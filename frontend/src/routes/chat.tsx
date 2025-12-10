@@ -190,13 +190,6 @@ function ChatComponent() {
     setError(null);
   };
 
-  // 处理按键
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
-      e.preventDefault();
-      handleSend();
-    }
-  };
 
   return (
     <div className="h-full flex items-center justify-center p-4 gap-4">
@@ -325,7 +318,6 @@ function ChatComponent() {
               type="text"
               value={input}
               onChange={e => setInput(e.target.value)}
-              onKeyDown={handleKeyDown}
               placeholder={initialized ? '输入任务描述...' : '请先初始化 Agent'}
               disabled={!initialized || loading}
               className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
@@ -343,12 +335,6 @@ function ChatComponent() {
 
       {/* Screenshot Display */}
       <div className="flex flex-col w-full max-w-xs h-[600px] border border-gray-200 dark:border-gray-700 rounded-2xl shadow-lg bg-white dark:bg-gray-800 overflow-hidden">
-        <div className="p-4 border-b border-gray-200 dark:border-gray-700">
-          <h2 className="text-lg font-semibold">屏幕截图</h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            每 3 秒自动刷新
-          </p>
-        </div>
         <div className="flex-1 flex items-center justify-center p-4 overflow-auto bg-gray-50 dark:bg-gray-900">
           {screenshot && screenshot.success ? (
             <div className="relative w-full h-full flex items-center justify-center">
