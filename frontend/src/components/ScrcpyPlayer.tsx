@@ -26,17 +26,18 @@ export function ScrcpyPlayer({ className, onFallback, fallbackTimeout = 5000 }: 
       setErrorMessage(null);
 
       try {
-        // Initialize jMuxer
+        // Initialize jMuxer with optimized settings
         jmuxerRef.current = new jMuxer({
           node: videoRef.current,
           mode: 'video',
-          flushingTime: 0,
+          flushingTime: 100, // Small buffer to handle jitter
           fps: 30,
           debug: false,
+          clearBuffer: false, // Don't clear buffer on errors
           onError: (error: any) => {
-            console.error('[jMuxer] Error:', error);
-            setErrorMessage('Video decoder error');
-            setStatus('error');
+            console.error('[jMuxer] Decoder error:', error);
+            // Just log the error, don't fail immediately
+            // The decoder will try to recover automatically
           },
         });
 

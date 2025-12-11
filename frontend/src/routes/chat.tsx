@@ -462,7 +462,7 @@ function ChatComponent() {
               setVideoStreamFailed(true);
               setUseVideoStream(false);
             }}
-            fallbackTimeout={5000}
+            fallbackTimeout={100000}
           />
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gray-900">

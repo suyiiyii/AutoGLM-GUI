@@ -72,6 +72,10 @@ class ScrcpyStreamer:
     async def start(self) -> None:
         """Start scrcpy server and establish connection."""
         try:
+            # 0. Kill existing scrcpy server processes on device
+            print(f"[ScrcpyStreamer] Cleaning up existing scrcpy processes...")
+            await self._cleanup_existing_server()
+
             # 1. Push scrcpy-server to device
             print(f"[ScrcpyStreamer] Pushing server to device...")
             await self._push_server()
@@ -95,6 +99,40 @@ class ScrcpyStreamer:
             traceback.print_exc()
             self.stop()
             raise RuntimeError(f"Failed to start scrcpy server: {e}") from e
+
+    async def _cleanup_existing_server(self) -> None:
+        """Kill existing scrcpy server processes on device."""
+        cmd_base = ["adb"]
+        if self.device_id:
+            cmd_base.extend(["-s", self.device_id])
+
+        # Method 1: Try pkill
+        cmd = cmd_base + ["shell", "pkill", "-9", "-f", "app_process.*scrcpy"]
+        process = await asyncio.create_subprocess_exec(
+            *cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        await process.wait()
+
+        # Method 2: Find and kill by PID (more reliable)
+        cmd = cmd_base + [
+            "shell",
+            "ps -ef | grep 'app_process.*scrcpy' | grep -v grep | awk '{print $2}' | xargs kill -9"
+        ]
+        process = await asyncio.create_subprocess_exec(
+            *cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        await process.wait()
+
+        # Method 3: Remove port forward if exists
+        cmd_remove_forward = cmd_base + ["forward", "--remove", f"tcp:{self.port}"]
+        process = await asyncio.create_subprocess_exec(
+            *cmd_remove_forward, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        await process.wait()
+
+        # Wait longer for resources to be released
+        print("[ScrcpyStreamer] Waiting for cleanup to complete...")
+        await asyncio.sleep(2)
 
     async def _push_server(self) -> None:
         """Push scrcpy-server to device."""
@@ -122,45 +160,65 @@ class ScrcpyStreamer:
         self.forward_cleanup_needed = True
 
     async def _start_server(self) -> None:
-        """Start scrcpy server on device."""
-        cmd = ["adb"]
-        if self.device_id:
-            cmd.extend(["-s", self.device_id])
+        """Start scrcpy server on device with retry on address conflict."""
+        max_retries = 3
+        retry_delay = 2
 
-        # Build server command
-        # Note: scrcpy 3.3+ uses different parameter format
-        server_args = [
-            "shell",
-            "CLASSPATH=/data/local/tmp/scrcpy-server",
-            "app_process",
-            "/",
-            "com.genymobile.scrcpy.Server",
-            "3.3.3",  # scrcpy version - must match installed version
-            f"max_size={self.max_size}",
-            f"video_bit_rate={self.bit_rate}",
-            "tunnel_forward=true",
-            "audio=false",
-            "control=false",
-            "cleanup=false",
-        ]
-        cmd.extend(server_args)
+        for attempt in range(max_retries):
+            cmd = ["adb"]
+            if self.device_id:
+                cmd.extend(["-s", self.device_id])
 
-        # Capture stderr to see error messages
-        self.scrcpy_process = await asyncio.create_subprocess_exec(
-            *cmd,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE
-        )
+            # Build server command
+            # Note: scrcpy 3.3+ uses different parameter format
+            server_args = [
+                "shell",
+                "CLASSPATH=/data/local/tmp/scrcpy-server",
+                "app_process",
+                "/",
+                "com.genymobile.scrcpy.Server",
+                "3.3.3",  # scrcpy version - must match installed version
+                f"max_size={self.max_size}",
+                f"video_bit_rate={self.bit_rate}",
+                "tunnel_forward=true",
+                "audio=false",
+                "control=false",
+                "cleanup=false",
+            ]
+            cmd.extend(server_args)
 
-        # Wait for server to start
-        await asyncio.sleep(2)
+            # Capture stderr to see error messages
+            self.scrcpy_process = await asyncio.create_subprocess_exec(
+                *cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
 
-        # Check if process is still running
-        if self.scrcpy_process.returncode is not None:
-            # Process has exited
-            stdout, stderr = await self.scrcpy_process.communicate()
-            error_msg = stderr.decode() if stderr else stdout.decode()
-            raise RuntimeError(f"scrcpy server exited immediately: {error_msg}")
+            # Wait for server to start
+            await asyncio.sleep(2)
+
+            # Check if process is still running
+            if self.scrcpy_process.returncode is not None:
+                # Process has exited
+                stdout, stderr = await self.scrcpy_process.communicate()
+                error_msg = stderr.decode() if stderr else stdout.decode()
+
+                # Check if it's an "Address already in use" error
+                if "Address already in use" in error_msg:
+                    if attempt < max_retries - 1:
+                        print(f"[ScrcpyStreamer] Address in use, retrying in {retry_delay}s (attempt {attempt + 1}/{max_retries})...")
+                        await self._cleanup_existing_server()
+                        await asyncio.sleep(retry_delay)
+                        continue
+                    else:
+                        raise RuntimeError(f"scrcpy server failed after {max_retries} attempts: {error_msg}")
+                else:
+                    raise RuntimeError(f"scrcpy server exited immediately: {error_msg}")
+
+            # Server started successfully
+            return
+
+        raise RuntimeError("Failed to start scrcpy server after maximum retries")
 
     async def _connect_socket(self) -> None:
         """Connect to scrcpy TCP socket."""

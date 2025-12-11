@@ -1,5 +1,6 @@
 """AutoGLM-GUI Backend API Server."""
 
+import asyncio
 import json
 import os
 from importlib.metadata import version as get_version
@@ -17,6 +18,10 @@ from pydantic import BaseModel, Field
 
 from AutoGLM_GUI.adb_plus import capture_screenshot
 from AutoGLM_GUI.scrcpy_stream import ScrcpyStreamer
+
+# 全局 scrcpy streamer 实例和锁
+scrcpy_streamer: ScrcpyStreamer | None = None
+scrcpy_lock = asyncio.Lock()
 
 # 获取包版本号
 try:
@@ -292,6 +297,22 @@ async def reset_agent() -> dict:
     }
 
 
+@app.post("/api/video/reset")
+async def reset_video_stream() -> dict:
+    """Reset video stream (cleanup scrcpy server)."""
+    global scrcpy_streamer
+
+    async with scrcpy_lock:
+        if scrcpy_streamer is not None:
+            print("[video/reset] Stopping existing streamer...")
+            scrcpy_streamer.stop()
+            scrcpy_streamer = None
+            print("[video/reset] Streamer reset complete")
+            return {"success": True, "message": "Video stream reset"}
+        else:
+            return {"success": True, "message": "No active video stream"}
+
+
 @app.post("/api/screenshot", response_model=ScreenshotResponse)
 def take_screenshot(request: ScreenshotRequest) -> ScreenshotResponse:
     """获取设备截图。此操作无副作用，不影响 PhoneAgent 运行。"""
@@ -318,29 +339,55 @@ def take_screenshot(request: ScreenshotRequest) -> ScreenshotResponse:
 @app.websocket("/api/video/stream")
 async def video_stream_ws(websocket: WebSocket):
     """Stream real-time H.264 video from scrcpy server via WebSocket."""
+    global scrcpy_streamer
+
     await websocket.accept()
     print("[video/stream] WebSocket connection accepted")
 
-    streamer = ScrcpyStreamer(max_size=1280, bit_rate=4_000_000)
+    # Use global lock to prevent concurrent streamer initialization
+    async with scrcpy_lock:
+        # Reuse existing streamer if available
+        if scrcpy_streamer is None:
+            print("[video/stream] Creating new streamer instance...")
+            scrcpy_streamer = ScrcpyStreamer(max_size=1280, bit_rate=4_000_000)
 
+            try:
+                print("[video/stream] Starting scrcpy server...")
+                await scrcpy_streamer.start()
+                print("[video/stream] Scrcpy server started successfully")
+            except Exception as e:
+                import traceback
+                print(f"[video/stream] Failed to start streamer: {e}")
+                print(f"[video/stream] Traceback:\n{traceback.format_exc()}")
+                scrcpy_streamer.stop()
+                scrcpy_streamer = None
+                try:
+                    await websocket.send_json({"error": str(e)})
+                except Exception:
+                    pass
+                return
+        else:
+            print("[video/stream] Reusing existing streamer instance")
+
+    # Stream H.264 data to client
+    stream_failed = False
     try:
-        # Start scrcpy server and establish connection
-        print("[video/stream] Starting scrcpy server...")
-        await streamer.start()
-        print("[video/stream] Scrcpy server started successfully")
-
-        # Stream H.264 data to client
         chunk_count = 0
         while True:
             try:
-                h264_chunk = await streamer.read_h264_chunk()
+                h264_chunk = await scrcpy_streamer.read_h264_chunk()
                 await websocket.send_bytes(h264_chunk)
                 chunk_count += 1
                 if chunk_count % 100 == 0:
                     print(f"[video/stream] Sent {chunk_count} chunks")
             except ConnectionError as e:
                 print(f"[video/stream] Connection error after {chunk_count} chunks: {e}")
-                await websocket.send_json({"error": f"Stream error: {str(e)}"})
+                stream_failed = True
+                # Don't send error if WebSocket already disconnected
+                try:
+                    await websocket.send_json({"error": f"Stream error: {str(e)}"})
+                except Exception:
+                    pass
                 break
 
     except WebSocketDisconnect:
@@ -349,13 +396,21 @@ async def video_stream_ws(websocket: WebSocket):
         import traceback
         print(f"[video/stream] Error: {e}")
         print(f"[video/stream] Traceback:\n{traceback.format_exc()}")
+        stream_failed = True
         try:
             await websocket.send_json({"error": str(e)})
         except Exception:
             pass
-    finally:
-        streamer.stop()
-        print("[video/stream] Streamer stopped")
+
+    # Reset global streamer if stream failed
+    if stream_failed:
+        async with scrcpy_lock:
+            print("[video/stream] Stream failed, resetting global streamer...")
+            if scrcpy_streamer is not None:
+                scrcpy_streamer.stop()
+                scrcpy_streamer = None
+
+    print("[video/stream] Client stream ended")
 
 
 # 静态文件托管 - 使用包内资源定位
