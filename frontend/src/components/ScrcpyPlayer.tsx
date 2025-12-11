@@ -3,14 +3,18 @@ import jMuxer from 'jmuxer';
 
 interface ScrcpyPlayerProps {
   className?: string;
+  onFallback?: () => void; // Callback when fallback to screenshot is needed
+  fallbackTimeout?: number; // Timeout in ms before fallback (default 5000)
 }
 
-export function ScrcpyPlayer({ className }: ScrcpyPlayerProps) {
+export function ScrcpyPlayer({ className, onFallback, fallbackTimeout = 5000 }: ScrcpyPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const jmuxerRef = useRef<any>(null);
   const wsRef = useRef<WebSocket | null>(null);
   const [status, setStatus] = useState<'connecting' | 'connected' | 'error' | 'disconnected'>('connecting');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const fallbackTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const hasReceivedDataRef = useRef(false);
 
   useEffect(() => {
     let reconnectTimeout: NodeJS.Timeout | null = null;
@@ -44,6 +48,19 @@ export function ScrcpyPlayer({ className }: ScrcpyPlayerProps) {
         ws.onopen = () => {
           console.log('[ScrcpyPlayer] WebSocket connected');
           setStatus('connected');
+
+          // Start fallback timer
+          fallbackTimerRef.current = setTimeout(() => {
+            if (!hasReceivedDataRef.current) {
+              console.log('[ScrcpyPlayer] No data received within timeout, triggering fallback');
+              setStatus('error');
+              setErrorMessage('Video stream timeout');
+              ws.close();
+              if (onFallback) {
+                onFallback();
+              }
+            }
+          }, fallbackTimeout);
         };
 
         ws.onmessage = (event) => {
@@ -54,13 +71,28 @@ export function ScrcpyPlayer({ className }: ScrcpyPlayerProps) {
               console.error('[ScrcpyPlayer] Server error:', error);
               setErrorMessage(error.error || 'Unknown error');
               setStatus('error');
+
+              // Trigger fallback on error
+              if (onFallback && !hasReceivedDataRef.current) {
+                onFallback();
+              }
             } catch {
               console.error('[ScrcpyPlayer] Received non-JSON string:', event.data);
             }
             return;
           }
 
-          // H.264 video data
+          // H.264 video data received successfully
+          if (!hasReceivedDataRef.current) {
+            hasReceivedDataRef.current = true;
+            console.log('[ScrcpyPlayer] First video data received, canceling fallback timer');
+            if (fallbackTimerRef.current) {
+              clearTimeout(fallbackTimerRef.current);
+              fallbackTimerRef.current = null;
+            }
+          }
+
+          // Feed to jMuxer
           try {
             if (jmuxerRef.current && event.data.byteLength > 0) {
               jmuxerRef.current.feed({
@@ -103,6 +135,11 @@ export function ScrcpyPlayer({ className }: ScrcpyPlayerProps) {
         clearTimeout(reconnectTimeout);
       }
 
+      if (fallbackTimerRef.current) {
+        clearTimeout(fallbackTimerRef.current);
+        fallbackTimerRef.current = null;
+      }
+
       if (wsRef.current) {
         wsRef.current.close();
         wsRef.current = null;
@@ -117,7 +154,7 @@ export function ScrcpyPlayer({ className }: ScrcpyPlayerProps) {
         jmuxerRef.current = null;
       }
     };
-  }, []);
+  }, [fallbackTimeout, onFallback]);
 
   return (
     <div className={`relative w-full h-full flex items-center justify-center ${className || ''}`}>

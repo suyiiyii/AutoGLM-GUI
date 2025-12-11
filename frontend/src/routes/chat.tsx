@@ -44,6 +44,8 @@ function ChatComponent() {
     modelName: '',
   });
   const [showConfig, setShowConfig] = useState(false);
+  const [useVideoStream, setUseVideoStream] = useState(true); // Try video stream first
+  const [videoStreamFailed, setVideoStreamFailed] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const screenshotFetchingRef = useRef(false);
@@ -87,8 +89,12 @@ function ChatComponent() {
     initializeAgent();
   }, []);
 
-  // 每 3 秒刷新截图
+  // 截图轮询 (仅在 fallback 模式下运行)
   useEffect(() => {
+    if (!videoStreamFailed) {
+      return; // Video stream is working, don't poll screenshots
+    }
+
     const fetchScreenshot = async () => {
       // 如果有正在进行的请求，跳过本次请求
       if (screenshotFetchingRef.current) {
@@ -112,10 +118,10 @@ function ChatComponent() {
     fetchScreenshot();
 
     // 设置定时器每 0.5 秒刷新
-    const interval = setInterval(fetchScreenshot, 500000);
+    const interval = setInterval(fetchScreenshot, 500);
 
     return () => clearInterval(interval);
-  }, []);
+  }, [videoStreamFailed]);
 
   // 初始化 Agent
   const handleInit = async () => {
@@ -446,9 +452,54 @@ function ChatComponent() {
         </div>
       </div>
 
-      {/* Real-time Video Stream */}
+      {/* Real-time Video Stream or Screenshot Fallback */}
       <div className="w-full max-w-xs h-[750px] border border-gray-200 dark:border-gray-700 rounded-2xl shadow-lg bg-gray-900 overflow-hidden">
-        <ScrcpyPlayer className="w-full h-full" />
+        {useVideoStream && !videoStreamFailed ? (
+          <ScrcpyPlayer
+            className="w-full h-full"
+            onFallback={() => {
+              console.log('[Chat] Video stream failed, falling back to screenshots');
+              setVideoStreamFailed(true);
+              setUseVideoStream(false);
+            }}
+            fallbackTimeout={5000}
+          />
+        ) : (
+          <div className="w-full h-full flex items-center justify-center bg-gray-900">
+            {screenshot && screenshot.success ? (
+              <div className="relative w-full h-full flex items-center justify-center">
+                <img
+                  src={`data:image/png;base64,${screenshot.image}`}
+                  alt="Device Screenshot"
+                  className="max-w-full max-h-full object-contain"
+                  style={{
+                    width: screenshot.width > screenshot.height ? '100%' : 'auto',
+                    height: screenshot.width > screenshot.height ? 'auto' : '100%',
+                  }}
+                />
+                {screenshot.is_sensitive && (
+                  <div className="absolute top-2 right-2 px-2 py-1 bg-yellow-500 text-white text-xs rounded">
+                    敏感内容
+                  </div>
+                )}
+                {/* Fallback indicator */}
+                <div className="absolute bottom-2 left-2 px-2 py-1 bg-blue-500 text-white text-xs rounded">
+                  截图模式 (0.5s 刷新)
+                </div>
+              </div>
+            ) : screenshot?.error ? (
+              <div className="text-center text-red-500 dark:text-red-400">
+                <p className="mb-2">截图失败</p>
+                <p className="text-xs">{screenshot.error}</p>
+              </div>
+            ) : (
+              <div className="text-center text-gray-500 dark:text-gray-400">
+                <div className="w-8 h-8 border-4 border-gray-300 border-t-blue-500 rounded-full animate-spin mx-auto mb-2" />
+                <p>加载中...</p>
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
