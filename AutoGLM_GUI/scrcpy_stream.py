@@ -187,6 +187,7 @@ class ScrcpyStreamer:
                 "3.3.3",  # scrcpy version - must match installed version
                 f"max_size={self.max_size}",
                 f"video_bit_rate={self.bit_rate}",
+                "max_fps=20",  # ✅ Limit to 20fps to reduce data volume
                 "tunnel_forward=true",
                 "audio=false",
                 "control=false",

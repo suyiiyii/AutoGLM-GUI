@@ -16,6 +16,14 @@ export function ScrcpyPlayer({ className, onFallback, fallbackTimeout = 5000 }: 
   const fallbackTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasReceivedDataRef = useRef(false);
 
+  // Latency monitoring
+  const frameCountRef = useRef(0);
+  const lastStatsTimeRef = useRef(Date.now());
+
+  // Error recovery (debounce reconnects)
+  const lastErrorTimeRef = useRef(0);
+  const lastConnectTimeRef = useRef(0);
+
   // Use ref to store latest callback to avoid useEffect re-running
   const onFallbackRef = useRef(onFallback);
   const fallbackTimeoutRef = useRef(fallbackTimeout);
@@ -28,11 +36,13 @@ export function ScrcpyPlayer({ className, onFallback, fallbackTimeout = 5000 }: 
 
   useEffect(() => {
     let reconnectTimeout: NodeJS.Timeout | null = null;
+    let connectFn: (() => void) | null = null;  // Reference to connect function
 
-    const connect = () => {
+    const connect = async () => {
       if (!videoRef.current) return;
 
       console.log('[ScrcpyPlayer] connect() called');
+      lastConnectTimeRef.current = Date.now();  // Record connect time
       setStatus('connecting');
       setErrorMessage(null);
 
@@ -70,20 +80,51 @@ export function ScrcpyPlayer({ className, onFallback, fallbackTimeout = 5000 }: 
         videoRef.current.load();
       }
 
+      // ✅ CRITICAL: Wait for browser to cleanup MediaSource resources
+      // Creating new jMuxer immediately can cause resource conflicts
+      await new Promise(resolve => setTimeout(resolve, 300));
+
       try {
-        // Initialize fresh jMuxer with optimized settings
-        console.log('[ScrcpyPlayer] Creating new jMuxer instance');
+        // Initialize fresh jMuxer with LOW LATENCY settings
+        console.log('[ScrcpyPlayer] Creating new jMuxer instance (after cleanup delay)');
         jmuxerRef.current = new jMuxer({
           node: videoRef.current,
           mode: 'video',
-          flushingTime: 100, // Small buffer to handle jitter
+          flushingTime: 0,  // ✅ 0 = lowest latency (no buffering)
           fps: 30,
-          debug: false,  // Disable debug to reduce console noise
-          clearBuffer: false, // Don't clear buffer on errors
+          debug: false,
+          clearBuffer: true,  // ✅ Clear buffer on errors to prevent buildup
           onError: (error: any) => {
             console.error('[jMuxer] Decoder error:', error);
-            // Just log the error, don't fail immediately
-            // The decoder will try to recover automatically
+
+            // ✅ On buffer error, immediately reconnect
+            if (error.name === 'InvalidStateError' && error.error === 'buffer error') {
+              const now = Date.now();
+              const timeSinceLastError = now - lastErrorTimeRef.current;
+              const timeSinceConnect = now - lastConnectTimeRef.current;
+
+              // Smart debounce logic:
+              // - If error happens soon after connect (< 1s), allow quick retry
+              //   (means connection itself failed, not buffer overflow)
+              // - Otherwise, require 2s between reconnects
+              const shouldReconnect = timeSinceConnect < 1000
+                ? timeSinceLastError > 500  // Quick retry for new connection failures
+                : timeSinceLastError > 2000;  // Normal debounce for buffer overflows
+
+              if (shouldReconnect) {
+                lastErrorTimeRef.current = now;
+                console.warn('[jMuxer] ⚠️ Buffer error detected, reconnecting...');
+
+                // Immediate reconnect
+                if (connectFn) {
+                  setTimeout(() => {
+                    connectFn!();
+                  }, 100);
+                }
+              } else {
+                console.warn(`[jMuxer] Reconnect skipped (debounced: ${timeSinceLastError}ms since last error)`);
+              }
+            }
           },
         });
 
@@ -145,6 +186,29 @@ export function ScrcpyPlayer({ className, onFallback, fallbackTimeout = 5000 }: 
               jmuxerRef.current.feed({
                 video: new Uint8Array(event.data),
               });
+
+              // Monitor frame rate and detect buffer buildup
+              frameCountRef.current++;
+              const now = Date.now();
+              const elapsed = now - lastStatsTimeRef.current;
+
+              if (elapsed > 5000) {  // Log stats every 5 seconds
+                const fps = (frameCountRef.current / elapsed) * 1000;
+                const videoEl = videoRef.current;
+                const buffered = videoEl && videoEl.buffered.length > 0
+                  ? videoEl.buffered.end(0) - videoEl.currentTime
+                  : 0;
+
+                console.log(`[ScrcpyPlayer] Stats: ${fps.toFixed(1)} fps, buffer: ${buffered.toFixed(2)}s`);
+
+                // ✅ WARNING: If buffer > 2 seconds, we're falling behind
+                if (buffered > 2) {
+                  console.warn(`[ScrcpyPlayer] ⚠ High latency detected: ${buffered.toFixed(2)}s buffer`);
+                }
+
+                frameCountRef.current = 0;
+                lastStatsTimeRef.current = now;
+              }
             }
           } catch (error) {
             console.error('[ScrcpyPlayer] Feed error:', error);
@@ -173,6 +237,9 @@ export function ScrcpyPlayer({ className, onFallback, fallbackTimeout = 5000 }: 
         setStatus('error');
       }
     };
+
+    // Make connect function accessible to jMuxer error handler
+    connectFn = connect;
 
     connect();
 
