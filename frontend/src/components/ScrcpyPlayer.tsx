@@ -32,7 +32,7 @@ export function ScrcpyPlayer({ className, onFallback, fallbackTimeout = 5000 }: 
           mode: 'video',
           flushingTime: 100, // Small buffer to handle jitter
           fps: 30,
-          debug: false,
+          debug: true,
           clearBuffer: false, // Don't clear buffer on errors
           onError: (error: any) => {
             console.error('[jMuxer] Decoder error:', error);

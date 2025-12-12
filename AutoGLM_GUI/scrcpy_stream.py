@@ -4,7 +4,6 @@ import asyncio
 import os
 import socket
 import subprocess
-import time
 from pathlib import Path
 
 
@@ -15,7 +14,7 @@ class ScrcpyStreamer:
         self,
         device_id: str | None = None,
         max_size: int = 1280,
-        bit_rate: int = 4_000_000,
+        bit_rate: int = 2_000_000,
         port: int = 27183,
     ):
         """Initialize ScrcpyStreamer.
@@ -34,6 +33,11 @@ class ScrcpyStreamer:
         self.scrcpy_process: subprocess.Popen | None = None
         self.tcp_socket: socket.socket | None = None
         self.forward_cleanup_needed = False
+
+        # H.264 parameter sets cache (for new connections to join mid-stream)
+        self.cached_sps: bytes | None = None
+        self.cached_pps: bytes | None = None
+        self.cached_idr: bytes | None = None  # Last IDR frame for immediate playback
 
         # Find scrcpy-server location
         self.scrcpy_server_path = self._find_scrcpy_server()
@@ -73,11 +77,11 @@ class ScrcpyStreamer:
         """Start scrcpy server and establish connection."""
         try:
             # 0. Kill existing scrcpy server processes on device
-            print(f"[ScrcpyStreamer] Cleaning up existing scrcpy processes...")
+            print("[ScrcpyStreamer] Cleaning up existing scrcpy processes...")
             await self._cleanup_existing_server()
 
             # 1. Push scrcpy-server to device
-            print(f"[ScrcpyStreamer] Pushing server to device...")
+            print("[ScrcpyStreamer] Pushing server to device...")
             await self._push_server()
 
             # 2. Setup port forwarding
@@ -85,13 +89,13 @@ class ScrcpyStreamer:
             await self._setup_port_forward()
 
             # 3. Start scrcpy server
-            print(f"[ScrcpyStreamer] Starting scrcpy server...")
+            print("[ScrcpyStreamer] Starting scrcpy server...")
             await self._start_server()
 
             # 4. Connect TCP socket
-            print(f"[ScrcpyStreamer] Connecting to TCP socket...")
+            print("[ScrcpyStreamer] Connecting to TCP socket...")
             await self._connect_socket()
-            print(f"[ScrcpyStreamer] Successfully connected!")
+            print("[ScrcpyStreamer] Successfully connected!")
 
         except Exception as e:
             print(f"[ScrcpyStreamer] Failed to start: {e}")
@@ -184,6 +188,8 @@ class ScrcpyStreamer:
                 "audio=false",
                 "control=false",
                 "cleanup=false",
+                # Force I-frame (IDR) every 1 second for reliable reconnection
+                "video_codec_options=i-frame-interval=1",
             ]
             cmd.extend(server_args)
 
@@ -236,11 +242,133 @@ class ScrcpyStreamer:
 
         raise ConnectionError("Failed to connect to scrcpy server")
 
+    def _find_nal_units(self, data: bytes) -> list[tuple[int, int, int]]:
+        """Find NAL units in H.264 data.
+
+        Returns:
+            List of (start_pos, nal_type, nal_size) tuples
+        """
+        nal_units = []
+        i = 0
+        data_len = len(data)
+
+        while i < data_len - 4:
+            # Look for start codes: 0x00 0x00 0x00 0x01 or 0x00 0x00 0x01
+            if data[i:i+4] == b'\x00\x00\x00\x01':
+                start_code_len = 4
+            elif data[i:i+3] == b'\x00\x00\x01':
+                start_code_len = 3
+            else:
+                i += 1
+                continue
+
+            # NAL unit type is in lower 5 bits of first byte after start code
+            nal_start = i + start_code_len
+            if nal_start >= data_len:
+                break
+
+            nal_type = data[nal_start] & 0x1F
+
+            # Find next start code to determine NAL unit size
+            next_start = nal_start + 1
+            while next_start < data_len - 3:
+                if (data[next_start:next_start+4] == b'\x00\x00\x00\x01' or
+                    data[next_start:next_start+3] == b'\x00\x00\x01'):
+                    break
+                next_start += 1
+            else:
+                next_start = data_len
+
+            nal_size = next_start - i
+            nal_units.append((i, nal_type, nal_size))
+
+            i = next_start
+
+        return nal_units
+
+    def _cache_nal_units(self, data: bytes) -> None:
+        """Parse and cache important NAL units (SPS, PPS, IDR)."""
+        nal_units = self._find_nal_units(data)
+
+        for start, nal_type, size in nal_units:
+            nal_data = data[start:start+size]
+
+            if nal_type == 7:  # SPS
+                if self.cached_sps != nal_data:
+                    self.cached_sps = nal_data
+                    print(f"[ScrcpyStreamer] Cached SPS ({size} bytes)")
+            elif nal_type == 8:  # PPS
+                if self.cached_pps != nal_data:
+                    self.cached_pps = nal_data
+                    print(f"[ScrcpyStreamer] Cached PPS ({size} bytes)")
+            elif nal_type == 5:  # IDR frame
+                # Only cache if we have SPS/PPS
+                if self.cached_sps and self.cached_pps:
+                    self.cached_idr = nal_data
+                    # print(f"[ScrcpyStreamer] Cached IDR frame ({size} bytes)")  # Too verbose
+
+    def _prepend_sps_pps_to_idr(self, data: bytes) -> bytes:
+        """Prepend SPS/PPS before each IDR frame to ensure decodability.
+
+        This ensures that clients can start decoding from any IDR frame,
+        even if they join mid-stream.
+
+        Returns:
+            Modified data with SPS/PPS prepended to IDR frames
+        """
+        if not self.cached_sps or not self.cached_pps:
+            return data
+
+        nal_units = self._find_nal_units(data)
+
+        # Find IDR frames and check for existing SPS/PPS
+        idr_positions = []
+        has_sps = False
+        has_pps = False
+
+        for start, nal_type, size in nal_units:
+            if nal_type == 7:
+                has_sps = True
+            elif nal_type == 8:
+                has_pps = True
+            elif nal_type == 5:  # IDR frame
+                idr_positions.append(start)
+
+        # If no IDR or already has SPS/PPS, return original data
+        if not idr_positions or (has_sps and has_pps):
+            return data
+
+        # Prepend SPS/PPS before first IDR frame
+        first_idr_pos = idr_positions[0]
+        modified_data = (
+            data[:first_idr_pos] +           # Data before IDR
+            self.cached_sps +                 # Insert SPS
+            self.cached_pps +                 # Insert PPS
+            data[first_idr_pos:]             # IDR and rest of data
+        )
+
+        print(f"[ScrcpyStreamer] Prepended SPS/PPS before IDR frame")
+        return modified_data
+
+    def get_initialization_data(self) -> bytes | None:
+        """Get cached SPS/PPS/IDR for initializing new connections.
+
+        Returns:
+            Concatenated SPS + PPS + IDR, or None if not available
+        """
+        if self.cached_sps and self.cached_pps:
+            # Return SPS + PPS (+ IDR if available)
+            init_data = self.cached_sps + self.cached_pps
+            if self.cached_idr:
+                init_data += self.cached_idr
+            return init_data
+        return None
+
     async def read_h264_chunk(self) -> bytes:
         """Read H.264 data chunk from socket.
 
         Returns:
-            bytes: Raw H.264 data
+            bytes: Raw H.264 data with SPS/PPS prepended to IDR frames
 
         Raises:
             ConnectionError: If socket is closed or error occurs
@@ -255,6 +383,13 @@ class ScrcpyStreamer:
 
             if not data:
                 raise ConnectionError("Socket closed by remote")
+
+            # Cache SPS/PPS/IDR for future use
+            self._cache_nal_units(data)
+
+            # Automatically prepend SPS/PPS before IDR frames
+            # This ensures clients can decode from any IDR frame
+            data = self._prepend_sps_pps_to_idr(data)
 
             return data
         except Exception as e:

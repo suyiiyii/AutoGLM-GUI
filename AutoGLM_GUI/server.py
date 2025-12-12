@@ -368,6 +368,8 @@ async def video_stream_ws(websocket: WebSocket):
                 return
         else:
             print("[video/stream] Reusing existing streamer instance")
+            # Note: No need to send cached init data manually
+            # ScrcpyStreamer automatically prepends SPS/PPS before each IDR frame
 
     # Stream H.264 data to client
     stream_failed = False
