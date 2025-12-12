@@ -1,9 +1,17 @@
 import { useEffect, useRef, useState } from 'react';
 import React from 'react';
 import jMuxer from 'jmuxer';
-import { sendTap, sendSwipe, getScreenshot } from '../api';
+import {
+  sendTap,
+  sendSwipe,
+  getScreenshot,
+  sendTouchDown,
+  sendTouchMove,
+  sendTouchUp,
+} from '../api';
 const MIN_SWIPE_DISTANCE = 3; // Minimum distance in pixels to qualify as a swipe
 const WHEEL_DELAY_MS = 400; // Debounce delay for wheel events
+const MOTION_THROTTLE_MS = 50; // Throttle for motion events (50ms = 20 events/sec)
 interface ScrcpyPlayerProps {
   className?: string;
   onFallback?: () => void; // Callback when fallback to screenshot is needed
@@ -64,6 +72,11 @@ export function ScrcpyPlayer({
     mouseX: number;
     mouseY: number;
   } | null>(null);
+
+  // Motion event throttling state
+  const lastMoveTimeRef = useRef<number>(0);
+  const pendingMoveRef = useRef<{ x: number; y: number } | null>(null);
+  const moveThrottleTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   // Device actual resolution (not video stream resolution)
   const [deviceResolution, setDeviceResolution] = useState<{
@@ -159,9 +172,9 @@ export function ScrcpyPlayer({
   };
 
   /**
-   * Handle mouse down event for swipe detection
+   * Handle mouse down event for drag start
    */
-  const handleMouseDown = (event: React.MouseEvent<HTMLVideoElement>) => {
+  const handleMouseDown = async (event: React.MouseEvent<HTMLVideoElement>) => {
     if (!enableControl || !videoRef.current || status !== 'connected') return;
 
     isDraggingRef.current = true;
@@ -170,14 +183,39 @@ export function ScrcpyPlayer({
       y: event.clientY,
       time: Date.now(),
     };
+
+    // Convert to device coordinates and send DOWN event
+    const rect = videoRef.current.getBoundingClientRect();
+    const clickX = event.clientX - rect.left;
+    const clickY = event.clientY - rect.top;
+
+    const deviceCoords = getDeviceCoordinates(clickX, clickY, videoRef.current);
+    if (!deviceCoords || !deviceResolution) return;
+
+    // Scale to actual device resolution
+    const videoWidth = videoRef.current.videoWidth;
+    const videoHeight = videoRef.current.videoHeight;
+    const scaleX = deviceResolution.width / videoWidth;
+    const scaleY = deviceResolution.height / videoHeight;
+
+    const actualDeviceX = Math.round(deviceCoords.x * scaleX);
+    const actualDeviceY = Math.round(deviceCoords.y * scaleY);
+
+    try {
+      await sendTouchDown(actualDeviceX, actualDeviceY);
+      console.log(`[Touch] DOWN: (${actualDeviceX}, ${actualDeviceY})`);
+    } catch (error) {
+      console.error('[Touch] DOWN failed:', error);
+    }
   };
 
   /**
-   * Handle mouse move event for swipe visualization
+   * Handle mouse move event with throttling for real-time dragging
    */
   const handleMouseMove = (event: React.MouseEvent<HTMLVideoElement>) => {
     if (!isDraggingRef.current || !dragStartRef.current) return;
 
+    // Update swipe line visualization (no throttle for visual feedback)
     setSwipeLine({
       id: Date.now(),
       startX: dragStartRef.current.x,
@@ -185,51 +223,122 @@ export function ScrcpyPlayer({
       endX: event.clientX,
       endY: event.clientY,
     });
+
+    // Throttled MOVE event sending
+    const rect = videoRef.current?.getBoundingClientRect();
+    if (!rect || !videoRef.current || !deviceResolution) return;
+
+    const clickX = event.clientX - rect.left;
+    const clickY = event.clientY - rect.top;
+
+    const deviceCoords = getDeviceCoordinates(clickX, clickY, videoRef.current);
+    if (!deviceCoords) return;
+
+    // Scale to actual device resolution
+    const videoWidth = videoRef.current.videoWidth;
+    const videoHeight = videoRef.current.videoHeight;
+    const scaleX = deviceResolution.width / videoWidth;
+    const scaleY = deviceResolution.height / videoHeight;
+
+    const actualDeviceX = Math.round(deviceCoords.x * scaleX);
+    const actualDeviceY = Math.round(deviceCoords.y * scaleY);
+
+    // Check if enough time has passed since last MOVE event
+    const now = Date.now();
+    if (now - lastMoveTimeRef.current >= MOTION_THROTTLE_MS) {
+      // Send immediately
+      lastMoveTimeRef.current = now;
+      sendTouchMove(actualDeviceX, actualDeviceY).catch(error => {
+        console.error('[Touch] MOVE failed:', error);
+      });
+    } else {
+      // Store pending move and schedule throttled send
+      pendingMoveRef.current = { x: actualDeviceX, y: actualDeviceY };
+
+      if (moveThrottleTimerRef.current) {
+        clearTimeout(moveThrottleTimerRef.current);
+      }
+
+      moveThrottleTimerRef.current = setTimeout(
+        () => {
+          if (pendingMoveRef.current) {
+            const { x, y } = pendingMoveRef.current;
+            lastMoveTimeRef.current = Date.now();
+            sendTouchMove(x, y).catch(error => {
+              console.error('[Touch] MOVE (throttled) failed:', error);
+            });
+            pendingMoveRef.current = null;
+          }
+        },
+        MOTION_THROTTLE_MS - (now - lastMoveTimeRef.current)
+      );
+    }
   };
 
   /**
-   * Handle mouse up event for swipe execution
+   * Handle mouse up event for drag end
    */
   const handleMouseUp = async (event: React.MouseEvent<HTMLVideoElement>) => {
     if (!isDraggingRef.current || !dragStartRef.current) return;
 
-    const dragEnd = {
-      x: event.clientX,
-      y: event.clientY,
-      time: Date.now(),
-    };
-
-    const deltaX = dragEnd.x - dragStartRef.current.x;
-    const deltaY = dragEnd.y - dragStartRef.current.y;
-    const deltaTime = dragEnd.time - dragStartRef.current.time;
+    const deltaX = event.clientX - dragStartRef.current.x;
+    const deltaY = event.clientY - dragStartRef.current.y;
+    const deltaTime = Date.now() - dragStartRef.current.time;
 
     // Clear swipe line
     setSwipeLine(null);
     isDraggingRef.current = false;
 
+    // Clear any pending throttled MOVE events
+    if (moveThrottleTimerRef.current) {
+      clearTimeout(moveThrottleTimerRef.current);
+      moveThrottleTimerRef.current = null;
+    }
+    pendingMoveRef.current = null;
+
     // Check if it's a tap (short movement, short duration)
     const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
     if (distance < 10 && deltaTime < 200) {
-      // It's a tap
+      // It's a tap - use existing tap logic
       handleVideoClick(event);
       dragStartRef.current = null;
       return;
     }
 
-    // Check if it's a valid swipe (minimum distance and reasonable duration)
-    if (distance < MIN_SWIPE_DISTANCE || deltaTime < 100 || deltaTime > 2000) {
-      console.log(
-        '[ScrcpyPlayer] Invalid swipe: distance=',
-        distance,
-        'duration=',
-        deltaTime
-      );
+    // Send UP event at final position
+    const rect = videoRef.current?.getBoundingClientRect();
+    if (!rect || !videoRef.current || !deviceResolution) {
       dragStartRef.current = null;
       return;
     }
 
-    // It's a swipe
-    await executeSwipe(dragStartRef.current, dragEnd);
+    const clickX = event.clientX - rect.left;
+    const clickY = event.clientY - rect.top;
+
+    const deviceCoords = getDeviceCoordinates(clickX, clickY, videoRef.current);
+    if (!deviceCoords) {
+      dragStartRef.current = null;
+      return;
+    }
+
+    // Scale to actual device resolution
+    const videoWidth = videoRef.current.videoWidth;
+    const videoHeight = videoRef.current.videoHeight;
+    const scaleX = deviceResolution.width / videoWidth;
+    const scaleY = deviceResolution.height / videoHeight;
+
+    const actualDeviceX = Math.round(deviceCoords.x * scaleX);
+    const actualDeviceY = Math.round(deviceCoords.y * scaleY);
+
+    try {
+      await sendTouchUp(actualDeviceX, actualDeviceY);
+      console.log(`[Touch] UP: (${actualDeviceX}, ${actualDeviceY})`);
+      onTapSuccess?.();
+    } catch (error) {
+      console.error('[Touch] UP failed:', error);
+      onTapError?.(String(error));
+    }
+
     dragStartRef.current = null;
   };
 
@@ -835,6 +944,12 @@ export function ScrcpyPlayer({
         wsRef.current = null;
       }
 
+      // Cleanup motion throttle timer
+      if (moveThrottleTimerRef.current) {
+        clearTimeout(moveThrottleTimerRef.current);
+        moveThrottleTimerRef.current = null;
+      }
+
       if (jmuxerRef.current) {
         try {
           jmuxerRef.current.destroy();
@@ -859,11 +974,39 @@ export function ScrcpyPlayer({
         onMouseDown={handleMouseDown}
         onMouseMove={handleMouseMove}
         onMouseUp={handleMouseUp}
-        onMouseLeave={() => {
+        onMouseLeave={async () => {
           // Cancel drag if mouse leaves video area
-          if (isDraggingRef.current) {
+          if (isDraggingRef.current && videoRef.current && deviceResolution) {
+            // Send UP event to cancel incomplete gesture
+            if (dragStartRef.current) {
+              const rect = videoRef.current.getBoundingClientRect();
+              // Use dragStart as fallback position
+              const deviceCoords = getDeviceCoordinates(
+                dragStartRef.current.x - rect.left,
+                dragStartRef.current.y - rect.top,
+                videoRef.current
+              );
+
+              if (deviceCoords) {
+                const scaleX =
+                  deviceResolution.width / videoRef.current.videoWidth;
+                const scaleY =
+                  deviceResolution.height / videoRef.current.videoHeight;
+                const x = Math.round(deviceCoords.x * scaleX);
+                const y = Math.round(deviceCoords.y * scaleY);
+
+                try {
+                  await sendTouchUp(x, y);
+                  console.log('[Touch] UP (mouse leave)');
+                } catch (error) {
+                  console.error('[Touch] UP (mouse leave) failed:', error);
+                }
+              }
+            }
+
             isDraggingRef.current = false;
             setSwipeLine(null);
+            dragStartRef.current = null;
           }
         }}
         onWheel={handleWheel}

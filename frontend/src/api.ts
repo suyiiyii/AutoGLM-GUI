@@ -96,6 +96,42 @@ export interface SwipeResponse {
   error?: string;
 }
 
+export interface TouchDownRequest {
+  x: number;
+  y: number;
+  device_id?: string | null;
+  delay?: number;
+}
+
+export interface TouchDownResponse {
+  success: boolean;
+  error?: string;
+}
+
+export interface TouchMoveRequest {
+  x: number;
+  y: number;
+  device_id?: string | null;
+  delay?: number;
+}
+
+export interface TouchMoveResponse {
+  success: boolean;
+  error?: string;
+}
+
+export interface TouchUpRequest {
+  x: number;
+  y: number;
+  device_id?: string | null;
+  delay?: number;
+}
+
+export interface TouchUpResponse {
+  success: boolean;
+  error?: string;
+}
+
 export async function initAgent(
   config?: InitRequest
 ): Promise<{ success: boolean; message: string }> {
@@ -247,4 +283,49 @@ export async function sendSwipe(
     console.error('[API] Swipe request failed:', error);
     throw error;
   }
+}
+
+export async function sendTouchDown(
+  x: number,
+  y: number,
+  deviceId?: string | null,
+  delay: number = 0
+): Promise<TouchDownResponse> {
+  const res = await axios.post<TouchDownResponse>('/api/control/touch/down', {
+    x: Math.round(x),
+    y: Math.round(y),
+    device_id: deviceId ?? null,
+    delay,
+  });
+  return res.data;
+}
+
+export async function sendTouchMove(
+  x: number,
+  y: number,
+  deviceId?: string | null,
+  delay: number = 0
+): Promise<TouchMoveResponse> {
+  const res = await axios.post<TouchMoveResponse>('/api/control/touch/move', {
+    x: Math.round(x),
+    y: Math.round(y),
+    device_id: deviceId ?? null,
+    delay,
+  });
+  return res.data;
+}
+
+export async function sendTouchUp(
+  x: number,
+  y: number,
+  deviceId?: string | null,
+  delay: number = 0
+): Promise<TouchUpResponse> {
+  const res = await axios.post<TouchUpResponse>('/api/control/touch/up', {
+    x: Math.round(x),
+    y: Math.round(y),
+    device_id: deviceId ?? null,
+    delay,
+  });
+  return res.data;
 }
