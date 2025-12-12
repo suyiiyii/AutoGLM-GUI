@@ -111,7 +111,7 @@ class ScreenshotResponse(BaseModel):
 
 # API 端点
 @app.post("/api/init")
-async def init_agent(request: InitRequest) -> dict:
+def init_agent(request: InitRequest) -> dict:
     """初始化 PhoneAgent。"""
     global agent, last_model_config, last_agent_config
 
@@ -257,7 +257,7 @@ def chat_stream(request: ChatRequest):
 
 
 @app.get("/api/status", response_model=StatusResponse)
-async def get_status() -> StatusResponse:
+def get_status() -> StatusResponse:
     """获取 Agent 状态和版本信息。"""
     global agent
 
@@ -269,7 +269,7 @@ async def get_status() -> StatusResponse:
 
 
 @app.post("/api/reset")
-async def reset_agent() -> dict:
+def reset_agent() -> dict:
     """重置 Agent 状态。"""
     global agent, last_model_config, last_agent_config
 
@@ -369,14 +369,15 @@ async def video_stream_ws(websocket: WebSocket):
         else:
             print("[video/stream] Reusing existing streamer instance")
 
-            # Send cached initialization data FIRST to ensure new client can decode
-            # This solves the "reconnect black screen" problem
-            init_data = scrcpy_streamer.get_initialization_data()
-            if init_data:
+            # Send ONLY SPS/PPS (not IDR) to initialize decoder
+            # Client will then wait for next live IDR frame (max 1s with i-frame-interval=1)
+            # This avoids issues with potentially corrupted cached IDR frames
+            if scrcpy_streamer.cached_sps and scrcpy_streamer.cached_pps:
+                init_data = scrcpy_streamer.cached_sps + scrcpy_streamer.cached_pps
                 await websocket.send_bytes(init_data)
-                print(f"[video/stream] ✓ Sent cached init data ({len(init_data)} bytes) to new connection")
+                print(f"[video/stream] ✓ Sent SPS/PPS ({len(init_data)} bytes), client will wait for live IDR")
             else:
-                print("[video/stream] ⚠ Warning: No cached init data available yet, client may experience delay")
+                print("[video/stream] ⚠ Warning: No cached SPS/PPS available")
 
     # Stream H.264 data to client
     stream_failed = False

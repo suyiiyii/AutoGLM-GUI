@@ -40,7 +40,8 @@ class ScrcpyStreamer:
         self.cached_sps: bytes | None = None
         self.cached_pps: bytes | None = None
         self.cached_idr: bytes | None = None  # Last IDR frame for immediate playback
-        self.cache_locked = False  # Lock cache after initial complete SPS/PPS
+        self.sps_pps_locked = False  # Lock SPS/PPS after initial complete capture
+        # Note: IDR is NOT locked - we keep updating to the latest frame
 
         # Find scrcpy-server location
         self.scrcpy_server_path = self._find_scrcpy_server()
@@ -305,45 +306,47 @@ class ScrcpyStreamer:
         NAL units may be truncated across chunks, so we validate minimum sizes
         and lock the cache after getting complete initial parameters.
         """
-        # Don't update cache if already locked (have complete initial SPS/PPS)
-        if self.cache_locked:
-            return
-
         nal_units = self._find_nal_units(data)
 
         for start, nal_type, size in nal_units:
             nal_data = data[start:start+size]
 
             if nal_type == 7:  # SPS
-                # Validate: SPS should be at least 10 bytes (起始码4 + NAL header1 + 数据5+)
-                # Typical SPS is 20-50 bytes
-                if size >= 10 and not self.cached_sps:
-                    self.cached_sps = nal_data
-                    hex_preview = ' '.join(f'{b:02x}' for b in nal_data[:min(12, len(nal_data))])
-                    print(f"[ScrcpyStreamer] ✓ Cached complete SPS ({size} bytes): {hex_preview}...")
-                elif size < 10:
-                    print(f"[ScrcpyStreamer] ✗ Skipped truncated SPS ({size} bytes, too short)")
+                # Only cache SPS if not yet locked
+                if not self.sps_pps_locked:
+                    # Validate: SPS should be at least 10 bytes
+                    if size >= 10 and not self.cached_sps:
+                        self.cached_sps = nal_data
+                        hex_preview = ' '.join(f'{b:02x}' for b in nal_data[:min(12, len(nal_data))])
+                        print(f"[ScrcpyStreamer] ✓ Cached complete SPS ({size} bytes): {hex_preview}...")
+                    elif size < 10:
+                        print(f"[ScrcpyStreamer] ✗ Skipped truncated SPS ({size} bytes, too short)")
 
             elif nal_type == 8:  # PPS
-                # Validate: PPS should be at least 6 bytes
-                # Typical PPS is 10-30 bytes
-                if size >= 6 and not self.cached_pps:
-                    self.cached_pps = nal_data
-                    hex_preview = ' '.join(f'{b:02x}' for b in nal_data[:min(12, len(nal_data))])
-                    print(f"[ScrcpyStreamer] ✓ Cached complete PPS ({size} bytes): {hex_preview}...")
-                elif size < 6:
-                    print(f"[ScrcpyStreamer] ✗ Skipped truncated PPS ({size} bytes, too short)")
+                # Only cache PPS if not yet locked
+                if not self.sps_pps_locked:
+                    # Validate: PPS should be at least 6 bytes
+                    if size >= 6 and not self.cached_pps:
+                        self.cached_pps = nal_data
+                        hex_preview = ' '.join(f'{b:02x}' for b in nal_data[:min(12, len(nal_data))])
+                        print(f"[ScrcpyStreamer] ✓ Cached complete PPS ({size} bytes): {hex_preview}...")
+                    elif size < 6:
+                        print(f"[ScrcpyStreamer] ✗ Skipped truncated PPS ({size} bytes, too short)")
 
             elif nal_type == 5:  # IDR frame
-                # Only cache if we have complete SPS/PPS
-                if self.cached_sps and self.cached_pps and not self.cached_idr:
+                # ✅ ALWAYS update IDR to keep the LATEST frame
+                # This gives better UX on reconnect (recent content, not stale startup frame)
+                if self.cached_sps and self.cached_pps:
+                    is_first = self.cached_idr is None
                     self.cached_idr = nal_data
-                    print(f"[ScrcpyStreamer] ✓ Cached IDR frame ({size} bytes)")
+                    if is_first:
+                        print(f"[ScrcpyStreamer] ✓ Cached initial IDR frame ({size} bytes)")
+                    # Don't log every IDR update (too verbose)
 
-        # Lock cache once we have complete SPS + PPS + IDR
-        if self.cached_sps and self.cached_pps and self.cached_idr and not self.cache_locked:
-            self.cache_locked = True
-            print("[ScrcpyStreamer] 🔒 Cache locked - initial parameter sets complete")
+        # Lock SPS/PPS once we have complete initial parameters
+        if self.cached_sps and self.cached_pps and not self.sps_pps_locked:
+            self.sps_pps_locked = True
+            print("[ScrcpyStreamer] 🔒 SPS/PPS locked (IDR will continue updating)")
 
     def _prepend_sps_pps_to_idr(self, data: bytes) -> bytes:
         """Prepend SPS/PPS before EVERY IDR frame unconditionally.
@@ -404,6 +407,15 @@ class ScrcpyStreamer:
             init_data = self.cached_sps + self.cached_pps
             if self.cached_idr:
                 init_data += self.cached_idr
+
+            # Validate data integrity
+            print(f"[ScrcpyStreamer] Returning init data:")
+            print(f"  - SPS: {len(self.cached_sps)} bytes, starts with {' '.join(f'{b:02x}' for b in self.cached_sps[:8])}")
+            print(f"  - PPS: {len(self.cached_pps)} bytes, starts with {' '.join(f'{b:02x}' for b in self.cached_pps[:8])}")
+            if self.cached_idr:
+                print(f"  - IDR: {len(self.cached_idr)} bytes, starts with {' '.join(f'{b:02x}' for b in self.cached_idr[:8])}")
+            print(f"  - Total: {len(init_data)} bytes")
+
             return init_data
         return None
 
