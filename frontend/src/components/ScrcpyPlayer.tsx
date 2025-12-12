@@ -531,7 +531,6 @@ export function ScrcpyPlayer({
             style={{
               left: ripple.x,
               top: ripple.y,
-              transform: 'translate(-50%, -50%)',
             }}
           >
             <div className="ripple-circle" />

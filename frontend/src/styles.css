@@ -43,6 +43,7 @@ body {
   border: 2px solid rgba(59, 130, 246, 0.8);
   animation: ripple 500ms ease-out;
   pointer-events: none;
+  transform: translate(-50%, -50%);
 }
 
 /* Fade in animation for toast notifications */
