@@ -1,13 +1,24 @@
 import { useEffect, useRef, useState } from 'react';
 import jMuxer from 'jmuxer';
+import { sendTap, getScreenshot } from '../api';
 
 interface ScrcpyPlayerProps {
   className?: string;
   onFallback?: () => void; // Callback when fallback to screenshot is needed
   fallbackTimeout?: number; // Timeout in ms before fallback (default 5000)
+  enableControl?: boolean; // Enable click control
+  onTapSuccess?: () => void; // Callback on successful tap
+  onTapError?: (error: string) => void; // Callback on tap error
 }
 
-export function ScrcpyPlayer({ className, onFallback, fallbackTimeout = 5000 }: ScrcpyPlayerProps) {
+export function ScrcpyPlayer({
+  className,
+  onFallback,
+  fallbackTimeout = 5000,
+  enableControl = false,
+  onTapSuccess,
+  onTapError
+}: ScrcpyPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const jmuxerRef = useRef<any>(null);
   const wsRef = useRef<WebSocket | null>(null);
@@ -15,6 +26,17 @@ export function ScrcpyPlayer({ className, onFallback, fallbackTimeout = 5000 }: 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const fallbackTimerRef = useRef<NodeJS.Timeout | null>(null);
   const hasReceivedDataRef = useRef(false);
+
+  // Ripple effect state
+  interface RippleEffect {
+    id: number;
+    x: number;  // CSS pixel coordinates
+    y: number;
+  }
+  const [ripples, setRipples] = useState<RippleEffect[]>([]);
+
+  // Device actual resolution (not video stream resolution)
+  const [deviceResolution, setDeviceResolution] = useState<{ width: number; height: number } | null>(null);
 
   // Latency monitoring
   const frameCountRef = useRef(0);
@@ -28,11 +50,176 @@ export function ScrcpyPlayer({ className, onFallback, fallbackTimeout = 5000 }: 
   const onFallbackRef = useRef(onFallback);
   const fallbackTimeoutRef = useRef(fallbackTimeout);
 
+  /**
+   * Convert click coordinates to device coordinates
+   * Accounts for object-fit: contain letterboxing
+   */
+  const getDeviceCoordinates = (
+    clickX: number,
+    clickY: number,
+    videoElement: HTMLVideoElement
+  ): { x: number; y: number } | null => {
+    // Get video element's display dimensions
+    const rect = videoElement.getBoundingClientRect();
+    const displayWidth = rect.width;
+    const displayHeight = rect.height;
+
+    // Get video's native dimensions
+    const videoWidth = videoElement.videoWidth;
+    const videoHeight = videoElement.videoHeight;
+
+    if (videoWidth === 0 || videoHeight === 0) {
+      console.warn('[ScrcpyPlayer] Video dimensions not available yet');
+      return null;
+    }
+
+    // Calculate aspect ratios
+    const videoAspect = videoWidth / videoHeight;
+    const displayAspect = displayWidth / displayHeight;
+
+    // Calculate actual rendered video dimensions (accounting for object-fit: contain)
+    let renderedWidth: number;
+    let renderedHeight: number;
+    let offsetX: number;
+    let offsetY: number;
+
+    if (displayAspect > videoAspect) {
+      // Display is wider - letterbox on sides
+      renderedHeight = displayHeight;
+      renderedWidth = videoAspect * displayHeight;
+      offsetX = (displayWidth - renderedWidth) / 2;
+      offsetY = 0;
+    } else {
+      // Display is taller - letterbox on top/bottom
+      renderedWidth = displayWidth;
+      renderedHeight = displayWidth / videoAspect;
+      offsetX = 0;
+      offsetY = (displayHeight - renderedHeight) / 2;
+    }
+
+    // Check if click is within rendered video area
+    const relativeX = clickX - offsetX;
+    const relativeY = clickY - offsetY;
+
+    if (relativeX < 0 || relativeX > renderedWidth ||
+        relativeY < 0 || relativeY > renderedHeight) {
+      console.warn('[ScrcpyPlayer] Click outside video area (in letterbox)');
+      return null;
+    }
+
+    // Convert to device coordinates
+    const deviceX = Math.round((relativeX / renderedWidth) * videoWidth);
+    const deviceY = Math.round((relativeY / renderedHeight) * videoHeight);
+
+    console.log(`[ScrcpyPlayer] Coordinate transform:
+      Click: (${clickX}, ${clickY})
+      Display: ${displayWidth}x${displayHeight}
+      Video: ${videoWidth}x${videoHeight}
+      Rendered: ${renderedWidth}x${renderedHeight} at offset (${offsetX}, ${offsetY})
+      Device: (${deviceX}, ${deviceY})`);
+
+    return { x: deviceX, y: deviceY };
+  };
+
+  /**
+   * Handle video click event
+   */
+  const handleVideoClick = async (event: React.MouseEvent<HTMLVideoElement>) => {
+    // Guard: Feature disabled
+    if (!enableControl) return;
+
+    // Guard: Video not ready
+    if (!videoRef.current || status !== 'connected') {
+      console.warn('[ScrcpyPlayer] Video not ready for control');
+      return;
+    }
+
+    // Guard: Video dimensions not available
+    if (videoRef.current.videoWidth === 0 || videoRef.current.videoHeight === 0) {
+      console.warn('[ScrcpyPlayer] Video dimensions not available');
+      return;
+    }
+
+    // Guard: Device resolution not available
+    if (!deviceResolution) {
+      console.warn('[ScrcpyPlayer] Device resolution not available yet');
+      return;
+    }
+
+    // Get click position relative to video element
+    const rect = videoRef.current.getBoundingClientRect();
+    const clickX = event.clientX - rect.left;
+    const clickY = event.clientY - rect.top;
+
+    // Transform to device coordinates
+    const deviceCoords = getDeviceCoordinates(clickX, clickY, videoRef.current);
+    if (!deviceCoords) {
+      return;
+    }
+
+    // Scale coordinates from video stream resolution to device actual resolution
+    const videoWidth = videoRef.current.videoWidth;
+    const videoHeight = videoRef.current.videoHeight;
+    const scaleX = deviceResolution.width / videoWidth;
+    const scaleY = deviceResolution.height / videoHeight;
+
+    const actualDeviceX = Math.round(deviceCoords.x * scaleX);
+    const actualDeviceY = Math.round(deviceCoords.y * scaleY);
+
+    console.log(`[ScrcpyPlayer] Coordinate scaling:
+      Video stream: ${videoWidth}x${videoHeight}
+      Device actual: ${deviceResolution.width}x${deviceResolution.height}
+      Scale: ${scaleX.toFixed(3)}x${scaleY.toFixed(3)}
+      Video coords: (${deviceCoords.x}, ${deviceCoords.y})
+      Device coords: (${actualDeviceX}, ${actualDeviceY})`);
+
+    // Add ripple effect (use viewport coordinates for fixed positioning)
+    const rippleId = Date.now();
+    setRipples(prev => [...prev, { id: rippleId, x: event.clientX, y: event.clientY }]);
+
+    // Remove ripple after animation (500ms)
+    setTimeout(() => {
+      setRipples(prev => prev.filter(r => r.id !== rippleId));
+    }, 500);
+
+    // Send tap command with actual device coordinates
+    try {
+      const result = await sendTap(actualDeviceX, actualDeviceY);
+      if (result.success) {
+        console.log('[ScrcpyPlayer] Tap successful');
+        onTapSuccess?.();
+      } else {
+        console.error('[ScrcpyPlayer] Tap failed:', result.error);
+        onTapError?.(result.error || 'Unknown error');
+      }
+    } catch (error) {
+      console.error('[ScrcpyPlayer] Tap request failed:', error);
+      onTapError?.(String(error));
+    }
+  };
+
   // Update refs when props change (without triggering useEffect)
   useEffect(() => {
     onFallbackRef.current = onFallback;
     fallbackTimeoutRef.current = fallbackTimeout;
   }, [onFallback, fallbackTimeout]);
+
+  // Fetch device actual resolution on mount
+  useEffect(() => {
+    const fetchDeviceResolution = async () => {
+      try {
+        const screenshot = await getScreenshot();
+        if (screenshot.success) {
+          setDeviceResolution({ width: screenshot.width, height: screenshot.height });
+          console.log(`[ScrcpyPlayer] Device actual resolution: ${screenshot.width}x${screenshot.height}`);
+        }
+      } catch (error) {
+        console.error('[ScrcpyPlayer] Failed to fetch device resolution:', error);
+      }
+    };
+
+    fetchDeviceResolution();
+  }, []);
 
   useEffect(() => {
     let reconnectTimeout: NodeJS.Timeout | null = null;
@@ -278,9 +465,27 @@ export function ScrcpyPlayer({ className, onFallback, fallbackTimeout = 5000 }: 
         autoPlay
         muted
         playsInline
-        className="max-w-full max-h-full object-contain"
+        onClick={handleVideoClick}
+        className={`max-w-full max-h-full object-contain ${
+          enableControl ? 'cursor-pointer' : ''
+        }`}
         style={{ backgroundColor: '#000' }}
       />
+
+      {/* Ripple effects overlay */}
+      {enableControl && ripples.map(ripple => (
+        <div
+          key={ripple.id}
+          className="fixed pointer-events-none z-50"
+          style={{
+            left: ripple.x,
+            top: ripple.y,
+            transform: 'translate(-50%, -50%)',
+          }}
+        >
+          <div className="ripple-circle" />
+        </div>
+      ))}
 
       {/* Status overlay */}
       {status !== 'connected' && (

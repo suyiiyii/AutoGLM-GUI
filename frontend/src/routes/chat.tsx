@@ -47,6 +47,7 @@ function ChatComponent() {
   const [useVideoStream, setUseVideoStream] = useState(true); // Try video stream first
   const [videoStreamFailed, setVideoStreamFailed] = useState(false);
   const [displayMode, setDisplayMode] = useState<'auto' | 'video' | 'screenshot'>('auto'); // User's manual choice
+  const [tapFeedback, setTapFeedback] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const screenshotFetchingRef = useRef(false);
@@ -496,14 +497,32 @@ function ChatComponent() {
         </div>
 
         {displayMode === 'video' || (displayMode === 'auto' && useVideoStream && !videoStreamFailed) ? (
-          <ScrcpyPlayer
-            className="w-full h-full"
-            onFallback={() => {
-              setVideoStreamFailed(true);
-              setUseVideoStream(false);
-            }}
-            fallbackTimeout={100000}
-          />
+          <>
+            {/* Tap feedback toast */}
+            {tapFeedback && (
+              <div className="absolute top-14 right-2 z-20 px-3 py-2 bg-blue-500 text-white text-sm rounded-lg shadow-lg animate-fade-in">
+                {tapFeedback}
+              </div>
+            )}
+
+            <ScrcpyPlayer
+              className="w-full h-full"
+              enableControl={true}
+              onFallback={() => {
+                setVideoStreamFailed(true);
+                setUseVideoStream(false);
+              }}
+              onTapSuccess={() => {
+                setTapFeedback('Tap executed');
+                setTimeout(() => setTapFeedback(null), 2000);
+              }}
+              onTapError={(error) => {
+                setTapFeedback(`Tap failed: ${error}`);
+                setTimeout(() => setTapFeedback(null), 3000);
+              }}
+              fallbackTimeout={100000}
+            />
+          </>
         ) : (
           <div className="w-full h-full flex items-center justify-center bg-gray-900">
             {screenshot && screenshot.success ? (

@@ -19,3 +19,44 @@ html {
 body {
   @apply bg-gray-50 text-gray-950 dark:bg-gray-900 dark:text-gray-200;
 }
+
+/* Ripple effect animation for ScrcpyPlayer */
+@keyframes ripple {
+  0% {
+    width: 0;
+    height: 0;
+    opacity: 1;
+  }
+  100% {
+    width: 60px;
+    height: 60px;
+    opacity: 0;
+  }
+}
+
+.ripple-circle {
+  position: absolute;
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(59, 130, 246, 0.5) 0%, rgba(59, 130, 246, 0) 70%);
+  border: 2px solid rgba(59, 130, 246, 0.8);
+  animation: ripple 500ms ease-out;
+  pointer-events: none;
+}
+
+/* Fade in animation for toast notifications */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 200ms ease-out;
+}

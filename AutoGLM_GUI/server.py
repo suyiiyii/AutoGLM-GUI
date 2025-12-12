@@ -109,6 +109,18 @@ class ScreenshotResponse(BaseModel):
     error: str | None = None
 
 
+class TapRequest(BaseModel):
+    x: int
+    y: int
+    device_id: str | None = None
+    delay: float = 0.0
+
+
+class TapResponse(BaseModel):
+    success: bool
+    error: str | None = None
+
+
 # API 端点
 @app.post("/api/init")
 def init_agent(request: InitRequest) -> dict:
@@ -334,6 +346,24 @@ def take_screenshot(request: ScreenshotRequest) -> ScreenshotResponse:
             is_sensitive=False,
             error=str(e),
         )
+
+
+@app.post("/api/control/tap", response_model=TapResponse)
+def control_tap(request: TapRequest) -> TapResponse:
+    """Execute tap at specified device coordinates."""
+    try:
+        from phone_agent.adb import tap
+
+        tap(
+            x=request.x,
+            y=request.y,
+            device_id=request.device_id,
+            delay=request.delay
+        )
+
+        return TapResponse(success=True)
+    except Exception as e:
+        return TapResponse(success=False, error=str(e))
 
 
 @app.websocket("/api/video/stream")

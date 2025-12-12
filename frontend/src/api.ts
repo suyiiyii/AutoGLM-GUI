@@ -69,6 +69,18 @@ export interface ErrorEvent {
 
 export type StreamEvent = StepEvent | DoneEvent | ErrorEvent;
 
+export interface TapRequest {
+  x: number;
+  y: number;
+  device_id?: string | null;
+  delay?: number;
+}
+
+export interface TapResponse {
+  success: boolean;
+  error?: string;
+}
+
 export async function initAgent(
   config?: InitRequest
 ): Promise<{ success: boolean; message: string }> {
@@ -173,5 +185,20 @@ export async function getScreenshot(
     { device_id: deviceId ?? null },
     {}
   );
+  return res.data;
+}
+
+export async function sendTap(
+  x: number,
+  y: number,
+  deviceId?: string | null,
+  delay: number = 0
+): Promise<TapResponse> {
+  const res = await axios.post<TapResponse>('/api/control/tap', {
+    x,
+    y,
+    device_id: deviceId ?? null,
+    delay,
+  });
   return res.data;
 }
