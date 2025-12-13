@@ -22,6 +22,7 @@ interface ScrcpyPlayerProps {
   onTapError?: (error: string) => void; // Callback on tap error
   onSwipeSuccess?: () => void; // Callback on successful swipe
   onSwipeError?: (error: string) => void; // Callback on swipe error
+  onStreamReady?: (stream: { close: () => void } | null) => void; // Callback when video stream is ready
 }
 
 export function ScrcpyPlayer({
@@ -34,6 +35,7 @@ export function ScrcpyPlayer({
   onTapError,
   onSwipeSuccess,
   onSwipeError,
+  onStreamReady,
 }: ScrcpyPlayerProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const jmuxerRef = useRef<any>(null);
@@ -829,6 +831,15 @@ export function ScrcpyPlayer({
           );
           setStatus('connected');
 
+          // Notify parent component that video stream is ready
+          if (onStreamReady) {
+            onStreamReady({
+              close: () => {
+                ws.close();
+              },
+            });
+          }
+
           // Start fallback timer
           fallbackTimerRef.current = setTimeout(() => {
             if (!hasReceivedDataRef.current) {
@@ -929,6 +940,11 @@ export function ScrcpyPlayer({
         ws.onclose = () => {
           console.log('[ScrcpyPlayer] WebSocket closed');
           setStatus('disconnected');
+
+          // Notify parent component that video stream is disconnected
+          if (onStreamReady) {
+            onStreamReady(null);
+          }
 
           // Auto-reconnect after 3 seconds
           // But only if we're still on the same device

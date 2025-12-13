@@ -37,7 +37,8 @@ interface DeviceState {
   loading: boolean;
   error: string | null;
   initialized: boolean;
-  currentStream: { close: () => void } | null;
+  chatStream: { close: () => void } | null;  // 聊天流（设备切换时不中断）
+  videoStream: { close: () => void } | null;  // 视频流（设备切换时中断）
   screenshot: ScreenshotResponse | null;
   useVideoStream: boolean;
   videoStreamFailed: boolean;
@@ -78,7 +79,8 @@ function ChatComponent() {
         loading: false,
         error: null,
         initialized: false,
-        currentStream: null,
+        chatStream: null,
+        videoStream: null,
         screenshot: null,
         useVideoStream: true,
         videoStreamFailed: false,
@@ -100,7 +102,8 @@ function ChatComponent() {
         loading: false,
         error: null,
         initialized: false,
-        currentStream: null,
+        chatStream: null,
+        videoStream: null,
         screenshot: null,
         useVideoStream: true,
         videoStreamFailed: false,
@@ -269,7 +272,7 @@ function ChatComponent() {
             ...state,
             messages: updatedMessages,
             loading: false,
-            currentStream: null,
+            chatStream: null,
           });
           return newMap;
         });
@@ -296,7 +299,7 @@ function ChatComponent() {
             ...state,
             messages: updatedMessages,
             loading: false,
-            currentStream: null,
+            chatStream: null,
             error: event.message,
           });
           return newMap;
@@ -305,7 +308,7 @@ function ChatComponent() {
     );
 
     // 保存流对象到设备状态
-    updateDeviceState(currentDeviceId, { currentStream: stream });
+    updateDeviceState(currentDeviceId, { chatStream: stream });
   };
 
   // 重置当前设备的对话
@@ -313,8 +316,8 @@ function ChatComponent() {
     if (!currentDeviceId) return;
 
     // 取消正在进行的流式请求
-    if (currentState.currentStream) {
-      currentState.currentStream.close();
+    if (currentState.chatStream) {
+      currentState.chatStream.close();
     }
 
     // 重置设备状态
@@ -322,7 +325,7 @@ function ChatComponent() {
       messages: [],
       loading: false,
       error: null,
-      currentStream: null,
+      chatStream: null,
     });
 
     // 调用后端重置
@@ -331,10 +334,10 @@ function ChatComponent() {
 
   // 切换设备
   const handleDeviceChange = (deviceId: string) => {
-    // 停止当前设备的流
-    if (currentState.currentStream) {
-      currentState.currentStream.close();
-      updateDeviceState(currentDeviceId, { currentStream: null });
+    // 只停止当前设备的视频流，保留聊天流继续运行
+    if (currentState.videoStream) {
+      currentState.videoStream.close();
+      updateDeviceState(currentDeviceId, { videoStream: null });
     }
 
     setCurrentDeviceId(deviceId);

@@ -20,6 +20,8 @@ interface DeviceState {
   loading: boolean;
   error: string | null;
   initialized: boolean;
+  chatStream: { close: () => void } | null;  // 聊天流
+  videoStream: { close: () => void } | null;  // 视频流
   screenshot: ScreenshotResponse | null;
   useVideoStream: boolean;
   videoStreamFailed: boolean;
@@ -101,6 +103,11 @@ export function DevicePanel({
       event.preventDefault();
       onSendMessage();
     }
+  };
+
+  // 处理视频流就绪事件
+  const handleVideoStreamReady = (stream: { close: () => void } | null) => {
+    updateDeviceState(deviceId, { videoStream: stream });
   };
 
   return (
@@ -344,6 +351,7 @@ export function DevicePanel({
                   3000
                 );
               }}
+              onStreamReady={handleVideoStreamReady}
               fallbackTimeout={100000}
             />
           </>
