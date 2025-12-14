@@ -144,6 +144,46 @@ export interface TouchUpResponse {
   error?: string;
 }
 
+export interface ConnectDeviceRequest {
+  address: string;
+  timeout?: number;
+}
+
+export interface ConnectDeviceResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface DisconnectDeviceRequest {
+  address?: string | null;
+}
+
+export interface DisconnectDeviceResponse {
+  success: boolean;
+  message: string;
+}
+
+export interface EnableTcpipRequest {
+  device_id?: string | null;
+  port?: number;
+}
+
+export interface EnableTcpipResponse {
+  success: boolean;
+  message: string;
+  device_ip?: string | null;
+}
+
+export interface GetDeviceIpRequest {
+  device_id?: string | null;
+}
+
+export interface GetDeviceIpResponse {
+  success: boolean;
+  ip?: string | null;
+  message?: string | null;
+}
+
 export async function listDevices(): Promise<DeviceListResponse> {
   const res = await axios.get<DeviceListResponse>('/api/devices');
   return res.data;
@@ -352,3 +392,50 @@ export async function sendTouchUp(
   });
   return res.data;
 }
+
+export async function connectDevice(
+  address: string,
+  timeout: number = 10
+): Promise<ConnectDeviceResponse> {
+  const res = await axios.post<ConnectDeviceResponse>('/api/devices/connect', {
+    address,
+    timeout,
+  });
+  return res.data;
+}
+
+export async function disconnectDevice(
+  address?: string | null
+): Promise<DisconnectDeviceResponse> {
+  const res = await axios.post<DisconnectDeviceResponse>(
+    '/api/devices/disconnect',
+    {
+      address: address ?? null,
+    }
+  );
+  return res.data;
+}
+
+export async function enableTcpip(
+  deviceId?: string | null,
+  port: number = 5555
+): Promise<EnableTcpipResponse> {
+  const res = await axios.post<EnableTcpipResponse>(
+    '/api/devices/enable-tcpip',
+    {
+      device_id: deviceId ?? null,
+      port,
+    }
+  );
+  return res.data;
+}
+
+export async function getDeviceIp(
+  deviceId?: string | null
+): Promise<GetDeviceIpResponse> {
+  const res = await axios.post<GetDeviceIpResponse>('/api/devices/ip', {
+    device_id: deviceId ?? null,
+  });
+  return res.data;
+}
+
