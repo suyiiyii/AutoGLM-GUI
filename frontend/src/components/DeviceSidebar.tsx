@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { DeviceCard } from './DeviceCard';
+import { WifiConnectionDialog } from './WifiConnectionDialog';
 import type { Device } from '../api';
 
 // 初始状态从 localStorage 读取
@@ -18,6 +19,7 @@ interface DeviceSidebarProps {
   currentDeviceId: string;
   onSelectDevice: (deviceId: string) => void;
   onOpenConfig: () => void;
+  onRefreshDevices: () => void;
 }
 
 export function DeviceSidebar({
@@ -25,8 +27,10 @@ export function DeviceSidebar({
   currentDeviceId,
   onSelectDevice,
   onOpenConfig,
+  onRefreshDevices,
 }: DeviceSidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(getInitialCollapsedState);
+  const [isWifiDialogOpen, setIsWifiDialogOpen] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('sidebar-collapsed', JSON.stringify(isCollapsed));
@@ -160,6 +164,25 @@ export function DeviceSidebar({
         {/* 底部操作栏 */}
         <div className="p-3 border-t border-gray-200 dark:border-gray-700 space-y-2 whitespace-nowrap">
           <button
+            onClick={() => setIsWifiDialogOpen(true)}
+            className="w-full px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-all duration-500 ease-[cubic-bezier(0.4,0.0,0.2,1)] font-medium flex items-center justify-center gap-2"
+          >
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M8.111 16.404a5.5 5.5 0 017.778 0M12 20h.01m-7.08-7.071c3.904-3.905 10.236-3.905 14.141 0M1.394 9.393c5.857-5.857 15.355-5.857 21.213 0"
+              />
+            </svg>
+            WiFi 连接
+          </button>
+          <button
             onClick={onOpenConfig}
             className="w-full px-4 py-2 bg-white dark:bg-gray-800 hover:bg-gray-50 dark:hover:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-lg transition-all duration-500 ease-[cubic-bezier(0.4,0.0,0.2,1)] font-medium text-gray-700 dark:text-gray-300 flex items-center justify-center gap-2"
           >
@@ -186,6 +209,14 @@ export function DeviceSidebar({
           </button>
         </div>
       </div>
+
+      {/* WiFi 连接对话框 */}
+      <WifiConnectionDialog
+        isOpen={isWifiDialogOpen}
+        onClose={() => setIsWifiDialogOpen(false)}
+        devices={devices}
+        onRefreshDevices={onRefreshDevices}
+      />
     </>
   );
 }
