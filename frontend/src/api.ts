@@ -438,4 +438,3 @@ export async function getDeviceIp(
   });
   return res.data;
 }
-

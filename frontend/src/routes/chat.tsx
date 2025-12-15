@@ -42,8 +42,8 @@ function ChatComponent() {
     }
   };
 
-  // 加载设备列表
-  const loadDevices = async () => {
+  // 加载设备列表 - 提取为独立函数供外部调用
+  const loadDevices = React.useCallback(async () => {
     try {
       const response = await listDevices();
       setDevices(response.devices);
@@ -63,13 +63,43 @@ function ChatComponent() {
     } catch (error) {
       console.error('Failed to load devices:', error);
     }
-  };
+  }, [currentDeviceId]);
 
   useEffect(() => {
-    loadDevices();
+    let mounted = true;
+
+    const fetchDevices = async () => {
+      try {
+        const response = await listDevices();
+        if (!mounted) return;
+
+        setDevices(response.devices);
+
+        // 自动选择第一个设备（如果当前没有选中设备）
+        if (response.devices.length > 0 && !currentDeviceId) {
+          setCurrentDeviceId(response.devices[0].id);
+        }
+
+        // ✅ 新增：处理当前设备被移除的情况
+        if (
+          currentDeviceId &&
+          !response.devices.find(d => d.id === currentDeviceId)
+        ) {
+          setCurrentDeviceId(response.devices[0]?.id || '');
+        }
+      } catch (error) {
+        console.error('Failed to load devices:', error);
+      }
+    };
+
+    fetchDevices();
     // 每3秒刷新设备列表
-    const interval = setInterval(loadDevices, 3000);
-    return () => clearInterval(interval);
+    const interval = setInterval(fetchDevices, 3000);
+
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
   }, [currentDeviceId]);
 
   return (
