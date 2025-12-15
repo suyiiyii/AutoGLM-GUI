@@ -862,7 +862,7 @@ export function ScrcpyPlayer({
                 data[i] === 0x00 &&
                 data[i + 1] === 0x00 &&
                 (data[i + 2] === 0x01 ||
-                 (data[i + 2] === 0x00 && data[i + 3] === 0x01))
+                  (data[i + 2] === 0x00 && data[i + 3] === 0x01))
               ) {
                 nalCount++;
               }
@@ -898,7 +898,11 @@ export function ScrcpyPlayer({
 
               if (!hasStartCode) {
                 console.warn(
-                  `[ScrcpyPlayer] Invalid NAL unit: missing start code, first bytes = ${Array.from(videoData.slice(0, 8)).map(b => b.toString(16).padStart(2, '0')).join(' ')}`
+                  `[ScrcpyPlayer] Invalid NAL unit: missing start code, first bytes = ${Array.from(
+                    videoData.slice(0, 8)
+                  )
+                    .map(b => b.toString(16).padStart(2, '0'))
+                    .join(' ')}`
                 );
               }
 
@@ -1044,7 +1048,7 @@ export function ScrcpyPlayer({
         autoPlay
         muted
         playsInline
-        onError={(e) => {
+        onError={e => {
           const videoEl = e.currentTarget;
           const error = videoEl.error;
           if (error) {

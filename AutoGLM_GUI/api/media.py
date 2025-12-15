@@ -91,7 +91,9 @@ async def video_stream_ws(
     if DEBUG_SAVE_STREAM:
         debug_dir = Path("debug_streams")
         debug_dir.mkdir(exist_ok=True)
-        debug_file_path = debug_dir / f"{device_id}_{int(__import__('time').time())}.h264"
+        debug_file_path = (
+            debug_dir / f"{device_id}_{int(__import__('time').time())}.h264"
+        )
         debug_file = open(debug_file_path, "wb")
         print(f"[video/stream] DEBUG: Saving stream to {debug_file_path}")
 

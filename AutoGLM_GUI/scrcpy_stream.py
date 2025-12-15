@@ -314,9 +314,7 @@ class ScrcpyStreamer:
 
         raise ConnectionError("Failed to connect to scrcpy server")
 
-    def _find_nal_units(
-        self, data: bytes
-    ) -> list[tuple[int, int, int, bool]]:
+    def _find_nal_units(self, data: bytes) -> list[tuple[int, int, int, bool]]:
         """Find NAL units in H.264 data.
 
         Returns:
@@ -392,9 +390,7 @@ class ScrcpyStreamer:
                             f"[ScrcpyStreamer] ✓ Cached SPS ({size} bytes, complete={is_complete}): {hex_preview}..."
                         )
                     elif size < 10:
-                        print(
-                            f"[ScrcpyStreamer] ✗ Skipped short SPS ({size} bytes)"
-                        )
+                        print(f"[ScrcpyStreamer] ✗ Skipped short SPS ({size} bytes)")
 
             elif nal_type == 8:  # PPS
                 # Only cache PPS if not yet locked
@@ -409,9 +405,7 @@ class ScrcpyStreamer:
                             f"[ScrcpyStreamer] ✓ Cached PPS ({size} bytes, complete={is_complete}): {hex_preview}..."
                         )
                     elif size < 6:
-                        print(
-                            f"[ScrcpyStreamer] ✗ Skipped short PPS ({size} bytes)"
-                        )
+                        print(f"[ScrcpyStreamer] ✗ Skipped short PPS ({size} bytes)")
 
             elif nal_type == 5:  # IDR frame
                 # Cache IDR if it's large enough (size check is sufficient)
@@ -422,9 +416,7 @@ class ScrcpyStreamer:
                     is_first = self.cached_idr is None
                     self.cached_idr = nal_data
                     if is_first:
-                        print(
-                            f"[ScrcpyStreamer] ✓ Cached IDR frame ({size} bytes)"
-                        )
+                        print(f"[ScrcpyStreamer] ✓ Cached IDR frame ({size} bytes)")
                     # Don't log every IDR update (too verbose)
                 elif size < 1024:
                     print(

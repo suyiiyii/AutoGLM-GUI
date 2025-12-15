@@ -63,13 +63,15 @@ export function WifiConnectionDialog({
     setMessage(null);
 
     try {
-      const fullAddress = address.includes(':') ? address : `${address}:${port}`;
+      const fullAddress = address.includes(':')
+        ? address
+        : `${address}:${port}`;
       const result = await connectDevice(fullAddress, parseInt(timeout));
 
       if (result.success) {
         setMessage({ type: 'success', text: result.message });
         // 延迟刷新设备列表
-        setTimeout(() => {
+        window.setTimeout(() => {
           onRefreshDevices();
         }, 1000);
       } else {
@@ -96,14 +98,16 @@ export function WifiConnectionDialog({
     setMessage(null);
 
     try {
-      const fullAddress = address.includes(':') ? address : `${address}:${port}`;
+      const fullAddress = address.includes(':')
+        ? address
+        : `${address}:${port}`;
       const result = await disconnectDevice(fullAddress);
 
       if (result.success) {
         setMessage({ type: 'success', text: result.message });
         setAddress('');
         // 刷新设备列表
-        setTimeout(() => {
+        window.setTimeout(() => {
           onRefreshDevices();
         }, 500);
       } else {
@@ -183,7 +187,7 @@ export function WifiConnectionDialog({
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text).then(() => {
       setMessage({ type: 'info', text: '已复制到剪贴板' });
-      setTimeout(() => setMessage(null), 2000);
+      window.setTimeout(() => setMessage(null), 2000);
     });
   };
 
@@ -279,9 +283,12 @@ export function WifiConnectionDialog({
                   <div className="text-sm text-blue-800 dark:text-blue-300">
                     <p className="font-medium mb-1">使用说明：</p>
                     <ol className="list-decimal list-inside space-y-1">
-                      <li>确保设备已启用 WiFi ADB（在"启用 TCP/IP"选项卡操作）</li>
-                      <li>输入设备的 IP 地址（可选端口，默认 5555）</li>
-                      <li>点击"连接"按钮</li>
+                      <li>
+                        确保设备已启用 WiFi ADB（在&ldquo;启用
+                        TCP/IP&rdquo;选项卡操作）
+                      </li>
+                      <li>输入设备的 IP 地址（可选端口,默认 5555）</li>
+                      <li>点击&ldquo;连接&rdquo;按钮</li>
                     </ol>
                   </div>
                 </div>
@@ -397,9 +404,9 @@ export function WifiConnectionDialog({
                     <ol className="list-decimal list-inside space-y-1">
                       <li>通过 USB 连接设备</li>
                       <li>选择要启用 WiFi ADB 的设备</li>
-                      <li>点击"启用 TCP/IP"按钮</li>
-                      <li>获取设备 IP 后，拔掉 USB 线</li>
-                      <li>在"WiFi 连接"选项卡使用该 IP 连接</li>
+                      <li>点击&ldquo;启用 TCP/IP&rdquo;按钮</li>
+                      <li>获取设备 IP 后,拔掉 USB 线</li>
+                      <li>在&ldquo;WiFi 连接&rdquo;选项卡使用该 IP 连接</li>
                     </ol>
                   </div>
                 </div>
