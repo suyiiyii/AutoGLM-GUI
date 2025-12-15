@@ -45,6 +45,14 @@ export function DevicePanel({
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
+  // 自动初始化：设备 id 变化且未初始化时自动调用 handleInit
+  useEffect(() => {
+    if (!initialized && deviceId) {
+      handleInit();
+    }
+    // 只在 deviceId 或 initialized 变化时触发
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deviceId, initialized]);
   const [screenshot, setScreenshot] = useState<ScreenshotResponse | null>(null);
   const [useVideoStream, setUseVideoStream] = useState(true);
   const [videoStreamFailed, setVideoStreamFailed] = useState(false);

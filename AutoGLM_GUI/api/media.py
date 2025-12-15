@@ -103,8 +103,20 @@ async def video_stream_ws(
     async with scrcpy_locks[device_id]:
         if device_id not in scrcpy_streamers:
             print(f"[video/stream] Creating streamer for device {device_id}")
+
+            # Optimize for WiFi connections (lower bitrate and resolution)
+            # WiFi devices have ":" in their device_id (e.g., 192.168.1.100:5555)
+            is_wifi = ":" in device_id
+            if is_wifi:
+                print("[video/stream] WiFi device detected, using optimized settings")
+                max_size = 1080  # Lower resolution for WiFi
+                bit_rate = 2_000_000  # 2 Mbps for WiFi (was 4 Mbps)
+            else:
+                max_size = 1280
+                bit_rate = 4_000_000
+
             scrcpy_streamers[device_id] = ScrcpyStreamer(
-                device_id=device_id, max_size=1280, bit_rate=4_000_000
+                device_id=device_id, max_size=max_size, bit_rate=bit_rate
             )
 
             try:
