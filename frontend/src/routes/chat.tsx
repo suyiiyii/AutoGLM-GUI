@@ -14,13 +14,33 @@ function ChatComponent() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [currentDeviceId, setCurrentDeviceId] = useState<string>('');
 
-  // 全局配置（所有设备共享）
-  const [config, setConfig] = useState({
-    baseUrl: '',
-    apiKey: '',
-    modelName: '',
+  // 全局配置（所有设备共享）- 从 localStorage 加载
+  const [config, setConfig] = useState(() => {
+    try {
+      const saved = localStorage.getItem('autoglm-config');
+      if (saved) {
+        return JSON.parse(saved);
+      }
+    } catch (error) {
+      console.warn('Failed to load config from localStorage:', error);
+    }
+    return {
+      baseUrl: '',
+      apiKey: '',
+      modelName: '',
+    };
   });
   const [showConfig, setShowConfig] = useState(false);
+
+  // 保存配置到 localStorage
+  const saveConfig = (newConfig: typeof config) => {
+    setConfig(newConfig);
+    try {
+      localStorage.setItem('autoglm-config', JSON.stringify(newConfig));
+    } catch (error) {
+      console.warn('Failed to save config to localStorage:', error);
+    }
+  };
 
   // 加载设备列表
   const loadDevices = async () => {
@@ -70,9 +90,9 @@ function ChatComponent() {
                   type="text"
                   value={config.baseUrl}
                   onChange={e =>
-                    setConfig({ ...config, baseUrl: e.target.value })
+                    saveConfig({ ...config, baseUrl: e.target.value })
                   }
-                  placeholder="留空使用默认值"
+                  placeholder="https://api-inference.modelscope.cn/v1"
                   className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
@@ -84,9 +104,9 @@ function ChatComponent() {
                   type="password"
                   value={config.apiKey}
                   onChange={e =>
-                    setConfig({ ...config, apiKey: e.target.value })
+                    saveConfig({ ...config, apiKey: e.target.value })
                   }
-                  placeholder="留空使用默认值"
+                  placeholder="ms-xxxxxx"
                   className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
@@ -98,9 +118,9 @@ function ChatComponent() {
                   type="text"
                   value={config.modelName}
                   onChange={e =>
-                    setConfig({ ...config, modelName: e.target.value })
+                    saveConfig({ ...config, modelName: e.target.value })
                   }
-                  placeholder="留空使用默认值"
+                  placeholder="ZhipuAI/AutoGLM-Phone-9B"
                   className="w-full px-3 py-2 border rounded-lg bg-white dark:bg-gray-700 border-gray-300 dark:border-gray-600 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 outline-none"
                 />
               </div>
