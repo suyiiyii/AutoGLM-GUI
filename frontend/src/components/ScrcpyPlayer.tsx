@@ -831,12 +831,27 @@ export function ScrcpyPlayer({
             // Error message from server
             try {
               const error = JSON.parse(event.data);
-              console.error('[ScrcpyPlayer] Server error:', error);
-              setErrorMessage(error.error || 'Unknown error');
-              setStatus('error');
+              // 若是正常断开（切换 WiFi 等场景）返回的 “Socket closed by remote”，静默处理，不打扰用户
+              if (
+                typeof error?.error === 'string' &&
+                error.error.toLowerCase().includes('socket closed by remote')
+              ) {
+                console.debug('[ScrcpyPlayer] Ignored expected close:', error);
+              } else {
+                console.error('[ScrcpyPlayer] Server error:', error);
+                setErrorMessage(error.error || 'Unknown error');
+                setStatus('error');
+              }
 
               // Trigger fallback on error
-              if (onFallbackRef.current && !hasReceivedDataRef.current) {
+              if (
+                onFallbackRef.current &&
+                !hasReceivedDataRef.current &&
+                !(
+                  typeof error?.error === 'string' &&
+                  error.error.toLowerCase().includes('socket closed by remote')
+                )
+              ) {
                 onFallbackRef.current();
               }
             } catch {

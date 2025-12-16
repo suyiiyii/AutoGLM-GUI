@@ -269,24 +269,13 @@ class ADBConnection:
 
             result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
 
-            # Parse IP from route output; skip typical cellular interfaces (ccmni/rmnet) to avoid getting baseband addresses like 10.x.x.x, prefer WiFi/wlan
+            # Parse IP from route output
             for line in result.stdout.split("\n"):
-                if "src" not in line:
-                    continue
-                parts = line.split()
-                iface = parts[parts.index("dev") + 1] if "dev" in parts else None
-                ip = None
-                if "dev" in parts:
-                    try:
-                        iface = parts[parts.index("dev") + 1]
-                    except IndexError as e:
-                        print(f"IndexError while parsing interface: {e}")
-                if not ip:
-                    continue
-                # Skip typical cellular interfaces to avoid getting baseband addresses like 10.x.x.x
-                if iface and (iface.startswith("ccmni") or iface.startswith("rmnet")):
-                    continue
-                return ip
+                if "src" in line:
+                    parts = line.split()
+                    for i, part in enumerate(parts):
+                        if part == "src" and i + 1 < len(parts):
+                            return parts[i + 1]
 
             # Alternative: try wlan0 interface
             cmd[-1] = "ip addr show wlan0"

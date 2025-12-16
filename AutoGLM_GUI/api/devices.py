@@ -2,6 +2,8 @@
 
 from fastapi import APIRouter
 
+from AutoGLM_GUI.adb_plus import get_wifi_ip
+
 from AutoGLM_GUI.schemas import (
     DeviceListResponse,
     WiFiConnectRequest,
@@ -66,8 +68,10 @@ def connect_wifi(request: WiFiConnectRequest) -> WiFiConnectResponse:
             success=False, message=msg or "Failed to enable tcpip", error="tcpip"
         )
 
-    # 2) 读取设备 IP
-    ip = conn.get_device_ip(device_info.device_id)
+    # 2) 读取设备 IP：先用本地 adb_plus 的 WiFi 优先逻辑，失败再回退上游接口
+    ip = get_wifi_ip(conn.adb_path, device_info.device_id) or conn.get_device_ip(
+        device_info.device_id
+    )
     if not ip:
         return WiFiConnectResponse(
             success=False, message="Failed to get device IP", error="ip"
