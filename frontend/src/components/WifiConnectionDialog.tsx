@@ -12,6 +12,8 @@ interface WifiConnectionDialogProps {
   onClose: () => void;
   devices: Device[];
   onRefreshDevices: () => void;
+  /** 打开时默认选中的标签页，connect=WiFi连接，enable=有线转无线 */
+  initialTab?: 'connect' | 'enable';
 }
 
 export function WifiConnectionDialog({
@@ -19,8 +21,9 @@ export function WifiConnectionDialog({
   onClose,
   devices,
   onRefreshDevices,
+  initialTab = 'connect',
 }: WifiConnectionDialogProps) {
-  const [activeTab, setActiveTab] = useState<'connect' | 'enable'>('connect');
+  const [activeTab, setActiveTab] = useState<'connect' | 'enable'>(initialTab);
   const [address, setAddress] = useState('');
   const [port, setPort] = useState('5555');
   const [timeout, setTimeout] = useState('10');
@@ -51,6 +54,13 @@ export function WifiConnectionDialog({
     resetForm();
     onClose();
   };
+
+  // 当 dialog 打开且 initialTab 变动时，切换到对应标签
+  React.useEffect(() => {
+    if (isOpen) {
+      setActiveTab(initialTab);
+    }
+  }, [isOpen, initialTab]);
 
   // WiFi 连接
   const handleConnect = async () => {
@@ -142,20 +152,54 @@ export function WifiConnectionDialog({
       const result = await enableTcpip(deviceId, parseInt(port) || 5555);
 
       if (result.success) {
-        setMessage({ type: 'success', text: result.message });
         if (result.device_ip) {
           setDeviceIp(result.device_ip);
           setAddress(result.device_ip);
 
-          // 刷新设备列表（移除已变成 offline 的 USB 设备）
-          window.setTimeout(() => {
-            onRefreshDevices();
-          }, 500);
+          // 立即切换到连接标签页
+          setActiveTab('connect');
+          setMessage({
+            type: 'info',
+            text: `TCP/IP 已启用，正在连接到 ${result.device_ip}...`,
+          });
 
-          // 自动切换到 WiFi 连接选项卡
-          window.setTimeout(() => {
-            setActiveTab('connect');
-          }, 1500);
+          // 刷新设备列表
+          onRefreshDevices();
+
+          // 自动尝试连接
+          try {
+            const fullAddress = `${result.device_ip}:${port}`;
+            const connectResult = await connectDevice(
+              fullAddress,
+              parseInt(timeout)
+            );
+
+            if (connectResult.success) {
+              setMessage({
+                type: 'success',
+                text: '已成功切换到无线连接！现在你可以拔掉 USB 线了。',
+              });
+              // 再次刷新以显示新连接的设备
+              window.setTimeout(() => {
+                onRefreshDevices();
+              }, 1000);
+            } else {
+              setMessage({
+                type: 'error',
+                text: `TCP/IP已启用，但连接失败: ${connectResult.message}`,
+              });
+            }
+          } catch (connError) {
+            setMessage({
+              type: 'error',
+              text: `连接出错: ${connError instanceof Error ? connError.message : '未知错误'}`,
+            });
+          }
+        } else {
+          setMessage({
+            type: 'success',
+            text: result.message + ' (未获取到IP，请手动连接)',
+          });
         }
       } else {
         setMessage({ type: 'error', text: result.message });

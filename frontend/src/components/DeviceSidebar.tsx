@@ -31,6 +31,9 @@ export function DeviceSidebar({
 }: DeviceSidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(getInitialCollapsedState);
   const [isWifiDialogOpen, setIsWifiDialogOpen] = useState(false);
+  const [wifiInitialTab, setWifiInitialTab] = useState<'connect' | 'enable'>(
+    'connect'
+  );
 
   useEffect(() => {
     localStorage.setItem('sidebar-collapsed', JSON.stringify(isCollapsed));
@@ -153,9 +156,18 @@ export function DeviceSidebar({
                 id={device.id}
                 model={device.model}
                 status={device.status}
+                connectionType={device.connection_type}
                 isInitialized={device.is_initialized}
                 isActive={device.id === currentDeviceId}
                 onClick={() => onSelectDevice(device.id)}
+                onEnableWifi={
+                  device.connection_type === 'usb'
+                    ? () => {
+                        setWifiInitialTab('enable');
+                        setIsWifiDialogOpen(true);
+                      }
+                    : undefined
+                }
               />
             ))
           )}
@@ -216,6 +228,7 @@ export function DeviceSidebar({
         onClose={() => setIsWifiDialogOpen(false)}
         devices={devices}
         onRefreshDevices={onRefreshDevices}
+        initialTab={wifiInitialTab}
       />
     </>
   );

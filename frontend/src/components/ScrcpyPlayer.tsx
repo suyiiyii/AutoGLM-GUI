@@ -100,6 +100,8 @@ export function ScrcpyPlayer({
   const lastResetTimeRef = useRef<number>(0); // Track last reset time for debouncing
   const MAX_RESET_ATTEMPTS = 3; // Max reset attempts before full reconnect
   const RESET_DEBOUNCE_MS = 1000; // Minimum time between resets
+  const cachedSpsRef = useRef<Uint8Array | null>(null);
+  const cachedPpsRef = useRef<Uint8Array | null>(null);
 
   // Use ref to store latest callback to avoid useEffect re-running
   const onFallbackRef = useRef(onFallback);
@@ -906,12 +908,33 @@ export function ScrcpyPlayer({
                 );
               }
 
-              // Extract NAL type for debugging (skip for first message which is multi-NAL init data)
-              if (hasReceivedDataRef.current) {
-                const nalHeaderOffset = videoData[2] === 0x01 ? 3 : 4;
-                const nalType = videoData[nalHeaderOffset] & 0x1f;
+              // Extract NAL type (even for init data)
+              const nalHeaderOffset = videoData[2] === 0x01 ? 3 : 4;
+              const nalType = videoData[nalHeaderOffset] & 0x1f;
 
-                // Log important NAL units (SPS=7, PPS=8, IDR=5)
+              // Drop obviously invalid NALs to avoid jMuxer buffer errors
+              const isTinySps = nalType === 7 && videoData.length < 10;
+              const isTinyPps = nalType === 8 && videoData.length < 6;
+              const isTinyIdr = nalType === 5 && videoData.length < 800;
+              const isHugeNal = videoData.length > 512_000; // >512KB
+
+              if (isTinySps || isTinyPps || isTinyIdr || isHugeNal) {
+                console.warn(
+                  `[ScrcpyPlayer] Dropped NAL (type=${nalType}, size=${videoData.length} bytes) ` +
+                    `(tinySps=${isTinySps}, tinyPps=${isTinyPps}, tinyIdr=${isTinyIdr}, huge=${isHugeNal})`
+                );
+                return;
+              }
+
+              // Cache valid SPS/PPS for later IDR recovery
+              if (nalType === 7) {
+                cachedSpsRef.current = videoData;
+              } else if (nalType === 8) {
+                cachedPpsRef.current = videoData;
+              }
+
+              // Log important NAL units (SPS=7, PPS=8, IDR=5) after first packet
+              if (hasReceivedDataRef.current) {
                 if (nalType === 5 || nalType === 7 || nalType === 8) {
                   const typeNames: Record<number, string> = {
                     5: 'IDR',
@@ -921,6 +944,16 @@ export function ScrcpyPlayer({
                   console.log(
                     `[ScrcpyPlayer] Received ${typeNames[nalType]} NAL unit (${videoData.length} bytes)`
                   );
+                }
+              }
+
+              // For each IDR, prepend last known SPS/PPS to stabilize decoder
+              if (nalType === 5) {
+                if (cachedSpsRef.current) {
+                  jmuxerRef.current.feed({ video: cachedSpsRef.current });
+                }
+                if (cachedPpsRef.current) {
+                  jmuxerRef.current.feed({ video: cachedPpsRef.current });
                 }
               }
 

@@ -230,10 +230,25 @@ async def video_stream_ws(
                 # Read one complete NAL unit
                 # Each WebSocket message = one complete NAL unit (clear semantic boundary)
                 nal_unit = await streamer.read_nal_unit(auto_cache=True)
+
+                # Extract NAL type (after start code)
+                nal_type = -1
+                if len(nal_unit) > 4:
+                    start_code_len = 4 if nal_unit[:4] == b"\x00\x00\x00\x01" else 3
+                    nal_type = nal_unit[start_code_len] & 0x1F
+
+                # For IDR frames, prepend cached SPS/PPS to help decoder recover after resets
+                if nal_type == 5 and streamer.cached_sps and streamer.cached_pps:
+                    await websocket.send_bytes(streamer.cached_sps)
+                    await websocket.send_bytes(streamer.cached_pps)
+
                 await websocket.send_bytes(nal_unit)
 
                 # Debug: Save to file
                 if debug_file:
+                    if nal_type == 5 and streamer.cached_sps and streamer.cached_pps:
+                        debug_file.write(streamer.cached_sps)
+                        debug_file.write(streamer.cached_pps)
                     debug_file.write(nal_unit)
                     debug_file.flush()
 
