@@ -105,6 +105,7 @@ export function ScrcpyPlayer({
   const onFallbackRef = useRef(onFallback);
   const fallbackTimeoutRef = useRef(fallbackTimeout);
   const onStreamReadyRef = useRef(onStreamReady);
+  const connectFnRef = useRef<(() => void) | null>(null); // Reference to connect function for error recovery
 
   /**
    * Convert click coordinates to device coordinates
@@ -185,7 +186,22 @@ export function ScrcpyPlayer({
    * Handle mouse down event for drag start
    */
   const handleMouseDown = async (event: React.MouseEvent<HTMLVideoElement>) => {
-    if (!enableControl || !videoRef.current || status !== 'connected') return;
+    console.log('[Touch] Mouse down event triggered');
+
+    if (!enableControl) {
+      console.warn('[Touch] Control disabled');
+      return;
+    }
+
+    if (!videoRef.current) {
+      console.warn('[Touch] Video ref not available');
+      return;
+    }
+
+    if (status !== 'connected') {
+      console.warn('[Touch] Video not connected, status:', status);
+      return;
+    }
 
     isDraggingRef.current = true;
     dragStartRef.current = {
@@ -194,13 +210,23 @@ export function ScrcpyPlayer({
       time: Date.now(),
     };
 
+    console.log('[Touch] Drag started at:', dragStartRef.current);
+
     // Convert to device coordinates and send DOWN event
     const rect = videoRef.current.getBoundingClientRect();
     const clickX = event.clientX - rect.left;
     const clickY = event.clientY - rect.top;
 
     const deviceCoords = getDeviceCoordinates(clickX, clickY, videoRef.current);
-    if (!deviceCoords || !deviceResolution) return;
+    if (!deviceCoords) {
+      console.warn('[Touch] Failed to get device coordinates');
+      return;
+    }
+
+    if (!deviceResolution) {
+      console.warn('[Touch] Device resolution not available');
+      return;
+    }
 
     // Scale to actual device resolution
     const videoWidth = videoRef.current.videoWidth;
@@ -291,11 +317,24 @@ export function ScrcpyPlayer({
    * Handle mouse up event for drag end
    */
   const handleMouseUp = async (event: React.MouseEvent<HTMLVideoElement>) => {
-    if (!isDraggingRef.current || !dragStartRef.current) return;
+    console.log('[Touch] Mouse up event triggered');
+
+    if (!isDraggingRef.current || !dragStartRef.current) {
+      console.warn('[Touch] Not dragging or no drag start');
+      return;
+    }
 
     const deltaX = event.clientX - dragStartRef.current.x;
     const deltaY = event.clientY - dragStartRef.current.y;
     const deltaTime = Date.now() - dragStartRef.current.time;
+    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+
+    console.log('[Touch] Drag info:', {
+      distance,
+      deltaTime,
+      deltaX,
+      deltaY,
+    });
 
     // Clear swipe line
     setSwipeLine(null);
@@ -309,13 +348,15 @@ export function ScrcpyPlayer({
     pendingMoveRef.current = null;
 
     // Check if it's a tap (short movement, short duration)
-    const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
     if (distance < 10 && deltaTime < 200) {
       // It's a tap - use existing tap logic
+      console.log('[Touch] Detected as TAP, calling handleVideoClick');
       handleVideoClick(event);
       dragStartRef.current = null;
       return;
     }
+
+    console.log('[Touch] Detected as SWIPE/DRAG');
 
     // Send UP event at final position
     const rect = videoRef.current?.getBoundingClientRect();
@@ -543,11 +584,17 @@ export function ScrcpyPlayer({
   const handleVideoClick = async (
     event: React.MouseEvent<HTMLVideoElement>
   ) => {
+    console.log('[Touch] handleVideoClick called');
+
     // Guard: Feature disabled
-    if (!enableControl) return;
+    if (!enableControl) {
+      console.warn('[Touch] Click - Control disabled');
+      return;
+    }
 
     // Guard: Video not ready
     if (!videoRef.current || status !== 'connected') {
+      console.warn('[Touch] Click - Video not ready or not connected');
       return;
     }
 
@@ -556,11 +603,13 @@ export function ScrcpyPlayer({
       videoRef.current.videoWidth === 0 ||
       videoRef.current.videoHeight === 0
     ) {
+      console.warn('[Touch] Click - Video dimensions not available');
       return;
     }
 
     // Guard: Device resolution not available
     if (!deviceResolution) {
+      console.warn('[Touch] Click - Device resolution not available');
       return;
     }
 
@@ -569,9 +618,12 @@ export function ScrcpyPlayer({
     const clickX = event.clientX - rect.left;
     const clickY = event.clientY - rect.top;
 
+    console.log('[Touch] Click position:', { clickX, clickY });
+
     // Transform to device coordinates
     const deviceCoords = getDeviceCoordinates(clickX, clickY, videoRef.current);
     if (!deviceCoords) {
+      console.warn('[Touch] Click - Failed to get device coordinates');
       return;
     }
 
@@ -583,6 +635,8 @@ export function ScrcpyPlayer({
 
     const actualDeviceX = Math.round(deviceCoords.x * scaleX);
     const actualDeviceY = Math.round(deviceCoords.y * scaleY);
+
+    console.log('[Touch] Sending tap to:', { actualDeviceX, actualDeviceY });
 
     // Add ripple effect (use viewport coordinates for fixed positioning)
     const rippleId = Date.now();
@@ -599,12 +653,14 @@ export function ScrcpyPlayer({
     // Send tap command with actual device coordinates
     try {
       const result = await sendTap(actualDeviceX, actualDeviceY, deviceId);
+      console.log('[Touch] Tap result:', result);
       if (result.success) {
         onTapSuccess?.();
       } else {
         onTapError?.(result.error || 'Unknown error');
       }
     } catch (error) {
+      console.error('[Touch] Tap error:', error);
       onTapError?.(String(error));
     }
   };
@@ -699,79 +755,99 @@ export function ScrcpyPlayer({
         jmuxerRef.current = new jMuxer({
           node: videoRef.current,
           mode: 'video',
-          flushingTime: 0, // ✅ Minimal latency
-          fps: 20, // Match backend max_fps=20
+          flushingTime: 0, // No buffering - process frames immediately
+          fps: 30, // Standard FPS
           debug: false,
           clearBuffer: true, // ✅ Clear buffer on errors to prevent buildup
 
-          // ✅ Enhanced error handling with reset-first strategy
+          // ✅ Enhanced error handling with intelligent recovery strategy
           onError: (error: { name: string; error: string }) => {
-            console.error('[jMuxer] Decoder error:', error);
+            // ✅ Safety: Wrap all error handling in try-catch to prevent crashes
+            try {
+              console.error('[jMuxer] Decoder error:', error);
 
-            // Handle buffer errors with progressive recovery strategy
-            if (
-              error.name === 'InvalidStateError' &&
-              error.error === 'buffer error'
-            ) {
-              const now = Date.now();
-              const timeSinceLastReset = now - lastResetTimeRef.current;
+              // Handle buffer errors with progressive recovery strategy
+              if (
+                error.name === 'InvalidStateError' &&
+                error.error === 'buffer error'
+              ) {
+                const now = Date.now();
+                const timeSinceLastReset = now - lastResetTimeRef.current;
 
-              // Debounce: prevent rapid consecutive resets
-              if (timeSinceLastReset < RESET_DEBOUNCE_MS) {
+                // Debounce: prevent rapid consecutive resets
+                if (timeSinceLastReset < RESET_DEBOUNCE_MS) {
+                  console.warn(
+                    `[jMuxer] Reset debounced (${timeSinceLastReset}ms since last reset)`
+                  );
+                  return;
+                }
+
+                lastResetTimeRef.current = now;
+                resetAttemptsRef.current++;
+
                 console.warn(
-                  `[jMuxer] Reset debounced (${timeSinceLastReset}ms since last reset)`
+                  `[jMuxer] ⚠️ Buffer error detected (attempt ${resetAttemptsRef.current}/${MAX_RESET_ATTEMPTS})`
                 );
-                return;
-              }
 
-              lastResetTimeRef.current = now;
-              resetAttemptsRef.current++;
-
-              console.warn(
-                `[jMuxer] ⚠️ Buffer error detected (attempt ${resetAttemptsRef.current}/${MAX_RESET_ATTEMPTS})`
-              );
-
-              // Strategy: Try reset() first, only reconnect as last resort
-              if (resetAttemptsRef.current <= MAX_RESET_ATTEMPTS) {
-                // ✅ OPTIMIZED: Use reset() instead of destroy + reconnect
-                if (jmuxerRef.current) {
-                  try {
-                    console.log('[jMuxer] Attempting lightweight reset()...');
-                    jmuxerRef.current.reset();
-                    console.log('[jMuxer] ✓ Reset successful');
-
-                    // If reset succeeds, don't reconnect WebSocket
-                    // Just continue receiving data on existing connection
-                    return;
-                  } catch (resetError) {
-                    console.error('[jMuxer] Reset failed:', resetError);
-                    // Fall through to full reconnect
+                // Strategy 1: Try lightweight reset() first (for minor glitches)
+                if (resetAttemptsRef.current <= 2) {
+                  if (jmuxerRef.current) {
+                    try {
+                      console.log(
+                        '[jMuxer] 🔄 Attempting lightweight reset()...'
+                      );
+                      jmuxerRef.current.reset();
+                      console.log(
+                        '[jMuxer] ✅ Reset successful, continuing with existing connection'
+                      );
+                      return; // Continue with existing WebSocket
+                    } catch (resetError) {
+                      console.error('[jMuxer] ❌ Reset failed:', resetError);
+                      // Don't crash, fall through to reconnect
+                    }
                   }
                 }
-              }
 
-              // CRITICAL: After reset, decoder needs fresh SPS+PPS+IDR
-              // Close and reconnect WebSocket to get initialization data
-              console.log(
-                '[jMuxer] Reset successful, reconnecting to get fresh initialization data...'
-              );
+                // Strategy 2: Full reconnect (for persistent issues or after multiple resets)
+                console.log(
+                  '[jMuxer] 🔌 Multiple errors detected, performing full reconnect to get fresh I-frame...'
+                );
 
-              lastErrorTimeRef.current = now;
-              const errorDeviceId = currentDeviceId;
+                lastErrorTimeRef.current = now;
+                const errorDeviceId = currentDeviceId;
 
-              if (connectFn) {
-                setTimeout(() => {
-                  if (deviceIdRef.current === errorDeviceId) {
-                    if (connectFn) {
-                      connectFn();
+                if (connectFn) {
+                  setTimeout(() => {
+                    try {
+                      if (deviceIdRef.current === errorDeviceId) {
+                        if (connectFn) {
+                          connectFn();
+                        }
+                      } else {
+                        console.log(
+                          `[jMuxer] Device changed (${errorDeviceId} -> ${deviceIdRef.current}), skip reconnect`
+                        );
+                      }
+                    } catch (reconnectError) {
+                      console.error(
+                        '[jMuxer] Reconnect failed:',
+                        reconnectError
+                      );
+                      // Don't crash, just log the error
                     }
-                  } else {
-                    console.log(
-                      `[jMuxer] Device changed (${errorDeviceId} -> ${deviceIdRef.current}), skip reconnect`
-                    );
-                  }
-                }, 100);
+                  }, 100);
+                }
+              } else {
+                // Handle other types of errors gracefully
+                console.warn('[jMuxer] Non-buffer error:', error.name);
               }
+            } catch (handlerError) {
+              // ✅ Last resort: catch any uncaught errors in error handler
+              console.error(
+                '[jMuxer] Error handler itself failed:',
+                handlerError
+              );
+              // Don't let error handler crash the app
             }
           },
 
@@ -882,9 +958,20 @@ export function ScrcpyPlayer({
 
             // Feed initialization data directly to jMuxer (contains multiple NAL units)
             if (jmuxerRef.current) {
-              jmuxerRef.current.feed({
-                video: data,
-              });
+              try {
+                jmuxerRef.current.feed({
+                  video: data,
+                });
+              } catch (feedError) {
+                console.error(
+                  '[ScrcpyPlayer] Failed to feed initialization data:',
+                  feedError
+                );
+                // Don't crash, try to reconnect
+                if (connectFnRef.current) {
+                  setTimeout(() => connectFnRef.current?.(), 500);
+                }
+              }
             }
             return; // Don't process further, initialization data is special
           }
@@ -892,8 +979,30 @@ export function ScrcpyPlayer({
           // Feed to jMuxer - each subsequent WebSocket message is one complete NAL unit
           // Backend ensures NAL unit boundaries, frontend just needs to pass through
           try {
+            // ✅ Safety check: Ensure jmuxerRef is valid
+            if (!jmuxerRef.current) {
+              console.warn(
+                '[ScrcpyPlayer] jMuxer not initialized, skipping frame'
+              );
+              return;
+            }
+
+            // ✅ Safety check: Ensure data is valid
+            if (!event.data || event.data.byteLength === 0) {
+              console.warn('[ScrcpyPlayer] Received empty frame, skipping');
+              return;
+            }
+
             if (jmuxerRef.current && event.data.byteLength > 0) {
               const videoData = new Uint8Array(event.data);
+
+              // ✅ Safety check: Ensure videoData is valid
+              if (!videoData || videoData.length < 4) {
+                console.warn(
+                  '[ScrcpyPlayer] Invalid video data (too short), skipping'
+                );
+                return;
+              }
 
               // Validate NAL unit structure (should start with start code)
               const hasStartCode =
@@ -904,15 +1013,26 @@ export function ScrcpyPlayer({
               if (!hasStartCode) {
                 console.warn(
                   `[ScrcpyPlayer] Invalid NAL unit: missing start code, first bytes = ${Array.from(
-                    videoData.slice(0, 8)
+                    videoData.slice(0, Math.min(8, videoData.length))
                   )
                     .map(b => b.toString(16).padStart(2, '0'))
                     .join(' ')}`
                 );
+                // Don't feed invalid data to jMuxer
+                return;
               }
 
               // Extract NAL type for debugging
               const nalHeaderOffset = videoData[2] === 0x01 ? 3 : 4;
+
+              // ✅ Safety check: Ensure we have enough data for NAL header
+              if (videoData.length <= nalHeaderOffset) {
+                console.warn(
+                  '[ScrcpyPlayer] Video data too short for NAL header'
+                );
+                return;
+              }
+
               const nalType = videoData[nalHeaderOffset] & 0x1f;
 
               // Log important NAL units (SPS=7, PPS=8, IDR=5)
@@ -925,12 +1045,27 @@ export function ScrcpyPlayer({
                 console.log(
                   `[ScrcpyPlayer] Received ${typeNames[nalType]} NAL unit (${videoData.length} bytes)`
                 );
+
+                // ✅ Reset error counters when receiving fresh IDR (I-frame)
+                // This indicates successful recovery from network issues
+                if (nalType === 5 && resetAttemptsRef.current > 0) {
+                  console.log(
+                    `[ScrcpyPlayer] ✅ Received IDR frame after ${resetAttemptsRef.current} error(s), resetting error counters`
+                  );
+                  resetAttemptsRef.current = 0;
+                }
               }
 
-              // Feed complete NAL unit to jMuxer
-              jmuxerRef.current.feed({
-                video: videoData,
-              });
+              // ✅ Feed complete NAL unit to jMuxer with error handling
+              try {
+                jmuxerRef.current.feed({
+                  video: videoData,
+                });
+              } catch (feedError) {
+                console.error('[ScrcpyPlayer] Feed error:', feedError);
+                // Don't crash, log and continue
+                // If too many feed errors, the onError handler will trigger reconnect
+              }
 
               // Monitor frame rate and detect buffer buildup
               frameCountRef.current++;
@@ -941,8 +1076,10 @@ export function ScrcpyPlayer({
                 // Log stats every 5 seconds
                 const fps = (frameCountRef.current / elapsed) * 1000;
                 const videoEl = videoRef.current;
+
+                // ✅ Safety check: Ensure video element exists
                 const buffered =
-                  videoEl && videoEl.buffered.length > 0
+                  videoEl && videoEl.buffered && videoEl.buffered.length > 0
                     ? videoEl.buffered.end(0) - videoEl.currentTime
                     : 0;
 
@@ -962,7 +1099,8 @@ export function ScrcpyPlayer({
               }
             }
           } catch (error) {
-            console.error('[ScrcpyPlayer] Feed error:', error);
+            console.error('[ScrcpyPlayer] Frame processing error:', error);
+            // Don't crash, just log and continue
           }
         };
 
@@ -1003,13 +1141,16 @@ export function ScrcpyPlayer({
       }
     };
 
-    // Make connect function accessible to jMuxer error handler
+    // Make connect function accessible to jMuxer error handler and video element error handler
     connectFn = connect;
+    connectFnRef.current = connect;
 
     connect();
 
     // Cleanup
     return () => {
+      connectFnRef.current = null; // Clear connect function reference
+
       if (reconnectTimeout) {
         clearTimeout(reconnectTimeout);
       }
@@ -1051,18 +1192,71 @@ export function ScrcpyPlayer({
         autoPlay
         muted
         playsInline
+        preload="auto"
         onError={e => {
-          const videoEl = e.currentTarget;
-          const error = videoEl.error;
-          if (error) {
-            console.error('[Video Element] Error occurred:', {
-              code: error.code,
-              message: error.message,
-              MEDIA_ERR_ABORTED: error.code === 1,
-              MEDIA_ERR_NETWORK: error.code === 2,
-              MEDIA_ERR_DECODE: error.code === 3,
-              MEDIA_ERR_SRC_NOT_SUPPORTED: error.code === 4,
-            });
+          // ✅ Safety: Wrap error handler in try-catch
+          try {
+            const videoEl = e.currentTarget;
+            const error = videoEl.error;
+            if (error) {
+              console.error('[Video Element] Error occurred:', {
+                code: error.code,
+                message: error.message,
+                MEDIA_ERR_ABORTED: error.code === 1,
+                MEDIA_ERR_NETWORK: error.code === 2,
+                MEDIA_ERR_DECODE: error.code === 3,
+                MEDIA_ERR_SRC_NOT_SUPPORTED: error.code === 4,
+              });
+
+              // ✅ CRITICAL: Handle MEDIA_ERR_DECODE (code 3) - video pipeline corruption
+              // This error means the decoder is in a bad state and can't recover without fresh initialization
+              if (error.code === 3) {
+                const now = Date.now();
+                const timeSinceLastError = now - lastErrorTimeRef.current;
+
+                // Debounce: Prevent rapid reconnects (wait at least 2s between reconnects)
+                if (timeSinceLastError < 2000) {
+                  console.warn(
+                    `[Video Element] Decode error debounced (${timeSinceLastError}ms since last error)`
+                  );
+                  return;
+                }
+
+                lastErrorTimeRef.current = now;
+                console.log(
+                  '[Video Element] 💥 MEDIA_ERR_DECODE detected, reconnecting to get fresh I-frame...'
+                );
+
+                // Close and reconnect to get fresh SPS+PPS+IDR
+                if (connectFnRef.current) {
+                  try {
+                    setTimeout(() => {
+                      try {
+                        if (connectFnRef.current) {
+                          connectFnRef.current();
+                        }
+                      } catch (reconnectError) {
+                        console.error(
+                          '[Video Element] Reconnect failed:',
+                          reconnectError
+                        );
+                      }
+                    }, 100);
+                  } catch (timeoutError) {
+                    console.error(
+                      '[Video Element] Failed to schedule reconnect:',
+                      timeoutError
+                    );
+                  }
+                }
+              }
+            }
+          } catch (handlerError) {
+            console.error(
+              '[Video Element] Error handler failed:',
+              handlerError
+            );
+            // Don't crash the app
           }
         }}
         onMouseDown={handleMouseDown}
@@ -1109,7 +1303,12 @@ export function ScrcpyPlayer({
         className={`max-w-full max-h-full object-contain ${
           enableControl ? 'cursor-pointer' : ''
         }`}
-        style={{ backgroundColor: '#000' }}
+        style={{
+          backgroundColor: '#000',
+          objectFit: 'contain',
+          maxWidth: '100%',
+          maxHeight: '100%',
+        }}
       />
 
       {/* Swipe line visualization */}

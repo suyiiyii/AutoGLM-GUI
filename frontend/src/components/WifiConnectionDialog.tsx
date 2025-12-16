@@ -130,16 +130,32 @@ export function WifiConnectionDialog({
     setDeviceIp(null);
 
     try {
-      const result = await enableTcpip(
-        selectedDevice || null,
-        parseInt(port) || 5555
-      );
+      // 如果没有选择设备，使用第一个 USB 设备
+      const deviceId = selectedDevice || usbDevices[0]?.id || null;
+
+      if (!deviceId) {
+        setMessage({ type: 'error', text: '没有可用的 USB 设备' });
+        setLoading(false);
+        return;
+      }
+
+      const result = await enableTcpip(deviceId, parseInt(port) || 5555);
 
       if (result.success) {
         setMessage({ type: 'success', text: result.message });
         if (result.device_ip) {
           setDeviceIp(result.device_ip);
           setAddress(result.device_ip);
+
+          // 刷新设备列表（移除已变成 offline 的 USB 设备）
+          window.setTimeout(() => {
+            onRefreshDevices();
+          }, 500);
+
+          // 自动切换到 WiFi 连接选项卡
+          window.setTimeout(() => {
+            setActiveTab('connect');
+          }, 1500);
         }
       } else {
         setMessage({ type: 'error', text: result.message });
@@ -161,7 +177,16 @@ export function WifiConnectionDialog({
     setDeviceIp(null);
 
     try {
-      const result = await getDeviceIp(selectedDevice || null);
+      // 如果没有选择设备，使用第一个 USB 设备
+      const deviceId = selectedDevice || usbDevices[0]?.id || null;
+
+      if (!deviceId) {
+        setMessage({ type: 'error', text: '没有可用的 USB 设备' });
+        setLoading(false);
+        return;
+      }
+
+      const result = await getDeviceIp(deviceId);
 
       if (result.success && result.ip) {
         setDeviceIp(result.ip);
@@ -194,7 +219,7 @@ export function WifiConnectionDialog({
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-lg flex items-center justify-center z-50">
       <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col">
         {/* 头部 */}
         <div className="px-6 py-4 border-b border-gray-200 dark:border-gray-700 flex items-center justify-between">
@@ -281,15 +306,33 @@ export function WifiConnectionDialog({
                     />
                   </svg>
                   <div className="text-sm text-blue-800 dark:text-blue-300">
-                    <p className="font-medium mb-1">使用说明：</p>
-                    <ol className="list-decimal list-inside space-y-1">
-                      <li>
-                        确保设备已启用 WiFi ADB（在&ldquo;启用
-                        TCP/IP&rdquo;选项卡操作）
-                      </li>
-                      <li>输入设备的 IP 地址（可选端口,默认 5555）</li>
-                      <li>点击&ldquo;连接&rdquo;按钮</li>
-                    </ol>
+                    <p className="font-medium mb-1">连接方式：</p>
+                    <div className="space-y-2">
+                      <div>
+                        <p className="font-semibold">
+                          方式 1：传统 TCP/IP（推荐）
+                        </p>
+                        <ol className="list-decimal list-inside space-y-1 ml-2">
+                          <li>
+                            在&ldquo;启用 TCP/IP&rdquo;选项卡操作（自动使用 5555
+                            端口）
+                          </li>
+                          <li>输入设备 IP 地址即可连接</li>
+                        </ol>
+                      </div>
+                      <div>
+                        <p className="font-semibold">
+                          方式 2：Android 11+ 无线调试
+                        </p>
+                        <ol className="list-decimal list-inside space-y-1 ml-2">
+                          <li>设备上手动开启&ldquo;无线调试&rdquo;</li>
+                          <li>
+                            查看设备显示的 IP:端口（例如 192.168.1.100:38273）
+                          </li>
+                          <li>完整输入到下方地址栏</li>
+                        </ol>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -297,12 +340,15 @@ export function WifiConnectionDialog({
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   设备地址
+                  <span className="ml-2 text-xs text-gray-500 dark:text-gray-400 font-normal">
+                    （可输入 IP:端口 或仅 IP）
+                  </span>
                 </label>
                 <input
                   type="text"
                   value={address}
                   onChange={e => setAddress(e.target.value)}
-                  placeholder="例如: 192.168.1.100 或 192.168.1.100:5555"
+                  placeholder="例如: 192.168.1.100:5555 或 192.168.1.100"
                   className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   disabled={loading}
                 />
@@ -312,6 +358,9 @@ export function WifiConnectionDialog({
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     端口
+                    <span className="ml-2 text-xs text-gray-500 dark:text-gray-400 font-normal">
+                      （地址未含端口时使用）
+                    </span>
                   </label>
                   <input
                     type="number"
@@ -450,22 +499,31 @@ export function WifiConnectionDialog({
               </div>
 
               {deviceIp && (
-                <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-green-800 dark:text-green-300 mb-1">
-                        设备 IP 地址
-                      </p>
-                      <p className="text-lg font-mono text-green-900 dark:text-green-200">
-                        {deviceIp}:{port}
-                      </p>
+                <div className="space-y-3">
+                  <div className="bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm font-medium text-green-800 dark:text-green-300 mb-1">
+                          设备 IP 地址
+                        </p>
+                        <p className="text-lg font-mono text-green-900 dark:text-green-200">
+                          {deviceIp}:{port}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => copyToClipboard(`${deviceIp}:${port}`)}
+                        className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
+                      >
+                        复制
+                      </button>
                     </div>
-                    <button
-                      onClick={() => copyToClipboard(`${deviceIp}:${port}`)}
-                      className="px-3 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
-                    >
-                      复制
-                    </button>
+                  </div>
+                  <div className="bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
+                    <p className="text-sm text-blue-800 dark:text-blue-300">
+                      💡 <strong>下一步：</strong>
+                      拔掉 USB
+                      线，在自动切换的&ldquo;WiFi连接&rdquo;选项卡点击连接即可
+                    </p>
                   </div>
                 </div>
               )}

@@ -18,6 +18,7 @@ class ScrcpyStreamer:
         bit_rate: int = 1_000_000,
         port: int = 27183,
         idr_interval_s: int = 1,
+        max_fps: int = 20,
     ):
         """Initialize ScrcpyStreamer.
 
@@ -27,12 +28,14 @@ class ScrcpyStreamer:
             bit_rate: Video bitrate in bps
             port: TCP port for scrcpy socket
             idr_interval_s: Seconds between IDR frames (controls GOP length)
+            max_fps: Maximum frames per second
         """
         self.device_id = device_id
         self.max_size = max_size
         self.bit_rate = bit_rate
         self.port = port
         self.idr_interval_s = idr_interval_s
+        self.max_fps = max_fps
 
         self.scrcpy_process: subprocess.Popen | None = None
         self.tcp_socket: socket.socket | None = None
@@ -227,14 +230,18 @@ class ScrcpyStreamer:
                 "3.3.3",  # scrcpy version - must match installed version
                 f"max_size={self.max_size}",
                 f"video_bit_rate={self.bit_rate}",
-                "max_fps=20",  # ✅ Limit to 20fps to reduce data volume
-                "tunnel_forward=true",
+                f"max_fps={self.max_fps}",  # Configurable FPS
                 "audio=false",
                 "control=false",
                 "cleanup=false",
                 # Force I-frame (IDR) at fixed interval (GOP length) for reliable reconnection
                 f"video_codec_options=i-frame-interval={self.idr_interval_s}",
             ]
+
+            # Connection mode: always use tunnel_forward for simplicity
+            # WiFi devices will still use adb forward, but connection is faster than LocalSocket
+            server_args.append("tunnel_forward=true")
+
             cmd.extend(server_args)
 
             # Capture stderr to see error messages
@@ -289,7 +296,7 @@ class ScrcpyStreamer:
         raise RuntimeError("Failed to start scrcpy server after maximum retries")
 
     async def _connect_socket(self) -> None:
-        """Connect to scrcpy TCP socket."""
+        """Connect to scrcpy TCP socket (via adb forward to localhost)."""
         self.tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         self.tcp_socket.settimeout(5)
 
@@ -303,16 +310,28 @@ class ScrcpyStreamer:
         except OSError as e:
             print(f"[ScrcpyStreamer] Warning: Failed to set socket buffer size: {e}")
 
+        # Connect to localhost (via adb forward for both USB and WiFi)
+        print(f"[ScrcpyStreamer] Connecting to localhost:{self.port} (via adb forward)")
+
         # Retry connection
-        for _ in range(5):
+        for attempt in range(10):
             try:
                 self.tcp_socket.connect(("localhost", self.port))
                 self.tcp_socket.settimeout(None)  # Non-blocking for async
+                print(
+                    f"[ScrcpyStreamer] Successfully connected to localhost:{self.port}"
+                )
                 return
-            except (ConnectionRefusedError, OSError):
-                await asyncio.sleep(0.5)
-
-        raise ConnectionError("Failed to connect to scrcpy server")
+            except (ConnectionRefusedError, OSError) as e:
+                if attempt < 9:
+                    print(
+                        f"[ScrcpyStreamer] Connection attempt {attempt + 1}/10 failed, retrying..."
+                    )
+                    await asyncio.sleep(0.5)
+                else:
+                    raise ConnectionError(
+                        f"Failed to connect to localhost:{self.port} after 10 attempts: {e}"
+                    )
 
     def _find_nal_units(self, data: bytes) -> list[tuple[int, int, int, bool]]:
         """Find NAL units in H.264 data.

@@ -45,9 +45,18 @@ def tap(x: int, y: int, device_id: str | None = None, delay: float = 1.0) -> Non
     """
     adb_prefix = _get_adb_prefix(device_id)
 
-    subprocess.run(
-        adb_prefix + ["shell", "input", "tap", str(x), str(y)], capture_output=True
-    )
+    cmd = adb_prefix + ["shell", "input", "tap", str(x), str(y)]
+    print(f"[ADB] Executing tap command: {' '.join(cmd)}")
+
+    result = subprocess.run(cmd, capture_output=True, text=True)
+
+    if result.returncode != 0:
+        print(f"[ADB] Tap command failed with code {result.returncode}")
+        print(f"[ADB] stdout: {result.stdout}")
+        print(f"[ADB] stderr: {result.stderr}")
+    else:
+        print(f"[ADB] Tap command succeeded at ({x}, {y})")
+
     time.sleep(delay)
 
 

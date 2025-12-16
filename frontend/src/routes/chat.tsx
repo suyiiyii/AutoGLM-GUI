@@ -14,32 +14,17 @@ function ChatComponent() {
   const [devices, setDevices] = useState<Device[]>([]);
   const [currentDeviceId, setCurrentDeviceId] = useState<string>('');
 
-  // 全局配置（所有设备共享）- 从 localStorage 加载
-  const [config, setConfig] = useState(() => {
-    try {
-      const saved = localStorage.getItem('autoglm-config');
-      if (saved) {
-        return JSON.parse(saved);
-      }
-    } catch (error) {
-      console.warn('Failed to load config from localStorage:', error);
-    }
-    return {
-      baseUrl: '',
-      apiKey: '',
-      modelName: '',
-    };
+  // 全局配置（所有设备共享）
+  const [config, setConfig] = useState({
+    baseUrl: '',
+    apiKey: '',
+    modelName: '',
   });
   const [showConfig, setShowConfig] = useState(false);
 
-  // 保存配置到 localStorage
+  // 保存配置（仅内存，不持久化）
   const saveConfig = (newConfig: typeof config) => {
     setConfig(newConfig);
-    try {
-      localStorage.setItem('autoglm-config', JSON.stringify(newConfig));
-    } catch (error) {
-      console.warn('Failed to save config to localStorage:', error);
-    }
   };
 
   // 加载设备列表 - 提取为独立函数供外部调用
