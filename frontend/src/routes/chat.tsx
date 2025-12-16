@@ -2,6 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import * as React from 'react';
 import { useState, useEffect } from 'react';
 import {
+  connectWifi,
   listDevices,
   getConfig,
   saveConfig,
@@ -10,6 +11,7 @@ import {
 } from '../api';
 import { DeviceSidebar } from '../components/DeviceSidebar';
 import { DevicePanel } from '../components/DevicePanel';
+import { Toast, type ToastType } from '../components/Toast';
 
 export const Route = createFileRoute('/chat')({
   component: ChatComponent,
@@ -19,6 +21,15 @@ function ChatComponent() {
   // 设备列表和当前选中设备
   const [devices, setDevices] = useState<Device[]>([]);
   const [currentDeviceId, setCurrentDeviceId] = useState<string>('');
+  const [toast, setToast] = useState<{
+    message: string;
+    type: ToastType;
+    visible: boolean;
+  }>({ message: '', type: 'info', visible: false });
+
+  const showToast = (message: string, type: ToastType = 'info') => {
+    setToast({ message, type, visible: true });
+  };
 
   // 全局配置（所有设备共享）
   const [config, setConfig] = useState<ConfigSaveRequest | null>(null);
@@ -121,8 +132,35 @@ function ChatComponent() {
     }
   };
 
+  const handleConnectWifi = async (deviceId: string) => {
+    try {
+      const res = await connectWifi({ device_id: deviceId });
+      if (res.success && res.device_id) {
+        // 刷新列表后切换到新的 WiFi 设备 ID
+        setCurrentDeviceId(res.device_id);
+        const refreshed = await listDevices();
+        setDevices(refreshed.devices);
+        // 提醒用户拔掉 USB
+        showToast('WiFi 连接成功！请拔掉 USB 线以使用无线模式。', 'success');
+      } else if (!res.success) {
+        showToast(res.message || res.error || '连接失败', 'error');
+        console.error('Connect WiFi failed:', res.message || res.error);
+      }
+    } catch (e) {
+      showToast('连接 WiFi 时发生错误', 'error');
+      console.error('Connect WiFi error:', e);
+    }
+  };
+
   return (
     <div className="h-full flex relative min-h-0">
+      {toast.visible && (
+        <Toast
+          message={toast.message}
+          type={toast.type}
+          onClose={() => setToast(prev => ({ ...prev, visible: false }))}
+        />
+      )}
       {/* Config Modal */}
       {showConfig && (
         <div className="absolute inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
@@ -263,6 +301,7 @@ function ChatComponent() {
         currentDeviceId={currentDeviceId}
         onSelectDevice={setCurrentDeviceId}
         onOpenConfig={() => setShowConfig(true)}
+        onConnectWifi={handleConnectWifi}
       />
 
       {/* 右侧主内容区 - 多实例架构 */}

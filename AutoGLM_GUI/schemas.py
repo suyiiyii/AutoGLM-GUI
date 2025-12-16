@@ -142,3 +142,16 @@ class ConfigSaveRequest(BaseModel):
     base_url: str
     model_name: str = "autoglm-phone-9b"
     api_key: str | None = None
+
+
+class WiFiConnectRequest(BaseModel):
+    device_id: str | None = None
+    port: int = 5555
+
+
+class WiFiConnectResponse(BaseModel):
+    success: bool
+    message: str
+    device_id: str | None = None
+    address: str | None = None
+    error: str | None = None

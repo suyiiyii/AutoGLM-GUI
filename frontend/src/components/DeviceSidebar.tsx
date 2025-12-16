@@ -18,6 +18,7 @@ interface DeviceSidebarProps {
   currentDeviceId: string;
   onSelectDevice: (deviceId: string) => void;
   onOpenConfig: () => void;
+  onConnectWifi: (deviceId: string) => void;
 }
 
 export function DeviceSidebar({
@@ -25,6 +26,7 @@ export function DeviceSidebar({
   currentDeviceId,
   onSelectDevice,
   onOpenConfig,
+  onConnectWifi,
 }: DeviceSidebarProps) {
   const [isCollapsed, setIsCollapsed] = useState(getInitialCollapsedState);
 
@@ -149,9 +151,13 @@ export function DeviceSidebar({
                 id={device.id}
                 model={device.model}
                 status={device.status}
+                connectionType={device.connection_type}
                 isInitialized={device.is_initialized}
                 isActive={device.id === currentDeviceId}
                 onClick={() => onSelectDevice(device.id)}
+                onConnectWifi={async () => {
+                  await onConnectWifi(device.id);
+                }}
               />
             ))
           )}

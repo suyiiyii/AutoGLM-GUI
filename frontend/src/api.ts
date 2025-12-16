@@ -144,8 +144,31 @@ export interface TouchUpResponse {
   error?: string;
 }
 
+export interface WiFiConnectRequest {
+  device_id?: string | null;
+  port?: number;
+}
+
+export interface WiFiConnectResponse {
+  success: boolean;
+  message: string;
+  device_id?: string | null;
+  address?: string | null;
+  error?: string;
+}
+
 export async function listDevices(): Promise<DeviceListResponse> {
   const res = await axios.get<DeviceListResponse>('/api/devices');
+  return res.data;
+}
+
+export async function connectWifi(
+  payload: WiFiConnectRequest
+): Promise<WiFiConnectResponse> {
+  const res = await axios.post<WiFiConnectResponse>(
+    '/api/devices/connect_wifi',
+    payload
+  );
   return res.data;
 }
 
