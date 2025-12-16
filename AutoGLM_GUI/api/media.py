@@ -104,10 +104,26 @@ async def video_stream_ws(
         if device_id not in scrcpy_streamers:
             print(f"[video/stream] Creating streamer for device {device_id}")
 
-            # Use same settings for all devices (WiFi and USB)
-            scrcpy_streamers[device_id] = ScrcpyStreamer(
-                device_id=device_id, max_size=1280, bit_rate=4_000_000
-            )
+            # Optimize for WiFi devices (they have ":" in device_id)
+            is_wifi = ":" in device_id
+            if is_wifi:
+                print("[video/stream] WiFi device detected - using optimized settings")
+                # WiFi optimization: lower bitrate + shorter I-frame interval for faster recovery
+                scrcpy_streamers[device_id] = ScrcpyStreamer(
+                    device_id=device_id,
+                    max_size=1280,  # Keep 1280p
+                    bit_rate=2_500_000,  # 2.5Mbps - reduce packet loss
+                    idr_interval_s=1,  # I-frame every 1s - faster recovery from errors
+                    max_fps=20,  # 20fps
+                )
+            else:
+                # USB device: standard settings
+                scrcpy_streamers[device_id] = ScrcpyStreamer(
+                    device_id=device_id,
+                    max_size=1280,
+                    bit_rate=4_000_000,
+                    max_fps=20,
+                )
 
             try:
                 print(f"[video/stream] Starting scrcpy server for device {device_id}")

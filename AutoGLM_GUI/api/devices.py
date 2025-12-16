@@ -80,13 +80,13 @@ def enable_tcpip(request: EnableTcpipRequest) -> EnableTcpipResponse:
     if device_ip:
         return EnableTcpipResponse(
             success=True,
-            message=f"{message}。设备 IP: {device_ip}",
+            message=f"{message}。设备 IP: {device_ip}。现在可以拔掉 USB 线，使用 WiFi 连接。",
             device_ip=device_ip,
         )
     else:
         return EnableTcpipResponse(
             success=True,
-            message=f"{message}。无法自动获取设备 IP，请手动查看设备网络设置。",
+            message=f"{message}。无法自动获取设备 IP，请手动查看设备网络设置后使用 WiFi 连接。",
             device_ip=None,
         )
 

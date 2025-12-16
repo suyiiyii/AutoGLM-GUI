@@ -253,44 +253,62 @@ class ADBConnection:
 
     def get_device_ip(self, device_id: str | None = None) -> str | None:
         """
-        Get the IP address of a connected device.
+        Get the IP address of a connected device (WiFi interface).
 
         Args:
             device_id: Device ID. If None, uses first available device.
 
         Returns:
-            IP address string or None if not found.
+            WiFi IP address string or None if not found.
         """
         try:
             cmd = [self.adb_path]
             if device_id:
                 cmd.extend(["-s", device_id])
-            cmd.extend(["shell", "ip", "route"])
 
-            result = subprocess.run(cmd, capture_output=True, text=True, timeout=5)
-
-            # Parse IP from route output
-            for line in result.stdout.split("\n"):
-                if "src" in line:
-                    parts = line.split()
-                    for i, part in enumerate(parts):
-                        if part == "src" and i + 1 < len(parts):
-                            return parts[i + 1]
-
-            # Alternative: try wlan0 interface
-            cmd[-1] = "ip addr show wlan0"
+            # Method 1: Try wlan0 interface first
             result = subprocess.run(
-                cmd[:-1] + ["shell", "ip", "addr", "show", "wlan0"],
+                cmd + ["shell", "ip", "addr", "show", "wlan0"],
                 capture_output=True,
                 text=True,
                 timeout=5,
             )
 
             for line in result.stdout.split("\n"):
-                if "inet " in line:
+                if "inet " in line and "scope global" in line:
+                    # Extract IP like: inet 192.168.1.100/24 brd ...
                     parts = line.strip().split()
-                    if len(parts) >= 2:
-                        return parts[1].split("/")[0]
+                    for i, part in enumerate(parts):
+                        if part == "inet" and i + 1 < len(parts):
+                            ip_with_mask = parts[i + 1]
+                            ip = ip_with_mask.split("/")[0]
+                            return ip
+
+            # Method 2: Try to get IP from getprop (WiFi IP property)
+            result = subprocess.run(
+                cmd + ["shell", "getprop", "dhcp.wlan0.ipaddress"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+            ip = result.stdout.strip()
+            if ip:
+                return ip
+
+            # Method 3: Parse from ip route
+            result = subprocess.run(
+                cmd + ["shell", "ip", "route"],
+                capture_output=True,
+                text=True,
+                timeout=5,
+            )
+
+            for line in result.stdout.split("\n"):
+                if "src" in line and "wlan0" in line:
+                    parts = line.split()
+                    for i, part in enumerate(parts):
+                        if part == "src" and i + 1 < len(parts):
+                            return parts[i + 1]
 
             return None
 

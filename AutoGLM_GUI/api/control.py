@@ -24,6 +24,10 @@ def control_tap(request: TapRequest) -> TapResponse:
     try:
         from phone_agent.adb import tap
 
+        print(
+            f"[Control] Tap request: x={request.x}, y={request.y}, device_id={request.device_id}"
+        )
+
         tap(
             x=request.x,
             y=request.y,
@@ -31,8 +35,10 @@ def control_tap(request: TapRequest) -> TapResponse:
             delay=request.delay,
         )
 
+        print(f"[Control] Tap executed successfully at ({request.x}, {request.y})")
         return TapResponse(success=True)
     except Exception as e:
+        print(f"[Control] Tap failed: {e}")
         return TapResponse(success=False, error=str(e))
 
 
