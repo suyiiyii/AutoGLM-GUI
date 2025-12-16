@@ -5,6 +5,7 @@ AutoGLM-GUI 统一 Lint 脚本
 """
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -42,6 +43,9 @@ class AutoGLMLinter:
         name = " ".join(cmd[:3])
         work_dir = cwd or self.root_dir
 
+        # Windows 兼容性：在 Windows 上使用 shell=True 以便找到 .cmd/.bat 脚本
+        use_shell = os.name == "nt"
+
         try:
             result = subprocess.run(
                 cmd,
@@ -49,6 +53,7 @@ class AutoGLMLinter:
                 capture_output=capture_output,
                 text=True,
                 timeout=300,  # 5分钟超时
+                shell=use_shell,  # Windows 上启用 shell
             )
             return LintResult(
                 name=name,

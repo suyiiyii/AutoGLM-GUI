@@ -699,8 +699,8 @@ export function ScrcpyPlayer({
         jmuxerRef.current = new jMuxer({
           node: videoRef.current,
           mode: 'video',
-          flushingTime: 0, // ✅ Try 0 again since backend data is now correct
-          fps: 30,
+          flushingTime: 0, // ✅ Minimal latency
+          fps: 20, // Match backend max_fps=20
           debug: false,
           clearBuffer: true, // ✅ Clear buffer on errors to prevent buildup
 
@@ -870,10 +870,7 @@ export function ScrcpyPlayer({
             console.log(
               `[ScrcpyPlayer] Initialization data contains ${nalCount} NAL units`
             );
-          }
 
-          // H.264 video data received successfully
-          if (!hasReceivedDataRef.current) {
             hasReceivedDataRef.current = true;
             console.log(
               '[ScrcpyPlayer] First video data received, canceling fallback timer'
@@ -882,9 +879,17 @@ export function ScrcpyPlayer({
               clearTimeout(fallbackTimerRef.current);
               fallbackTimerRef.current = null;
             }
+
+            // Feed initialization data directly to jMuxer (contains multiple NAL units)
+            if (jmuxerRef.current) {
+              jmuxerRef.current.feed({
+                video: data,
+              });
+            }
+            return; // Don't process further, initialization data is special
           }
 
-          // Feed to jMuxer - each WebSocket message is one complete NAL unit
+          // Feed to jMuxer - each subsequent WebSocket message is one complete NAL unit
           // Backend ensures NAL unit boundaries, frontend just needs to pass through
           try {
             if (jmuxerRef.current && event.data.byteLength > 0) {
@@ -906,22 +911,20 @@ export function ScrcpyPlayer({
                 );
               }
 
-              // Extract NAL type for debugging (skip for first message which is multi-NAL init data)
-              if (hasReceivedDataRef.current) {
-                const nalHeaderOffset = videoData[2] === 0x01 ? 3 : 4;
-                const nalType = videoData[nalHeaderOffset] & 0x1f;
+              // Extract NAL type for debugging
+              const nalHeaderOffset = videoData[2] === 0x01 ? 3 : 4;
+              const nalType = videoData[nalHeaderOffset] & 0x1f;
 
-                // Log important NAL units (SPS=7, PPS=8, IDR=5)
-                if (nalType === 5 || nalType === 7 || nalType === 8) {
-                  const typeNames: Record<number, string> = {
-                    5: 'IDR',
-                    7: 'SPS',
-                    8: 'PPS',
-                  };
-                  console.log(
-                    `[ScrcpyPlayer] Received ${typeNames[nalType]} NAL unit (${videoData.length} bytes)`
-                  );
-                }
+              // Log important NAL units (SPS=7, PPS=8, IDR=5)
+              if (nalType === 5 || nalType === 7 || nalType === 8) {
+                const typeNames: Record<number, string> = {
+                  5: 'IDR',
+                  7: 'SPS',
+                  8: 'PPS',
+                };
+                console.log(
+                  `[ScrcpyPlayer] Received ${typeNames[nalType]} NAL unit (${videoData.length} bytes)`
+                );
               }
 
               // Feed complete NAL unit to jMuxer
