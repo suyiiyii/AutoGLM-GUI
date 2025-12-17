@@ -4,6 +4,7 @@ import asyncio
 import os
 import socket
 import subprocess
+import sys
 from pathlib import Path
 from typing import Any
 
@@ -59,20 +60,27 @@ class ScrcpyStreamer:
 
     def _find_scrcpy_server(self) -> str:
         """Find scrcpy-server binary path."""
-        # Priority 1: Project root directory (for repository version)
+        # Priority 1: PyInstaller bundled path (for packaged executable)
+        if getattr(sys, "_MEIPASS", None):
+            bundled_server = Path(sys._MEIPASS) / "scrcpy-server-v3.3.3"
+            if bundled_server.exists():
+                logger.info(f"Using bundled scrcpy-server: {bundled_server}")
+                return str(bundled_server)
+
+        # Priority 2: Project root directory (for repository version)
         project_root = Path(__file__).parent.parent
         project_server = project_root / "scrcpy-server-v3.3.3"
         if project_server.exists():
             logger.info(f"Using project scrcpy-server: {project_server}")
             return str(project_server)
 
-        # Priority 2: Environment variable
+        # Priority 3: Environment variable
         scrcpy_server = os.getenv("SCRCPY_SERVER_PATH")
         if scrcpy_server and os.path.exists(scrcpy_server):
             logger.info(f"Using env scrcpy-server: {scrcpy_server}")
             return scrcpy_server
 
-        # Priority 3: Common system locations
+        # Priority 4: Common system locations
         paths = [
             "/opt/homebrew/Cellar/scrcpy/3.3.3/share/scrcpy/scrcpy-server",
             "/usr/local/share/scrcpy/scrcpy-server",

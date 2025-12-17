@@ -2,8 +2,8 @@
 
 import argparse
 import os
-import socket
 import sys
+import socket
 import threading
 import time
 import webbrowser
@@ -200,7 +200,7 @@ def main() -> None:
 
     # Warning if base_url is not configured
     if not merged_config["base_url"]:
-        print("  ⚠️  WARNING: base_url is not configured!")
+        print("  [!]  WARNING: base_url is not configured!")
         print("     Please configure via frontend or use --base-url")
         print()
 

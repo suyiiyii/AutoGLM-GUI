@@ -16,4 +16,20 @@ AutoGLM_GUI/static/
 # Frontend
 frontend/node_modules/
 frontend/dist/
+
+# Electron
+electron/node_modules/
+electron/dist/
+
+# Build resources
+resources/
+
+# Logs
+*.log
+logs/
+
+# MCP
 .mcp.json
+
+# macOS
+.DS_Store

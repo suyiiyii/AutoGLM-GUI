@@ -1,5 +1,6 @@
 """FastAPI application factory and route registration."""
 
+import sys
 from importlib.resources import files
 from pathlib import Path
 
@@ -15,6 +16,13 @@ from . import agents, control, devices, media
 
 def _get_static_dir() -> Path | None:
     """Locate packaged static assets."""
+    # Priority 1: PyInstaller bundled path (for packaged executable)
+    if getattr(sys, "_MEIPASS", None):
+        bundled_static = Path(sys._MEIPASS) / "AutoGLM_GUI" / "static"
+        if bundled_static.exists():
+            return bundled_static
+
+    # Priority 2: importlib.resources (for installed package)
     try:
         static_dir = files("AutoGLM_GUI").joinpath("static")
         if hasattr(static_dir, "_path"):

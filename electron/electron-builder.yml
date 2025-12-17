@@ -1,0 +1,47 @@
+appId: com.autoglm.gui
+productName: AutoGLM GUI
+copyright: Copyright © 2025
+
+# 使用本地 Electron，避免网络下载
+electronDist: node_modules/electron/dist
+
+# 打包后设置可执行权限
+afterPack: ./afterPack.js
+
+directories:
+  output: dist
+  buildResources: build
+
+files:
+  - "**/*"
+  - "!node_modules"
+
+extraResources:
+  - from: ../resources/backend
+    to: backend
+  - from: ../resources/adb
+    to: adb
+  - from: ../scrcpy-server-v3.3.3
+    to: ./
+
+win:
+  target:
+    - nsis       # 安装包（推荐）
+    - portable   # 便携版
+  icon: icon.ico
+  publisherName: AutoGLM Team
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  perMachine: false  # 用户级安装，无需管理员权限
+
+mac:
+  target:
+    - dmg
+  icon: icon.icns
+  category: public.app-category.developer-tools
+  # 开发阶段不签名，使用 xattr -cr 移除隔离属性
+  identity: null

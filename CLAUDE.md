@@ -77,6 +77,29 @@ uvx --from dist/autoglm_gui-*.whl autoglm-gui
 uv publish
 ```
 
+### Electron Desktop Application
+
+```bash
+# One-click build (all platforms)
+uv run python scripts/build_electron.py
+
+# Build with skip options (faster incremental builds)
+uv run python scripts/build_electron.py --skip-frontend  # Skip frontend rebuild
+uv run python scripts/build_electron.py --skip-adb       # Skip ADB download
+uv run python scripts/build_electron.py --skip-backend   # Skip backend repackaging
+
+# Development mode (test Electron without building)
+cd electron && npm run dev
+
+# Build Electron only (requires resources prepared)
+cd electron && npm run build
+```
+
+**Build Output**:
+- **macOS**: `electron/dist/AutoGLM GUI-{version}-arm64.dmg`
+- **Windows**: `electron/dist/AutoGLM GUI Setup {version}.exe` (installer)
+- **Windows**: `electron/dist/AutoGLM GUI {version}.exe` (portable)
+
 ## Configuration Management
 
 ### Configuration File
@@ -270,6 +293,34 @@ Core automation engine from Open-AutoGLM:
   - Ripple animation on tap
 - **`api.ts`**: API client functions (uses `redaxios` - lightweight axios alternative)
 
+### Electron Desktop Application (`electron/`)
+
+AutoGLM-GUI can be packaged as a standalone desktop application using Electron, bundling the Python backend, ADB tools, and frontend into a single distributable package.
+
+**Architecture**:
+- **`main.js`**: Electron main process
+  - Manages backend process lifecycle (spawn, health check, cleanup)
+  - Dynamic port allocation (8000-8100 range)
+  - Window creation and management
+  - Environment setup (ADB PATH, PYTHONIOENCODING)
+  - Error handling with user dialogs
+  - Development and production mode support
+- **`preload.js`**: Context isolation bridge between main and renderer
+- **`afterPack.js`**: Post-build hook to set executable permissions (ADB, backend)
+
+**Packaging Flow**:
+1. **Frontend Build**: React app → `AutoGLM_GUI/static/`
+2. **ADB Download**: Platform-specific tools → `resources/adb/{platform}/`
+3. **Backend Packaging**: PyInstaller → `resources/backend/`
+4. **Electron Build**: electron-builder → DMG/NSIS installers
+
+**Key Features**:
+- ✅ **Cross-platform**: Windows (x64) + macOS (ARM64)
+- ✅ **No dependencies**: Bundles Python runtime, ADB, scrcpy-server
+- ✅ **Auto-configuration**: Backend starts with bundled resources
+- ✅ **Portable mode**: Windows supports portable .exe
+- ✅ **UTF-8 handling**: PyInstaller runtime hook for Windows encoding
+
 ## Critical Implementation Details
 
 ### Video Streaming (Scrcpy)
@@ -376,12 +427,33 @@ frontend/              # React frontend
     api.ts             # API client
   dist/                # Build output (not in git)
 
+electron/              # Electron desktop application
+  main.js              # Main process (backend lifecycle)
+  preload.js           # Context bridge
+  afterPack.js         # Post-build hook (permissions)
+  electron-builder.yml # Packaging configuration
+  package.json         # Electron dependencies
+  dist/                # Built installers (not in git)
+
+resources/             # Bundled resources (not in git)
+  backend/             # PyInstaller output
+  adb/                 # Platform-specific ADB tools
+    windows/
+    darwin/
+
+scripts/
+  build.py             # Web app build
+  build_electron.py    # Electron one-click build
+  autoglm.spec         # PyInstaller configuration
+  download_adb.py      # ADB downloader
+  pyi_rth_utf8.py      # PyInstaller runtime hook (UTF-8)
+
 scrcpy-server-v3.3.3   # Scrcpy server binary (bundled)
-scripts/build.py       # Build automation
 ```
 
 ## Common Pitfalls
 
+### Web Application
 1. **Missing scrcpy-server**: Video streaming fails if binary is missing or not bundled correctly in wheel
 2. **Coordinate Mismatch**: Frontend must fetch actual device resolution via `/api/scrcpy/info` before sending taps
 3. **Python Execution**: Always use `uv run python`, never plain `python`
@@ -389,16 +461,65 @@ scripts/build.py       # Build automation
 5. **ADB Not in PATH**: All ADB operations will fail silently or with cryptic errors
 6. **Model API Compatibility**: LLM must support vision inputs (base64 images) and follow action schema conventions
 
+### Electron Desktop Application
+1. **Resources Not Prepared**: Electron build requires `resources/backend/` and `resources/adb/` - use `build_electron.py`
+2. **Executable Permissions**: On macOS/Linux, ADB and backend must have execute permissions - handled by `afterPack.js`
+3. **Windows Encoding**: Python backend uses PyInstaller runtime hook (`pyi_rth_utf8.py`) for UTF-8, don't modify `__main__.py` encoding
+4. **macOS Unsigned App**: First launch may be blocked by Gatekeeper - use `xattr -cr "AutoGLM GUI.app"` or right-click → Open
+5. **Port Conflicts**: Electron auto-finds available port (8000-8100), but may fail if all ports occupied
+6. **Backend Startup Timeout**: If backend doesn't respond within 30s, check logs and ensure all dependencies bundled correctly
+7. **Path Issues in PyInstaller**: Always use `sys._MEIPASS` for bundled resource paths, see `scrcpy_stream.py` and `api/__init__.py`
+
 ## Development Workflow
 
+### Web Application Development
 1. Make frontend changes → `cd frontend && pnpm dev` (hot reload)
 2. Make backend changes → `uv run autoglm-gui --reload` (auto-reload enabled)
-3. Before committing code, run backend linting: `uv run python scripts/lint.py`
+3. Before committing code, run linting: `uv run python scripts/lint.py`
 4. Before package release:
    - Build frontend: `uv run python scripts/build.py`
    - Test locally: `uv run autoglm-gui`
    - Build package: `uv run python scripts/build.py --pack`
    - Test wheel: `uvx --from dist/autoglm_gui-*.whl autoglm-gui`
    - Publish: `uv publish`
+
+### Electron Desktop Application Development
+1. **Initial Setup**:
+   ```bash
+   cd electron && npm install
+   ```
+
+2. **Development Mode** (without packaging):
+   ```bash
+   # Terminal 1: Run backend directly
+   uv run autoglm-gui --base-url http://localhost:8080/v1
+
+   # Terminal 2: Run Electron in dev mode
+   cd electron && npm run dev
+   ```
+
+3. **Test Full Build** (with packaging):
+   ```bash
+   # One-click build everything
+   uv run python scripts/build_electron.py
+
+   # Or incremental build (skip unchanged parts)
+   uv run python scripts/build_electron.py --skip-frontend --skip-adb
+   ```
+
+4. **Test Built Application**:
+   - **macOS**: `open "electron/dist/mac-arm64/AutoGLM GUI.app"`
+   - **Windows**: Run `electron\dist\AutoGLM GUI Setup {version}.exe`
+
+5. **CI/CD**: Push to `main` or `dev` branch triggers GitHub Actions
+   - Builds Windows + macOS installers automatically
+   - Downloads artifacts from Actions tab
+
+### Important Notes
+- **phone_agent**: Third-party code, do NOT modify for compatibility
+- **Encoding**: Use PyInstaller runtime hook for Windows UTF-8, not application code
+- **Resources**: Always check `sys._MEIPASS` exists in PyInstaller environment
+
+
 - phone_agent 下面是第三方的代码，目前通过直接拷贝代码的情况下进行引用，为了保持兼容性，任何时候不能修改里面的代码
 - 运行 adb 命令的时候，尽量使用AutoGLM_GUI/platform_utils.py 下面的代码执行命令，为了更好的兼容性

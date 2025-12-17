@@ -5,6 +5,14 @@ import sys
 from functools import wraps
 from importlib import metadata
 
+# 修复 Windows 编码问题 - 必须在所有其他导入之前
+if sys.platform == "win32":
+    import codecs
+
+    sys.stdout = codecs.getwriter("utf-8")(sys.stdout.buffer, "strict")
+    sys.stderr = codecs.getwriter("utf-8")(sys.stderr.buffer, "strict")
+
+
 # ============================================================================
 # Fix Windows encoding issue: Force UTF-8 for all subprocess calls
 # ============================================================================
