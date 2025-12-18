@@ -5,8 +5,15 @@ import type {
   StepEvent,
   DoneEvent,
   ErrorEvent,
+  StoppedEvent,
 } from '../api';
-import { getScreenshot, initAgent, resetChat, sendMessageStream } from '../api';
+import {
+  getScreenshot,
+  initAgent,
+  resetChat,
+  sendMessageStream,
+  stopChat,
+} from '../api';
 
 interface Message {
   id: string;
@@ -203,6 +210,23 @@ export function DevicePanel({
         setLoading(false);
         setError(event.message);
         chatStreamRef.current = null;
+      },
+      // onStopped
+      (event: StoppedEvent) => {
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === agentMessageId
+              ? {
+                  ...msg,
+                  content: event.message,
+                  success: false,
+                  isStreaming: false,
+                }
+              : msg
+          )
+        );
+        setLoading(false);
+        chatStreamRef.current = null;
       }
     );
 
@@ -221,6 +245,23 @@ export function DevicePanel({
     chatStreamRef.current = null;
 
     await resetChat(deviceId);
+  }, [deviceId]);
+
+  // 停止当前任务
+  const handleStop = useCallback(async () => {
+    try {
+      await stopChat(deviceId);
+      // The SSE connection will receive the stopped event
+      // and update UI accordingly through onStopped callback
+    } catch (err) {
+      console.error('Failed to stop chat:', err);
+      // Force close the connection if stop API fails
+      if (chatStreamRef.current) {
+        chatStreamRef.current.close();
+        chatStreamRef.current = null;
+      }
+      setLoading(false);
+    }
   }, [deviceId]);
 
   // 滚动到底部
@@ -458,13 +499,22 @@ export function DevicePanel({
               disabled={loading}
               className="flex-1 px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-xl bg-white dark:bg-gray-800 focus:outline-none focus:ring-2 focus:ring-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
             />
-            <button
-              onClick={handleSend}
-              disabled={loading || !input.trim()}
-              className="px-6 py-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            >
-              发送
-            </button>
+            {loading ? (
+              <button
+                onClick={handleStop}
+                className="px-6 py-3 bg-red-500 text-white rounded-xl hover:bg-red-600 transition-colors"
+              >
+                停止
+              </button>
+            ) : (
+              <button
+                onClick={handleSend}
+                disabled={!input.trim()}
+                className="px-6 py-3 bg-blue-500 text-white rounded-xl hover:bg-blue-600 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                发送
+              </button>
+            )}
           </div>
         </div>
       </div>

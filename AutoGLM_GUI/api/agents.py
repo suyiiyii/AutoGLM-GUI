@@ -23,11 +23,13 @@ from AutoGLM_GUI.schemas import (
     InitRequest,
     ResetRequest,
     StatusResponse,
+    StopRequest,
 )
 from AutoGLM_GUI.state import (
     agent_configs,
     agents,
     non_blocking_takeover,
+    stop_flags,
 )
 from AutoGLM_GUI.version import APP_VERSION
 from phone_agent import PhoneAgent
@@ -145,6 +147,9 @@ def chat_stream(request: ChatRequest):
 
     agent = agents[device_id]
 
+    # Reset stop flag at the start of execution
+    stop_flags[device_id] = False
+
     def event_generator():
         """SSE 事件生成器"""
         try:
@@ -161,6 +166,17 @@ def chat_stream(request: ChatRequest):
 
                 yield "event: step\n"
                 yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+
+                # Check stop flag after each step
+                if stop_flags.get(device_id, False):
+                    stopped_data = {
+                        "type": "stopped",
+                        "message": "任务已停止",
+                        "steps": agent.step_count,
+                    }
+                    yield "event: stopped\n"
+                    yield f"data: {json.dumps(stopped_data, ensure_ascii=False)}\n\n"
+                    break
 
                 if step_result.finished:
                     done_data = {
@@ -187,6 +203,8 @@ def chat_stream(request: ChatRequest):
                 step_result = agent.step()
 
             agent.reset()
+            # Clean up stop flag
+            stop_flags.pop(device_id, None)
 
         except Exception as e:
             error_data = {
@@ -205,6 +223,23 @@ def chat_stream(request: ChatRequest):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.post("/api/chat/stop")
+def stop_chat(request: StopRequest) -> dict:
+    """停止正在执行的 Agent 任务。"""
+    device_id = request.device_id
+
+    if device_id not in agents:
+        raise HTTPException(status_code=404, detail=f"Device {device_id} not found")
+
+    stop_flags[device_id] = True
+
+    return {
+        "success": True,
+        "device_id": device_id,
+        "message": f"Stop signal sent for device {device_id}",
+    }
 
 
 @router.get("/api/status", response_model=StatusResponse)
@@ -281,14 +316,26 @@ def get_config_endpoint() -> ConfigResponse:
 
     # 检查是否有 CLI 参数（环境变量值不同于默认值且文件配置中没有对应值）
     has_cli_config = (
-        (env_config["base_url"] and env_config["base_url"] != "") and
-        (not file_config or file_config.get("base_url") != env_config["base_url"])
-    ) or (
-        (env_config["model_name"] and env_config["model_name"] != "autoglm-phone-9b") and
-        (not file_config or file_config.get("model_name") != env_config["model_name"])
-    ) or (
-        (env_config["api_key"] and env_config["api_key"] != "EMPTY") and
-        (not file_config or file_config.get("api_key") != env_config["api_key"])
+        (
+            (env_config["base_url"] and env_config["base_url"] != "")
+            and (
+                not file_config or file_config.get("base_url") != env_config["base_url"]
+            )
+        )
+        or (
+            (
+                env_config["model_name"]
+                and env_config["model_name"] != "autoglm-phone-9b"
+            )
+            and (
+                not file_config
+                or file_config.get("model_name") != env_config["model_name"]
+            )
+        )
+        or (
+            (env_config["api_key"] and env_config["api_key"] != "EMPTY")
+            and (not file_config or file_config.get("api_key") != env_config["api_key"])
+        )
     )
 
     if has_cli_config:

@@ -47,6 +47,10 @@ class ResetRequest(BaseModel):
     device_id: str  # 设备 ID（必填）
 
 
+class StopRequest(BaseModel):
+    device_id: str  # 设备 ID（必填）
+
+
 class ScreenshotRequest(BaseModel):
     device_id: str | None = None
 

@@ -79,7 +79,13 @@ export interface ErrorEvent {
   message: string;
 }
 
-export type StreamEvent = StepEvent | DoneEvent | ErrorEvent;
+export interface StoppedEvent {
+  type: 'stopped';
+  message: string;
+  steps: number;
+}
+
+export type StreamEvent = StepEvent | DoneEvent | ErrorEvent | StoppedEvent;
 
 export interface TapRequest {
   x: number;
@@ -166,7 +172,8 @@ export function sendMessageStream(
   deviceId: string,
   onStep: (event: StepEvent) => void,
   onDone: (event: DoneEvent) => void,
-  onError: (event: ErrorEvent) => void
+  onError: (event: ErrorEvent) => void,
+  onStopped?: (event: StoppedEvent) => void
 ): { close: () => void } {
   const controller = new AbortController();
 
@@ -215,6 +222,11 @@ export function sendMessageStream(
               } else if (eventType === 'done') {
                 console.log('[SSE] Received done event:', data);
                 onDone(data as DoneEvent);
+              } else if (eventType === 'stopped') {
+                console.log('[SSE] Received stopped event:', data);
+                if (onStopped) {
+                  onStopped(data as StoppedEvent);
+                }
               } else if (eventType === 'error') {
                 console.log('[SSE] Received error event:', data);
                 onError(data as ErrorEvent);
@@ -248,6 +260,15 @@ export async function resetChat(deviceId: string): Promise<{
   device_id?: string;
 }> {
   const res = await axios.post('/api/reset', { device_id: deviceId });
+  return res.data;
+}
+
+export async function stopChat(deviceId: string): Promise<{
+  success: boolean;
+  message: string;
+  device_id?: string;
+}> {
+  const res = await axios.post('/api/chat/stop', { device_id: deviceId });
   return res.data;
 }
 

@@ -22,6 +22,9 @@ agent_configs: dict[str, tuple[ModelConfig, AgentConfig]] = {}
 scrcpy_streamers: dict[str, "ScrcpyStreamer"] = {}
 scrcpy_locks: dict[str, asyncio.Lock] = {}
 
+# Stop flags for interrupting chat execution per device
+stop_flags: dict[str, bool] = {}
+
 
 def non_blocking_takeover(message: str) -> None:
     """Log takeover requests without blocking for console input."""
