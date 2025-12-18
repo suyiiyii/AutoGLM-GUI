@@ -11,6 +11,25 @@ def is_windows() -> bool:
     return platform.system() == "Windows"
 
 
+def run_cmd_silently_sync(
+    cmd: Sequence[str], timeout: float | None = None
+) -> subprocess.CompletedProcess:
+    """Run a command synchronously, suppressing output but preserving it in the result.
+
+    This is the synchronous version that works on all platforms.
+
+    Args:
+        cmd: Command to run as a sequence of strings
+        timeout: Optional timeout in seconds
+
+    Returns:
+        CompletedProcess with stdout/stderr captured
+    """
+    return subprocess.run(
+        cmd, capture_output=True, text=True, check=False, timeout=timeout
+    )
+
+
 async def run_cmd_silently(cmd: Sequence[str]) -> subprocess.CompletedProcess:
     """Run a command, suppressing output but preserving it in the result; safe for async contexts on all platforms."""
     if is_windows():

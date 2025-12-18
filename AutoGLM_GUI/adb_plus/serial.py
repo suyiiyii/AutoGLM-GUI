@@ -1,6 +1,6 @@
 """Get device serial number using ADB."""
 
-import subprocess
+from AutoGLM_GUI.platform_utils import run_cmd_silently_sync
 
 
 def get_device_serial(device_id: str, adb_path: str = "adb") -> str | None:
@@ -20,10 +20,8 @@ def get_device_serial(device_id: str, adb_path: str = "adb") -> str | None:
     try:
         # Use getprop to get the actual hardware serial number
         # This works for both USB and WiFi connections
-        result = subprocess.run(
+        result = run_cmd_silently_sync(
             [adb_path, "-s", device_id, "shell", "getprop", "ro.serialno"],
-            capture_output=True,
-            text=True,
             timeout=3,
         )
         if result.returncode == 0:
