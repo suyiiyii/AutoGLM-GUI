@@ -96,13 +96,6 @@ def connect_wifi(request: WiFiConnectRequest) -> WiFiConnectResponse:
             error="connect",
         )
 
-    # 4) 成功连接后,断开原来的 USB 连接
-    try:
-        conn.disconnect(device_info.device_id)
-    except Exception:
-        # 断开失败不影响返回结果,因为 WiFi 已经连接成功
-        pass
-
     return WiFiConnectResponse(
         success=True,
         message="Switched to WiFi successfully",
