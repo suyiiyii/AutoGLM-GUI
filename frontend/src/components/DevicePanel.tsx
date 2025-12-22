@@ -338,7 +338,7 @@ export function DevicePanel({
   return (
     <div className="flex-1 flex gap-4 p-4 items-stretch justify-center min-h-0">
       {/* Chat area - takes remaining space */}
-      <Card className="flex-1 flex flex-col min-h-0">
+      <Card className="flex-1 flex flex-col min-h-0 max-w-2xl">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-3">
@@ -401,7 +401,7 @@ export function DevicePanel({
 
         {/* Messages */}
         <div className="flex-1 overflow-y-auto p-4 space-y-4 min-h-0">
-          <div className="max-w-3xl mx-auto w-full">
+          <div className="w-full">
             {messages.length === 0 ? (
               <div className="flex flex-col items-center justify-center h-full text-center">
                 <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
