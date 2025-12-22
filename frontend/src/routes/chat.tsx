@@ -30,7 +30,6 @@ import {
   AlertCircle,
   Eye,
   EyeOff,
-  X,
   Server,
 } from 'lucide-react';
 
@@ -136,7 +135,7 @@ function ChatComponent() {
           }
         }
 
-        Array.from(serialMap.values()).forEach((devices) => {
+        Array.from(serialMap.values()).forEach(devices => {
           const remoteDevice = devices.find(
             (d: Device) => d.connection_type === 'remote'
           );
@@ -153,7 +152,7 @@ function ChatComponent() {
 
         if (
           currentDeviceId &&
-          !filteredDevices.find((d) => d.id === currentDeviceId)
+          !filteredDevices.find(d => d.id === currentDeviceId)
         ) {
           setCurrentDeviceId(filteredDevices[0]?.id || '');
         }
@@ -231,7 +230,7 @@ function ChatComponent() {
         <Toast
           message={toast.message}
           type={toast.type}
-          onClose={() => setToast((prev) => ({ ...prev, visible: false }))}
+          onClose={() => setToast(prev => ({ ...prev, visible: false }))}
         />
       )}
 
@@ -253,7 +252,7 @@ function ChatComponent() {
             <div className="space-y-2">
               <Label className="text-sm font-medium">选择预设配置</Label>
               <div className="grid grid-cols-1 gap-2">
-                {PRESET_CONFIGS.map((preset) => (
+                {PRESET_CONFIGS.map(preset => (
                   <button
                     key={preset.name}
                     type="button"
@@ -267,7 +266,8 @@ function ChatComponent() {
                     className={`text-left p-3 rounded-lg border transition-all ${
                       tempConfig.base_url === preset.config.base_url &&
                       (preset.name !== '自建服务' ||
-                        (preset.name === '自建服务' && tempConfig.base_url === ''))
+                        (preset.name === '自建服务' &&
+                          tempConfig.base_url === ''))
                         ? 'border-[#1d9bf0] bg-[#1d9bf0]/5'
                         : 'border-slate-200 dark:border-slate-700 hover:border-[#1d9bf0]/50 hover:bg-slate-50 dark:hover:bg-slate-800/50'
                     }`}
@@ -277,7 +277,8 @@ function ChatComponent() {
                         className={`w-4 h-4 ${
                           tempConfig.base_url === preset.config.base_url &&
                           (preset.name !== '自建服务' ||
-                            (preset.name === '自建服务' && tempConfig.base_url === ''))
+                            (preset.name === '自建服务' &&
+                              tempConfig.base_url === ''))
                             ? 'text-[#1d9bf0]'
                             : 'text-slate-400'
                         }`}
@@ -299,7 +300,7 @@ function ChatComponent() {
               <Input
                 id="base_url"
                 value={tempConfig.base_url}
-                onChange={(e) =>
+                onChange={e =>
                   setTempConfig({ ...tempConfig, base_url: e.target.value })
                 }
                 placeholder="http://localhost:8080/v1"
@@ -319,7 +320,7 @@ function ChatComponent() {
                   id="api_key"
                   type={showApiKey ? 'text' : 'password'}
                   value={tempConfig.api_key}
-                  onChange={(e) =>
+                  onChange={e =>
                     setTempConfig({ ...tempConfig, api_key: e.target.value })
                   }
                   placeholder="Leave empty if not required"
@@ -346,7 +347,7 @@ function ChatComponent() {
               <Input
                 id="model_name"
                 value={tempConfig.model_name}
-                onChange={(e) =>
+                onChange={e =>
                   setTempConfig({ ...tempConfig, model_name: e.target.value })
                 }
                 placeholder="autoglm-phone-9b"
@@ -417,7 +418,7 @@ function ChatComponent() {
             </div>
           </div>
         ) : (
-          devices.map((device) => (
+          devices.map(device => (
             <div
               key={device.id}
               className={`w-full h-full flex items-stretch justify-center min-h-0 ${

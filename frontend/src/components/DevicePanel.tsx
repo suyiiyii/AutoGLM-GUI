@@ -164,7 +164,7 @@ export function DevicePanel({
       timestamp: new Date(),
     };
 
-    setMessages((prev) => [...prev, userMessage]);
+    setMessages(prev => [...prev, userMessage]);
     setInput('');
     setLoading(true);
     setError(null);
@@ -183,7 +183,7 @@ export function DevicePanel({
       isStreaming: true,
     };
 
-    setMessages((prev) => [...prev, agentMessage]);
+    setMessages(prev => [...prev, agentMessage]);
 
     const stream = sendMessageStream(
       userMessage.content,
@@ -192,8 +192,8 @@ export function DevicePanel({
         thinkingList.push(event.thinking);
         actionsList.push(event.action);
 
-        setMessages((prev) =>
-          prev.map((msg) =>
+        setMessages(prev =>
+          prev.map(msg =>
             msg.id === agentMessageId
               ? {
                   ...msg,
@@ -206,8 +206,8 @@ export function DevicePanel({
         );
       },
       (event: DoneEvent) => {
-        setMessages((prev) =>
-          prev.map((msg) =>
+        setMessages(prev =>
+          prev.map(msg =>
             msg.id === agentMessageId
               ? {
                   ...msg,
@@ -222,8 +222,8 @@ export function DevicePanel({
         chatStreamRef.current = null;
       },
       (event: ErrorEvent) => {
-        setMessages((prev) =>
-          prev.map((msg) =>
+        setMessages(prev =>
+          prev.map(msg =>
             msg.id === agentMessageId
               ? {
                   ...msg,
@@ -308,7 +308,9 @@ export function DevicePanel({
     return () => clearInterval(interval);
   }, [deviceId, videoStreamFailed, displayMode]);
 
-  const handleInputKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
+  const handleInputKeyDown = (
+    event: React.KeyboardEvent<HTMLTextAreaElement>
+  ) => {
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
       event.preventDefault();
       handleSend();
@@ -411,7 +413,7 @@ export function DevicePanel({
             </div>
           ) : null}
 
-          {messages.map((message) => (
+          {messages.map(message => (
             <div
               key={message.id}
               className={`flex ${
@@ -434,9 +436,7 @@ export function DevicePanel({
                           Step {idx + 1}
                         </span>
                       </div>
-                      <p className="text-sm whitespace-pre-wrap">
-                        {think}
-                      </p>
+                      <p className="text-sm whitespace-pre-wrap">{think}</p>
 
                       {message.actions?.[idx] && (
                         <details className="mt-2 text-xs">
@@ -510,7 +510,7 @@ export function DevicePanel({
           <div className="flex items-end gap-3">
             <Textarea
               value={input}
-              onChange={(e) => setInput(e.target.value)}
+              onChange={e => setInput(e.target.value)}
               onKeyDown={handleInputKeyDown}
               placeholder={
                 !isConfigured
@@ -632,9 +632,9 @@ export function DevicePanel({
             enableControl={true}
             onFallback={handleFallback}
             onTapSuccess={() => showFeedback('Tapped', 2000)}
-            onTapError={(error) => showFeedback(`Error: ${error}`, 3000)}
+            onTapError={error => showFeedback(`Error: ${error}`, 3000)}
             onSwipeSuccess={() => showFeedback('Swiped', 2000)}
-            onSwipeError={(error) => showFeedback(`Swipe error: ${error}`, 3000)}
+            onSwipeError={error => showFeedback(`Swipe error: ${error}`, 3000)}
             onStreamReady={handleVideoStreamReady}
             fallbackTimeout={100000}
           />

@@ -1,11 +1,5 @@
 import React, { useState } from 'react';
-import {
-  Wifi,
-  WifiOff,
-  CheckCircle2,
-  Smartphone,
-  Loader2,
-} from 'lucide-react';
+import { Wifi, WifiOff, CheckCircle2, Smartphone, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { ConfirmDialog } from './ConfirmDialog';
@@ -82,7 +76,7 @@ export function DeviceCard({
         onClick={onClick}
         role="button"
         tabIndex={0}
-        onKeyDown={(e) => {
+        onKeyDown={e => {
           if (e.key === 'Enter' || e.key === ' ') {
             onClick();
           }
