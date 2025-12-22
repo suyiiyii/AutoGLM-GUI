@@ -14,7 +14,7 @@ function Footer() {
 
   React.useEffect(() => {
     getStatus()
-      .then((status) => setVersion(status.version))
+      .then(status => setVersion(status.version))
       .catch(() => setVersion('unknown'));
   }, []);
 

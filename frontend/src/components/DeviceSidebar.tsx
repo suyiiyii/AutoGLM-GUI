@@ -131,7 +131,7 @@ export function DeviceSidebar({
               </p>
             </div>
           ) : (
-            devices.map((device) => (
+            devices.map(device => (
               <DeviceCard
                 key={device.id}
                 id={device.id}

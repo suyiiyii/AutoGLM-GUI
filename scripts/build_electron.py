@@ -236,7 +236,9 @@ class ElectronBuilder:
         print_step("构建 Electron 应用", 7, 7)
 
         # 构建 Electron (明确指定不发布)
-        if not run_command(["npm", "run", "build", "--", "--publish", "never"], cwd=self.electron_dir):
+        if not run_command(
+            ["npm", "run", "build", "--", "--publish", "never"], cwd=self.electron_dir
+        ):
             return False
 
         # 显示构建产物
