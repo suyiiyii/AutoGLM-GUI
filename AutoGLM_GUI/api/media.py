@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from fastapi import APIRouter
 
-from AutoGLM_GUI.adb_plus import capture_screenshot
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.schemas import ScreenshotRequest, ScreenshotResponse
 from AutoGLM_GUI.socketio_server import stop_streamers
@@ -30,7 +29,18 @@ async def reset_video_stream(device_id: str | None = None) -> dict:
 def take_screenshot(request: ScreenshotRequest) -> ScreenshotResponse:
     """获取设备截图。此操作无副作用，不影响 PhoneAgent 运行。"""
     try:
-        screenshot = capture_screenshot(device_id=request.device_id)
+        from AutoGLM_GUI.platforms import ops as platform_ops
+
+        resolved_device_type = platform_ops.resolve_device_type(
+            device_id=request.device_id,
+            device_type=request.device_type,
+        )
+
+        screenshot = platform_ops.take_screenshot(
+            device_type=resolved_device_type,
+            device_id=request.device_id,
+            wda_url=request.wda_url,
+        )
         return ScreenshotResponse(
             success=True,
             image=screenshot.base64_data,

@@ -9,8 +9,8 @@ from typing import Any
 import socketio
 
 from AutoGLM_GUI.logger import logger
-from AutoGLM_GUI.scrcpy_protocol import ScrcpyMediaStreamPacket
-from AutoGLM_GUI.scrcpy_stream import ScrcpyStreamer
+from AutoGLM_GUI.platforms.adb.video.scrcpy_protocol import ScrcpyMediaStreamPacket
+from AutoGLM_GUI.platforms.adb.video.scrcpy_stream import ScrcpyStreamer
 
 sio = socketio.AsyncServer(
     async_mode="asgi",
@@ -95,6 +95,14 @@ async def connect_device(sid: str, data: dict | None) -> None:
     bit_rate = int(payload.get("bitRate") or 4_000_000)
 
     await _stop_stream_for_sid(sid)
+
+    try:
+        from AutoGLM_GUI.state import agent_types, known_device_types
+
+        if device_id and (agent_types.get(device_id) or known_device_types.get(device_id)) == "ios":
+            return
+    except Exception:
+        pass
 
     streamer = ScrcpyStreamer(
         device_id=device_id,

@@ -239,10 +239,9 @@ See: `AutoGLM_GUI/resources/apks/ADBKeyBoard.LICENSE.txt`
   - `/api/tap` - Send tap command to device
   - `/api/scrcpy/stream` - H.264 video stream endpoint
   - `/api/scrcpy/info` - Get device resolution info
-- **`scrcpy_stream.py`**: `ScrcpyStreamer` class manages scrcpy server lifecycle and H.264 video streaming
+- **`platforms/adb/video/scrcpy_stream.py`**: `ScrcpyStreamer` class manages scrcpy server lifecycle and H.264 video streaming
   - Spawns scrcpy-server process on device
   - Handles TCP socket for video data
-  - Caches SPS/PPS/IDR frames for new client connections
   - Critical: Uses bundled `scrcpy-server-v3.3.3` binary (must be in project root and package)
 - **`logger.py`**: Centralized logging configuration using loguru
   - Provides colorized console output with timestamps, levels, and source locations
@@ -250,7 +249,7 @@ See: `AutoGLM_GUI/resources/apks/ADBKeyBoard.LICENSE.txt`
   - Separate error log files (50MB rotation, 30 days retention)
   - Configurable via CLI parameters (--log-level, --log-file, --no-log-file)
   - Used throughout AutoGLM_GUI/ (phone_agent/ uses original print statements)
-- **`adb_plus/`**: Extended ADB utilities (screenshot capture, etc.)
+- **`platforms/adb/`**: Extended ADB utilities (screenshot capture, WiFi IP detection, touch events, etc.)
 
 ### Phone Agent (`phone_agent/`)
 
@@ -409,8 +408,10 @@ See `AutoGLM_GUI/__main__.py` for full list. Key args:
 AutoGLM_GUI/           # Backend FastAPI app (entry point)
   __main__.py          # CLI entry point
   server.py            # FastAPI routes and WebSocket
-  scrcpy_stream.py     # Scrcpy video streaming
-  adb_plus/            # Extended ADB utilities
+  platforms/           # Platform-specific implementations
+    adb/               # Android platform
+      video/           # scrcpy video streaming
+      setup/           # setup/install utilities
   static/              # Built frontend (copied from frontend/dist)
 
 phone_agent/           # Core automation engine
@@ -468,7 +469,7 @@ scrcpy-server-v3.3.3   # Scrcpy server binary (bundled)
 4. **macOS Unsigned App**: First launch may be blocked by Gatekeeper - use `xattr -cr "AutoGLM GUI.app"` or right-click → Open
 5. **Port Conflicts**: Electron auto-finds available port (8000-8100), but may fail if all ports occupied
 6. **Backend Startup Timeout**: If backend doesn't respond within 30s, check logs and ensure all dependencies bundled correctly
-7. **Path Issues in PyInstaller**: Always use `sys._MEIPASS` for bundled resource paths, see `scrcpy_stream.py` and `api/__init__.py`
+7. **Path Issues in PyInstaller**: Always use `sys._MEIPASS` for bundled resource paths, see `platforms/adb/video/scrcpy_stream.py` and `api/__init__.py`
 
 ## Development Workflow
 

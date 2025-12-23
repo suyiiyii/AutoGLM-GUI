@@ -22,12 +22,19 @@ router = APIRouter()
 def control_tap(request: TapRequest) -> TapResponse:
     """Execute tap at specified device coordinates."""
     try:
-        from phone_agent.adb import tap
+        from AutoGLM_GUI.platforms import ops as platform_ops
 
-        tap(
+        resolved_device_type = platform_ops.resolve_device_type(
+            device_id=request.device_id,
+            device_type=request.device_type,
+        )
+
+        platform_ops.tap(
+            device_type=resolved_device_type,
+            device_id=request.device_id,
             x=request.x,
             y=request.y,
-            device_id=request.device_id,
+            wda_url=request.wda_url,
             delay=request.delay,
         )
 
@@ -40,15 +47,22 @@ def control_tap(request: TapRequest) -> TapResponse:
 def control_swipe(request: SwipeRequest) -> SwipeResponse:
     """Execute swipe from start to end coordinates."""
     try:
-        from phone_agent.adb import swipe
+        from AutoGLM_GUI.platforms import ops as platform_ops
 
-        swipe(
+        resolved_device_type = platform_ops.resolve_device_type(
+            device_id=request.device_id,
+            device_type=request.device_type,
+        )
+
+        platform_ops.swipe(
+            device_type=resolved_device_type,
+            device_id=request.device_id,
             start_x=request.start_x,
             start_y=request.start_y,
             end_x=request.end_x,
             end_y=request.end_y,
             duration_ms=request.duration_ms,
-            device_id=request.device_id,
+            wda_url=request.wda_url,
             delay=request.delay,
         )
 
@@ -61,12 +75,21 @@ def control_swipe(request: SwipeRequest) -> SwipeResponse:
 def control_touch_down(request: TouchDownRequest) -> TouchDownResponse:
     """Send touch DOWN event at specified device coordinates."""
     try:
-        from AutoGLM_GUI.adb_plus import touch_down
+        from AutoGLM_GUI.platforms import ops as platform_ops
 
-        touch_down(
+        resolved_device_type = platform_ops.resolve_device_type(
+            device_id=request.device_id,
+            device_type=request.device_type,
+        )
+
+        if resolved_device_type == "ios":
+            return TouchDownResponse(success=False, error="not_supported_for_ios")
+
+        platform_ops.touch_down(
+            device_type=resolved_device_type,
+            device_id=request.device_id,
             x=request.x,
             y=request.y,
-            device_id=request.device_id,
             delay=request.delay,
         )
 
@@ -79,12 +102,21 @@ def control_touch_down(request: TouchDownRequest) -> TouchDownResponse:
 def control_touch_move(request: TouchMoveRequest) -> TouchMoveResponse:
     """Send touch MOVE event at specified device coordinates."""
     try:
-        from AutoGLM_GUI.adb_plus import touch_move
+        from AutoGLM_GUI.platforms import ops as platform_ops
 
-        touch_move(
+        resolved_device_type = platform_ops.resolve_device_type(
+            device_id=request.device_id,
+            device_type=request.device_type,
+        )
+
+        if resolved_device_type == "ios":
+            return TouchMoveResponse(success=False, error="not_supported_for_ios")
+
+        platform_ops.touch_move(
+            device_type=resolved_device_type,
+            device_id=request.device_id,
             x=request.x,
             y=request.y,
-            device_id=request.device_id,
             delay=request.delay,
         )
 
@@ -97,12 +129,21 @@ def control_touch_move(request: TouchMoveRequest) -> TouchMoveResponse:
 def control_touch_up(request: TouchUpRequest) -> TouchUpResponse:
     """Send touch UP event at specified device coordinates."""
     try:
-        from AutoGLM_GUI.adb_plus import touch_up
+        from AutoGLM_GUI.platforms import ops as platform_ops
 
-        touch_up(
+        resolved_device_type = platform_ops.resolve_device_type(
+            device_id=request.device_id,
+            device_type=request.device_type,
+        )
+
+        if resolved_device_type == "ios":
+            return TouchUpResponse(success=False, error="not_supported_for_ios")
+
+        platform_ops.touch_up(
+            device_type=resolved_device_type,
+            device_id=request.device_id,
             x=request.x,
             y=request.y,
-            device_id=request.device_id,
             delay=request.delay,
         )
 

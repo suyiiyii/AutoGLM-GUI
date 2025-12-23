@@ -21,11 +21,10 @@ from AutoGLM_GUI.schemas import (
 from AutoGLM_GUI.state import (
     agent_configs,
     agents,
+    agent_types,
     non_blocking_takeover,
 )
 from AutoGLM_GUI.version import APP_VERSION
-from phone_agent import PhoneAgent
-from phone_agent.agent import AgentConfig
 from phone_agent.model import ModelConfig
 
 router = APIRouter()
@@ -34,15 +33,21 @@ router = APIRouter()
 @router.post("/api/init")
 def init_agent(request: InitRequest) -> dict:
     """初始化 PhoneAgent（多设备支持）。"""
-    from AutoGLM_GUI.adb_plus import ADBKeyboardInstaller
+    from AutoGLM_GUI.platforms.adb.setup import ADBKeyboardInstaller
     from AutoGLM_GUI.config_manager import config_manager
     from AutoGLM_GUI.logger import logger
+    from AutoGLM_GUI.platforms import ops as platform_ops
 
     req_model_config = request.model or APIModelConfig()
     req_agent_config = request.agent or APIAgentConfig()
 
+    device_type = platform_ops.resolve_device_type(
+        device_id=req_agent_config.device_id,
+        device_type=req_agent_config.device_type,
+    )
+
     device_id = req_agent_config.device_id
-    if not device_id:
+    if not device_id and device_type != "ios":
         raise HTTPException(
             status_code=400, detail="device_id is required in agent_config"
         )
@@ -52,20 +57,20 @@ def init_agent(request: InitRequest) -> dict:
     config_manager.sync_to_env()
     config.refresh_from_env()
 
-    # 检查并自动安装 ADB Keyboard
-    logger.info(f"Checking ADB Keyboard for device {device_id}...")
-    installer = ADBKeyboardInstaller(device_id=device_id)
-    status = installer.get_status()
+    if device_type == "adb":
+        logger.info(f"Checking ADB Keyboard for device {device_id}...")
+        installer = ADBKeyboardInstaller(device_id=device_id)
+        status = installer.get_status()
 
-    if not (status["installed"] and status["enabled"]):
-        logger.info(f"Setting up ADB Keyboard for device {device_id}...")
-        success, message = installer.auto_setup()
-        if success:
-            logger.info(f"✓ Device {device_id}: {message}")
+        if not (status["installed"] and status["enabled"]):
+            logger.info(f"Setting up ADB Keyboard for device {device_id}...")
+            success, message = installer.auto_setup()
+            if success:
+                logger.info(f"✓ Device {device_id}: {message}")
+            else:
+                logger.warning(f"✗ Device {device_id}: {message}")
         else:
-            logger.warning(f"✗ Device {device_id}: {message}")
-    else:
-        logger.info(f"✓ Device {device_id}: ADB Keyboard ready")
+            logger.info(f"✓ Device {device_id}: ADB Keyboard ready")
 
     base_url = req_model_config.base_url or config.base_url
     api_key = req_model_config.api_key or config.api_key
@@ -87,26 +92,27 @@ def init_agent(request: InitRequest) -> dict:
         frequency_penalty=req_model_config.frequency_penalty,
     )
 
-    agent_config = AgentConfig(
-        max_steps=req_agent_config.max_steps,
-        device_id=device_id,
-        lang=req_agent_config.lang,
-        system_prompt=req_agent_config.system_prompt,
-        verbose=req_agent_config.verbose,
-    )
+    try:
+        resolved_device_id, agent, agent_config, resolved_device_type = (
+            platform_ops.create_agent(
+                device_type=device_type,
+                device_id=device_id,
+                model_config=model_config,
+                api_agent_config=req_agent_config,
+                takeover_callback=non_blocking_takeover,
+            )
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
-    agents[device_id] = PhoneAgent(
-        model_config=model_config,
-        agent_config=agent_config,
-        takeover_callback=non_blocking_takeover,
-    )
-
-    agent_configs[device_id] = (model_config, agent_config)
+    agents[resolved_device_id] = agent
+    agent_configs[resolved_device_id] = (model_config, agent_config)
+    agent_types[resolved_device_id] = resolved_device_type
 
     return {
         "success": True,
-        "device_id": device_id,
-        "message": f"Agent initialized for device {device_id}",
+        "device_id": resolved_device_id,
+        "message": f"Agent initialized for device {resolved_device_id}",
     }
 
 
@@ -244,7 +250,10 @@ def reset_agent(request: ResetRequest) -> dict:
 
     if device_id in agent_configs:
         model_config, agent_config = agent_configs[device_id]
-        agents[device_id] = PhoneAgent(
+        from AutoGLM_GUI.platforms import ops as platform_ops
+
+        agents[device_id] = platform_ops.rebuild_agent(
+            device_type=agent_types.get(device_id),
             model_config=model_config,
             agent_config=agent_config,
             takeover_callback=non_blocking_takeover,
