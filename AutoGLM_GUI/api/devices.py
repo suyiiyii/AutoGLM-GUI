@@ -2,7 +2,7 @@
 
 from fastapi import APIRouter
 
-from AutoGLM_GUI.adb_plus import get_wifi_ip, get_device_serial
+from AutoGLM_GUI.platforms.adb.ip import get_wifi_ip
 
 from AutoGLM_GUI.schemas import (
     DeviceListResponse,
@@ -11,7 +11,7 @@ from AutoGLM_GUI.schemas import (
     WiFiDisconnectRequest,
     WiFiDisconnectResponse,
 )
-from AutoGLM_GUI.state import agents
+from AutoGLM_GUI.state import agents, known_device_types
 
 router = APIRouter()
 
@@ -19,28 +19,16 @@ router = APIRouter()
 @router.get("/api/devices", response_model=DeviceListResponse)
 def list_devices() -> DeviceListResponse:
     """列出所有 ADB 设备。"""
-    from phone_agent.adb import list_devices as adb_list, ADBConnection
+    from AutoGLM_GUI.platforms import ops as platform_ops
 
-    adb_devices = adb_list()
-    conn = ADBConnection()
+    devices = platform_ops.list_devices(initialized_device_ids=set(agents.keys()))
+    for d in devices:
+        device_id = d.get("id")
+        device_type = d.get("device_type")
+        if isinstance(device_id, str) and isinstance(device_type, str):
+            known_device_types[device_id] = device_type
 
-    devices_with_serial = []
-    for d in adb_devices:
-        # 使用 adb_plus 的 get_device_serial 获取真实序列号
-        serial = get_device_serial(d.device_id, conn.adb_path)
-
-        devices_with_serial.append(
-            {
-                "id": d.device_id,
-                "model": d.model or "Unknown",
-                "status": d.status,
-                "connection_type": d.connection_type.value,
-                "is_initialized": d.device_id in agents,
-                "serial": serial,  # 真实序列号
-            }
-        )
-
-    return DeviceListResponse(devices=devices_with_serial)
+    return DeviceListResponse(devices=devices)
 
 
 @router.post("/api/devices/connect_wifi", response_model=WiFiConnectResponse)
@@ -76,7 +64,7 @@ def connect_wifi(request: WiFiConnectRequest) -> WiFiConnectResponse:
             success=False, message=msg or "Failed to enable tcpip", error="tcpip"
         )
 
-    # 2) 读取设备 IP：先用本地 adb_plus 的 WiFi 优先逻辑，失败再回退上游接口
+    # 2) 读取设备 IP：先用本地 platforms/adb 的 WiFi 优先逻辑，失败再回退上游接口
     ip = get_wifi_ip(conn.adb_path, device_info.device_id) or conn.get_device_ip(
         device_info.device_id
     )

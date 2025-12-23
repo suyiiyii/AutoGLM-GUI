@@ -9,10 +9,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
-from AutoGLM_GUI.adb_plus import check_device_available
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.platform_utils import is_windows, run_cmd_silently, spawn_process
-from AutoGLM_GUI.scrcpy_protocol import (
+from AutoGLM_GUI.platforms.adb.device import check_device_available
+from .scrcpy_protocol import (
     PTS_CONFIG,
     PTS_KEYFRAME,
     SCRCPY_CODEC_NAME_TO_ID,
@@ -90,7 +90,7 @@ class ScrcpyStreamer:
                 return str(bundled_server)
 
         # Priority 2: Project root directory (for repository version)
-        project_root = Path(__file__).parent.parent
+        project_root = Path(__file__).parent.parent.parent.parent.parent
         project_server = project_root / "scrcpy-server-v3.3.3"
         if project_server.exists():
             logger.info(f"Using project scrcpy-server: {project_server}")

@@ -26,6 +26,7 @@ dependencies = [
     "loguru>=0.7.3",
     "openai>=2.9.0",
     "pillow>=11.3.0",
+    "requests>=2.32.0",
     "python-socketio>=5.11.0",
     "uvicorn[standard]>=0.38.0",
 ]

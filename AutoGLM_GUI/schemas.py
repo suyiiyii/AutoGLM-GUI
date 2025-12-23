@@ -16,6 +16,8 @@ class APIModelConfig(BaseModel):
 class APIAgentConfig(BaseModel):
     max_steps: int = 100
     device_id: str | None = None
+    device_type: str = "adb"
+    wda_url: str | None = None
     lang: str = "cn"
     system_prompt: str | None = None
     verbose: bool = True
@@ -29,6 +31,8 @@ class InitRequest(BaseModel):
 class ChatRequest(BaseModel):
     message: str
     device_id: str  # 设备 ID（必填）
+    device_type: str = "adb"
+    wda_url: str | None = None
 
 
 class ChatResponse(BaseModel):
@@ -45,10 +49,14 @@ class StatusResponse(BaseModel):
 
 class ResetRequest(BaseModel):
     device_id: str  # 设备 ID（必填）
+    device_type: str = "adb"
+    wda_url: str | None = None
 
 
 class ScreenshotRequest(BaseModel):
     device_id: str | None = None
+    device_type: str = "adb"
+    wda_url: str | None = None
 
 
 class ScreenshotResponse(BaseModel):
@@ -64,6 +72,8 @@ class TapRequest(BaseModel):
     x: int
     y: int
     device_id: str | None = None
+    device_type: str = "adb"
+    wda_url: str | None = None
     delay: float = 0.0
 
 
@@ -79,6 +89,8 @@ class SwipeRequest(BaseModel):
     end_y: int
     duration_ms: int | None = None
     device_id: str | None = None
+    device_type: str = "adb"
+    wda_url: str | None = None
     delay: float = 0.0
 
 
@@ -91,6 +103,8 @@ class TouchDownRequest(BaseModel):
     x: int
     y: int
     device_id: str | None = None
+    device_type: str = "adb"
+    wda_url: str | None = None
     delay: float = 0.0
 
 
@@ -103,6 +117,8 @@ class TouchMoveRequest(BaseModel):
     x: int
     y: int
     device_id: str | None = None
+    device_type: str = "adb"
+    wda_url: str | None = None
     delay: float = 0.0
 
 
@@ -115,6 +131,8 @@ class TouchUpRequest(BaseModel):
     x: int
     y: int
     device_id: str | None = None
+    device_type: str = "adb"
+    wda_url: str | None = None
     delay: float = 0.0
 
 

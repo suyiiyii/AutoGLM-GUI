@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+from typing import Any
 from typing import TYPE_CHECKING
 
 from AutoGLM_GUI.logger import logger
@@ -10,13 +11,16 @@ from phone_agent.agent import AgentConfig
 from phone_agent.model import ModelConfig
 
 if TYPE_CHECKING:
-    from AutoGLM_GUI.scrcpy_stream import ScrcpyStreamer
+    from AutoGLM_GUI.platforms.adb.video.scrcpy_stream import ScrcpyStreamer
     from phone_agent import PhoneAgent
+    from phone_agent.agent_ios import IOSAgentConfig, IOSPhoneAgent
 
 # Agent instances keyed by device_id
-agents: dict[str, "PhoneAgent"] = {}
+agents: dict[str, Any] = {}
 # Cached configs to rebuild agents on reset
-agent_configs: dict[str, tuple[ModelConfig, AgentConfig]] = {}
+agent_configs: dict[str, tuple[ModelConfig, AgentConfig | "IOSAgentConfig"]] = {}
+agent_types: dict[str, str] = {}
+known_device_types: dict[str, str] = {}
 
 # Scrcpy streaming per device
 scrcpy_streamers: dict[str, "ScrcpyStreamer"] = {}
