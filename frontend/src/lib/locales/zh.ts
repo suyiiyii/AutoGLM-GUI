@@ -14,7 +14,7 @@ export const zh = {
   },
   chat: {
     welcomeTitle: '欢迎使用 AutoGLM',
-    connectDevice: '连接 ADB 设备开始使用',
+    connectDevice: '连接设备开始使用',
     configuration: '配置',
     configureApi: '配置您的 API 设置以开始使用',
     selectPreset: '选择预设配置',
