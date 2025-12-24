@@ -14,6 +14,7 @@ import { DeviceSidebar } from '../components/DeviceSidebar';
 import { DevicePanel } from '../components/DevicePanel';
 import { HistoryDialog } from '../components/HistoryDialog';
 import { Toast, type ToastType } from '../components/Toast';
+import type { HistoryItem } from '../types/history';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -89,6 +90,7 @@ function ChatComponent() {
   const [showHistory, setShowHistory] = useState(false);
   const [historyDeviceId, setHistoryDeviceId] = useState('');
   const [historyDeviceName, setHistoryDeviceName] = useState('');
+  const [restoreHistory, setRestoreHistory] = useState<HistoryItem | null>(null);
   const [showApiKey, setShowApiKey] = useState(false);
   const [tempConfig, setTempConfig] = useState({
     base_url: '',
@@ -243,6 +245,12 @@ function ChatComponent() {
       setHistoryDeviceName(device?.model || 'Unknown Device');
       setShowHistory(true);
     }
+  };
+
+  const handleSelectHistory = (item: HistoryItem) => {
+    setRestoreHistory(item);
+    // 清空 restoreHistory，以便下次点击可以触发 useEffect
+    setTimeout(() => setRestoreHistory(null), 100);
   };
 
   return (
@@ -427,6 +435,7 @@ function ChatComponent() {
         onOpenChange={setShowHistory}
         deviceId={historyDeviceId}
         deviceName={historyDeviceName}
+        onSelectHistory={handleSelectHistory}
       />
 
       {/* Sidebar */}
@@ -482,6 +491,7 @@ function ChatComponent() {
                 config={config}
                 isVisible={device.id === currentDeviceId}
                 isConfigured={!!config?.base_url}
+                restoreHistory={restoreHistory}
               />
             </div>
           ))

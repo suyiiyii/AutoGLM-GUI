@@ -5,9 +5,10 @@ import { HistoryItemCard } from './HistoryItemCard';
 interface HistoryGroupProps {
   title: string;
   items: HistoryItem[];
+  onSelect: (item: HistoryItem) => void;
 }
 
-export function HistoryGroup({ title, items }: HistoryGroupProps) {
+export function HistoryGroup({ title, items, onSelect }: HistoryGroupProps) {
   if (items.length === 0) return null;
 
   return (
@@ -17,7 +18,7 @@ export function HistoryGroup({ title, items }: HistoryGroupProps) {
       </h3>
       <div className="space-y-2">
         {items.map(item => (
-          <HistoryItemCard key={item.id} item={item} />
+          <HistoryItemCard key={item.id} item={item} onSelect={onSelect} />
         ))}
       </div>
     </div>

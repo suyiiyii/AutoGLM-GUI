@@ -28,6 +28,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { useTranslation } from '../lib/i18n-context';
 import { createHistoryItem, saveHistoryItem } from '../utils/history';
+import type { HistoryItem } from '../types/history';
 
 interface Message {
   id: string;
@@ -53,6 +54,7 @@ interface DevicePanelProps {
   config: GlobalConfig | null;
   isVisible: boolean;
   isConfigured: boolean;
+  restoreHistory?: HistoryItem | null;
 }
 
 export function DevicePanel({
@@ -60,6 +62,7 @@ export function DevicePanel({
   deviceName,
   config,
   isConfigured,
+  restoreHistory,
 }: DevicePanelProps) {
   const t = useTranslation();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -167,6 +170,33 @@ export function DevicePanel({
       handleInit();
     }
   }, [isConfigured, config, initialized, handleInit]);
+
+  // Restore history when selected
+  useEffect(() => {
+    if (restoreHistory) {
+      // 将 HistoryItem 转换为 Message 格式
+      const userMessage: Message = {
+        id: `${restoreHistory.id}-user`,
+        role: 'user',
+        content: restoreHistory.taskText,
+        timestamp: restoreHistory.startTime,
+      };
+
+      const agentMessage: Message = {
+        id: `${restoreHistory.id}-agent`,
+        role: 'agent',
+        content: restoreHistory.finalMessage,
+        timestamp: restoreHistory.endTime,
+        steps: restoreHistory.steps,
+        success: restoreHistory.success,
+        thinking: restoreHistory.thinking,
+        actions: restoreHistory.actions,
+        isStreaming: false,
+      };
+
+      setMessages([userMessage, agentMessage]);
+    }
+  }, [restoreHistory]);
 
   const handleSend = useCallback(async () => {
     const inputValue = input.trim();
