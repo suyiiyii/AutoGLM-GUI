@@ -277,6 +277,9 @@ export function DevicePanel({
     const thinkingList: string[] = [];
     const actionsList: Record<string, unknown>[] = [];
     let currentThinkingText = '';
+    // Use a ref to batch updates and reduce render frequency
+    const thinkingChunksBuffer: string[] = [];
+    let updateTimeoutId: NodeJS.Timeout | null = null;
 
     const agentMessageId = (Date.now() + 1).toString();
     const agentMessage: Message = {
@@ -292,12 +295,12 @@ export function DevicePanel({
 
     setMessages(prev => [...prev, agentMessage]);
 
-    const stream = sendMessageStream(
-      userMessage.content,
-      deviceId,
-      (event: ThinkingChunkEvent) => {
-        // Append chunk to current thinking text
-        currentThinkingText += event.chunk;
+    // Batch update function to improve performance
+    const flushThinkingUpdate = () => {
+      if (thinkingChunksBuffer.length > 0) {
+        const chunksToAdd = thinkingChunksBuffer.join('');
+        thinkingChunksBuffer.length = 0; // Clear buffer
+        currentThinkingText += chunksToAdd;
 
         setMessages(prev =>
           prev.map(msg =>
@@ -309,13 +312,37 @@ export function DevicePanel({
               : msg
           )
         );
+      }
+      updateTimeoutId = null;
+    };
+
+    const stream = sendMessageStream(
+      userMessage.content,
+      deviceId,
+      (event: ThinkingChunkEvent) => {
+        // Buffer chunks and batch update every 50ms to reduce render frequency
+        thinkingChunksBuffer.push(event.chunk);
+
+        if (updateTimeoutId === null) {
+          updateTimeoutId = setTimeout(flushThinkingUpdate, 50);
+        }
       },
       (event: StepEvent) => {
-        // When a step completes, save the full thinking and reset current
-        if (currentThinkingText) {
-          thinkingList.push(currentThinkingText);
-          currentThinkingText = '';
+        // Flush any remaining chunks before processing step
+        if (updateTimeoutId !== null) {
+          clearTimeout(updateTimeoutId);
+          flushThinkingUpdate();
         }
+
+        // Prefer backend-provided thinking as source of truth, fall back to streamed text
+        const stepThinking =
+          event.thinking && event.thinking.length > 0
+            ? event.thinking
+            : currentThinkingText;
+        if (stepThinking) {
+          thinkingList.push(stepThinking);
+        }
+        currentThinkingText = '';
         actionsList.push(event.action);
 
         setMessages(prev =>
@@ -333,6 +360,11 @@ export function DevicePanel({
         );
       },
       (event: DoneEvent) => {
+        // Clear any pending updates
+        if (updateTimeoutId !== null) {
+          clearTimeout(updateTimeoutId);
+        }
+
         const updatedAgentMessage = {
           ...agentMessage,
           content: event.message,
@@ -363,6 +395,11 @@ export function DevicePanel({
         saveHistoryItem(deviceId, historyItem);
       },
       (event: ErrorEvent) => {
+        // Clear any pending updates
+        if (updateTimeoutId !== null) {
+          clearTimeout(updateTimeoutId);
+        }
+
         const updatedAgentMessage = {
           ...agentMessage,
           content: `Error: ${event.message}`,
