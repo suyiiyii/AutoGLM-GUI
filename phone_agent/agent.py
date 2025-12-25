@@ -67,6 +67,7 @@ class PhoneAgent:
         agent_config: AgentConfig | None = None,
         confirmation_callback: Callable[[str], bool] | None = None,
         takeover_callback: Callable[[str], None] | None = None,
+        thinking_chunk_callback: Callable[[str], None] | None = None,
     ):
         self.model_config = model_config or ModelConfig()
         self.agent_config = agent_config or AgentConfig()
@@ -80,6 +81,7 @@ class PhoneAgent:
 
         self._context: list[dict[str, Any]] = []
         self._step_count = 0
+        self._thinking_chunk_callback = thinking_chunk_callback
 
     def run(self, task: str) -> str:
         """
@@ -174,7 +176,9 @@ class PhoneAgent:
             print("\n" + "=" * 50)
             print(f"💭 {msgs['thinking']}:")
             print("-" * 50)
-            response = self.model_client.request(self._context)
+            response = self.model_client.request(
+                self._context, on_thinking_chunk=self._thinking_chunk_callback
+            )
         except Exception as e:
             if self.agent_config.verbose:
                 traceback.print_exc()

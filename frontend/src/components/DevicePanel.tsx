@@ -18,6 +18,7 @@ import {
 import { ScrcpyPlayer } from './ScrcpyPlayer';
 import type {
   ScreenshotResponse,
+  ThinkingChunkEvent,
   StepEvent,
   DoneEvent,
   ErrorEvent,
@@ -54,6 +55,7 @@ interface Message {
   thinking?: string[];
   actions?: Record<string, unknown>[];
   isStreaming?: boolean;
+  currentThinking?: string; // Current thinking text being streamed
 }
 
 interface GlobalConfig {
@@ -274,6 +276,7 @@ export function DevicePanel({
 
     const thinkingList: string[] = [];
     const actionsList: Record<string, unknown>[] = [];
+    let currentThinkingText = '';
 
     const agentMessageId = (Date.now() + 1).toString();
     const agentMessage: Message = {
@@ -284,6 +287,7 @@ export function DevicePanel({
       thinking: [],
       actions: [],
       isStreaming: true,
+      currentThinking: '',
     };
 
     setMessages(prev => [...prev, agentMessage]);
@@ -291,8 +295,27 @@ export function DevicePanel({
     const stream = sendMessageStream(
       userMessage.content,
       deviceId,
+      (event: ThinkingChunkEvent) => {
+        // Append chunk to current thinking text
+        currentThinkingText += event.chunk;
+        
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === agentMessageId
+              ? {
+                  ...msg,
+                  currentThinking: currentThinkingText,
+                }
+              : msg
+          )
+        );
+      },
       (event: StepEvent) => {
-        thinkingList.push(event.thinking);
+        // When a step completes, save the full thinking and reset current
+        if (currentThinkingText) {
+          thinkingList.push(currentThinkingText);
+          currentThinkingText = '';
+        }
         actionsList.push(event.action);
 
         setMessages(prev =>
@@ -303,6 +326,7 @@ export function DevicePanel({
                   thinking: [...thinkingList],
                   actions: [...actionsList],
                   steps: event.step,
+                  currentThinking: '',
                 }
               : msg
           )
@@ -318,6 +342,7 @@ export function DevicePanel({
           thinking: [...thinkingList],
           actions: [...actionsList],
           timestamp: new Date(),
+          currentThinking: undefined,
         };
 
         setMessages(prev =>
@@ -346,6 +371,7 @@ export function DevicePanel({
           thinking: [...thinkingList],
           actions: [...actionsList],
           timestamp: new Date(),
+          currentThinking: undefined,
         };
 
         setMessages(prev =>
@@ -639,6 +665,24 @@ export function DevicePanel({
                         )}
                       </div>
                     ))}
+
+                    {/* Current thinking being streamed */}
+                    {message.currentThinking && (
+                      <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl rounded-tl-sm px-4 py-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#1d9bf0]/10">
+                            <Sparkles className="h-3 w-3 text-[#1d9bf0] animate-pulse" />
+                          </div>
+                          <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                            Thinking...
+                          </span>
+                        </div>
+                        <p className="text-sm whitespace-pre-wrap text-slate-700 dark:text-slate-300">
+                          {message.currentThinking}
+                          <span className="inline-block w-1 h-4 ml-0.5 bg-[#1d9bf0] animate-pulse" />
+                        </p>
+                      </div>
+                    )}
 
                     {/* Final result */}
                     {message.content && (
