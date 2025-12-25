@@ -136,7 +136,7 @@ def chat_stream(request: ChatRequest):
     """发送任务给 Agent 并实时推送执行进度（SSE，多设备支持）。"""
     import queue
     import threading
-    
+
     device_id = request.device_id
 
     if device_id not in agents:
@@ -147,14 +147,14 @@ def chat_stream(request: ChatRequest):
 
     # Get the original agent to copy its config
     original_agent = agents[device_id]
-    
+
     # Get the stored configs for this device
     if device_id not in agent_configs:
         raise HTTPException(
             status_code=400,
             detail=f"Device {device_id} config not found.",
         )
-    
+
     model_config, agent_config = agent_configs[device_id]
 
     def event_generator():
@@ -162,7 +162,7 @@ def chat_stream(request: ChatRequest):
         try:
             # Create a queue to collect events from the agent
             event_queue = queue.Queue()
-            
+
             # Create a callback to handle thinking chunks
             def on_thinking_chunk(chunk: str):
                 """Emit thinking chunks as they arrive"""
@@ -171,7 +171,7 @@ def chat_stream(request: ChatRequest):
                     "chunk": chunk,
                 }
                 event_queue.put(("thinking_chunk", chunk_data))
-            
+
             # Create a new agent instance with thinking chunk callback
             streaming_agent = PhoneAgent(
                 model_config=model_config,
@@ -179,15 +179,15 @@ def chat_stream(request: ChatRequest):
                 takeover_callback=non_blocking_takeover,
                 thinking_chunk_callback=on_thinking_chunk,
             )
-            
+
             # Copy context from original agent
             streaming_agent._context = original_agent._context.copy()
             streaming_agent._step_count = original_agent._step_count
-            
+
             # Run agent step in a separate thread
             step_result = [None]
             error_result = [None]
-            
+
             def run_step(is_first=True, task=None):
                 try:
                     if is_first:
@@ -199,27 +199,27 @@ def chat_stream(request: ChatRequest):
                     error_result[0] = e
                 finally:
                     event_queue.put(("step_done", None))
-            
+
             # Start first step
             thread = threading.Thread(target=run_step, args=(True, request.message))
             thread.start()
-            
+
             while True:
                 # Wait for events from the queue
                 try:
                     event_type, event_data = event_queue.get(timeout=0.1)
                 except queue.Empty:
                     continue
-                
+
                 if event_type == "thinking_chunk":
                     yield "event: thinking_chunk\n"
                     yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
-                
+
                 elif event_type == "step_done":
                     # Check for errors
                     if error_result[0]:
                         raise error_result[0]
-                    
+
                     result = step_result[0]
                     event_data = {
                         "type": "step",
@@ -244,7 +244,10 @@ def chat_stream(request: ChatRequest):
                         yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
                         break
 
-                    if streaming_agent.step_count >= streaming_agent.agent_config.max_steps:
+                    if (
+                        streaming_agent.step_count
+                        >= streaming_agent.agent_config.max_steps
+                    ):
                         done_data = {
                             "type": "done",
                             "message": "Max steps reached",
@@ -264,7 +267,7 @@ def chat_stream(request: ChatRequest):
             # Update original agent state
             original_agent._context = streaming_agent._context
             original_agent._step_count = streaming_agent._step_count
-            
+
             original_agent.reset()
 
         except Exception as e:

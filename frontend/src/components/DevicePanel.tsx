@@ -298,7 +298,7 @@ export function DevicePanel({
       (event: ThinkingChunkEvent) => {
         // Append chunk to current thinking text
         currentThinkingText += event.chunk;
-        
+
         setMessages(prev =>
           prev.map(msg =>
             msg.id === agentMessageId
