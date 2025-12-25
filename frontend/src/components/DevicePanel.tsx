@@ -15,6 +15,7 @@ import {
   ChevronRight,
   History,
   ListChecks,
+  ArrowDown,
 } from 'lucide-react';
 import { ScrcpyPlayer } from './ScrcpyPlayer';
 import type {
@@ -161,9 +162,13 @@ export function DevicePanel({
   const chatStreamRef = useRef<{ close: () => void } | null>(null);
   const videoStreamRef = useRef<{ close: () => void } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const screenshotFetchingRef = useRef(false);
   const hasAutoInited = useRef(false);
   const prevConfigRef = useRef<GlobalConfig | null>(null);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [showNewMessageNotification, setShowNewMessageNotification] =
+    useState(false);
 
   const handleInit = useCallback(async () => {
     if (!config) return;
@@ -396,11 +401,47 @@ export function DevicePanel({
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    setShowNewMessageNotification(false);
   };
 
+  const checkIfAtBottom = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return true;
+
+    const threshold = 100; // pixels from bottom to be considered "at bottom"
+    const isBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight <
+      threshold;
+    return isBottom;
+  }, []);
+
+  const handleScroll = useCallback(() => {
+    const atBottom = checkIfAtBottom();
+    setIsAtBottom(atBottom);
+    if (atBottom) {
+      setShowNewMessageNotification(false);
+    }
+  }, [checkIfAtBottom]);
+
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    const container = messagesContainerRef.current;
+    if (container) {
+      container.addEventListener('scroll', handleScroll);
+      return () => container.removeEventListener('scroll', handleScroll);
+    }
+  }, [handleScroll]);
+
+  useEffect(() => {
+    // Only auto-scroll if user is at the bottom
+    if (isAtBottom) {
+      scrollToBottom();
+    } else {
+      // Show notification that there's a new message
+      if (messages.length > 0) {
+        setShowNewMessageNotification(true);
+      }
+    }
+  }, [messages, isAtBottom]);
 
   useEffect(() => {
     return () => {
@@ -614,7 +655,10 @@ export function DevicePanel({
         )}
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 min-h-0">
+        <div
+          ref={messagesContainerRef}
+          className="flex-1 overflow-y-auto p-4 min-h-0 relative"
+        >
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center min-h-[calc(100%-1rem)]">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
@@ -722,6 +766,21 @@ export function DevicePanel({
             ))
           )}
           <div ref={messagesEndRef} />
+
+          {/* New message notification button */}
+          {showNewMessageNotification && (
+            <div className="sticky bottom-4 left-0 right-0 flex justify-center pointer-events-none">
+              <Button
+                onClick={scrollToBottom}
+                variant="twitter"
+                size="sm"
+                className="pointer-events-auto shadow-lg animate-fade-in-up"
+              >
+                <ArrowDown className="w-4 h-4 mr-2" />
+                {t.devicePanel.scrollToLatest}
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Input area */}
