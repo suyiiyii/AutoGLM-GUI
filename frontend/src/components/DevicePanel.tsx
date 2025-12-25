@@ -166,6 +166,7 @@ export function DevicePanel({
   const screenshotFetchingRef = useRef(false);
   const hasAutoInited = useRef(false);
   const prevConfigRef = useRef<GlobalConfig | null>(null);
+  const prevMessagesLengthRef = useRef(0);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [showNewMessageNotification, setShowNewMessageNotification] =
     useState(false);
@@ -432,15 +433,21 @@ export function DevicePanel({
   }, [handleScroll]);
 
   useEffect(() => {
-    // Only auto-scroll if user is at the bottom
-    if (isAtBottom) {
-      scrollToBottom();
-    } else {
-      // Show notification that there's a new message
-      if (messages.length > 0) {
+    const prevLength = prevMessagesLengthRef.current;
+    const currentLength = messages.length;
+    const hasNewMessage = currentLength > prevLength;
+
+    if (hasNewMessage) {
+      if (isAtBottom) {
+        // Auto-scroll when new messages arrive and the user is at the bottom
+        scrollToBottom();
+      } else {
+        // Show notification only when new messages arrive while scrolled up
         setShowNewMessageNotification(true);
       }
     }
+
+    prevMessagesLengthRef.current = currentLength;
   }, [messages, isAtBottom]);
 
   useEffect(() => {
