@@ -3,7 +3,7 @@
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Any
+from typing import Any, Callable
 
 from openai import OpenAI
 
@@ -53,7 +53,7 @@ class ModelClient:
     def request(
         self,
         messages: list[dict[str, Any]],
-        on_thinking_chunk: Any | None = None,
+        on_thinking_chunk: Callable[[str], None] | None = None,
     ) -> ModelResponse:
         """
         Send a request to the model.
