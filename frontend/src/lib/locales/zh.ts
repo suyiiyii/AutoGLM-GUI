@@ -58,6 +58,13 @@ export const zh = {
     pairingStep4: '4. 输入显示的 IP 地址、配对端口和 6 位配对码',
     pairingNote:
       '注意：配对端口和连接端口不同。配对成功后，系统将自动使用连接端口（默认 5555）进行连接。',
+    discoveredDevices: '发现的设备',
+    scanning: '扫描中...',
+    scanAgain: '重新扫描',
+    noDevicesFound: '未发现无线设备',
+    scanError: '扫描失败: {error}',
+    pairingRequired: '可能需要配对',
+    manualConnection: '手动连接',
   },
   devicePanel: {
     noConfig: '请先配置您的 API 设置',

@@ -220,3 +220,22 @@ class VersionCheckResponse(BaseModel):
     release_url: str | None = None
     published_at: str | None = None
     error: str | None = None
+
+
+class MdnsDeviceResponse(BaseModel):
+    """Single mDNS-discovered device."""
+
+    name: str  # Device name (e.g., "adb-243a09b7-cbCO6P")
+    ip: str  # IP address
+    port: int  # Port number
+    has_pairing: bool  # Whether pairing service was also advertised
+    service_type: str  # Service type
+    pairing_port: int | None = None  # Pairing port if has_pairing is True
+
+
+class MdnsDiscoverResponse(BaseModel):
+    """mDNS device discovery response."""
+
+    success: bool
+    devices: list[MdnsDeviceResponse]
+    error: str | None = None

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Smartphone,
   Settings,
@@ -6,6 +6,9 @@ import {
   ChevronRight,
   Plug,
   Plus,
+  Wifi,
+  AlertCircle,
+  ChevronDown,
 } from 'lucide-react';
 import { DeviceCard } from './DeviceCard';
 import { Button } from '@/components/ui/button';
@@ -19,10 +22,15 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+import {
+  Collapsible,
+  CollapsibleTrigger,
+  CollapsibleContent,
+} from '@/components/ui/collapsible';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import type { Device } from '../api';
-import { connectWifiManual, pairWifi } from '../api';
+import type { Device, MdnsDevice } from '../api';
+import { connectWifiManual, pairWifi, discoverMdnsDevices } from '../api';
 import { useTranslation } from '../lib/i18n-context';
 
 const getInitialCollapsedState = (): boolean => {
@@ -69,6 +77,21 @@ export function DeviceSidebar({
   const [connectionPort, setConnectionPort] = useState('5555');
   const [pairingCodeError, setPairingCodeError] = useState('');
   const [isConnecting, setIsConnecting] = useState(false);
+
+  // mDNS device discovery
+  const [discoveredDevices, setDiscoveredDevices] = useState<MdnsDevice[]>([]);
+  const [isScanning, setIsScanning] = useState(false);
+  const [scanError, setScanError] = useState('');
+  const [isManualOpen, setIsManualOpen] = useState(false);
+
+  // Quick pairing dialog for discovered devices
+  const [showQuickPair, setShowQuickPair] = useState(false);
+  const [quickPairDevice, setQuickPairDevice] = useState<MdnsDevice | null>(
+    null
+  );
+  const [quickPairingCode, setQuickPairingCode] = useState('');
+  const [quickPairingPort, setQuickPairingPort] = useState('');
+  const [quickPairingError, setQuickPairingError] = useState('');
 
   useEffect(() => {
     localStorage.setItem('sidebar-collapsed', JSON.stringify(isCollapsed));
@@ -214,6 +237,135 @@ export function DeviceSidebar({
     }
   };
 
+  // mDNS device discovery handler
+  const handleDiscover = useCallback(async () => {
+    setIsScanning(true);
+    setScanError('');
+
+    try {
+      const result = await discoverMdnsDevices();
+
+      if (result.success) {
+        setDiscoveredDevices(result.devices);
+      } else {
+        setScanError(
+          result.error ||
+            t.deviceSidebar.scanError.replace('{error}', 'Unknown error')
+        );
+        setDiscoveredDevices([]);
+      }
+    } catch (error) {
+      setScanError(t.deviceSidebar.scanError.replace('{error}', String(error)));
+      setDiscoveredDevices([]);
+    } finally {
+      setIsScanning(false);
+    }
+  }, [t.deviceSidebar.scanError]);
+
+  // Handle clicking on a discovered device
+  const handleDeviceClick = async (device: MdnsDevice) => {
+    // If device requires pairing, show quick pair dialog
+    if (device.has_pairing) {
+      setQuickPairDevice(device);
+      setQuickPairingCode('');
+      // Auto-fill pairing port if available from mDNS
+      setQuickPairingPort(
+        device.pairing_port ? String(device.pairing_port) : ''
+      );
+      setQuickPairingError('');
+      setShowQuickPair(true);
+      return;
+    }
+
+    // Otherwise, try to connect directly
+    setIsConnecting(true);
+    setIpError('');
+
+    try {
+      const result = await connectWifiManual({
+        ip: device.ip,
+        port: device.port,
+      });
+
+      if (result.success) {
+        setShowManualConnect(false);
+        // Device list will auto-refresh via polling
+      } else {
+        setIpError(result.message || t.toasts.wifiManualConnectError);
+      }
+    } catch (error) {
+      setIpError(t.toasts.wifiManualConnectError);
+      console.error('[DeviceSidebar] Error connecting:', error);
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  // Handle quick pairing for discovered devices
+  const handleQuickPair = async () => {
+    if (!quickPairDevice) return;
+
+    setQuickPairingError('');
+
+    // Validate pairing code (6 digits)
+    if (!/^\d{6}$/.test(quickPairingCode)) {
+      setQuickPairingError(t.deviceSidebar.invalidPairingCodeError);
+      return;
+    }
+
+    // Validate pairing port
+    const pairingPortNum = parseInt(quickPairingPort, 10);
+    if (isNaN(pairingPortNum) || pairingPortNum < 1 || pairingPortNum > 65535) {
+      setQuickPairingError(t.deviceSidebar.invalidPortError);
+      return;
+    }
+
+    setIsConnecting(true);
+
+    try {
+      const result = await pairWifi({
+        ip: quickPairDevice.ip,
+        pairing_port: pairingPortNum,
+        pairing_code: quickPairingCode,
+        connection_port: quickPairDevice.port,
+      });
+
+      if (result.success) {
+        setShowQuickPair(false);
+        setShowManualConnect(false);
+        setQuickPairDevice(null);
+        setQuickPairingCode('');
+        setQuickPairingPort('');
+        // Device list will auto-refresh via polling
+      } else {
+        setQuickPairingError(result.message || t.toasts.wifiPairError);
+      }
+    } catch (error) {
+      console.error('[DeviceSidebar] Error pairing:', error);
+      setQuickPairingError(t.toasts.wifiPairError);
+    } finally {
+      setIsConnecting(false);
+    }
+  };
+
+  // Auto-scan when dialog opens and poll for updates
+  useEffect(() => {
+    if (showManualConnect) {
+      // Initial scan
+      handleDiscover();
+
+      // Poll every 5 seconds for device updates
+      const pollInterval = setInterval(() => {
+        handleDiscover();
+      }, 5000);
+
+      // Cleanup interval on unmount or when dialog closes
+      return () => {
+        clearInterval(pollInterval);
+      };
+    }
+  }, [showManualConnect, handleDiscover]);
+
   return (
     <>
       {/* Collapsed toggle button */}
@@ -342,134 +494,253 @@ export function DeviceSidebar({
               </DialogDescription>
             </DialogHeader>
 
-            <Tabs
-              value={activeTab}
-              onValueChange={setActiveTab}
-              className="w-full"
-            >
-              <TabsList className="grid w-full grid-cols-2">
-                <TabsTrigger value="direct">
-                  {t.deviceSidebar.directConnectTab}
-                </TabsTrigger>
-                <TabsTrigger value="pair">
-                  {t.deviceSidebar.pairTab}
-                </TabsTrigger>
-              </TabsList>
+            {/* mDNS Discovery Section */}
+            <div className="space-y-3">
+              {/* Scan Button */}
+              <div className="flex items-center justify-between">
+                <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                  {t.deviceSidebar.discoveredDevices}
+                </h3>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleDiscover}
+                  disabled={isScanning}
+                  className="h-8"
+                >
+                  {isScanning ? (
+                    <>
+                      <span className="mr-2 h-3 w-3 animate-spin rounded-full border-2 border-slate-400 border-t-transparent" />
+                      {t.deviceSidebar.scanning}
+                    </>
+                  ) : (
+                    t.deviceSidebar.scanAgain
+                  )}
+                </Button>
+              </div>
 
-              <TabsContent value="direct" className="space-y-4">
-                <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 p-3 text-sm">
-                  <p className="text-amber-800 dark:text-amber-200">
-                    {t.deviceSidebar.directConnectNote}
+              {/* Scan Error */}
+              {scanError && (
+                <div className="rounded-lg bg-red-50 dark:bg-red-950/20 p-3">
+                  <p className="text-sm text-red-700 dark:text-red-300">
+                    {scanError}
                   </p>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="ip">{t.deviceSidebar.ipAddress}</Label>
-                  <Input
-                    id="ip"
-                    placeholder="192.168.1.100"
-                    value={manualConnectIp}
-                    onChange={e => setManualConnectIp(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleManualConnect()}
-                    className={ipError ? 'border-red-500' : ''}
-                  />
-                  {ipError && <p className="text-sm text-red-500">{ipError}</p>}
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="port">{t.deviceSidebar.port}</Label>
-                  <Input
-                    id="port"
-                    type="number"
-                    value={manualConnectPort}
-                    onChange={e => setManualConnectPort(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleManualConnect()}
-                    className={portError ? 'border-red-500' : ''}
-                  />
-                  {portError && (
-                    <p className="text-sm text-red-500">{portError}</p>
-                  )}
-                </div>
-              </TabsContent>
+              )}
 
-              <TabsContent value="pair" className="space-y-4">
-                <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 p-3 text-sm">
-                  <p className="font-medium text-blue-900 dark:text-blue-100 mb-2">
-                    {t.deviceSidebar.pairingInstructions}
-                  </p>
-                  <ol className="space-y-1 text-blue-700 dark:text-blue-300 text-xs">
-                    <li>{t.deviceSidebar.pairingStep1}</li>
-                    <li>{t.deviceSidebar.pairingStep2}</li>
-                    <li>{t.deviceSidebar.pairingStep3}</li>
-                    <li>{t.deviceSidebar.pairingStep4}</li>
-                  </ol>
-                  <p className="mt-2 text-xs text-blue-600 dark:text-blue-400">
-                    {t.deviceSidebar.pairingNote}
+              {/* No Devices Found */}
+              {!isScanning && !scanError && discoveredDevices.length === 0 && (
+                <div className="rounded-lg bg-slate-50 dark:bg-slate-900 p-4 text-center">
+                  <Wifi className="mx-auto h-8 w-8 text-slate-400" />
+                  <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                    {t.deviceSidebar.noDevicesFound}
                   </p>
                 </div>
+              )}
 
+              {/* Discovered Devices List */}
+              {discoveredDevices.length > 0 && (
                 <div className="space-y-2">
-                  <Label htmlFor="pair-ip">{t.deviceSidebar.ipAddress}</Label>
-                  <Input
-                    id="pair-ip"
-                    placeholder="192.168.1.100"
-                    value={manualConnectIp}
-                    onChange={e => setManualConnectIp(e.target.value)}
-                    className={ipError ? 'border-red-500' : ''}
-                  />
-                  {ipError && <p className="text-sm text-red-500">{ipError}</p>}
+                  {discoveredDevices.map(device => (
+                    <button
+                      key={`${device.ip}:${device.port}`}
+                      onClick={() => handleDeviceClick(device)}
+                      disabled={isConnecting}
+                      className="w-full rounded-lg border border-slate-200 dark:border-slate-700 p-3 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                    >
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2">
+                            <Smartphone className="h-4 w-4 text-[#1d9bf0]" />
+                            <span className="font-medium text-slate-900 dark:text-slate-100">
+                              {device.name}
+                            </span>
+                          </div>
+                          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                            {device.ip}:{device.port}
+                          </p>
+                          {device.has_pairing && (
+                            <div className="mt-2 flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400">
+                              <AlertCircle className="h-3 w-3" />
+                              <span>{t.deviceSidebar.pairingRequired}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    </button>
+                  ))}
                 </div>
+              )}
 
-                <div className="space-y-2">
-                  <Label htmlFor="pairing-port">
-                    {t.deviceSidebar.pairingPort}
-                  </Label>
-                  <Input
-                    id="pairing-port"
-                    type="number"
-                    placeholder="37831"
-                    value={pairingPort}
-                    onChange={e => setPairingPort(e.target.value)}
-                    className={portError ? 'border-red-500' : ''}
-                  />
-                  {portError && (
-                    <p className="text-sm text-red-500">{portError}</p>
-                  )}
+              {/* Connection Error Display */}
+              {ipError && (
+                <div className="rounded-lg bg-red-50 dark:bg-red-950/20 p-3">
+                  <p className="text-sm text-red-700 dark:text-red-300">
+                    {ipError}
+                  </p>
                 </div>
+              )}
+            </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="pairing-code">
-                    {t.deviceSidebar.pairingCode}
-                  </Label>
-                  <Input
-                    id="pairing-code"
-                    type="text"
-                    placeholder="123456"
-                    maxLength={6}
-                    value={pairingCode}
-                    onChange={e =>
-                      setPairingCode(e.target.value.replace(/\D/g, ''))
-                    }
-                    onKeyDown={e => e.key === 'Enter' && handlePair()}
-                    className={pairingCodeError ? 'border-red-500' : ''}
+            {/* Manual Connection Collapsible */}
+            <Collapsible open={isManualOpen} onOpenChange={setIsManualOpen}>
+              <CollapsibleTrigger asChild>
+                <Button
+                  variant="ghost"
+                  className="flex w-full items-center justify-between p-2 text-sm font-medium"
+                >
+                  <span>{t.deviceSidebar.manualConnection}</span>
+                  <ChevronDown
+                    className={`h-4 w-4 transition-transform ${
+                      isManualOpen ? 'rotate-180' : ''
+                    }`}
                   />
-                  {pairingCodeError && (
-                    <p className="text-sm text-red-500">{pairingCodeError}</p>
-                  )}
-                </div>
+                </Button>
+              </CollapsibleTrigger>
 
-                <div className="space-y-2">
-                  <Label htmlFor="connection-port">
-                    {t.deviceSidebar.connectionPort}
-                  </Label>
-                  <Input
-                    id="connection-port"
-                    type="number"
-                    value={connectionPort}
-                    onChange={e => setConnectionPort(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handlePair()}
-                  />
-                </div>
-              </TabsContent>
-            </Tabs>
+              <CollapsibleContent className="space-y-4 pt-2">
+                <Tabs
+                  value={activeTab}
+                  onValueChange={setActiveTab}
+                  className="w-full"
+                >
+                  <TabsList className="grid w-full grid-cols-2">
+                    <TabsTrigger value="direct">
+                      {t.deviceSidebar.directConnectTab}
+                    </TabsTrigger>
+                    <TabsTrigger value="pair">
+                      {t.deviceSidebar.pairTab}
+                    </TabsTrigger>
+                  </TabsList>
+
+                  <TabsContent value="direct" className="space-y-4">
+                    <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 p-3 text-sm">
+                      <p className="text-amber-800 dark:text-amber-200">
+                        {t.deviceSidebar.directConnectNote}
+                      </p>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="ip">{t.deviceSidebar.ipAddress}</Label>
+                      <Input
+                        id="ip"
+                        placeholder="192.168.1.100"
+                        value={manualConnectIp}
+                        onChange={e => setManualConnectIp(e.target.value)}
+                        onKeyDown={e =>
+                          e.key === 'Enter' && handleManualConnect()
+                        }
+                        className={ipError ? 'border-red-500' : ''}
+                      />
+                      {ipError && (
+                        <p className="text-sm text-red-500">{ipError}</p>
+                      )}
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="port">{t.deviceSidebar.port}</Label>
+                      <Input
+                        id="port"
+                        type="number"
+                        value={manualConnectPort}
+                        onChange={e => setManualConnectPort(e.target.value)}
+                        onKeyDown={e =>
+                          e.key === 'Enter' && handleManualConnect()
+                        }
+                        className={portError ? 'border-red-500' : ''}
+                      />
+                      {portError && (
+                        <p className="text-sm text-red-500">{portError}</p>
+                      )}
+                    </div>
+                  </TabsContent>
+
+                  <TabsContent value="pair" className="space-y-4">
+                    <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 p-3 text-sm">
+                      <p className="font-medium text-blue-900 dark:text-blue-100 mb-2">
+                        {t.deviceSidebar.pairingInstructions}
+                      </p>
+                      <ol className="space-y-1 text-blue-700 dark:text-blue-300 text-xs">
+                        <li>{t.deviceSidebar.pairingStep1}</li>
+                        <li>{t.deviceSidebar.pairingStep2}</li>
+                        <li>{t.deviceSidebar.pairingStep3}</li>
+                        <li>{t.deviceSidebar.pairingStep4}</li>
+                      </ol>
+                      <p className="mt-2 text-xs text-blue-600 dark:text-blue-400">
+                        {t.deviceSidebar.pairingNote}
+                      </p>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="pair-ip">
+                        {t.deviceSidebar.ipAddress}
+                      </Label>
+                      <Input
+                        id="pair-ip"
+                        placeholder="192.168.1.100"
+                        value={manualConnectIp}
+                        onChange={e => setManualConnectIp(e.target.value)}
+                        className={ipError ? 'border-red-500' : ''}
+                      />
+                      {ipError && (
+                        <p className="text-sm text-red-500">{ipError}</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="pairing-port">
+                        {t.deviceSidebar.pairingPort}
+                      </Label>
+                      <Input
+                        id="pairing-port"
+                        type="number"
+                        placeholder="37831"
+                        value={pairingPort}
+                        onChange={e => setPairingPort(e.target.value)}
+                        className={portError ? 'border-red-500' : ''}
+                      />
+                      {portError && (
+                        <p className="text-sm text-red-500">{portError}</p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="pairing-code">
+                        {t.deviceSidebar.pairingCode}
+                      </Label>
+                      <Input
+                        id="pairing-code"
+                        type="text"
+                        placeholder="123456"
+                        maxLength={6}
+                        value={pairingCode}
+                        onChange={e =>
+                          setPairingCode(e.target.value.replace(/\D/g, ''))
+                        }
+                        onKeyDown={e => e.key === 'Enter' && handlePair()}
+                        className={pairingCodeError ? 'border-red-500' : ''}
+                      />
+                      {pairingCodeError && (
+                        <p className="text-sm text-red-500">
+                          {pairingCodeError}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="connection-port">
+                        {t.deviceSidebar.connectionPort}
+                      </Label>
+                      <Input
+                        id="connection-port"
+                        type="number"
+                        value={connectionPort}
+                        onChange={e => setConnectionPort(e.target.value)}
+                        onKeyDown={e => e.key === 'Enter' && handlePair()}
+                      />
+                    </div>
+                  </TabsContent>
+                </Tabs>
+              </CollapsibleContent>
+            </Collapsible>
 
             <DialogFooter>
               <Button
@@ -479,12 +750,15 @@ export function DeviceSidebar({
                   setIpError('');
                   setPortError('');
                   setPairingCodeError('');
+                  setScanError('');
                   setManualConnectIp('');
                   setManualConnectPort('5555');
                   setPairingCode('');
                   setPairingPort('');
                   setConnectionPort('5555');
                   setActiveTab('direct');
+                  setDiscoveredDevices([]);
+                  setIsManualOpen(false);
                 }}
               >
                 {t.common.cancel}
@@ -495,6 +769,103 @@ export function DeviceSidebar({
                 }
                 disabled={isConnecting}
               >
+                {isConnecting ? t.common.loading : t.common.confirm}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {/* Quick Pairing Dialog for Discovered Devices */}
+        <Dialog open={showQuickPair} onOpenChange={setShowQuickPair}>
+          <DialogContent className="sm:max-w-md">
+            <DialogHeader>
+              <DialogTitle>{t.deviceSidebar.pairTab}</DialogTitle>
+              <DialogDescription>
+                {quickPairDevice
+                  ? `${quickPairDevice.name} (${quickPairDevice.ip}:${quickPairDevice.port})`
+                  : ''}
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="space-y-4">
+              <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 p-3 text-sm">
+                <p className="font-medium text-blue-900 dark:text-blue-100 mb-2">
+                  {t.deviceSidebar.pairingInstructions}
+                </p>
+                <ol className="space-y-1 text-blue-700 dark:text-blue-300 text-xs">
+                  <li>{t.deviceSidebar.pairingStep1}</li>
+                  <li>{t.deviceSidebar.pairingStep2}</li>
+                  <li>{t.deviceSidebar.pairingStep3}</li>
+                  <li>{t.deviceSidebar.pairingStep4}</li>
+                </ol>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="quick-pairing-port">
+                  {t.deviceSidebar.pairingPort}
+                  {quickPairDevice?.pairing_port && (
+                    <span className="ml-2 text-xs text-green-600 dark:text-green-400">
+                      (Auto-detected)
+                    </span>
+                  )}
+                </Label>
+                <Input
+                  id="quick-pairing-port"
+                  type="number"
+                  placeholder="40817"
+                  value={quickPairingPort}
+                  onChange={e => setQuickPairingPort(e.target.value)}
+                  readOnly={!!quickPairDevice?.pairing_port}
+                  className={
+                    quickPairingError
+                      ? 'border-red-500'
+                      : quickPairDevice?.pairing_port
+                        ? 'bg-slate-50 dark:bg-slate-900'
+                        : ''
+                  }
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="quick-pairing-code">
+                  {t.deviceSidebar.pairingCode}
+                </Label>
+                <Input
+                  id="quick-pairing-code"
+                  type="text"
+                  maxLength={6}
+                  value={quickPairingCode}
+                  onChange={e =>
+                    setQuickPairingCode(e.target.value.replace(/\D/g, ''))
+                  }
+                  onKeyDown={e => e.key === 'Enter' && handleQuickPair()}
+                  className={quickPairingError ? 'border-red-500' : ''}
+                />
+              </div>
+
+              {quickPairingError && (
+                <div className="rounded-lg bg-red-50 dark:bg-red-950/20 p-3">
+                  <p className="text-sm text-red-700 dark:text-red-300">
+                    {quickPairingError}
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <DialogFooter>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowQuickPair(false);
+                  setQuickPairDevice(null);
+                  setQuickPairingCode('');
+                  setQuickPairingPort('');
+                  setQuickPairingError('');
+                }}
+              >
+                {t.common.cancel}
+              </Button>
+              <Button onClick={handleQuickPair} disabled={isConnecting}>
                 {isConnecting ? t.common.loading : t.common.confirm}
               </Button>
             </DialogFooter>

@@ -14,6 +14,8 @@ from AutoGLM_GUI.schemas import (
     WiFiManualConnectResponse,
     WiFiPairRequest,
     WiFiPairResponse,
+    MdnsDiscoverResponse,
+    MdnsDeviceResponse,
 )
 from AutoGLM_GUI.state import agents
 
@@ -243,3 +245,38 @@ def pair_wifi(request: WiFiPairRequest) -> WiFiPairResponse:
         message=f"Successfully paired and connected to {connection_address}",
         device_id=connection_address,
     )
+
+
+@router.get("/api/devices/discover_mdns", response_model=MdnsDiscoverResponse)
+def discover_mdns() -> MdnsDiscoverResponse:
+    """Discover wireless ADB devices via mDNS."""
+    from phone_agent.adb import ADBConnection
+    from AutoGLM_GUI.adb_plus import discover_mdns_devices
+
+    try:
+        conn = ADBConnection()
+        devices = discover_mdns_devices(conn.adb_path)
+
+        device_responses = [
+            MdnsDeviceResponse(
+                name=dev.name,
+                ip=dev.ip,
+                port=dev.port,
+                has_pairing=dev.has_pairing,
+                service_type=dev.service_type,
+                pairing_port=dev.pairing_port,
+            )
+            for dev in devices
+        ]
+
+        return MdnsDiscoverResponse(
+            success=True,
+            devices=device_responses,
+        )
+
+    except Exception as e:
+        return MdnsDiscoverResponse(
+            success=False,
+            devices=[],
+            error=str(e),
+        )

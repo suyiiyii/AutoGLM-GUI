@@ -60,6 +60,13 @@ export const en = {
       '4. Enter the IP address, pairing port, and 6-digit code shown',
     pairingNote:
       'Note: Pairing port and connection port are different. After pairing, the system will automatically connect using the connection port (default 5555).',
+    discoveredDevices: 'Discovered Devices',
+    scanning: 'Scanning...',
+    scanAgain: 'Scan Again',
+    noDevicesFound: 'No wireless devices found',
+    scanError: 'Scan failed: {error}',
+    pairingRequired: 'Pairing may be required',
+    manualConnection: 'Manual Connection',
   },
   devicePanel: {
     noConfig: 'Please configure your API settings first',

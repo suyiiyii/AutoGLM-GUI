@@ -190,6 +190,21 @@ export interface WiFiPairResponse {
   error?: string;
 }
 
+export interface MdnsDevice {
+  name: string;
+  ip: string;
+  port: number;
+  has_pairing: boolean;
+  service_type: string;
+  pairing_port?: number;
+}
+
+export interface MdnsDiscoverResponse {
+  success: boolean;
+  devices: MdnsDevice[];
+  error?: string;
+}
+
 export async function listDevices(): Promise<DeviceListResponse> {
   const res = await axios.get<DeviceListResponse>('/api/devices');
   return res.data;
@@ -492,5 +507,12 @@ export interface VersionCheckResponse {
 
 export async function checkVersion(): Promise<VersionCheckResponse> {
   const res = await axios.get<VersionCheckResponse>('/api/version/latest');
+  return res.data;
+}
+
+export async function discoverMdnsDevices(): Promise<MdnsDiscoverResponse> {
+  const res = await axios.get<MdnsDiscoverResponse>(
+    '/api/devices/discover_mdns'
+  );
   return res.data;
 }
