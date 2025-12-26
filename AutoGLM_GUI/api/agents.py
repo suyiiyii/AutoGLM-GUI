@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
 from AutoGLM_GUI.config import config
+from AutoGLM_GUI.phone_agent_patches import apply_patches
 from AutoGLM_GUI.schemas import (
     APIAgentConfig,
     APIModelConfig,
@@ -30,6 +31,9 @@ from AutoGLM_GUI.version import APP_VERSION
 from phone_agent import PhoneAgent
 from phone_agent.agent import AgentConfig
 from phone_agent.model import ModelConfig
+
+# Apply monkey patches to phone_agent
+apply_patches()
 
 router = APIRouter()
 
@@ -197,17 +201,27 @@ def chat_stream(request: ChatRequest):
                         }
                         event_queue.put(("thinking_chunk", chunk_data))
 
-                # Create a new agent instance with thinking chunk callback
+                # Create a new agent instance
                 streaming_agent = PhoneAgent(
                     model_config=model_config,
                     agent_config=agent_config,
                     takeover_callback=non_blocking_takeover,
-                    thinking_chunk_callback=on_thinking_chunk,
                 )
 
                 # Copy context from original agent (thread-safe due to device lock)
                 streaming_agent._context = original_agent._context.copy()
                 streaming_agent._step_count = original_agent._step_count
+
+                # Monkey-patch the model_client.request to inject the callback
+                original_request = streaming_agent.model_client.request
+
+                def patched_request(messages, **kwargs):
+                    # Inject the on_thinking_chunk callback
+                    return original_request(
+                        messages, on_thinking_chunk=on_thinking_chunk
+                    )
+
+                streaming_agent.model_client.request = patched_request
 
                 # Run agent step in a separate thread
                 step_result: list[Any] = [None]
