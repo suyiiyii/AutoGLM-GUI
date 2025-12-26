@@ -359,6 +359,15 @@ export async function resetChat(deviceId: string): Promise<{
   return res.data;
 }
 
+export async function interruptAgent(deviceId: string): Promise<{
+  success: boolean;
+  message: string;
+  device_id: string;
+}> {
+  const res = await axios.post('/api/interrupt', { device_id: deviceId });
+  return res.data;
+}
+
 export async function getScreenshot(
   deviceId?: string | null
 ): Promise<ScreenshotResponse> {

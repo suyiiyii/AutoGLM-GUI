@@ -47,6 +47,16 @@ class ResetRequest(BaseModel):
     device_id: str  # 设备 ID（必填）
 
 
+class InterruptRequest(BaseModel):
+    device_id: str
+
+
+class InterruptResponse(BaseModel):
+    success: bool
+    message: str
+    device_id: str
+
+
 class ScreenshotRequest(BaseModel):
     device_id: str | None = None
 

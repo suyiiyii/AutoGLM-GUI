@@ -124,6 +124,10 @@ export const en = {
     tapError: 'Error: {error}',
     swiped: 'Swiped',
     swipeError: 'Swipe error: {error}',
+    interrupt: 'Interrupt',
+    interrupting: 'Interrupting...',
+    interruptSent: 'Interruption signal sent',
+    interruptError: 'Failed to interrupt',
   },
   deviceCard: {
     unknownDevice: 'Unknown Device',
