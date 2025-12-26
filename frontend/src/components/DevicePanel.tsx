@@ -279,7 +279,7 @@ export function DevicePanel({
     let currentThinkingText = '';
     // Use a ref to batch updates and reduce render frequency
     const thinkingChunksBuffer: string[] = [];
-    let updateTimeoutId: NodeJS.Timeout | null = null;
+    let updateTimeoutId: number | null = null;
 
     const agentMessageId = (Date.now() + 1).toString();
     const agentMessage: Message = {
