@@ -116,6 +116,8 @@ def init_agent(request: InitRequest) -> dict:
 @router.post("/api/chat", response_model=ChatResponse)
 def chat(request: ChatRequest) -> ChatResponse:
     """发送任务给 Agent 并执行。"""
+    from AutoGLM_GUI.exceptions import TaskInterruptedError
+    
     device_id = request.device_id
     if device_id not in agents:
         raise HTTPException(
@@ -130,6 +132,15 @@ def chat(request: ChatRequest) -> ChatResponse:
         agent.reset()
 
         return ChatResponse(result=result, steps=steps, success=True)
+    except TaskInterruptedError:
+        # Handle user/task interruption explicitly for consistency with /api/chat/stream
+        steps = agent.step_count
+        agent.reset()
+        return ChatResponse(
+            result="Task interrupted",
+            steps=steps,
+            success=False,
+        )
     except Exception as e:
         agent.reset()
         return ChatResponse(result=str(e), steps=0, success=False)
@@ -150,7 +161,7 @@ def chat_stream(request: ChatRequest):
 
     def event_generator():
         """SSE 事件生成器"""
-        from AutoGLM_GUI.exceptions import InterruptedError
+        from AutoGLM_GUI.exceptions import TaskInterruptedError
 
         try:
             step_result = agent.step(request.message)
@@ -208,7 +219,7 @@ def chat_stream(request: ChatRequest):
 
             agent.reset()
 
-        except InterruptedError:
+        except TaskInterruptedError:
             logger.info(f"Task on device {device_id} was interrupted during execution.")
             done_data = {
                 "type": "done",
@@ -242,8 +253,6 @@ def chat_stream(request: ChatRequest):
 @router.post("/api/interrupt", response_model=InterruptResponse)
 def interrupt_agent(request: InterruptRequest) -> InterruptResponse:
     """打断当前正在执行的任务（多设备支持）。"""
-    from AutoGLM_GUI.agent_wrapper import InterruptiblePhoneAgent
-
     device_id = request.device_id
     logger.info(f"Received interrupt request for device {device_id}")
 
