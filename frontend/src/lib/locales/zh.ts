@@ -124,6 +124,10 @@ export const zh = {
     tapError: '错误: {error}',
     swiped: '已滑动',
     swipeError: '滑动错误: {error}',
+    interrupt: '打断',
+    interrupting: '正在打断...',
+    interruptSent: '打断信号已发送',
+    interruptError: '打断失败',
   },
   deviceCard: {
     unknownDevice: '未知设备',

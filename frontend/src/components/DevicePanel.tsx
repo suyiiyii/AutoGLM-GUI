@@ -15,6 +15,7 @@ import {
   ChevronRight,
   History,
   ListChecks,
+  StopCircle,
 } from 'lucide-react';
 import { ScrcpyPlayer } from './ScrcpyPlayer';
 import type {
@@ -31,6 +32,7 @@ import {
   resetChat,
   sendMessageStream,
   listWorkflows,
+  interruptAgent,
 } from '../api';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -443,6 +445,16 @@ export function DevicePanel({
 
     chatStreamRef.current = stream;
   }, [input, loading, initialized, deviceId, deviceName, handleInit]);
+
+  const handleInterrupt = useCallback(async () => {
+    try {
+      await interruptAgent(deviceId);
+      showFeedback(t.devicePanel.interruptSent, 2000, 'success');
+    } catch (err) {
+      console.error('Failed to interrupt:', err);
+      showFeedback(t.devicePanel.interruptError, 3000, 'error');
+    }
+  }, [deviceId, t.devicePanel.interruptSent, t.devicePanel.interruptError]);
 
   const handleReset = useCallback(async () => {
     if (chatStreamRef.current) {
@@ -877,14 +889,17 @@ export function DevicePanel({
               </PopoverContent>
             </Popover>
             <Button
-              onClick={handleSend}
-              disabled={loading || !input.trim()}
+              onClick={loading ? handleInterrupt : handleSend}
+              disabled={!loading && !input.trim()}
               size="icon"
-              variant="twitter"
+              variant={loading ? 'destructive' : 'twitter'}
               className="h-10 w-10 rounded-full flex-shrink-0"
+              title={
+                loading ? t.devicePanel.interrupt : t.devicePanel.sendMessage
+              }
             >
               {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <StopCircle className="h-4 w-4" />
               ) : (
                 <Send className="h-4 w-4" />
               )}

@@ -1,7 +1,9 @@
 """Custom exceptions for AutoGLM-GUI."""
 
 
-class DeviceNotAvailableError(Exception):
-    """Raised when device is not available (disconnected/offline)."""
+class InterruptedError(Exception):
+    """Raised when a task is interrupted by the user."""
 
-    pass
+    def __init__(self, message: str = "Task interrupted by user"):
+        self.message = message
+        super().__init__(self.message)

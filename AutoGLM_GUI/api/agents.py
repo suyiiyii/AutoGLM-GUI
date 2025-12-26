@@ -10,6 +10,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
 from AutoGLM_GUI.config import config
+from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.phone_agent_patches import apply_patches
 from AutoGLM_GUI.schemas import (
     APIAgentConfig,
@@ -19,6 +20,8 @@ from AutoGLM_GUI.schemas import (
     ConfigResponse,
     ConfigSaveRequest,
     InitRequest,
+    InterruptRequest,
+    InterruptResponse,
     ResetRequest,
     StatusResponse,
 )
@@ -28,7 +31,7 @@ from AutoGLM_GUI.state import (
     non_blocking_takeover,
 )
 from AutoGLM_GUI.version import APP_VERSION
-from phone_agent import PhoneAgent
+from AutoGLM_GUI.agent_wrapper import InterruptiblePhoneAgent
 from phone_agent.agent import AgentConfig
 from phone_agent.model import ModelConfig
 
@@ -127,7 +130,7 @@ def init_agent(request: InitRequest) -> dict:
         verbose=req_agent_config.verbose,
     )
 
-    agents[device_id] = PhoneAgent(
+    agents[device_id] = InterruptiblePhoneAgent(
         model_config=model_config,
         agent_config=agent_config,
         takeover_callback=non_blocking_takeover,
@@ -160,6 +163,7 @@ def chat(request: ChatRequest) -> ChatResponse:
 
         return ChatResponse(result=result, steps=steps, success=True)
     except Exception as e:
+        agent.reset()
         return ChatResponse(result=str(e), steps=0, success=False)
 
 
@@ -199,6 +203,8 @@ def chat_stream(request: ChatRequest):
 
         def event_generator():
             """SSE 事件生成器"""
+            from AutoGLM_GUI.exceptions import InterruptedError
+
             threads: list[threading.Thread] = []
             stop_event = threading.Event()
 
@@ -216,8 +222,8 @@ def chat_stream(request: ChatRequest):
                         }
                         event_queue.put(("thinking_chunk", chunk_data))
 
-                # Create a new agent instance
-                streaming_agent = PhoneAgent(
+                # Create a new InterruptiblePhoneAgent instance for streaming
+                streaming_agent = InterruptiblePhoneAgent(
                     model_config=model_config,
                     agent_config=agent_config,
                     takeover_callback=non_blocking_takeover,
@@ -244,13 +250,15 @@ def chat_stream(request: ChatRequest):
 
                 def run_step(is_first: bool = True, task: str | None = None):
                     try:
-                        if stop_event.is_set():
+                        if stop_event.is_set() or streaming_agent.interrupted:
                             return
                         if is_first:
                             result = streaming_agent.step(task)
                         else:
                             result = streaming_agent.step()
                         step_result[0] = result
+                    except InterruptedError as e:
+                        error_result[0] = e
                     except Exception as e:
                         error_result[0] = e
                     finally:
@@ -264,6 +272,23 @@ def chat_stream(request: ChatRequest):
                 threads.append(thread)
 
                 while not stop_event.is_set():
+                    # Check for interruption from the original agent
+                    if isinstance(original_agent, InterruptiblePhoneAgent) and original_agent.interrupted:
+                        logger.info(
+                            f"Agent for device {device_id} was interrupted, stopping stream."
+                        )
+                        streaming_agent.interrupt()
+                        stop_event.set()
+                        done_data = {
+                            "type": "done",
+                            "message": "Task Interrupted",
+                            "steps": streaming_agent.step_count,
+                            "success": False,
+                        }
+                        yield "event: done\n"
+                        yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
+                        break
+
                     # Wait for events from the queue
                     try:
                         event_type, event_data = event_queue.get(timeout=0.1)
@@ -277,6 +302,17 @@ def chat_stream(request: ChatRequest):
                     elif event_type == "step_done":
                         # Check for errors
                         if error_result[0]:
+                            if isinstance(error_result[0], InterruptedError):
+                                logger.info(f"Task on device {device_id} was interrupted during execution.")
+                                done_data = {
+                                    "type": "done",
+                                    "message": "Task Interrupted",
+                                    "steps": streaming_agent.step_count,
+                                    "success": False,
+                                }
+                                yield "event: done\n"
+                                yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
+                                break
                             raise error_result[0]
 
                         result = step_result[0]
@@ -333,6 +369,7 @@ def chat_stream(request: ChatRequest):
                 original_agent.reset()
 
             except Exception as e:
+                logger.exception(f"Error in chat_stream: {e}")
                 error_data = {
                     "type": "error",
                     "message": str(e),
@@ -368,6 +405,42 @@ def chat_stream(request: ChatRequest):
         if device_lock.locked():
             device_lock.release()
         raise
+
+
+@router.post("/api/interrupt", response_model=InterruptResponse)
+def interrupt_agent(request: InterruptRequest) -> InterruptResponse:
+    """打断当前正在执行的任务（多设备支持）。"""
+    from AutoGLM_GUI.agent_wrapper import InterruptiblePhoneAgent
+
+    device_id = request.device_id
+    logger.info(f"Received interrupt request for device {device_id}")
+
+    if device_id not in agents:
+        logger.warning(f"Interrupt failed: Device {device_id} not initialized.")
+        raise HTTPException(
+            status_code=404, detail=f"Device {device_id} not initialized."
+        )
+
+    agent = agents[device_id]
+    if isinstance(agent, InterruptiblePhoneAgent):
+        agent.interrupt()
+        logger.info(
+            f"Successfully sent interrupt signal to agent for device {device_id}"
+        )
+        return InterruptResponse(
+            success=True,
+            message=f"Interruption signal sent to device {device_id}",
+            device_id=device_id,
+        )
+    else:
+        logger.error(
+            f"Interrupt failed: Agent for device {device_id} does not support interruption"
+        )
+        return InterruptResponse(
+            success=False,
+            message=f"Agent for device {device_id} does not support interruption",
+            device_id=device_id,
+        )
 
 
 @router.get("/api/status", response_model=StatusResponse)
@@ -408,7 +481,7 @@ def reset_agent(request: ResetRequest) -> dict:
 
     if device_id in agent_configs:
         model_config, agent_config = agent_configs[device_id]
-        agents[device_id] = PhoneAgent(
+        agents[device_id] = InterruptiblePhoneAgent(
             model_config=model_config,
             agent_config=agent_config,
             takeover_callback=non_blocking_takeover,
