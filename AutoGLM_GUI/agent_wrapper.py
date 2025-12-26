@@ -1,8 +1,9 @@
 """Wrapper for PhoneAgent to support interruption."""
 
+import threading
 from typing import Any, Callable
 
-from AutoGLM_GUI.exceptions import InterruptedError
+from AutoGLM_GUI.exceptions import TaskInterruptedError
 from AutoGLM_GUI.logger import logger
 from phone_agent import PhoneAgent
 from phone_agent.agent import AgentConfig
@@ -19,7 +20,7 @@ class WrappedModelClient:
     def request(self, *args, **kwargs) -> Any:
         if self._check():
             logger.info("ModelClient request interrupted")
-            raise InterruptedError()
+            raise TaskInterruptedError()
         return self._client.request(*args, **kwargs)
 
     def __getattr__(self, name: str) -> Any:
@@ -36,7 +37,7 @@ class WrappedActionHandler:
     def execute(self, *args, **kwargs) -> Any:
         if self._check():
             logger.info("ActionHandler execution interrupted")
-            raise InterruptedError()
+            raise TaskInterruptedError()
         return self._handler.execute(*args, **kwargs)
 
     def __getattr__(self, name: str) -> Any:
@@ -63,27 +64,27 @@ class InterruptiblePhoneAgent(PhoneAgent):
             confirmation_callback=confirmation_callback,
             takeover_callback=takeover_callback,
         )
-        self._interrupted = False
+        self._interrupt_event = threading.Event()
 
         # Wrap components to intercept calls
         self.model_client = WrappedModelClient(
-            self.model_client, lambda: self._interrupted
+            self.model_client, lambda: self._interrupt_event.is_set()
         )
         self.action_handler = WrappedActionHandler(
-            self.action_handler, lambda: self._interrupted
+            self.action_handler, lambda: self._interrupt_event.is_set()
         )
 
     def interrupt(self) -> None:
         """Interrupt the current task."""
         logger.info(f"Interrupting agent for device {self.agent_config.device_id}")
-        self._interrupted = True
+        self._interrupt_event.set()
 
     @property
     def interrupted(self) -> bool:
         """Check if the agent has been interrupted."""
-        return self._interrupted
+        return self._interrupt_event.is_set()
 
     def reset(self) -> None:
         """Reset the agent state, including interruption flag."""
-        self._interrupted = False
+        self._interrupt_event.clear()
         super().reset()

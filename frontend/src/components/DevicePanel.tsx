@@ -454,7 +454,7 @@ export function DevicePanel({
       console.error('Failed to interrupt:', err);
       showFeedback(t.devicePanel.interruptError, 3000, 'error');
     }
-  }, [deviceId, t.devicePanel.interruptSent, t.devicePanel.interruptError]);
+  }, [deviceId, t.devicePanel.interruptSent, t.devicePanel.interruptError, showFeedback]);
 
   const handleReset = useCallback(async () => {
     if (chatStreamRef.current) {
