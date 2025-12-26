@@ -3,7 +3,7 @@
 import json
 import time
 from dataclasses import dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from openai import OpenAI
 
@@ -50,18 +50,12 @@ class ModelClient:
         self.config = config or ModelConfig()
         self.client = OpenAI(base_url=self.config.base_url, api_key=self.config.api_key)
 
-    def request(
-        self,
-        messages: list[dict[str, Any]],
-        on_thinking_chunk: Callable[[str], None] | None = None,
-    ) -> ModelResponse:
+    def request(self, messages: list[dict[str, Any]]) -> ModelResponse:
         """
         Send a request to the model.
 
         Args:
             messages: List of message dictionaries in OpenAI format.
-            on_thinking_chunk: Optional callback for streaming thinking chunks.
-                               Called with each chunk of thinking text as it arrives.
 
         Returns:
             ModelResponse containing thinking and action.
@@ -116,8 +110,6 @@ class ModelClient:
                         # Marker found, print everything before it
                         thinking_part = buffer.split(marker, 1)[0]
                         print(thinking_part, end="", flush=True)
-                        if on_thinking_chunk:
-                            on_thinking_chunk(thinking_part)
                         print()  # Print newline after thinking is complete
                         in_action_phase = True
                         marker_found = True
@@ -145,8 +137,6 @@ class ModelClient:
                 if not is_potential_marker:
                     # Safe to print the buffer
                     print(buffer, end="", flush=True)
-                    if on_thinking_chunk:
-                        on_thinking_chunk(buffer)
                     buffer = ""
 
         # Calculate total time
