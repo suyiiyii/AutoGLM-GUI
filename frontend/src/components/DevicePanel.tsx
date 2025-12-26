@@ -438,6 +438,8 @@ export function DevicePanel({
     const hasNewMessage = currentLength > prevLength;
 
     if (hasNewMessage) {
+      prevMessagesLengthRef.current = currentLength;
+      
       if (isAtBottom) {
         // Auto-scroll when new messages arrive and the user is at the bottom
         scrollToBottom();
@@ -446,9 +448,7 @@ export function DevicePanel({
         setShowNewMessageNotification(true);
       }
     }
-
-    prevMessagesLengthRef.current = currentLength;
-  }, [messages, isAtBottom]);
+  }, [messages]);
 
   useEffect(() => {
     return () => {
