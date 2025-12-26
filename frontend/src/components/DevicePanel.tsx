@@ -762,9 +762,16 @@ export function DevicePanel({
                     {t.workflows.selectWorkflow}
                   </h4>
                   {workflows.length === 0 ? (
-                    <p className="text-sm text-slate-500 dark:text-slate-400">
-                      {t.workflows.empty}
-                    </p>
+                    <div className="text-sm text-slate-500 dark:text-slate-400 space-y-1">
+                      <p>{t.workflows.empty}</p>
+                      <p>
+                        前往{' '}
+                        <a href="/workflows" className="text-primary underline">
+                          工作流
+                        </a>{' '}
+                        页面创建。
+                      </p>
+                    </div>
                   ) : (
                     <ScrollArea className="h-64">
                       <div className="space-y-1">
