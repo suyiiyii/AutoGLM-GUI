@@ -28,6 +28,7 @@ dependencies = [
     "pillow>=11.3.0",
     "python-socketio>=5.11.0",
     "uvicorn[standard]>=0.38.0",
+    "zeroconf>=0.148.0",
 ]
 
 [project.urls]

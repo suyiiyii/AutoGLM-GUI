@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   Smartphone,
   Settings,
@@ -8,6 +8,9 @@ import {
   Plus,
   Wifi,
   AlertCircle,
+  Loader2,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react';
 import { DeviceCard } from './DeviceCard';
 import { Button } from '@/components/ui/button';
@@ -23,8 +26,16 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { QRCodeSVG } from 'qrcode.react';
 import type { Device, MdnsDevice } from '../api';
-import { connectWifiManual, pairWifi, discoverMdnsDevices } from '../api';
+import {
+  connectWifiManual,
+  pairWifi,
+  discoverMdnsDevices,
+  generateQRPairing,
+  getQRPairingStatus,
+  cancelQRPairing,
+} from '../api';
 import { useTranslation } from '../lib/i18n-context';
 
 const getInitialCollapsedState = (): boolean => {
@@ -76,6 +87,24 @@ export function DeviceSidebar({
   const [discoveredDevices, setDiscoveredDevices] = useState<MdnsDevice[]>([]);
   const [isScanning, setIsScanning] = useState(false);
   const [scanError, setScanError] = useState('');
+
+  // QR pairing state
+  interface QRPairingSession {
+    sessionId: string;
+    payload: string;
+    status:
+      | 'listening'
+      | 'pairing'
+      | 'paired'
+      | 'connecting'
+      | 'connected'
+      | 'timeout'
+      | 'error';
+    expiresAt: number;
+  }
+  const [qrSession, setQrSession] = useState<QRPairingSession | null>(null);
+  const [isGeneratingQR, setIsGeneratingQR] = useState(false);
+  const qrPollIntervalRef = useRef<number | null>(null);
 
   useEffect(() => {
     localStorage.setItem('sidebar-collapsed', JSON.stringify(isCollapsed));
@@ -220,6 +249,127 @@ export function DeviceSidebar({
       setIsConnecting(false);
     }
   };
+
+  // QR pairing handlers
+  const stopQRStatusPolling = useCallback(() => {
+    if (qrPollIntervalRef.current !== null) {
+      clearInterval(qrPollIntervalRef.current);
+      qrPollIntervalRef.current = null;
+    }
+  }, []);
+
+  const startQRStatusPolling = useCallback(
+    (sessionId: string) => {
+      stopQRStatusPolling();
+
+      qrPollIntervalRef.current = window.setInterval(async () => {
+        try {
+          const status = await getQRPairingStatus(sessionId);
+
+          setQrSession(prev =>
+            prev
+              ? {
+                  ...prev,
+                  status: status.status as QRPairingSession['status'],
+                }
+              : null
+          );
+
+          // Stop polling on terminal states
+          if (['connected', 'timeout', 'error'].includes(status.status)) {
+            stopQRStatusPolling();
+
+            if (status.status === 'connected') {
+              // Success - close dialog after 2 seconds
+              setTimeout(() => {
+                setShowManualConnect(false);
+                setQrSession(null);
+              }, 2000);
+            }
+          }
+        } catch (error) {
+          console.error('[QR Pairing] Status poll failed:', error);
+        }
+      }, 1000);
+    },
+    [stopQRStatusPolling]
+  );
+
+  const handleGenerateQRCode = useCallback(async () => {
+    setIsGeneratingQR(true);
+
+    try {
+      const result = await generateQRPairing();
+
+      if (result.success && result.qr_payload && result.session_id) {
+        setQrSession({
+          sessionId: result.session_id,
+          payload: result.qr_payload,
+          status: 'listening',
+          expiresAt: result.expires_at ?? Date.now() + 120000,
+        });
+
+        startQRStatusPolling(result.session_id);
+      }
+    } catch (error) {
+      console.error('[QR Pairing] Generation failed:', error);
+    } finally {
+      setIsGeneratingQR(false);
+    }
+  }, [startQRStatusPolling]);
+
+  const handleCancelQRPairing = useCallback(async () => {
+    if (!qrSession) return;
+
+    try {
+      await cancelQRPairing(qrSession.sessionId);
+      setQrSession(null);
+      stopQRStatusPolling();
+    } catch (error) {
+      console.error('[QR Pairing] Cancel failed:', error);
+    }
+  }, [qrSession, stopQRStatusPolling]);
+
+  // Cleanup QR session when dialog closes or tab changes
+  useEffect(() => {
+    if (!showManualConnect || activeTab !== 'pair') {
+      if (qrSession && qrSession.status === 'listening') {
+        handleCancelQRPairing();
+      }
+      stopQRStatusPolling();
+    }
+  }, [
+    showManualConnect,
+    activeTab,
+    qrSession,
+    stopQRStatusPolling,
+    handleCancelQRPairing,
+  ]);
+
+  // Cleanup on unmount
+  useEffect(() => {
+    return () => {
+      stopQRStatusPolling();
+    };
+  }, [stopQRStatusPolling]);
+
+  // Auto-generate QR code when switching to pair tab
+  useEffect(() => {
+    if (
+      showManualConnect &&
+      activeTab === 'pair' &&
+      !qrSession &&
+      !isGeneratingQR
+    ) {
+      handleGenerateQRCode();
+    }
+  }, [
+    showManualConnect,
+    activeTab,
+    qrSession,
+    isGeneratingQR,
+    handleGenerateQRCode,
+  ]);
 
   // mDNS device discovery handler
   const handleDiscover = useCallback(async () => {
@@ -672,6 +822,128 @@ export function DeviceSidebar({
                   }
                   return null;
                 })()}
+
+                {/* QR Code Pairing Section */}
+                <div className="space-y-3">
+                  {/* QR Separator */}
+                  <div className="relative my-4">
+                    <Separator />
+                    <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 bg-white dark:bg-slate-950 px-2 text-sm text-slate-500">
+                      {t.deviceSidebar.orQrPair}
+                    </span>
+                  </div>
+
+                  {/* QR Instructions */}
+                  <div className="rounded-lg bg-purple-50 dark:bg-purple-950/20 p-3 text-sm">
+                    <p className="font-medium text-purple-900 dark:text-purple-100 mb-2">
+                      {t.deviceSidebar.qrPairingTitle}
+                    </p>
+                    <ol className="space-y-1 text-purple-700 dark:text-purple-300 text-xs">
+                      <li>{t.deviceSidebar.qrStep1}</li>
+                      <li>{t.deviceSidebar.qrStep2}</li>
+                      <li>{t.deviceSidebar.qrStep3}</li>
+                    </ol>
+                  </div>
+
+                  {/* QR Display Area (when session active) */}
+                  {qrSession && (
+                    <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 bg-white dark:bg-slate-900">
+                      <div className="flex flex-col items-center space-y-3">
+                        {/* QR Code Image */}
+                        <div className="bg-white p-4 rounded-lg">
+                          <QRCodeSVG
+                            value={qrSession.payload}
+                            size={200}
+                            level="M"
+                          />
+                        </div>
+
+                        {/* Status Display */}
+                        <div className="flex items-center gap-2">
+                          {qrSession.status === 'listening' && (
+                            <>
+                              <span className="h-2 w-2 rounded-full bg-blue-500 animate-pulse" />
+                              <span className="text-sm text-slate-600 dark:text-slate-400">
+                                {t.deviceSidebar.qrWaitingForScan}
+                              </span>
+                            </>
+                          )}
+                          {qrSession.status === 'pairing' && (
+                            <>
+                              <Loader2 className="h-4 w-4 animate-spin text-blue-500" />
+                              <span className="text-sm text-slate-600 dark:text-slate-400">
+                                {t.deviceSidebar.qrPairing}
+                              </span>
+                            </>
+                          )}
+                          {qrSession.status === 'connected' && (
+                            <>
+                              <CheckCircle className="h-4 w-4 text-green-500" />
+                              <span className="text-sm text-green-600 dark:text-green-400">
+                                {t.deviceSidebar.qrConnected}
+                              </span>
+                            </>
+                          )}
+                          {qrSession.status === 'timeout' && (
+                            <>
+                              <XCircle className="h-4 w-4 text-amber-500" />
+                              <span className="text-sm text-amber-600 dark:text-amber-400">
+                                {t.deviceSidebar.qrTimeout}
+                              </span>
+                            </>
+                          )}
+                          {qrSession.status === 'error' && (
+                            <>
+                              <XCircle className="h-4 w-4 text-red-500" />
+                              <span className="text-sm text-red-600 dark:text-red-400">
+                                {t.deviceSidebar.qrError}
+                              </span>
+                            </>
+                          )}
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="flex gap-2 w-full">
+                          {(qrSession.status === 'timeout' ||
+                            qrSession.status === 'error') && (
+                            <Button
+                              variant="outline"
+                              onClick={handleGenerateQRCode}
+                              className="flex-1"
+                            >
+                              {t.deviceSidebar.qrRegenerate}
+                            </Button>
+                          )}
+                          {qrSession.status === 'listening' && (
+                            <Button
+                              variant="outline"
+                              onClick={handleCancelQRPairing}
+                              className="flex-1"
+                            >
+                              {t.common.cancel}
+                            </Button>
+                          )}
+                          {qrSession.status === 'connected' && (
+                            <Button
+                              onClick={() => setShowManualConnect(false)}
+                              className="flex-1"
+                            >
+                              {t.common.confirm}
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Loading state when auto-generating */}
+                  {!qrSession && isGeneratingQR && (
+                    <div className="flex items-center justify-center gap-2 py-4 text-slate-600 dark:text-slate-400">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-sm">{t.common.loading}</span>
+                    </div>
+                  )}
+                </div>
 
                 {/* Separator */}
                 <div className="relative my-4">

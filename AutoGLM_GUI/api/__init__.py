@@ -1,5 +1,6 @@
 """FastAPI application factory and route registration."""
 
+import asyncio
 import sys
 from importlib.resources import files
 from pathlib import Path
@@ -10,6 +11,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from AutoGLM_GUI.version import APP_VERSION
+from AutoGLM_GUI.adb_plus.qr_pair import qr_pairing_manager
 
 from . import agents, control, devices, media, version
 
@@ -55,6 +57,12 @@ def create_app() -> FastAPI:
     app.include_router(control.router)
     app.include_router(media.router)
     app.include_router(version.router)
+
+    @app.on_event("startup")
+    async def startup_event():
+        """Initialize background tasks on server startup."""
+        # Start QR pairing session cleanup task
+        asyncio.create_task(qr_pairing_manager.cleanup_expired_sessions())
 
     static_dir = _get_static_dir()
     if static_dir is not None and static_dir.exists():

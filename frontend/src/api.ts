@@ -516,3 +516,55 @@ export async function discoverMdnsDevices(): Promise<MdnsDiscoverResponse> {
   );
   return res.data;
 }
+
+// QR Code Pairing
+
+export interface QRPairGenerateResponse {
+  success: boolean;
+  qr_payload?: string;
+  session_id?: string;
+  expires_at?: number;
+  message: string;
+  error?: string;
+}
+
+export interface QRPairStatusResponse {
+  session_id: string;
+  status: string; // "listening" | "pairing" | "paired" | "connecting" | "connected" | "timeout" | "error"
+  device_id?: string;
+  message: string;
+  error?: string;
+}
+
+export interface QRPairCancelResponse {
+  success: boolean;
+  message: string;
+}
+
+export async function generateQRPairing(
+  timeout: number = 90
+): Promise<QRPairGenerateResponse> {
+  const res = await axios.post<QRPairGenerateResponse>(
+    '/api/devices/qr_pair/generate',
+    { timeout }
+  );
+  return res.data;
+}
+
+export async function getQRPairingStatus(
+  sessionId: string
+): Promise<QRPairStatusResponse> {
+  const res = await axios.get<QRPairStatusResponse>(
+    `/api/devices/qr_pair/status/${sessionId}`
+  );
+  return res.data;
+}
+
+export async function cancelQRPairing(
+  sessionId: string
+): Promise<QRPairCancelResponse> {
+  const res = await axios.delete<QRPairCancelResponse>(
+    `/api/devices/qr_pair/${sessionId}`
+  );
+  return res.data;
+}

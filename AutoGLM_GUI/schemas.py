@@ -239,3 +239,36 @@ class MdnsDiscoverResponse(BaseModel):
     success: bool
     devices: list[MdnsDeviceResponse]
     error: str | None = None
+
+
+# QR Code Pairing Models
+
+
+class QRPairGenerateResponse(BaseModel):
+    """QR code pairing generation response."""
+
+    success: bool
+    qr_payload: str | None = (
+        None  # QR text payload (WIFI:T:ADB;S:{name};P:{password};;)
+    )
+    session_id: str | None = None  # Session tracking ID (UUID)
+    expires_at: float | None = None  # Unix timestamp when session expires
+    message: str
+    error: str | None = None  # Error code for frontend handling
+
+
+class QRPairStatusResponse(BaseModel):
+    """QR code pairing status response."""
+
+    session_id: str
+    status: str  # "listening" | "pairing" | "paired" | "connecting" | "connected" | "timeout" | "error"
+    device_id: str | None = None  # Device ID when connected (ip:port)
+    message: str
+    error: str | None = None  # Error details
+
+
+class QRPairCancelResponse(BaseModel):
+    """QR code pairing cancellation response."""
+
+    success: bool
+    message: str
