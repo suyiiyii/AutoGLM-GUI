@@ -149,7 +149,7 @@ def init_agent(request: InitRequest) -> dict:
 def chat(request: ChatRequest) -> ChatResponse:
     """发送任务给 Agent 并执行。"""
     from AutoGLM_GUI.exceptions import TaskInterruptedError
-    
+
     device_id = request.device_id
     if device_id not in agents:
         raise HTTPException(

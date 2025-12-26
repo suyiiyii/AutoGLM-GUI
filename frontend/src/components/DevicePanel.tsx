@@ -110,20 +110,23 @@ export function DevicePanel({
   const [showWorkflowPopover, setShowWorkflowPopover] = useState(false);
   const feedbackTimeoutRef = useRef<number | null>(null);
 
-  const showFeedback = (
-    message: string,
-    duration = 2000,
-    type: 'tap' | 'swipe' | 'error' | 'success' = 'success'
-  ) => {
-    if (feedbackTimeoutRef.current) {
-      clearTimeout(feedbackTimeoutRef.current);
-    }
-    setFeedbackType(type);
-    setFeedbackMessage(message);
-    feedbackTimeoutRef.current = setTimeout(() => {
-      setFeedbackMessage(null);
-    }, duration);
-  };
+  const showFeedback = useCallback(
+    (
+      message: string,
+      duration = 2000,
+      type: 'tap' | 'swipe' | 'error' | 'success' = 'success'
+    ) => {
+      if (feedbackTimeoutRef.current) {
+        clearTimeout(feedbackTimeoutRef.current);
+      }
+      setFeedbackType(type);
+      setFeedbackMessage(message);
+      feedbackTimeoutRef.current = setTimeout(() => {
+        setFeedbackMessage(null);
+      }, duration);
+    },
+    []
+  );
 
   useEffect(() => {
     return () => {
@@ -454,7 +457,12 @@ export function DevicePanel({
       console.error('Failed to interrupt:', err);
       showFeedback(t.devicePanel.interruptError, 3000, 'error');
     }
-  }, [deviceId, t.devicePanel.interruptSent, t.devicePanel.interruptError, showFeedback]);
+  }, [
+    deviceId,
+    t.devicePanel.interruptSent,
+    t.devicePanel.interruptError,
+    showFeedback,
+  ]);
 
   const handleReset = useCallback(async () => {
     if (chatStreamRef.current) {
