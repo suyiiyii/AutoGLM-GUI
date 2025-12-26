@@ -37,6 +37,7 @@ import {
   cancelQRPairing,
 } from '../api';
 import { useTranslation } from '../lib/i18n-context';
+import { useDebouncedState } from '@/hooks/useDebouncedState';
 
 const getInitialCollapsedState = (): boolean => {
   try {
@@ -85,7 +86,7 @@ export function DeviceSidebar({
 
   // mDNS device discovery
   const [discoveredDevices, setDiscoveredDevices] = useState<MdnsDevice[]>([]);
-  const [isScanning, setIsScanning] = useState(false);
+  const [isScanning, setIsScanning] = useDebouncedState(false, 300);
   const [scanError, setScanError] = useState('');
 
   // QR pairing state
@@ -394,7 +395,7 @@ export function DeviceSidebar({
     } finally {
       setIsScanning(false);
     }
-  }, [t.deviceSidebar.scanError]);
+  }, [t.deviceSidebar.scanError, setIsScanning]);
 
   // Handle clicking on a discovered device
   const handleDeviceClick = async (
