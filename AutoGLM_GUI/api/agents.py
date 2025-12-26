@@ -39,12 +39,17 @@ router = APIRouter()
 
 # Device locks to prevent concurrent streaming for the same device
 _device_locks: dict[str, threading.Lock] = {}
+_device_locks_creation_lock = threading.Lock()
 
 
 def _get_device_lock(device_id: str) -> threading.Lock:
-    """Get or create a lock for a specific device."""
+    """Get or create a lock for a specific device in a thread-safe manner."""
+    # Use double-checked locking pattern for performance
     if device_id not in _device_locks:
-        _device_locks[device_id] = threading.Lock()
+        with _device_locks_creation_lock:
+            # Check again inside the lock to avoid race condition
+            if device_id not in _device_locks:
+                _device_locks[device_id] = threading.Lock()
     return _device_locks[device_id]
 
 
