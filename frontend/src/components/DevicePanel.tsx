@@ -168,6 +168,7 @@ export function DevicePanel({
   const hasAutoInited = useRef(false);
   const prevConfigRef = useRef<GlobalConfig | null>(null);
   const prevMessageCountRef = useRef(0);
+  const prevMessageSigRef = useRef<string | null>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [showNewMessageNotice, setShowNewMessageNotice] = useState(false);
 
@@ -483,8 +484,24 @@ export function DevicePanel({
   }, []);
 
   useEffect(() => {
+    const latest = messages[messages.length - 1];
+    const latestSignature = latest
+      ? [
+          latest.id,
+          latest.content?.length ?? 0,
+          latest.currentThinking?.length ?? 0,
+          latest.thinking?.length ?? 0,
+          latest.steps ?? '',
+          latest.isStreaming ? 1 : 0,
+        ].join('|')
+      : null;
+
     const isNewMessage = messages.length > prevMessageCountRef.current;
+    const hasLatestChanged =
+      latestSignature !== prevMessageSigRef.current && messages.length > 0;
+
     prevMessageCountRef.current = messages.length;
+    prevMessageSigRef.current = latestSignature;
 
     if (isAtBottom) {
       scrollToBottom();
@@ -497,7 +514,7 @@ export function DevicePanel({
       return;
     }
 
-    if (isNewMessage) {
+    if (isNewMessage || hasLatestChanged) {
       setShowNewMessageNotice(true);
     }
   }, [messages, isAtBottom, scrollToBottom]);
