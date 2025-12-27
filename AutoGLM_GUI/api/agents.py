@@ -284,7 +284,10 @@ def chat_stream(request: ChatRequest):
 
                 while not stop_event.is_set():
                     # Check for interruption from the original agent
-                    if isinstance(original_agent, InterruptiblePhoneAgent) and original_agent.interrupted:
+                    if (
+                        isinstance(original_agent, InterruptiblePhoneAgent)
+                        and original_agent.interrupted
+                    ):
                         logger.info(
                             f"Agent for device {device_id} was interrupted, stopping stream."
                         )
@@ -314,7 +317,9 @@ def chat_stream(request: ChatRequest):
                         # Check for errors
                         if error_result[0]:
                             if isinstance(error_result[0], TaskInterruptedError):
-                                logger.info(f"Task on device {device_id} was interrupted during execution.")
+                                logger.info(
+                                    f"Task on device {device_id} was interrupted during execution."
+                                )
                                 done_data = {
                                     "type": "done",
                                     "message": "Task Interrupted",
