@@ -4,8 +4,19 @@ import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
 import { getStatus, checkVersion, type VersionCheckResponse } from '../api';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Github, Globe } from 'lucide-react';
 import { useLocale, useTranslation } from '../lib/i18n-context';
+import { cn } from '@/lib/utils';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { NavigationSidebar } from '../components/NavigationSidebar';
 
@@ -20,6 +31,7 @@ function Footer() {
   const [updateInfo, setUpdateInfo] =
     React.useState<VersionCheckResponse | null>(null);
   const [showUpdateBadge, setShowUpdateBadge] = React.useState(false);
+  const [isUpdateDialogOpen, setIsUpdateDialogOpen] = React.useState(false);
 
   React.useEffect(() => {
     getStatus()
@@ -81,26 +93,41 @@ function Footer() {
     }
   };
 
+  const releaseNotes = updateInfo?.release_notes?.trim();
+
   return (
     <footer className="mt-auto border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
       <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm">
         <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
-          <span className="flex items-center gap-1.5">
-            v{version}
-            {showUpdateBadge && updateInfo?.latest_version && (
-              <Badge
-                variant="warning"
-                className="cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={handleUpdateClick}
-                title={t.footer.updateAvailable.replace(
-                  '{version}',
-                  updateInfo.latest_version
-                )}
-              >
-                {t.footer.newVersion}
-              </Badge>
+          <button
+            type="button"
+            onClick={() => {
+              if (showUpdateBadge) {
+                setIsUpdateDialogOpen(true);
+              }
+            }}
+            className={cn(
+              'flex items-center gap-1.5',
+              showUpdateBadge
+                ? 'cursor-pointer hover:opacity-80 transition-opacity'
+                : 'cursor-default'
             )}
-          </span>
+            aria-haspopup="dialog"
+            aria-expanded={isUpdateDialogOpen}
+            title={
+              showUpdateBadge && updateInfo?.latest_version
+                ? t.footer.updateAvailable.replace(
+                    '{version}',
+                    updateInfo.latest_version
+                  )
+                : undefined
+            }
+          >
+            <span>v{version}</span>
+            {showUpdateBadge && updateInfo?.latest_version && (
+              <Badge variant="warning">{t.footer.newVersion}</Badge>
+            )}
+          </button>
           <Separator
             orientation="vertical"
             className="h-4 bg-slate-200 dark:bg-slate-700"
@@ -147,6 +174,38 @@ function Footer() {
           </a>
         </div>
       </div>
+      <Dialog open={isUpdateDialogOpen} onOpenChange={setIsUpdateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t.footer.newVersionTitle}</DialogTitle>
+            {updateInfo?.latest_version && (
+              <DialogDescription>
+                {t.footer.updateAvailable.replace(
+                  '{version}',
+                  updateInfo.latest_version
+                )}
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          <div className="space-y-2">
+            <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              {t.footer.releaseNotes}
+            </div>
+            <ScrollArea className="max-h-60 rounded-md border border-slate-200 dark:border-slate-800">
+              <pre className="whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300 p-3">
+                {releaseNotes || t.footer.noReleaseNotes}
+              </pre>
+            </ScrollArea>
+          </div>
+          <DialogFooter>
+            {updateInfo?.release_url && (
+              <Button variant="twitter" onClick={handleUpdateClick}>
+                {t.footer.viewRelease}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </footer>
   );
 }

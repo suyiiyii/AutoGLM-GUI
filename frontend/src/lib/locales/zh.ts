@@ -13,6 +13,10 @@ export const zh = {
     starOnGitHub: '在 GitHub 上Star',
     newVersion: '新版本!',
     updateAvailable: '可用更新: v{version}',
+    newVersionTitle: '发现新版本',
+    releaseNotes: '更新日志',
+    viewRelease: '查看发布页',
+    noReleaseNotes: '暂无更新日志。',
   },
   chat: {
     welcomeTitle: '欢迎使用 AutoGLM',
