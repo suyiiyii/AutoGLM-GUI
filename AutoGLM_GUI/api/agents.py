@@ -53,6 +53,16 @@ def _get_device_lock(device_id: str) -> threading.Lock:
     return _device_locks[device_id]
 
 
+def _release_device_lock_when_done(
+    device_lock: threading.Lock, threads: list[threading.Thread]
+) -> None:
+    """Block until threads finish, then release the device lock."""
+    for thread in threads:
+        thread.join()
+    if device_lock.locked():
+        device_lock.release()
+
+
 @router.post("/api/init")
 def init_agent(request: InitRequest) -> dict:
     """初始化 PhoneAgent（多设备支持）。"""
@@ -333,13 +343,16 @@ def chat_stream(request: ChatRequest):
                 # Signal all threads to stop
                 stop_event.set()
 
-                # Join all threads with timeout
-                for thread in threads:
-                    if thread.is_alive():
-                        thread.join(timeout=5.0)
-
-                # Release the device lock
-                device_lock.release()
+                alive_threads = [thread for thread in threads if thread.is_alive()]
+                if alive_threads:
+                    cleanup_thread = threading.Thread(
+                        target=_release_device_lock_when_done,
+                        args=(device_lock, alive_threads),
+                        daemon=True,
+                    )
+                    cleanup_thread.start()
+                elif device_lock.locked():
+                    device_lock.release()
 
         return StreamingResponse(
             event_generator(),
