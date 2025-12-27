@@ -167,6 +167,7 @@ export function DevicePanel({
   const screenshotFetchingRef = useRef(false);
   const hasAutoInited = useRef(false);
   const prevConfigRef = useRef<GlobalConfig | null>(null);
+  const prevMessageCountRef = useRef(0);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [showNewMessageNotice, setShowNewMessageNotice] = useState(false);
 
@@ -482,9 +483,21 @@ export function DevicePanel({
   }, []);
 
   useEffect(() => {
+    const isNewMessage = messages.length > prevMessageCountRef.current;
+    prevMessageCountRef.current = messages.length;
+
     if (isAtBottom) {
       scrollToBottom();
-    } else if (messages.length > 0) {
+      setShowNewMessageNotice(false);
+      return;
+    }
+
+    if (messages.length === 0) {
+      setShowNewMessageNotice(false);
+      return;
+    }
+
+    if (isNewMessage) {
       setShowNewMessageNotice(true);
     }
   }, [messages, isAtBottom, scrollToBottom]);
