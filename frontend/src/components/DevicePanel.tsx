@@ -331,11 +331,18 @@ export function DevicePanel({
       updateTimeoutId = null;
     };
 
-    const stream = sendMessageStream(
-      userMessage.content,
-      deviceId,
-      (event: ThinkingChunkEvent) => {
-        // Buffer chunks and batch update every 50ms to reduce render frequency
+      const afterStart = text.slice(tagIndex + thinkingTag.length);
+      const endMarkers = [
+        afterStart.indexOf('</think>'),
+        afterStart.indexOf('<answer>'),
+      ]
+        .filter(index => index >= 0)
+        .sort((a, b) => a - b);
+      const endIndex = endMarkers.length > 0 ? endMarkers[0] : -1;
+      const content =
+        endIndex >= 0 ? afterStart.slice(0, endIndex) : afterStart;
+      const trimmedContent = content.trim();
+      return trimmedContent.length > 0 ? trimmedContent : null;
         thinkingChunksBuffer.push(event.chunk);
 
         if (updateTimeoutId === null) {
