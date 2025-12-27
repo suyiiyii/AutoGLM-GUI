@@ -194,6 +194,14 @@ export function DevicePanel({
     }, 100)
   );
 
+  // Cleanup throttled function on unmount
+  useEffect(() => {
+    const throttledFn = throttledUpdateScrollStateRef.current;
+    return () => {
+      throttledFn.cancel();
+    };
+  }, []);
+
   const handleInit = useCallback(async () => {
     if (!config) return;
 
@@ -251,11 +259,12 @@ export function DevicePanel({
       actions: item.actions,
       isStreaming: false,
     };
-    setMessages([userMessage, agentMessage]);
+    const newMessages = [userMessage, agentMessage];
+    setMessages(newMessages);
 
     // Reset previous message tracking refs to match the loaded history
     // so that the next effect run does not treat this as a new message.
-    prevMessageCountRef.current = 2;
+    prevMessageCountRef.current = newMessages.length;
     prevMessageSigRef.current = [
       agentMessage.id,
       agentMessage.content?.length ?? 0,
