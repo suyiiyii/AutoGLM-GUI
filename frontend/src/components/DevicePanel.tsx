@@ -292,9 +292,13 @@ export function DevicePanel({
     const thinkingList: string[] = [];
     const actionsList: Record<string, unknown>[] = [];
     let currentThinkingText = '';
-    // Use a ref to batch updates and reduce render frequency
-    const thinkingChunksBuffer: string[] = [];
+    let pendingStreamThinking: string | null = null;
     let updateTimeoutId: number | null = null;
+    let streamBuffer = '';
+    let isInThink = false;
+    let isInAnswer = false;
+    const thinkingEndTag = '</think>';
+    const answerTag = '<answer>';
 
     const agentMessageId = (Date.now() + 1).toString();
     const agentMessage: Message = {
@@ -310,61 +314,140 @@ export function DevicePanel({
 
     setMessages(prev => [...prev, agentMessage]);
 
-    // Batch update function to improve performance
-    const flushThinkingUpdate = () => {
-      if (thinkingChunksBuffer.length > 0) {
-        const chunksToAdd = thinkingChunksBuffer.join('');
-        thinkingChunksBuffer.length = 0; // Clear buffer
-        currentThinkingText += chunksToAdd;
-
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === agentMessageId
-              ? {
-                  ...msg,
-                  currentThinking: currentThinkingText,
-                }
-              : msg
-          )
-        );
-      }
+    const updateCurrentThinking = () => {
+      setMessages(prev =>
+        prev.map(msg =>
+          msg.id === agentMessageId
+            ? {
+                ...msg,
+                currentThinking: currentThinkingText,
+              }
+            : msg
+        )
+      );
       updateTimeoutId = null;
     };
 
-      const afterStart = text.slice(tagIndex + thinkingTag.length);
-      const endMarkers = [
-        afterStart.indexOf('</think>'),
-        afterStart.indexOf('<answer>'),
-      ]
-        .filter(index => index >= 0)
-        .sort((a, b) => a - b);
-      const endIndex = endMarkers.length > 0 ? endMarkers[0] : -1;
-      const content =
-        endIndex >= 0 ? afterStart.slice(0, endIndex) : afterStart;
-      const trimmedContent = content.trim();
-      return trimmedContent.length > 0 ? trimmedContent : null;
-        thinkingChunksBuffer.push(event.chunk);
+    const scheduleThinkingUpdate = () => {
+      if (updateTimeoutId === null) {
+        updateTimeoutId = setTimeout(updateCurrentThinking, 50);
+      }
+    };
 
-        if (updateTimeoutId === null) {
-          updateTimeoutId = setTimeout(flushThinkingUpdate, 50);
+    const flushThinkingUpdate = () => {
+      updateCurrentThinking();
+    const getTailLength = (text: string, markers: string[]) => {
+      let maxLength = 0;
+      markers.forEach(marker => {
+        for (let i = 1; i < marker.length; i += 1) {
+          if (text.endsWith(marker.slice(0, i))) {
+            maxLength = Math.max(maxLength, i);
+          }
         }
-      },
-      (event: StepEvent) => {
-        // Flush any remaining chunks before processing step
-        if (updateTimeoutId !== null) {
-          clearTimeout(updateTimeoutId);
+      });
+      return maxLength;
+    };
+
+    const findNextMarker = (text: string, markers: string[]) => {
+      let closestIndex = -1;
+      let closestMarker = '';
+      markers.forEach(marker => {
+        const index = text.indexOf(marker);
+        if (index >= 0 && (closestIndex === -1 || index < closestIndex)) {
+          closestIndex = index;
+          closestMarker = marker;
+        }
+      });
+      return { index: closestIndex, marker: closestMarker };
+    };
+
+    const processStreamChunk = (chunk: string) => {
+      streamBuffer += chunk;
+      let shouldUpdate = false;
+      let shouldForceFlush = false;
+
+      const appendThinkingContent = (content: string) => {
+        if (!content) return;
+        currentThinkingText += content;
+        shouldUpdate = true;
+      };
+
+      while (streamBuffer.length > 0) {
+        if (!isInThink && !isInAnswer) {
+          const startIndex = streamBuffer.indexOf(thinkingTag);
+          if (startIndex === -1) {
+            const tailLength = getTailLength(streamBuffer, [thinkingTag]);
+            streamBuffer = streamBuffer.slice(streamBuffer.length - tailLength);
+            break;
+          }
+          streamBuffer = streamBuffer.slice(startIndex + thinkingTag.length);
+          isInThink = true;
+        }
+
+        if (isInThink) {
+          const { index, marker } = findNextMarker(streamBuffer, [
+            thinkingEndTag,
+            answerTag,
+          ]);
+
+          if (index >= 0) {
+            const content = streamBuffer.slice(0, index);
+            appendThinkingContent(content);
+
+            streamBuffer = streamBuffer.slice(index + marker.length);
+            const finishedThinking = currentThinkingText;
+            currentThinkingText = '';
+            isInThink = false;
+            shouldForceFlush = true;
+
+            if (marker === answerTag) {
+              isInAnswer = true;
+            }
+
+            if (finishedThinking.trim().length > 0) {
+              pendingStreamThinking = finishedThinking;
+            }
+            continue;
+          }
+
+          const tailLength = getTailLength(streamBuffer, [
+            thinkingEndTag,
+            answerTag,
+          ]);
+          const safeLength = streamBuffer.length - tailLength;
+          if (safeLength > 0) {
+            appendThinkingContent(streamBuffer.slice(0, safeLength));
+            streamBuffer = streamBuffer.slice(safeLength);
+          }
+          break;
+        }
+
+        if (isInAnswer) {
+          streamBuffer = '';
+          break;
+        }
+      }
+
+      return { shouldUpdate, shouldForceFlush };
+        const { shouldUpdate, shouldForceFlush } = processStreamChunk(
+          event.chunk
+        );
+        if (shouldForceFlush) {
           flushThinkingUpdate();
-        }
-
-        // Prefer backend-provided thinking as source of truth, fall back to streamed text
+        } else if (shouldUpdate) {
+          scheduleThinkingUpdate();
         const stepThinking =
-          event.thinking && event.thinking.length > 0
+          event.thinking && event.thinking.trim().length > 0
             ? event.thinking
-            : currentThinkingText;
-        if (stepThinking) {
+            : pendingStreamThinking || currentThinkingText;
+        if (stepThinking && stepThinking.trim().length > 0) {
           thinkingList.push(stepThinking);
         }
         currentThinkingText = '';
+        pendingStreamThinking = null;
+        streamBuffer = '';
+        isInThink = false;
+        isInAnswer = false;
         actionsList.push(event.action);
 
         setMessages(prev =>
@@ -383,9 +466,14 @@ export function DevicePanel({
       },
       (event: DoneEvent) => {
         // Clear any pending updates
-        if (updateTimeoutId !== null) {
-          clearTimeout(updateTimeoutId);
-        }
+        flushThinkingUpdate();
+          pendingStreamThinking || currentThinkingText;
+        if (interruptedThinking && interruptedThinking.trim().length > 0) {
+        pendingStreamThinking = null;
+        currentThinkingText = '';
+        streamBuffer = '';
+        isInThink = false;
+        isInAnswer = false;
 
         const updatedAgentMessage = {
           ...agentMessage,
@@ -418,9 +506,14 @@ export function DevicePanel({
       },
       (event: ErrorEvent) => {
         // Clear any pending updates
-        if (updateTimeoutId !== null) {
-          clearTimeout(updateTimeoutId);
-        }
+        flushThinkingUpdate();
+          pendingStreamThinking || currentThinkingText;
+        if (interruptedThinking && interruptedThinking.trim().length > 0) {
+        pendingStreamThinking = null;
+        currentThinkingText = '';
+        streamBuffer = '';
+        isInThink = false;
+        isInAnswer = false;
 
         const updatedAgentMessage = {
           ...agentMessage,
