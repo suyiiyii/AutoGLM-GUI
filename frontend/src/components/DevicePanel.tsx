@@ -163,9 +163,12 @@ export function DevicePanel({
   const chatStreamRef = useRef<{ close: () => void } | null>(null);
   const videoStreamRef = useRef<{ close: () => void } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
   const screenshotFetchingRef = useRef(false);
   const hasAutoInited = useRef(false);
   const prevConfigRef = useRef<GlobalConfig | null>(null);
+  const [isAtBottom, setIsAtBottom] = useState(true);
+  const [showNewMessageNotice, setShowNewMessageNotice] = useState(false);
 
   const handleInit = useCallback(async () => {
     if (!config) return;
@@ -225,6 +228,8 @@ export function DevicePanel({
       isStreaming: false,
     };
     setMessages([userMessage, agentMessage]);
+    setShowNewMessageNotice(false);
+    setIsAtBottom(true);
     setShowHistoryPopover(false);
   };
 
@@ -240,6 +245,19 @@ export function DevicePanel({
     // 从列表中移除已删除的项
     setHistoryItems(prev => prev.filter(item => item.id !== itemId));
   };
+
+  const updateScrollState = useCallback(() => {
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    const threshold = 80;
+    const distanceFromBottom =
+      container.scrollHeight - container.scrollTop - container.clientHeight;
+    const atBottom = distanceFromBottom <= threshold;
+    setIsAtBottom(atBottom);
+    if (atBottom) {
+      setShowNewMessageNotice(false);
+    }
+  }, []);
   // Re-initialize when config changes (for already initialized devices)
   useEffect(() => {
     // Skip if not initialized yet or no config
@@ -452,18 +470,23 @@ export function DevicePanel({
     setMessages([]);
     setLoading(false);
     setError(null);
+    setShowNewMessageNotice(false);
     chatStreamRef.current = null;
 
     await resetChat(deviceId);
   }, [deviceId]);
 
-  const scrollToBottom = () => {
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  };
+  }, []);
 
   useEffect(() => {
-    scrollToBottom();
-  }, [messages]);
+    if (isAtBottom) {
+      scrollToBottom();
+    } else if (messages.length > 0) {
+      setShowNewMessageNotice(true);
+    }
+  }, [messages, isAtBottom, scrollToBottom]);
 
   useEffect(() => {
     return () => {
@@ -492,6 +515,16 @@ export function DevicePanel({
   const handleExecuteWorkflow = (workflow: Workflow) => {
     setInput(workflow.text);
     setShowWorkflowPopover(false);
+  };
+
+  const handleMessagesScroll = () => {
+    updateScrollState();
+  };
+
+  const handleScrollToLatest = () => {
+    scrollToBottom();
+    setShowNewMessageNotice(false);
+    setIsAtBottom(true);
   };
 
   useEffect(() => {
@@ -677,7 +710,11 @@ export function DevicePanel({
         )}
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 min-h-0">
+        <div
+          className="flex-1 overflow-y-auto p-4 min-h-0 relative"
+          ref={messagesContainerRef}
+          onScroll={handleMessagesScroll}
+        >
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center min-h-[calc(100%-1rem)]">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
@@ -803,6 +840,18 @@ export function DevicePanel({
             ))
           )}
           <div ref={messagesEndRef} />
+          {showNewMessageNotice && (
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2">
+              <Button
+                onClick={handleScrollToLatest}
+                size="sm"
+                variant="secondary"
+                className="shadow-lg"
+              >
+                {t.devicePanel.newMessages}
+              </Button>
+            </div>
+          )}
         </div>
 
         {/* Input area */}

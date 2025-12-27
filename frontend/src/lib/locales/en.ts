@@ -126,6 +126,7 @@ export const en = {
     tapError: 'Error: {error}',
     swiped: 'Swiped',
     swipeError: 'Swipe error: {error}',
+    newMessages: 'New messages. Click to view latest',
   },
   deviceCard: {
     unknownDevice: 'Unknown Device',

@@ -124,6 +124,7 @@ export const zh = {
     tapError: '错误: {error}',
     swiped: '已滑动',
     swipeError: '滑动错误: {error}',
+    newMessages: '有新消息，点击查看最新',
   },
   deviceCard: {
     unknownDevice: '未知设备',
