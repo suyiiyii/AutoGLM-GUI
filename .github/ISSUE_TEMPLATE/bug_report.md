@@ -25,9 +25,9 @@ assignees: ''
 
 ## 运行环境
 - AutoGLM-GUI 版本：例如 v0.8.0 / 源码 main 分支
-- 安装方式：发行版 / 源码运行 / Docker / 其他
+- 安装方式：桌面版 / pip 或 uvx 运行 / 源码运行 / 其他
 - 操作系统：Windows / macOS / Linux（发行版及版本）
-- 设备信息：手机/平板型号，系统版本（Android/iOS/HarmonyOS），是否已 root/jailbreak
+- 设备信息：手机/平板型号，系统版本（Android/iOS/HarmonyOS）
 - 连接方式：USB / Wi-Fi，是否使用代理 / VPN
 
 ## 日志与截图
