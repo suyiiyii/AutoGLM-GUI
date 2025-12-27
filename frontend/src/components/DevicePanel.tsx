@@ -298,6 +298,7 @@ export function DevicePanel({
     let isInThink = false;
     let isInAnswer = false;
     const thinkingEndTag = '</think>';
+    const thinkingTag = '<think>';
     const answerTag = '<answer>';
 
     const agentMessageId = (Date.now() + 1).toString();
@@ -336,6 +337,8 @@ export function DevicePanel({
 
     const flushThinkingUpdate = () => {
       updateCurrentThinking();
+    };
+
     const getTailLength = (text: string, markers: string[]) => {
       let maxLength = 0;
       markers.forEach(marker => {
@@ -429,6 +432,12 @@ export function DevicePanel({
       }
 
       return { shouldUpdate, shouldForceFlush };
+    };
+
+    const stream = sendMessageStream(
+      userMessage.content,
+      deviceId,
+      (event: ThinkingChunkEvent) => {
         const { shouldUpdate, shouldForceFlush } = processStreamChunk(
           event.chunk
         );
@@ -436,6 +445,9 @@ export function DevicePanel({
           flushThinkingUpdate();
         } else if (shouldUpdate) {
           scheduleThinkingUpdate();
+        }
+      },
+      (event: StepEvent) => {
         const stepThinking =
           event.thinking && event.thinking.trim().length > 0
             ? event.thinking
@@ -467,8 +479,11 @@ export function DevicePanel({
       (event: DoneEvent) => {
         // Clear any pending updates
         flushThinkingUpdate();
+        const interruptedThinking =
           pendingStreamThinking || currentThinkingText;
         if (interruptedThinking && interruptedThinking.trim().length > 0) {
+          thinkingList.push(interruptedThinking);
+        }
         pendingStreamThinking = null;
         currentThinkingText = '';
         streamBuffer = '';
@@ -507,8 +522,11 @@ export function DevicePanel({
       (event: ErrorEvent) => {
         // Clear any pending updates
         flushThinkingUpdate();
+        const interruptedThinking =
           pendingStreamThinking || currentThinkingText;
         if (interruptedThinking && interruptedThinking.trim().length > 0) {
+          thinkingList.push(interruptedThinking);
+        }
         pendingStreamThinking = null;
         currentThinkingText = '';
         streamBuffer = '';
