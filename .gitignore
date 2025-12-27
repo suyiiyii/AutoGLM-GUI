@@ -34,3 +34,10 @@ logs/
 
 # macOS
 .DS_Store
+
+# Spec-kit
+.specify/
+specs/
+.claude/
+.gemini/
+GEMINI.md

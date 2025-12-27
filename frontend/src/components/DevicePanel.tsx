@@ -15,6 +15,7 @@ import {
   ChevronRight,
   History,
   ListChecks,
+  StopCircle,
 } from 'lucide-react';
 import { ScrcpyPlayer } from './ScrcpyPlayer';
 import type {
@@ -31,6 +32,7 @@ import {
   resetChat,
   sendMessageStream,
   listWorkflows,
+  interruptAgent,
 } from '../api';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -110,20 +112,23 @@ export function DevicePanel({
   const [showWorkflowPopover, setShowWorkflowPopover] = useState(false);
   const feedbackTimeoutRef = useRef<number | null>(null);
 
-  const showFeedback = (
-    message: string,
-    duration = 2000,
-    type: 'tap' | 'swipe' | 'error' | 'success' = 'success'
-  ) => {
-    if (feedbackTimeoutRef.current) {
-      clearTimeout(feedbackTimeoutRef.current);
-    }
-    setFeedbackType(type);
-    setFeedbackMessage(message);
-    feedbackTimeoutRef.current = setTimeout(() => {
-      setFeedbackMessage(null);
-    }, duration);
-  };
+  const showFeedback = useCallback(
+    (
+      message: string,
+      duration = 2000,
+      type: 'tap' | 'swipe' | 'error' | 'success' = 'success'
+    ) => {
+      if (feedbackTimeoutRef.current) {
+        clearTimeout(feedbackTimeoutRef.current);
+      }
+      setFeedbackType(type);
+      setFeedbackMessage(message);
+      feedbackTimeoutRef.current = setTimeout(() => {
+        setFeedbackMessage(null);
+      }, duration);
+    },
+    []
+  );
 
   useEffect(() => {
     return () => {
@@ -289,9 +294,14 @@ export function DevicePanel({
     const thinkingList: string[] = [];
     const actionsList: Record<string, unknown>[] = [];
     let currentThinkingText = '';
-    // Use a ref to batch updates and reduce render frequency
-    const thinkingChunksBuffer: string[] = [];
+    let pendingStreamThinking: string | null = null;
     let updateTimeoutId: number | null = null;
+    let streamBuffer = '';
+    let isInThink = false;
+    let isInAnswer = false;
+    const thinkingEndTag = '</think>';
+    const thinkingTag = '<think>';
+    const answerTag = '<answer>';
 
     const agentMessageId = (Date.now() + 1).toString();
     const agentMessage: Message = {
@@ -307,54 +317,151 @@ export function DevicePanel({
 
     setMessages(prev => [...prev, agentMessage]);
 
-    // Batch update function to improve performance
-    const flushThinkingUpdate = () => {
-      if (thinkingChunksBuffer.length > 0) {
-        const chunksToAdd = thinkingChunksBuffer.join('');
-        thinkingChunksBuffer.length = 0; // Clear buffer
-        currentThinkingText += chunksToAdd;
-
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === agentMessageId
-              ? {
-                  ...msg,
-                  currentThinking: currentThinkingText,
-                }
-              : msg
-          )
-        );
-      }
+    const updateCurrentThinking = () => {
+      setMessages(prev =>
+        prev.map(msg =>
+          msg.id === agentMessageId
+            ? {
+                ...msg,
+                currentThinking: currentThinkingText,
+              }
+            : msg
+        )
+      );
       updateTimeoutId = null;
+    };
+
+    const scheduleThinkingUpdate = () => {
+      if (updateTimeoutId === null) {
+        updateTimeoutId = setTimeout(updateCurrentThinking, 50);
+      }
+    };
+
+    const flushThinkingUpdate = () => {
+      updateCurrentThinking();
+    };
+
+    const getTailLength = (text: string, markers: string[]) => {
+      let maxLength = 0;
+      markers.forEach(marker => {
+        for (let i = 1; i < marker.length; i += 1) {
+          if (text.endsWith(marker.slice(0, i))) {
+            maxLength = Math.max(maxLength, i);
+          }
+        }
+      });
+      return maxLength;
+    };
+
+    const findNextMarker = (text: string, markers: string[]) => {
+      let closestIndex = -1;
+      let closestMarker = '';
+      markers.forEach(marker => {
+        const index = text.indexOf(marker);
+        if (index >= 0 && (closestIndex === -1 || index < closestIndex)) {
+          closestIndex = index;
+          closestMarker = marker;
+        }
+      });
+      return { index: closestIndex, marker: closestMarker };
+    };
+
+    const processStreamChunk = (chunk: string) => {
+      streamBuffer += chunk;
+      let shouldUpdate = false;
+      let shouldForceFlush = false;
+
+      const appendThinkingContent = (content: string) => {
+        if (!content) return;
+        currentThinkingText += content;
+        shouldUpdate = true;
+      };
+
+      while (streamBuffer.length > 0) {
+        if (!isInThink && !isInAnswer) {
+          const startIndex = streamBuffer.indexOf(thinkingTag);
+          if (startIndex === -1) {
+            const tailLength = getTailLength(streamBuffer, [thinkingTag]);
+            streamBuffer = streamBuffer.slice(streamBuffer.length - tailLength);
+            break;
+          }
+          streamBuffer = streamBuffer.slice(startIndex + thinkingTag.length);
+          isInThink = true;
+        }
+
+        if (isInThink) {
+          const { index, marker } = findNextMarker(streamBuffer, [
+            thinkingEndTag,
+            answerTag,
+          ]);
+
+          if (index >= 0) {
+            const content = streamBuffer.slice(0, index);
+            appendThinkingContent(content);
+
+            streamBuffer = streamBuffer.slice(index + marker.length);
+            const finishedThinking = currentThinkingText;
+            currentThinkingText = '';
+            isInThink = false;
+            shouldForceFlush = true;
+
+            if (marker === answerTag) {
+              isInAnswer = true;
+            }
+
+            if (finishedThinking.trim().length > 0) {
+              pendingStreamThinking = finishedThinking;
+            }
+            continue;
+          }
+
+          const tailLength = getTailLength(streamBuffer, [
+            thinkingEndTag,
+            answerTag,
+          ]);
+          const safeLength = streamBuffer.length - tailLength;
+          if (safeLength > 0) {
+            appendThinkingContent(streamBuffer.slice(0, safeLength));
+            streamBuffer = streamBuffer.slice(safeLength);
+          }
+          break;
+        }
+
+        if (isInAnswer) {
+          streamBuffer = '';
+          break;
+        }
+      }
+
+      return { shouldUpdate, shouldForceFlush };
     };
 
     const stream = sendMessageStream(
       userMessage.content,
       deviceId,
       (event: ThinkingChunkEvent) => {
-        // Buffer chunks and batch update every 50ms to reduce render frequency
-        thinkingChunksBuffer.push(event.chunk);
-
-        if (updateTimeoutId === null) {
-          updateTimeoutId = setTimeout(flushThinkingUpdate, 50);
+        const { shouldUpdate, shouldForceFlush } = processStreamChunk(
+          event.chunk
+        );
+        if (shouldForceFlush) {
+          flushThinkingUpdate();
+        } else if (shouldUpdate) {
+          scheduleThinkingUpdate();
         }
       },
       (event: StepEvent) => {
-        // Flush any remaining chunks before processing step
-        if (updateTimeoutId !== null) {
-          clearTimeout(updateTimeoutId);
-          flushThinkingUpdate();
-        }
-
-        // Prefer backend-provided thinking as source of truth, fall back to streamed text
         const stepThinking =
-          event.thinking && event.thinking.length > 0
+          event.thinking && event.thinking.trim().length > 0
             ? event.thinking
-            : currentThinkingText;
-        if (stepThinking) {
+            : pendingStreamThinking || currentThinkingText;
+        if (stepThinking && stepThinking.trim().length > 0) {
           thinkingList.push(stepThinking);
         }
         currentThinkingText = '';
+        pendingStreamThinking = null;
+        streamBuffer = '';
+        isInThink = false;
+        isInAnswer = false;
         actionsList.push(event.action);
 
         setMessages(prev =>
@@ -373,9 +480,17 @@ export function DevicePanel({
       },
       (event: DoneEvent) => {
         // Clear any pending updates
-        if (updateTimeoutId !== null) {
-          clearTimeout(updateTimeoutId);
+        flushThinkingUpdate();
+        const interruptedThinking =
+          pendingStreamThinking || currentThinkingText;
+        if (interruptedThinking && interruptedThinking.trim().length > 0) {
+          thinkingList.push(interruptedThinking);
         }
+        pendingStreamThinking = null;
+        currentThinkingText = '';
+        streamBuffer = '';
+        isInThink = false;
+        isInAnswer = false;
 
         const updatedAgentMessage = {
           ...agentMessage,
@@ -408,9 +523,17 @@ export function DevicePanel({
       },
       (event: ErrorEvent) => {
         // Clear any pending updates
-        if (updateTimeoutId !== null) {
-          clearTimeout(updateTimeoutId);
+        flushThinkingUpdate();
+        const interruptedThinking =
+          pendingStreamThinking || currentThinkingText;
+        if (interruptedThinking && interruptedThinking.trim().length > 0) {
+          thinkingList.push(interruptedThinking);
         }
+        pendingStreamThinking = null;
+        currentThinkingText = '';
+        streamBuffer = '';
+        isInThink = false;
+        isInAnswer = false;
 
         const updatedAgentMessage = {
           ...agentMessage,
@@ -452,6 +575,21 @@ export function DevicePanel({
     deviceSerial,
     deviceName,
     handleInit,
+  ]);
+
+  const handleInterrupt = useCallback(async () => {
+    try {
+      await interruptAgent(deviceId);
+      showFeedback(t.devicePanel.interruptSent, 2000, 'success');
+    } catch (err) {
+      console.error('Failed to interrupt:', err);
+      showFeedback(t.devicePanel.interruptError, 3000, 'error');
+    }
+  }, [
+    deviceId,
+    t.devicePanel.interruptSent,
+    t.devicePanel.interruptError,
+    showFeedback,
   ]);
 
   const handleReset = useCallback(async () => {
@@ -687,7 +825,7 @@ export function DevicePanel({
         )}
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 min-h-0">
+        <div className="flex-1 overflow-y-auto p-4 min-h-0 space-y-6">
           {messages.length === 0 ? (
             <div className="h-full flex flex-col items-center justify-center text-center min-h-[calc(100%-1rem)]">
               <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
@@ -887,14 +1025,17 @@ export function DevicePanel({
               </PopoverContent>
             </Popover>
             <Button
-              onClick={handleSend}
-              disabled={loading || !input.trim()}
+              onClick={loading ? handleInterrupt : handleSend}
+              disabled={!loading && !input.trim()}
               size="icon"
-              variant="twitter"
+              variant={loading ? 'destructive' : 'twitter'}
               className="h-10 w-10 rounded-full flex-shrink-0"
+              title={
+                loading ? t.devicePanel.interrupt : t.devicePanel.sendMessage
+              }
             >
               {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
+                <StopCircle className="h-4 w-4" />
               ) : (
                 <Send className="h-4 w-4" />
               )}
