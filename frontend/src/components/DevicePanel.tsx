@@ -16,6 +16,7 @@ import {
   History,
   ListChecks,
 } from 'lucide-react';
+import { throttle } from 'lodash';
 import { ScrcpyPlayer } from './ScrcpyPlayer';
 import type {
   ScreenshotResponse,
@@ -172,6 +173,27 @@ export function DevicePanel({
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [showNewMessageNotice, setShowNewMessageNotice] = useState(false);
 
+  // Create throttled scroll handler ref that persists across renders
+  const throttledUpdateScrollStateRef = useRef(
+    throttle(() => {
+      const container = messagesContainerRef.current;
+      if (!container) return;
+      const threshold = 80;
+      const distanceFromBottom =
+        container.scrollHeight - container.scrollTop - container.clientHeight;
+      // Consider the user "at bottom" only when they are effectively at the end
+      // of the scroll area, to avoid unwanted auto-scrolling when they have
+      // intentionally scrolled slightly up.
+      const atBottom = distanceFromBottom <= 1;
+      setIsAtBottom(atBottom);
+      // Still hide the new message notice when the user is near the bottom,
+      // using the more generous threshold.
+      if (distanceFromBottom <= threshold) {
+        setShowNewMessageNotice(false);
+      }
+    }, 100)
+  );
+
   const handleInit = useCallback(async () => {
     if (!config) return;
 
@@ -230,6 +252,19 @@ export function DevicePanel({
       isStreaming: false,
     };
     setMessages([userMessage, agentMessage]);
+
+    // Reset previous message tracking refs to match the loaded history
+    // so that the next effect run does not treat this as a new message.
+    prevMessageCountRef.current = 2;
+    prevMessageSigRef.current = [
+      agentMessage.id,
+      agentMessage.content?.length ?? 0,
+      agentMessage.currentThinking?.length ?? 0,
+      agentMessage.thinking ? JSON.stringify(agentMessage.thinking).length : 0,
+      agentMessage.steps ?? '',
+      agentMessage.isStreaming ? 1 : 0,
+    ].join('|');
+
     setShowNewMessageNotice(false);
     setIsAtBottom(true);
     setShowHistoryPopover(false);
@@ -248,18 +283,6 @@ export function DevicePanel({
     setHistoryItems(prev => prev.filter(item => item.id !== itemId));
   };
 
-  const updateScrollState = useCallback(() => {
-    const container = messagesContainerRef.current;
-    if (!container) return;
-    const threshold = 80;
-    const distanceFromBottom =
-      container.scrollHeight - container.scrollTop - container.clientHeight;
-    const atBottom = distanceFromBottom <= threshold;
-    setIsAtBottom(atBottom);
-    if (atBottom) {
-      setShowNewMessageNotice(false);
-    }
-  }, []);
   // Re-initialize when config changes (for already initialized devices)
   useEffect(() => {
     // Skip if not initialized yet or no config
@@ -475,6 +498,8 @@ export function DevicePanel({
     setShowNewMessageNotice(false);
     setIsAtBottom(true);
     chatStreamRef.current = null;
+    prevMessageCountRef.current = 0;
+    prevMessageSigRef.current = null;
 
     await resetChat(deviceId);
   }, [deviceId]);
@@ -485,12 +510,15 @@ export function DevicePanel({
 
   useEffect(() => {
     const latest = messages[messages.length - 1];
+    const thinkingSignature = latest?.thinking
+      ? JSON.stringify(latest.thinking).length
+      : 0;
     const latestSignature = latest
       ? [
           latest.id,
           latest.content?.length ?? 0,
           latest.currentThinking?.length ?? 0,
-          latest.thinking?.length ?? 0,
+          thinkingSignature,
           latest.steps ?? '',
           latest.isStreaming ? 1 : 0,
         ].join('|')
@@ -548,8 +576,10 @@ export function DevicePanel({
     setShowWorkflowPopover(false);
   };
 
+  // Throttle scroll event handler to reduce the frequency of state updates
+  // and improve performance, especially on lower-end devices
   const handleMessagesScroll = () => {
-    updateScrollState();
+    throttledUpdateScrollStateRef.current();
   };
 
   const handleScrollToLatest = () => {
@@ -879,6 +909,7 @@ export function DevicePanel({
                 onClick={handleScrollToLatest}
                 size="sm"
                 className="pointer-events-auto shadow-lg bg-[#1d9bf0] text-white hover:bg-[#1a8cd8]"
+                aria-label={t.devicePanel.newMessages}
               >
                 {t.devicePanel.newMessages}
               </Button>
