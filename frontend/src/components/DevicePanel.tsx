@@ -437,18 +437,27 @@ export function DevicePanel({
     const currentLength = messages.length;
     const hasNewMessage = currentLength > prevLength;
 
+    if (currentLength < prevLength) {
+      prevMessagesLengthRef.current = currentLength;
+      setShowNewMessageNotification(false);
+      return;
+    }
+
     if (hasNewMessage) {
       prevMessagesLengthRef.current = currentLength;
+      const atBottom = checkIfAtBottom();
 
-      if (isAtBottom) {
+      if (atBottom) {
         // Auto-scroll when new messages arrive and the user is at the bottom
         scrollToBottom();
       } else {
         // Show notification only when new messages arrive while scrolled up
         setShowNewMessageNotification(true);
       }
+
+      setIsAtBottom(atBottom);
     }
-  }, [messages, isAtBottom]);
+  }, [messages, checkIfAtBottom]);
 
   useEffect(() => {
     return () => {
