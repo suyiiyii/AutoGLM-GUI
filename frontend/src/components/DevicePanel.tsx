@@ -167,7 +167,6 @@ export function DevicePanel({
   const hasAutoInited = useRef(false);
   const prevConfigRef = useRef<GlobalConfig | null>(null);
   const prevMessagesLengthRef = useRef(0);
-  const [isAtBottom, setIsAtBottom] = useState(true);
   const [showNewMessageNotification, setShowNewMessageNotification] =
     useState(false);
 
@@ -418,7 +417,6 @@ export function DevicePanel({
 
   const handleScroll = useCallback(() => {
     const atBottom = checkIfAtBottom();
-    setIsAtBottom(atBottom);
     if (atBottom) {
       setShowNewMessageNotification(false);
     }
@@ -454,8 +452,6 @@ export function DevicePanel({
         // Show notification only when new messages arrive while scrolled up
         setShowNewMessageNotification(true);
       }
-
-      setIsAtBottom(atBottom);
     }
   }, [messages, checkIfAtBottom]);
 
