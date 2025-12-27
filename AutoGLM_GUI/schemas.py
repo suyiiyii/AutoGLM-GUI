@@ -218,6 +218,7 @@ class VersionCheckResponse(BaseModel):
     latest_version: str | None = None
     has_update: bool = False
     release_url: str | None = None
+    release_notes: str | None = None
     published_at: str | None = None
     error: str | None = None
 

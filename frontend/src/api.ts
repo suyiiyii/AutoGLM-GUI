@@ -501,6 +501,7 @@ export interface VersionCheckResponse {
   latest_version: string | null;
   has_update: boolean;
   release_url: string | null;
+  release_notes: string | null;
   published_at: string | null;
   error: string | null;
 }

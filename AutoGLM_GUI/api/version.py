@@ -166,6 +166,7 @@ def check_version() -> VersionCheckResponse:
     tag_name = release_data.get("tag_name", "")
     latest_version = tag_name.lstrip("v")  # Strip 'v' prefix
     release_url = release_data.get("html_url")
+    release_notes = release_data.get("body")
     published_at = release_data.get("published_at")
 
     # Compare versions
@@ -177,6 +178,7 @@ def check_version() -> VersionCheckResponse:
         latest_version=latest_version,
         has_update=has_update,
         release_url=release_url,
+        release_notes=release_notes,
         published_at=published_at,
         error=None,
     )

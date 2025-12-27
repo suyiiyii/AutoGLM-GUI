@@ -13,6 +13,10 @@ export const en = {
     starOnGitHub: 'Star on GitHub',
     newVersion: 'New!',
     updateAvailable: 'Update available: v{version}',
+    newVersionTitle: 'New version available',
+    releaseNotes: 'Release notes',
+    viewRelease: 'View release',
+    noReleaseNotes: 'No release notes available.',
   },
   chat: {
     welcomeTitle: 'Welcome to AutoGLM',

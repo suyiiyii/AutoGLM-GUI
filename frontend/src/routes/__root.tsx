@@ -4,6 +4,16 @@ import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
 import { getStatus, checkVersion, type VersionCheckResponse } from '../api';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { Github, Globe } from 'lucide-react';
 import { useLocale, useTranslation } from '../lib/i18n-context';
 import { ThemeToggle } from '../components/ThemeToggle';
@@ -20,6 +30,7 @@ function Footer() {
   const [updateInfo, setUpdateInfo] =
     React.useState<VersionCheckResponse | null>(null);
   const [showUpdateBadge, setShowUpdateBadge] = React.useState(false);
+  const [isUpdateDialogOpen, setIsUpdateDialogOpen] = React.useState(false);
 
   React.useEffect(() => {
     getStatus()
@@ -81,6 +92,8 @@ function Footer() {
     }
   };
 
+  const releaseNotes = updateInfo?.release_notes?.trim();
+
   return (
     <footer className="mt-auto border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
       <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm">
@@ -91,7 +104,7 @@ function Footer() {
               <Badge
                 variant="warning"
                 className="cursor-pointer hover:opacity-80 transition-opacity"
-                onClick={handleUpdateClick}
+                onClick={() => setIsUpdateDialogOpen(true)}
                 title={t.footer.updateAvailable.replace(
                   '{version}',
                   updateInfo.latest_version
@@ -147,6 +160,38 @@ function Footer() {
           </a>
         </div>
       </div>
+      <Dialog open={isUpdateDialogOpen} onOpenChange={setIsUpdateDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{t.footer.newVersionTitle}</DialogTitle>
+            {updateInfo?.latest_version && (
+              <DialogDescription>
+                {t.footer.updateAvailable.replace(
+                  '{version}',
+                  updateInfo.latest_version
+                )}
+              </DialogDescription>
+            )}
+          </DialogHeader>
+          <div className="space-y-2">
+            <div className="text-sm font-medium text-slate-700 dark:text-slate-300">
+              {t.footer.releaseNotes}
+            </div>
+            <ScrollArea className="max-h-60 rounded-md border border-slate-200 dark:border-slate-800">
+              <pre className="whitespace-pre-wrap text-sm text-slate-600 dark:text-slate-300 p-3">
+                {releaseNotes || t.footer.noReleaseNotes}
+              </pre>
+            </ScrollArea>
+          </div>
+          <DialogFooter>
+            {updateInfo?.release_url && (
+              <Button variant="twitter" onClick={handleUpdateClick}>
+                {t.footer.viewRelease}
+              </Button>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </footer>
   );
 }
