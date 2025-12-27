@@ -59,6 +59,11 @@ export interface ScreenshotResponse {
   error?: string;
 }
 
+export interface ThinkingChunkEvent {
+  type: 'thinking_chunk';
+  chunk: string;
+}
+
 export interface StepEvent {
   type: 'step';
   step: number;
@@ -80,7 +85,11 @@ export interface ErrorEvent {
   message: string;
 }
 
-export type StreamEvent = StepEvent | DoneEvent | ErrorEvent;
+export type StreamEvent =
+  | ThinkingChunkEvent
+  | StepEvent
+  | DoneEvent
+  | ErrorEvent;
 
 export interface TapRequest {
   x: number;
@@ -272,6 +281,7 @@ export async function sendMessage(message: string): Promise<ChatResponse> {
 export function sendMessageStream(
   message: string,
   deviceId: string,
+  onThinkingChunk: (event: ThinkingChunkEvent) => void,
   onStep: (event: StepEvent) => void,
   onDone: (event: DoneEvent) => void,
   onError: (event: ErrorEvent) => void
@@ -317,7 +327,10 @@ export function sendMessageStream(
             try {
               const data = JSON.parse(line.slice(6));
 
-              if (eventType === 'step') {
+              if (eventType === 'thinking_chunk') {
+                console.log('[SSE] Received thinking_chunk event:', data);
+                onThinkingChunk(data as ThinkingChunkEvent);
+              } else if (eventType === 'step') {
                 console.log('[SSE] Received step event:', data);
                 onStep(data as StepEvent);
               } else if (eventType === 'done') {

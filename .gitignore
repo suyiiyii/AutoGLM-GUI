@@ -16,6 +16,7 @@ AutoGLM_GUI/static/
 # Frontend
 frontend/node_modules/
 frontend/dist/
+frontend/package-lock.json
 
 # Electron
 electron/node_modules/

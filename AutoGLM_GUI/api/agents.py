@@ -1,12 +1,16 @@
 """Agent lifecycle and chat routes."""
 
 import json
+import queue
+import threading
+from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
 from AutoGLM_GUI.config import config
+from AutoGLM_GUI.phone_agent_patches import apply_patches
 from AutoGLM_GUI.schemas import (
     APIAgentConfig,
     APIModelConfig,
@@ -28,7 +32,35 @@ from phone_agent import PhoneAgent
 from phone_agent.agent import AgentConfig
 from phone_agent.model import ModelConfig
 
+# Apply monkey patches to phone_agent
+apply_patches()
+
 router = APIRouter()
+
+# Device locks to prevent concurrent streaming for the same device
+_device_locks: dict[str, threading.Lock] = {}
+_device_locks_creation_lock = threading.Lock()
+
+
+def _get_device_lock(device_id: str) -> threading.Lock:
+    """Get or create a lock for a specific device in a thread-safe manner."""
+    # Use double-checked locking pattern for performance
+    if device_id not in _device_locks:
+        with _device_locks_creation_lock:
+            # Check again inside the lock to avoid race condition
+            if device_id not in _device_locks:
+                _device_locks[device_id] = threading.Lock()
+    return _device_locks[device_id]
+
+
+def _release_device_lock_when_done(
+    device_lock: threading.Lock, threads: list[threading.Thread]
+) -> None:
+    """Block until threads finish, then release the device lock."""
+    for thread in threads:
+        thread.join()
+    if device_lock.locked():
+        device_lock.release()
 
 
 @router.post("/api/init")
@@ -142,68 +174,200 @@ def chat_stream(request: ChatRequest):
             detail=f"Device {device_id} not initialized. Call /api/init first.",
         )
 
-    agent = agents[device_id]
+    # Get device lock to prevent concurrent requests for the same device
+    device_lock = _get_device_lock(device_id)
 
-    def event_generator():
-        """SSE 事件生成器"""
-        try:
-            step_result = agent.step(request.message)
-            while True:
-                event_data = {
-                    "type": "step",
-                    "step": agent.step_count,
-                    "thinking": step_result.thinking,
-                    "action": step_result.action,
-                    "success": step_result.success,
-                    "finished": step_result.finished,
+    if not device_lock.acquire(blocking=False):
+        raise HTTPException(
+            status_code=409,
+            detail=f"Device {device_id} is already processing a request. Please wait.",
+        )
+
+    try:
+        # Get the original agent to copy its config
+        original_agent = agents[device_id]
+
+        # Get the stored configs for this device
+        if device_id not in agent_configs:
+            device_lock.release()
+            raise HTTPException(
+                status_code=400,
+                detail=f"Device {device_id} config not found.",
+            )
+
+        model_config, agent_config = agent_configs[device_id]
+
+        def event_generator():
+            """SSE 事件生成器"""
+            threads: list[threading.Thread] = []
+            stop_event = threading.Event()
+
+            try:
+                # Create a queue to collect events from the agent
+                event_queue: queue.Queue[tuple[str, Any]] = queue.Queue()
+
+                # Create a callback to handle thinking chunks
+                def on_thinking_chunk(chunk: str):
+                    """Emit thinking chunks as they arrive"""
+                    if not stop_event.is_set():
+                        chunk_data = {
+                            "type": "thinking_chunk",
+                            "chunk": chunk,
+                        }
+                        event_queue.put(("thinking_chunk", chunk_data))
+
+                # Create a new agent instance
+                streaming_agent = PhoneAgent(
+                    model_config=model_config,
+                    agent_config=agent_config,
+                    takeover_callback=non_blocking_takeover,
+                )
+
+                # Copy context from original agent (thread-safe due to device lock)
+                streaming_agent._context = original_agent._context.copy()
+                streaming_agent._step_count = original_agent._step_count
+
+                # Monkey-patch the model_client.request to inject the callback
+                original_request = streaming_agent.model_client.request
+
+                def patched_request(messages, **kwargs):
+                    # Inject the on_thinking_chunk callback
+                    return original_request(
+                        messages, on_thinking_chunk=on_thinking_chunk
+                    )
+
+                streaming_agent.model_client.request = patched_request
+
+                # Run agent step in a separate thread
+                step_result: list[Any] = [None]
+                error_result: list[Any] = [None]
+
+                def run_step(is_first: bool = True, task: str | None = None):
+                    try:
+                        if stop_event.is_set():
+                            return
+                        if is_first:
+                            result = streaming_agent.step(task)
+                        else:
+                            result = streaming_agent.step()
+                        step_result[0] = result
+                    except Exception as e:
+                        error_result[0] = e
+                    finally:
+                        event_queue.put(("step_done", None))
+
+                # Start first step
+                thread = threading.Thread(
+                    target=run_step, args=(True, request.message), daemon=True
+                )
+                thread.start()
+                threads.append(thread)
+
+                while not stop_event.is_set():
+                    # Wait for events from the queue
+                    try:
+                        event_type, event_data = event_queue.get(timeout=0.1)
+                    except queue.Empty:
+                        continue
+
+                    if event_type == "thinking_chunk":
+                        yield "event: thinking_chunk\n"
+                        yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+
+                    elif event_type == "step_done":
+                        # Check for errors
+                        if error_result[0]:
+                            raise error_result[0]
+
+                        result = step_result[0]
+                        event_data = {
+                            "type": "step",
+                            "step": streaming_agent.step_count,
+                            "thinking": result.thinking,
+                            "action": result.action,
+                            "success": result.success,
+                            "finished": result.finished,
+                        }
+
+                        yield "event: step\n"
+                        yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+
+                        if result.finished:
+                            done_data = {
+                                "type": "done",
+                                "message": result.message,
+                                "steps": streaming_agent.step_count,
+                                "success": result.success,
+                            }
+                            yield "event: done\n"
+                            yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
+                            break
+
+                        if (
+                            streaming_agent.step_count
+                            >= streaming_agent.agent_config.max_steps
+                        ):
+                            done_data = {
+                                "type": "done",
+                                "message": "Max steps reached",
+                                "steps": streaming_agent.step_count,
+                                "success": result.success,
+                            }
+                            yield "event: done\n"
+                            yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
+                            break
+
+                        # Start next step
+                        step_result[0] = None
+                        error_result[0] = None
+                        thread = threading.Thread(
+                            target=run_step, args=(False, None), daemon=True
+                        )
+                        thread.start()
+                        threads.append(thread)
+
+                # Update original agent state (thread-safe due to device lock)
+                original_agent._context = streaming_agent._context
+                original_agent._step_count = streaming_agent._step_count
+
+                original_agent.reset()
+
+            except Exception as e:
+                error_data = {
+                    "type": "error",
+                    "message": str(e),
                 }
+                yield "event: error\n"
+                yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
+            finally:
+                # Signal all threads to stop
+                stop_event.set()
 
-                yield "event: step\n"
-                yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+                alive_threads = [thread for thread in threads if thread.is_alive()]
+                if alive_threads:
+                    cleanup_thread = threading.Thread(
+                        target=_release_device_lock_when_done,
+                        args=(device_lock, alive_threads),
+                        daemon=True,
+                    )
+                    cleanup_thread.start()
+                elif device_lock.locked():
+                    device_lock.release()
 
-                if step_result.finished:
-                    done_data = {
-                        "type": "done",
-                        "message": step_result.message,
-                        "steps": agent.step_count,
-                        "success": step_result.success,
-                    }
-                    yield "event: done\n"
-                    yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
-                    break
-
-                if agent.step_count >= agent.agent_config.max_steps:
-                    done_data = {
-                        "type": "done",
-                        "message": "Max steps reached",
-                        "steps": agent.step_count,
-                        "success": step_result.success,
-                    }
-                    yield "event: done\n"
-                    yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
-                    break
-
-                step_result = agent.step()
-
-            agent.reset()
-
-        except Exception as e:
-            error_data = {
-                "type": "error",
-                "message": str(e),
-            }
-            yield "event: error\n"
-            yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
-
-    return StreamingResponse(
-        event_generator(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-            "X-Accel-Buffering": "no",
-        },
-    )
+        return StreamingResponse(
+            event_generator(),
+            media_type="text/event-stream",
+            headers={
+                "Cache-Control": "no-cache",
+                "Connection": "keep-alive",
+                "X-Accel-Buffering": "no",
+            },
+        )
+    except Exception:
+        # Release lock if exception occurs before generator starts
+        if device_lock.locked():
+            device_lock.release()
+        raise
 
 
 @router.get("/api/status", response_model=StatusResponse)

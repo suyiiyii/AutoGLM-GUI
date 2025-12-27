@@ -19,6 +19,7 @@ import {
 import { ScrcpyPlayer } from './ScrcpyPlayer';
 import type {
   ScreenshotResponse,
+  ThinkingChunkEvent,
   StepEvent,
   DoneEvent,
   ErrorEvent,
@@ -62,6 +63,7 @@ interface Message {
   thinking?: string[];
   actions?: Record<string, unknown>[];
   isStreaming?: boolean;
+  currentThinking?: string; // Current thinking text being streamed
 }
 
 interface GlobalConfig {
@@ -284,6 +286,10 @@ export function DevicePanel({
 
     const thinkingList: string[] = [];
     const actionsList: Record<string, unknown>[] = [];
+    let currentThinkingText = '';
+    // Use a ref to batch updates and reduce render frequency
+    const thinkingChunksBuffer: string[] = [];
+    let updateTimeoutId: number | null = null;
 
     const agentMessageId = (Date.now() + 1).toString();
     const agentMessage: Message = {
@@ -294,15 +300,59 @@ export function DevicePanel({
       thinking: [],
       actions: [],
       isStreaming: true,
+      currentThinking: '',
     };
 
     setMessages(prev => [...prev, agentMessage]);
 
+    // Batch update function to improve performance
+    const flushThinkingUpdate = () => {
+      if (thinkingChunksBuffer.length > 0) {
+        const chunksToAdd = thinkingChunksBuffer.join('');
+        thinkingChunksBuffer.length = 0; // Clear buffer
+        currentThinkingText += chunksToAdd;
+
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === agentMessageId
+              ? {
+                  ...msg,
+                  currentThinking: currentThinkingText,
+                }
+              : msg
+          )
+        );
+      }
+      updateTimeoutId = null;
+    };
+
     const stream = sendMessageStream(
       userMessage.content,
       deviceId,
+      (event: ThinkingChunkEvent) => {
+        // Buffer chunks and batch update every 50ms to reduce render frequency
+        thinkingChunksBuffer.push(event.chunk);
+
+        if (updateTimeoutId === null) {
+          updateTimeoutId = setTimeout(flushThinkingUpdate, 50);
+        }
+      },
       (event: StepEvent) => {
-        thinkingList.push(event.thinking);
+        // Flush any remaining chunks before processing step
+        if (updateTimeoutId !== null) {
+          clearTimeout(updateTimeoutId);
+          flushThinkingUpdate();
+        }
+
+        // Prefer backend-provided thinking as source of truth, fall back to streamed text
+        const stepThinking =
+          event.thinking && event.thinking.length > 0
+            ? event.thinking
+            : currentThinkingText;
+        if (stepThinking) {
+          thinkingList.push(stepThinking);
+        }
+        currentThinkingText = '';
         actionsList.push(event.action);
 
         setMessages(prev =>
@@ -313,12 +363,18 @@ export function DevicePanel({
                   thinking: [...thinkingList],
                   actions: [...actionsList],
                   steps: event.step,
+                  currentThinking: '',
                 }
               : msg
           )
         );
       },
       (event: DoneEvent) => {
+        // Clear any pending updates
+        if (updateTimeoutId !== null) {
+          clearTimeout(updateTimeoutId);
+        }
+
         const updatedAgentMessage = {
           ...agentMessage,
           content: event.message,
@@ -328,6 +384,7 @@ export function DevicePanel({
           thinking: [...thinkingList],
           actions: [...actionsList],
           timestamp: new Date(),
+          currentThinking: undefined,
         };
 
         setMessages(prev =>
@@ -348,6 +405,11 @@ export function DevicePanel({
         saveHistoryItem(deviceId, historyItem);
       },
       (event: ErrorEvent) => {
+        // Clear any pending updates
+        if (updateTimeoutId !== null) {
+          clearTimeout(updateTimeoutId);
+        }
+
         const updatedAgentMessage = {
           ...agentMessage,
           content: `Error: ${event.message}`,
@@ -356,6 +418,7 @@ export function DevicePanel({
           thinking: [...thinkingList],
           actions: [...actionsList],
           timestamp: new Date(),
+          currentThinking: undefined,
         };
 
         setMessages(prev =>
@@ -667,6 +730,24 @@ export function DevicePanel({
                         )}
                       </div>
                     ))}
+
+                    {/* Current thinking being streamed */}
+                    {message.currentThinking && (
+                      <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl rounded-tl-sm px-4 py-3">
+                        <div className="flex items-center gap-2 mb-2">
+                          <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#1d9bf0]/10">
+                            <Sparkles className="h-3 w-3 text-[#1d9bf0] animate-pulse" />
+                          </div>
+                          <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                            Thinking...
+                          </span>
+                        </div>
+                        <p className="text-sm whitespace-pre-wrap text-slate-700 dark:text-slate-300">
+                          {message.currentThinking}
+                          <span className="inline-block w-1 h-4 ml-0.5 bg-[#1d9bf0] animate-pulse" />
+                        </p>
+                      </div>
+                    )}
 
                     {/* Final result */}
                     {message.content && (
