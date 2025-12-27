@@ -471,6 +471,7 @@ export function DevicePanel({
     setLoading(false);
     setError(null);
     setShowNewMessageNotice(false);
+    setIsAtBottom(true);
     chatStreamRef.current = null;
 
     await resetChat(deviceId);
