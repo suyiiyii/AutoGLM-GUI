@@ -284,7 +284,8 @@ export function sendMessageStream(
   onThinkingChunk: (event: ThinkingChunkEvent) => void,
   onStep: (event: StepEvent) => void,
   onDone: (event: DoneEvent) => void,
-  onError: (event: ErrorEvent) => void
+  onError: (event: ErrorEvent) => void,
+  onAborted?: (event: { type: 'aborted'; message: string }) => void
 ): { close: () => void } {
   const controller = new AbortController();
 
@@ -336,6 +337,11 @@ export function sendMessageStream(
               } else if (eventType === 'done') {
                 console.log('[SSE] Received done event:', data);
                 onDone(data as DoneEvent);
+              } else if (eventType === 'aborted') {
+                console.log('[SSE] Received aborted event:', data);
+                if (onAborted) {
+                  onAborted(data as { type: 'aborted'; message: string });
+                }
               } else if (eventType === 'error') {
                 console.log('[SSE] Received error event:', data);
                 onError(data as ErrorEvent);
@@ -348,7 +354,12 @@ export function sendMessageStream(
       }
     })
     .catch(error => {
-      if (error.name !== 'AbortError') {
+      if (error.name === 'AbortError') {
+        // User manually aborted the connection
+        if (onAborted) {
+          onAborted({ type: 'aborted', message: 'Connection aborted by user' });
+        }
+      } else {
         onError({ type: 'error', message: error.message });
       }
     });
@@ -369,6 +380,14 @@ export async function resetChat(deviceId: string): Promise<{
   device_id?: string;
 }> {
   const res = await axios.post('/api/reset', { device_id: deviceId });
+  return res.data;
+}
+
+export async function abortChat(deviceId: string): Promise<{
+  success: boolean;
+  message: string;
+}> {
+  const res = await axios.post('/api/chat/abort', { device_id: deviceId });
   return res.data;
 }
 

@@ -10,8 +10,10 @@ from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
 from AutoGLM_GUI.config import config
+from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.phone_agent_patches import apply_patches
 from AutoGLM_GUI.schemas import (
+    AbortRequest,
     APIAgentConfig,
     APIModelConfig,
     ChatRequest,
@@ -23,8 +25,6 @@ from AutoGLM_GUI.schemas import (
     StatusResponse,
 )
 from AutoGLM_GUI.state import (
-    agent_configs,
-    agents,
     non_blocking_takeover,
 )
 from AutoGLM_GUI.version import APP_VERSION
@@ -37,30 +37,23 @@ apply_patches()
 
 router = APIRouter()
 
-# Device locks to prevent concurrent streaming for the same device
-_device_locks: dict[str, threading.Lock] = {}
-_device_locks_creation_lock = threading.Lock()
-
-
-def _get_device_lock(device_id: str) -> threading.Lock:
-    """Get or create a lock for a specific device in a thread-safe manner."""
-    # Use double-checked locking pattern for performance
-    if device_id not in _device_locks:
-        with _device_locks_creation_lock:
-            # Check again inside the lock to avoid race condition
-            if device_id not in _device_locks:
-                _device_locks[device_id] = threading.Lock()
-    return _device_locks[device_id]
+# Active chat sessions (device_id -> stop_event)
+# Used for aborting ongoing conversations
+_active_chats: dict[str, threading.Event] = {}
+_active_chats_lock = threading.Lock()
 
 
 def _release_device_lock_when_done(
-    device_lock: threading.Lock, threads: list[threading.Thread]
+    device_id: str, threads: list[threading.Thread]
 ) -> None:
-    """Block until threads finish, then release the device lock."""
+    """Block until threads finish, then release the device lock via manager."""
+    from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
+
     for thread in threads:
         thread.join()
-    if device_lock.locked():
-        device_lock.release()
+
+    manager = PhoneAgentManager.get_instance()
+    manager.release_device(device_id)
 
 
 @router.post("/api/init")
@@ -127,18 +120,20 @@ def init_agent(request: InitRequest) -> dict:
         verbose=req_agent_config.verbose,
     )
 
-    agents[device_id] = PhoneAgent(
-        model_config=model_config,
-        agent_config=agent_config,
-        takeover_callback=non_blocking_takeover,
-    )
+    # Initialize agent via PhoneAgentManager (thread-safe, transactional)
+    from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
-    agent_configs[device_id] = (model_config, agent_config)
-
-    # Notify DeviceManager of initialization status
-    from AutoGLM_GUI.device_manager import DeviceManager
-
-    DeviceManager.get_instance().update_initialization_status(device_id, True)
+    manager = PhoneAgentManager.get_instance()
+    try:
+        manager.initialize_agent(
+            device_id=device_id,
+            model_config=model_config,
+            agent_config=agent_config,
+            takeover_callback=non_blocking_takeover,
+        )
+    except Exception as e:
+        logger.error(f"Failed to initialize agent: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
 
     return {
         "success": True,
@@ -150,20 +145,29 @@ def init_agent(request: InitRequest) -> dict:
 @router.post("/api/chat", response_model=ChatResponse)
 def chat(request: ChatRequest) -> ChatResponse:
     """发送任务给 Agent 并执行。"""
+    from AutoGLM_GUI.exceptions import DeviceBusyError
+    from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
+
     device_id = request.device_id
-    if device_id not in agents:
+    manager = PhoneAgentManager.get_instance()
+
+    # Check if agent is initialized
+    if not manager.is_initialized(device_id):
         raise HTTPException(
             status_code=400, detail="Agent not initialized. Call /api/init first."
         )
 
-    agent = agents[device_id]
-
+    # Use context manager for automatic lock management
     try:
-        result = agent.run(request.message)
-        steps = agent.step_count
-        agent.reset()
-
-        return ChatResponse(result=result, steps=steps, success=True)
+        with manager.use_agent(device_id, timeout=None) as agent:
+            result = agent.run(request.message)
+            steps = agent.step_count
+            agent.reset()
+            return ChatResponse(result=result, steps=steps, success=True)
+    except DeviceBusyError:
+        raise HTTPException(
+            status_code=409, detail=f"Device {device_id} is busy. Please wait."
+        )
     except Exception as e:
         return ChatResponse(result=str(e), steps=0, success=False)
 
@@ -171,18 +175,23 @@ def chat(request: ChatRequest) -> ChatResponse:
 @router.post("/api/chat/stream")
 def chat_stream(request: ChatRequest):
     """发送任务给 Agent 并实时推送执行进度（SSE，多设备支持）。"""
-    device_id = request.device_id
+    from AutoGLM_GUI.exceptions import AgentNotInitializedError, DeviceBusyError
+    from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
-    if device_id not in agents:
+    device_id = request.device_id
+    manager = PhoneAgentManager.get_instance()
+
+    # Check if agent is initialized
+    if not manager.is_initialized(device_id):
         raise HTTPException(
             status_code=400,
             detail=f"Device {device_id} not initialized. Call /api/init first.",
         )
 
-    # Get device lock to prevent concurrent requests for the same device
-    device_lock = _get_device_lock(device_id)
-
-    if not device_lock.acquire(blocking=False):
+    # Acquire device lock (non-blocking) to prevent concurrent requests
+    try:
+        manager.acquire_device(device_id, timeout=0, raise_on_timeout=True)
+    except DeviceBusyError:
         raise HTTPException(
             status_code=409,
             detail=f"Device {device_id} is already processing a request. Please wait.",
@@ -190,22 +199,26 @@ def chat_stream(request: ChatRequest):
 
     try:
         # Get the original agent to copy its config
-        original_agent = agents[device_id]
+        original_agent = manager.get_agent(device_id)
 
         # Get the stored configs for this device
-        if device_id not in agent_configs:
-            device_lock.release()
+        try:
+            model_config, agent_config = manager.get_config(device_id)
+        except AgentNotInitializedError:
+            manager.release_device(device_id)
             raise HTTPException(
                 status_code=400,
                 detail=f"Device {device_id} config not found.",
             )
 
-        model_config, agent_config = agent_configs[device_id]
-
         def event_generator():
             """SSE 事件生成器"""
             threads: list[threading.Thread] = []
             stop_event = threading.Event()
+
+            # Register stop_event to global mapping for abort support
+            with _active_chats_lock:
+                _active_chats[device_id] = stop_event
 
             try:
                 # Create a queue to collect events from the agent
@@ -243,18 +256,40 @@ def chat_stream(request: ChatRequest):
 
                 streaming_agent.model_client.request = patched_request
 
+                # Early abort check (before starting any steps)
+                if stop_event.is_set():
+                    logger.info(
+                        f"[Abort] Agent for device {device_id} received abort signal before starting steps"
+                    )
+                    yield "event: aborted\n"
+                    yield 'data: {"type": "aborted", "message": "Chat aborted by user"}\n\n'
+                    return
+
                 # Run agent step in a separate thread
                 step_result: list[Any] = [None]
                 error_result: list[Any] = [None]
 
                 def run_step(is_first: bool = True, task: str | None = None):
                     try:
+                        # Check before starting step
                         if stop_event.is_set():
+                            logger.info(
+                                f"[Abort] Agent for device {device_id} received abort signal before step execution"
+                            )
                             return
+
                         if is_first:
                             result = streaming_agent.step(task)
                         else:
                             result = streaming_agent.step()
+
+                        # Check after step completes
+                        if stop_event.is_set():
+                            logger.info(
+                                f"[Abort] Agent for device {device_id} received abort signal after step execution"
+                            )
+                            return
+
                         step_result[0] = result
                     except Exception as e:
                         error_result[0] = e
@@ -273,6 +308,9 @@ def chat_stream(request: ChatRequest):
                     try:
                         event_type, event_data = event_queue.get(timeout=0.1)
                     except queue.Empty:
+                        # Check again on timeout
+                        if stop_event.is_set():
+                            break
                         continue
 
                     if event_type == "thinking_chunk":
@@ -331,6 +369,14 @@ def chat_stream(request: ChatRequest):
                         thread.start()
                         threads.append(thread)
 
+                # Check if loop exited due to abort
+                if stop_event.is_set():
+                    logger.info(
+                        f"[Abort] Agent for device {device_id} event loop terminated due to abort signal"
+                    )
+                    yield "event: aborted\n"
+                    yield 'data: {"type": "aborted", "message": "Chat aborted by user"}\n\n'
+
                 # Update original agent state (thread-safe due to device lock)
                 original_agent._context = streaming_agent._context
                 original_agent._step_count = streaming_agent._step_count
@@ -345,19 +391,25 @@ def chat_stream(request: ChatRequest):
                 yield "event: error\n"
                 yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
             finally:
+                # Clean up active chats mapping
+                with _active_chats_lock:
+                    _active_chats.pop(device_id, None)
+
                 # Signal all threads to stop
                 stop_event.set()
 
                 alive_threads = [thread for thread in threads if thread.is_alive()]
                 if alive_threads:
+                    # Release lock after background threads complete
                     cleanup_thread = threading.Thread(
                         target=_release_device_lock_when_done,
-                        args=(device_lock, alive_threads),
+                        args=(device_id, alive_threads),
                         daemon=True,
                     )
                     cleanup_thread.start()
-                elif device_lock.locked():
-                    device_lock.release()
+                else:
+                    # Release lock immediately if no threads are alive
+                    manager.release_device(device_id)
 
         return StreamingResponse(
             event_generator(),
@@ -370,29 +422,32 @@ def chat_stream(request: ChatRequest):
         )
     except Exception:
         # Release lock if exception occurs before generator starts
-        if device_lock.locked():
-            device_lock.release()
+        manager.release_device(device_id)
         raise
 
 
 @router.get("/api/status", response_model=StatusResponse)
 def get_status(device_id: str | None = None) -> StatusResponse:
     """获取 Agent 状态和版本信息（多设备支持）。"""
+    from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
+
+    manager = PhoneAgentManager.get_instance()
+
     if device_id is None:
         return StatusResponse(
             version=APP_VERSION,
-            initialized=len(agents) > 0,
+            initialized=len(manager.list_agents()) > 0,
             step_count=0,
         )
 
-    if device_id not in agents:
+    if not manager.is_initialized(device_id):
         return StatusResponse(
             version=APP_VERSION,
             initialized=False,
             step_count=0,
         )
 
-    agent = agents[device_id]
+    agent = manager.get_agent(device_id)
     return StatusResponse(
         version=APP_VERSION,
         initialized=True,
@@ -403,27 +458,38 @@ def get_status(device_id: str | None = None) -> StatusResponse:
 @router.post("/api/reset")
 def reset_agent(request: ResetRequest) -> dict:
     """重置 Agent 状态（多设备支持）。"""
-    device_id = request.device_id
+    from AutoGLM_GUI.exceptions import AgentNotInitializedError
+    from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
-    if device_id not in agents:
+    device_id = request.device_id
+    manager = PhoneAgentManager.get_instance()
+
+    try:
+        manager.reset_agent(device_id)
+        return {
+            "success": True,
+            "device_id": device_id,
+            "message": f"Agent reset for device {device_id}",
+        }
+    except AgentNotInitializedError:
         raise HTTPException(status_code=404, detail=f"Device {device_id} not found")
 
-    agent = agents[device_id]
-    agent.reset()
 
-    if device_id in agent_configs:
-        model_config, agent_config = agent_configs[device_id]
-        agents[device_id] = PhoneAgent(
-            model_config=model_config,
-            agent_config=agent_config,
-            takeover_callback=non_blocking_takeover,
-        )
+@router.post("/api/chat/abort")
+def abort_chat(request: AbortRequest) -> dict:
+    """中断正在进行的对话流。"""
+    from AutoGLM_GUI.logger import logger
 
-    return {
-        "success": True,
-        "device_id": device_id,
-        "message": f"Agent reset for device {device_id}",
-    }
+    device_id = request.device_id
+
+    with _active_chats_lock:
+        if device_id in _active_chats:
+            logger.info(f"Aborting chat for device {device_id}")
+            _active_chats[device_id].set()  # 设置中断标志
+            return {"success": True, "message": "Abort requested"}
+        else:
+            logger.warning(f"No active chat found for device {device_id}")
+            return {"success": False, "message": "No active chat found"}
 
 
 @router.get("/api/config", response_model=ConfigResponse)

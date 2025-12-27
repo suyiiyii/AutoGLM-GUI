@@ -92,6 +92,12 @@ class ResetRequest(BaseModel):
     device_id: str  # 设备 ID（必填）
 
 
+class AbortRequest(BaseModel):
+    """中断对话请求。"""
+
+    device_id: str  # 设备 ID（必填）
+
+
 class ScreenshotRequest(BaseModel):
     device_id: str | None = None
 

@@ -28,6 +28,9 @@ export const en = {
     saveConfig: 'Save Configuration',
     noDevices: 'No devices found',
     getApiKey: 'Get API Key',
+    aborted: 'Chat aborted',
+    abortFailed: 'Failed to abort chat',
+    abortChat: 'Abort Chat',
   },
   deviceSidebar: {
     devices: 'Devices',

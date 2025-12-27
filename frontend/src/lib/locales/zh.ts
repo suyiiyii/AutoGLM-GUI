@@ -28,6 +28,9 @@ export const zh = {
     saveConfig: '保存配置',
     noDevices: '未找到设备',
     getApiKey: '获取 API Key',
+    aborted: '对话已中止',
+    abortFailed: '中止对话失败',
+    abortChat: '中止对话',
   },
   deviceSidebar: {
     devices: '设备',

@@ -15,6 +15,7 @@ import {
   ChevronRight,
   History,
   ListChecks,
+  Square,
 } from 'lucide-react';
 import { throttle } from 'lodash';
 import { ScrcpyPlayer } from './ScrcpyPlayer';
@@ -27,6 +28,7 @@ import type {
   Workflow,
 } from '../api';
 import {
+  abortChat,
   getScreenshot,
   initAgent,
   resetChat,
@@ -93,6 +95,7 @@ export function DevicePanel({
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [aborting, setAborting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [initialized, setInitialized] = useState(false);
   const [screenshot, setScreenshot] = useState<ScreenshotResponse | null>(null);
@@ -492,6 +495,36 @@ export function DevicePanel({
           updatedAgentMessage
         );
         saveHistoryItem(deviceSerial, historyItem);
+      },
+      (event: { type: 'aborted'; message: string }) => {
+        // Clear any pending updates
+        if (updateTimeoutId !== null) {
+          clearTimeout(updateTimeoutId);
+        }
+
+        const updatedAgentMessage = {
+          ...agentMessage,
+          content: event.message || 'Chat aborted by user',
+          success: false,
+          isStreaming: false,
+          thinking: [...thinkingList],
+          actions: [...actionsList],
+          timestamp: new Date(),
+          currentThinking: undefined,
+        };
+
+        setMessages(prev =>
+          prev.map(msg =>
+            msg.id === agentMessageId ? updatedAgentMessage : msg
+          )
+        );
+        setLoading(false);
+        chatStreamRef.current = null;
+
+        // Show feedback
+        setFeedbackMessage(t.chat.aborted);
+        setFeedbackType('success');
+        setTimeout(() => setFeedbackMessage(null), 2000);
       }
     );
 
@@ -504,6 +537,9 @@ export function DevicePanel({
     deviceSerial,
     deviceName,
     handleInit,
+    t,
+    setFeedbackMessage,
+    setFeedbackType,
   ]);
 
   const handleReset = useCallback(async () => {
@@ -522,6 +558,34 @@ export function DevicePanel({
 
     await resetChat(deviceId);
   }, [deviceId]);
+
+  const handleAbortChat = useCallback(async () => {
+    if (!chatStreamRef.current) return;
+
+    setAborting(true);
+
+    try {
+      // Close SSE connection
+      chatStreamRef.current.close();
+      chatStreamRef.current = null;
+
+      // Notify backend to abort
+      await abortChat(deviceId);
+
+      // Show feedback
+      setFeedbackMessage(t.chat.aborted);
+      setFeedbackType('success');
+      setTimeout(() => setFeedbackMessage(null), 2000);
+    } catch (error) {
+      console.error('Failed to abort chat:', error);
+      setFeedbackMessage(t.chat.abortFailed);
+      setFeedbackType('error');
+      setTimeout(() => setFeedbackMessage(null), 2000);
+    } finally {
+      setLoading(false);
+      setAborting(false);
+    }
+  }, [deviceId, t]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -1007,19 +1071,35 @@ export function DevicePanel({
                 </div>
               </PopoverContent>
             </Popover>
-            <Button
-              onClick={handleSend}
-              disabled={loading || !input.trim()}
-              size="icon"
-              variant="twitter"
-              className="h-10 w-10 rounded-full flex-shrink-0"
-            >
-              {loading ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
+            {/* Abort Button - shown when loading */}
+            {loading && (
+              <Button
+                onClick={handleAbortChat}
+                disabled={aborting}
+                size="icon"
+                variant="destructive"
+                className="h-10 w-10 rounded-full flex-shrink-0"
+                title={t.chat.abortChat}
+              >
+                {aborting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Square className="h-4 w-4" />
+                )}
+              </Button>
+            )}
+            {/* Send Button */}
+            {!loading && (
+              <Button
+                onClick={handleSend}
+                disabled={!input.trim()}
+                size="icon"
+                variant="twitter"
+                className="h-10 w-10 rounded-full flex-shrink-0"
+              >
                 <Send className="h-4 w-4" />
-              )}
-            </Button>
+              </Button>
+            )}
           </div>
         </div>
       </Card>
