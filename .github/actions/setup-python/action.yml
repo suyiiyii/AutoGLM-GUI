@@ -1,11 +1,16 @@
 name: Setup Python & uv
-description: Setup Python and uv package manager with caching
+description: Setup Python and uv package manager
 
 inputs:
   python-version:
     description: Python version to use
     required: false
     default: "3.11"
+  
+  install-dependencies:
+    description: Whether to install dependencies with uv sync
+    required: false
+    default: "true"
 
 runs:
   using: composite
@@ -22,6 +27,7 @@ runs:
         python-version: ${{ inputs.python-version }}
 
     - name: Install dependencies
+      if: inputs.install-dependencies == 'true'
       shell: bash
       run: |
         if [ -f uv.lock ]; then

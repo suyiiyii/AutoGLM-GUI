@@ -65,26 +65,7 @@ jobs:
         with:
           node-version: ${{ matrix.node-version }}
 
-      # 额外的缓存优化
-      - name: Cache Electron
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.cache/electron
-            ~/.cache/electron-builder
-            ~/Library/Caches/electron
-            ~/Library/Caches/electron-builder
-          key: ${{ runner.os }}-electron-${{ hashFiles('electron/package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-electron-
-
-      - name: Cache ADB tools
-        uses: actions/cache@v4
-        with:
-          path: resources/adb
-          key: ${{ runner.os }}-adb-${{ hashFiles('scripts/download_adb.py') }}
-          restore-keys: |
-            ${{ runner.os }}-adb-
+      # 依赖缓存已在 setup-node-pnpm 和 setup-python action 中处理|      # 依赖缓存已在 setup-node-pnpm 和 setup-python action 中处理
 
       # 构建应用
       - name: Build application
