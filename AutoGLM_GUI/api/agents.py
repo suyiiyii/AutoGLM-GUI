@@ -148,7 +148,27 @@ def init_agent(request: InitRequest) -> dict:
 
     # Initialize agent (includes ADB Keyboard setup)
     try:
-        _initialize_agent_with_config(device_id, model_config, agent_config)
+        # Setup ADB Keyboard (common for all agents)
+        _setup_adb_keyboard(device_id)
+
+        # Use agent factory to create agent
+        from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
+
+        manager = PhoneAgentManager.get_instance()
+
+        # Initialize agent using factory pattern
+        manager.initialize_agent_with_factory(
+            device_id=device_id,
+            agent_type=request.agent_type,
+            model_config=model_config,
+            agent_config=agent_config,
+            agent_specific_config=request.agent_config_params or {},
+            takeover_callback=non_blocking_takeover,
+        )
+
+        logger.info(
+            f"Agent of type '{request.agent_type}' initialized for device {device_id}"
+        )
     except Exception as e:
         logger.error(f"Failed to initialize agent: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -157,6 +177,7 @@ def init_agent(request: InitRequest) -> dict:
         "success": True,
         "device_id": device_id,
         "message": f"Agent initialized for device {device_id}",
+        "agent_type": request.agent_type,
     }
 
 

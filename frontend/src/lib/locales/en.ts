@@ -45,6 +45,10 @@ export const en = {
     decisionApiKey: 'Decision Model API Key',
     visionModel: 'Vision Model',
     decisionModel: 'Decision Model',
+    agentType: 'Agent Type',
+    selectAgentType: 'Select Agent Type',
+    history_n: 'History Count',
+    history_n_hint: 'Number of historical screenshots (1-10)',
   },
   deviceSidebar: {
     devices: 'Devices',

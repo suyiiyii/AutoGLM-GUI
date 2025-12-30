@@ -60,6 +60,24 @@ class InitRequest(BaseModel):
     model: APIModelConfig | None = Field(default=None, alias="model_config")
     agent: APIAgentConfig | None = Field(default=None, alias="agent_config")
 
+    # Agent configuration (factory pattern)
+    agent_type: str = "glm"  # Agent type to use (e.g., "glm", "mai")
+    agent_config_params: dict | None = None  # Agent-specific configuration parameters
+
+    @field_validator("agent_type")
+    @classmethod
+    def validate_agent_type(cls, v: str) -> str:
+        """验证 agent_type 有效性."""
+        # Don't import at module level to avoid circular imports
+        from AutoGLM_GUI.agents import is_agent_type_registered
+
+        if not is_agent_type_registered(v):
+            raise ValueError(
+                f"Unknown agent_type: '{v}'. "
+                f"Please register the agent type first or use a known type."
+            )
+        return v
+
 
 class ChatRequest(BaseModel):
     message: str

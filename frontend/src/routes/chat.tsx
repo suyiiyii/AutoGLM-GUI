@@ -42,6 +42,7 @@ import {
   Brain,
   Layers,
   Sparkles,
+  Cpu,
 } from 'lucide-react';
 import { useTranslation } from '../lib/i18n-context';
 
@@ -95,6 +96,26 @@ const DECISION_PRESETS = [
     config: {
       base_url: '',
       model_name: '',
+    },
+  },
+] as const;
+
+// Agent 类型预设配置
+const AGENT_PRESETS = [
+  {
+    name: 'glm',
+    displayName: 'GLM Agent',
+    description: '基于 GLM 模型优化，成熟稳定，适合大多数任务',
+    icon: Cpu,
+    defaultConfig: {},
+  },
+  {
+    name: 'mai',
+    displayName: 'MAI Agent',
+    description: '阿里通义团队开发，支持多张历史截图上下文',
+    icon: Brain,
+    defaultConfig: {
+      history_n: 3,
     },
   },
 ] as const;
@@ -159,6 +180,8 @@ function ChatComponent() {
     decision_base_url: '',
     decision_model_name: '',
     decision_api_key: '',
+    agent_type: 'glm',
+    agent_config_params: {} as Record<string, unknown>,
   });
 
   useEffect(() => {
@@ -173,6 +196,8 @@ function ChatComponent() {
           decision_base_url: data.decision_base_url || undefined,
           decision_model_name: data.decision_model_name || undefined,
           decision_api_key: data.decision_api_key || undefined,
+          agent_type: data.agent_type || 'glm',
+          agent_config_params: data.agent_config_params || undefined,
         });
         setTempConfig({
           base_url: data.base_url,
@@ -182,6 +207,8 @@ function ChatComponent() {
           decision_base_url: data.decision_base_url || '',
           decision_model_name: data.decision_model_name || '',
           decision_api_key: data.decision_api_key || '',
+          agent_type: data.agent_type || 'glm',
+          agent_config_params: data.agent_config_params || {},
         });
 
         if (!data.base_url) {
@@ -322,6 +349,11 @@ function ChatComponent() {
         decision_base_url: tempConfig.decision_base_url || undefined,
         decision_model_name: tempConfig.decision_model_name || undefined,
         decision_api_key: tempConfig.decision_api_key || undefined,
+        agent_type: tempConfig.agent_type,
+        agent_config_params:
+          Object.keys(tempConfig.agent_config_params).length > 0
+            ? tempConfig.agent_config_params
+            : undefined,
       });
 
       setConfig({
@@ -332,6 +364,11 @@ function ChatComponent() {
         decision_base_url: tempConfig.decision_base_url || undefined,
         decision_model_name: tempConfig.decision_model_name || undefined,
         decision_api_key: tempConfig.decision_api_key || undefined,
+        agent_type: tempConfig.agent_type,
+        agent_config_params:
+          Object.keys(tempConfig.agent_config_params).length > 0
+            ? tempConfig.agent_config_params
+            : undefined,
       });
       setShowConfig(false);
       showToast(t.toasts.configSaved, 'success');
@@ -563,6 +600,91 @@ function ChatComponent() {
                     placeholder="autoglm-phone-9b"
                   />
                 </div>
+
+                {/* Agent 类型选择 */}
+                <div className="space-y-2">
+                  <Label className="text-sm font-medium">
+                    {t.chat.agentType || 'Agent 类型'}
+                  </Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {AGENT_PRESETS.map(preset => (
+                      <button
+                        key={preset.name}
+                        type="button"
+                        onClick={() =>
+                          setTempConfig(prev => ({
+                            ...prev,
+                            agent_type: preset.name,
+                            agent_config_params: preset.defaultConfig,
+                          }))
+                        }
+                        className={`text-left p-3 rounded-lg border transition-all ${
+                          tempConfig.agent_type === preset.name
+                            ? 'border-[#1d9bf0] bg-[#1d9bf0]/5'
+                            : 'border-slate-200 dark:border-slate-700 hover:border-[#1d9bf0]/50 hover:bg-slate-50 dark:hover:bg-slate-800/50'
+                        }`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <preset.icon
+                            className={`w-4 h-4 ${
+                              tempConfig.agent_type === preset.name
+                                ? 'text-[#1d9bf0]'
+                                : 'text-slate-400 dark:text-slate-500'
+                            }`}
+                          />
+                          <span
+                            className={`font-medium text-sm ${
+                              tempConfig.agent_type === preset.name
+                                ? 'text-[#1d9bf0]'
+                                : 'text-slate-900 dark:text-slate-100'
+                            }`}
+                          >
+                            {preset.displayName}
+                          </span>
+                        </div>
+                        <p
+                          className={`text-xs mt-1 ml-6 ${
+                            tempConfig.agent_type === preset.name
+                              ? 'text-[#1d9bf0]/70'
+                              : 'text-slate-500 dark:text-slate-400'
+                          }`}
+                        >
+                          {preset.description}
+                        </p>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                {/* MAI Agent 特定配置 */}
+                {tempConfig.agent_type === 'mai' && (
+                  <div className="space-y-2">
+                    <Label htmlFor="history_n">
+                      {t.chat.history_n || '历史记录数量'}
+                    </Label>
+                    <Input
+                      id="history_n"
+                      type="number"
+                      min={1}
+                      max={10}
+                      value={tempConfig.agent_config_params?.history_n || 3}
+                      onChange={e => {
+                        const value = parseInt(e.target.value) || 3;
+                        setTempConfig(prev => ({
+                          ...prev,
+                          agent_config_params: {
+                            ...prev.agent_config_params,
+                            history_n: value,
+                          },
+                        }));
+                      }}
+                      className="w-full"
+                    />
+                    <p className="text-xs text-slate-500 dark:text-slate-400">
+                      {t.chat.history_n_hint || '包含的历史截图数量（1-10）'}
+                    </p>
+                  </div>
+                )}
               </>
             ) : (
               <>
@@ -719,6 +841,8 @@ function ChatComponent() {
                     decision_base_url: config.decision_base_url || '',
                     decision_model_name: config.decision_model_name || '',
                     decision_api_key: config.decision_api_key || '',
+                    agent_type: config.agent_type || 'glm',
+                    agent_config_params: config.agent_config_params || {},
                   });
                 }
               }}

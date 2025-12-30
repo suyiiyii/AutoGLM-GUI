@@ -45,6 +45,10 @@ export const zh = {
     decisionApiKey: '决策模型 API Key',
     visionModel: '视觉模型',
     decisionModel: '决策模型',
+    agentType: 'Agent 类型',
+    selectAgentType: '选择 Agent 类型',
+    history_n: '历史记录数量',
+    history_n_hint: '包含的历史截图数量（1-10）',
   },
   deviceSidebar: {
     devices: '设备',

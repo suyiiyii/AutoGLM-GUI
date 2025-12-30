@@ -247,6 +247,16 @@ AutoGLM-GUI 支持同时控制多个 Android 设备：
 4. **对话** - 描述你想要做什么（例如："去美团点一杯霸王茶姬的伯牙绝弦"）
 5. **观察** - Agent 会逐步执行操作，每一步的思考过程和动作都会实时显示
 
+### 🤖 选择 Agent 类型
+
+在初始化设备时，可以选择不同的 Agent 类型（默认：GLM Agent）：
+
+- **GLM Agent**：基于 GLM 模型优化，成熟稳定，适合大多数任务
+- **MAI Agent**：阿里通义团队开发的 Mobile Agent，支持多张历史截图上下文，适合复杂任务
+
+MAI Agent 可配置参数：
+- `history_n`：历史截图数量（1-10，默认：3）
+
 <a id="mode-classic"></a>
 ### 🌿 普通模式（单模型 / Open AutoGLM）
 

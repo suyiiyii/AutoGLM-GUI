@@ -94,6 +94,8 @@ interface GlobalConfig {
   decision_base_url?: string;
   decision_model_name?: string;
   decision_api_key?: string;
+  agent_type?: string;
+  agent_config_params?: Record<string, unknown>;
 }
 
 interface DevicePanelProps {
@@ -254,6 +256,8 @@ export function DevicePanel({
         agent_config: {
           device_id: deviceId,
         },
+        agent_type: config.agent_type,
+        agent_config_params: config.agent_config_params,
       });
       setInitialized(true);
       setError(null);

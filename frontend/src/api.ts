@@ -90,6 +90,9 @@ export interface APIAgentConfig {
 export interface InitRequest {
   model_config?: APIModelConfig;
   agent_config?: APIAgentConfig;
+  // Agent 类型配置
+  agent_type?: string;
+  agent_config_params?: Record<string, unknown>;
 }
 
 export interface ScreenshotRequest {
@@ -575,6 +578,9 @@ export interface ConfigResponse {
   decision_base_url: string;
   decision_model_name: string;
   decision_api_key: string;
+  // Agent 类型配置
+  agent_type?: string;
+  agent_config_params?: Record<string, unknown>;
 }
 
 export interface ConfigSaveRequest {
@@ -586,6 +592,9 @@ export interface ConfigSaveRequest {
   decision_base_url?: string;
   decision_model_name?: string;
   decision_api_key?: string;
+  // Agent 类型配置
+  agent_type?: string;
+  agent_config_params?: Record<string, unknown>;
 }
 
 export async function getConfig(): Promise<ConfigResponse> {
