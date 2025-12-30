@@ -10,8 +10,6 @@ on:
 
 env:
   PYTHON_VERSION: '3.11'
-  NODE_VERSION_WINDOWS: '24'
-  NODE_VERSION_UNIX: '20'
 
 jobs:
   # 快速检查 - 在构建前验证代码质量
@@ -41,13 +39,13 @@ jobs:
         include:
           - os: Windows
             runs-on: windows-latest
-            node-version: ${{ env.NODE_VERSION_WINDOWS }}
+            node-version: '24'
           - os: macOS
             runs-on: macos-latest
-            node-version: ${{ env.NODE_VERSION_UNIX }}
+            node-version: '20'
           - os: Linux
             runs-on: ubuntu-22.04
-            node-version: ${{ env.NODE_VERSION_UNIX }}
+            node-version: '20'
 
     env:
       PYTHONIOENCODING: utf-8
@@ -125,11 +123,20 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Platform | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Windows | ${{ needs.build.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| macOS | ${{ needs.build.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Linux | ${{ needs.build.result == 'success' && '✅' || '❌' }} |" >> $GITHUB_STEP_SUMMARY
           
-          if [ "${{ needs.build.result }}" != "success" ]; then
+          # 检查每个构建的结果
+          results='${{ needs.build.result }}'
+          if [ "$results" = "success" ]; then
+            echo "| Windows | ✅ |" >> $GITHUB_STEP_SUMMARY
+            echo "| macOS | ✅ |" >> $GITHUB_STEP_SUMMARY
+            echo "| Linux | ✅ |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "| Windows | ❌ |" >> $GITHUB_STEP_SUMMARY
+            echo "| macOS | ❌ |" >> $GITHUB_STEP_SUMMARY
+            echo "| Linux | ❌ |" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          if [ "$results" != "success" ]; then
             echo "❌ Some builds failed"
             exit 1
           fi

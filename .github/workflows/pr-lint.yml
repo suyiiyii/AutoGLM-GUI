@@ -56,6 +56,18 @@ jobs:
             exit 1
           fi
 
+      - name: Set job status
+        id: status
+        if: always()
+        run: |
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "status=PASSED" >> $GITHUB_OUTPUT
+            echo "icon=✅" >> $GITHUB_OUTPUT
+          else
+            echo "status=FAILED" >> $GITHUB_OUTPUT
+            echo "icon=❌" >> $GITHUB_OUTPUT
+          fi
+
       - name: Comment PR with results
         if: always() && github.event_name == 'pull_request' && github.event.pull_request.head.repo.full_name == github.repository
         continue-on-error: true
@@ -73,20 +85,70 @@ jobs:
               comment.body.includes('🚀 Lint & Format Check Results')
             );
 
-            const status = '${{ job.status }}' === 'success' ? '✅ PASSED' : '❌ FAILED';
+            const status = '${{ steps.status.outputs.status }}';
+            const icon = '${{ steps.status.outputs.icon }}';
+
+            let messageSection = '';
+            if (status === 'PASSED') {
+              messageSection = `
+            ### ✅ All checks passed!
+            Your code follows the project's style guidelines.
+
+            ### Checks performed:
+            - Backend Ruff lint ✅
+            - Backend Ruff format ✅
+            - Frontend ESLint ✅
+            - Frontend Prettier format ✅
+            - Frontend TypeScript types ✅
+            - Unified lint script ✅
+              `;
+            } else {
+              messageSection = `
+            ### ❌ Some checks failed!
+
+            #### How to fix:
+            1. Run locally to auto-fix most issues:
+            \`\`\`bash
+            uv run python scripts/lint.py
+            \`\`\`
+
+            2. Commit the fixes and push:
+            \`\`\`bash
+            git add .
+            git commit -m "fix: apply lint and format fixes"
+            git push
+            \`\`\`
+
+            3. The checks will run again automatically.
+
+            #### Individual fix commands:
+            **Backend:**
+            \`\`\`bash
+            uv run ruff check --fix
+            uv run ruff format
+            \`\`\`
+
+            **Frontend:**
+            \`\`\`bash
+            cd frontend
+            pnpm lint --fix
+            pnpm format
+            cd ..
+            \`\`\`
+              `;
+            }
 
             const commentBody = `
-            ## 🚀 Lint & Format Check Results: ${status}
+            ## 🚀 Lint & Format Check Results: ${icon} ${status}
 
             ### What was checked:
             - 🐍 **Backend**: Ruff linting + formatting
             - 📱 **Frontend**: ESLint + Prettier + TypeScript types
             - 🔧 **Unified**: Custom lint script validation
-
-            ${{ job.status == 'success' ? '### ✅ All checks passed!' : '### ❌ Some checks failed!\n\nRun locally: `uv run python scripts/lint.py`' }}
+            ${messageSection}
 
             ---
-            *This is an automated check.*
+            *This is an automated check. For questions, ask in the PR discussion.*
             `;
 
             if (botComment) {

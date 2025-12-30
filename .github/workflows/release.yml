@@ -192,17 +192,35 @@ jobs:
     steps:
       - name: Create release summary
         run: |
+          # Determine status
+          pypi_status="${{ needs.release-pypi.result }}"
+          electron_status="${{ needs.build-electron.result }}"
+          
+          # PyPI status
+          if [ "$pypi_status" = "success" ]; then
+            pypi_icon="✅ Published"
+          else
+            pypi_icon="❌ Failed"
+          fi
+          
+          # Electron status
+          if [ "$electron_status" = "success" ]; then
+            electron_icon="✅ Built"
+          else
+            electron_icon="❌ Failed"
+          fi
+          
           echo "### Release Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| PyPI Package | ${{ needs.release-pypi.result == 'success' && '✅ Published' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Electron (macOS) | ${{ needs.build-electron.result == 'success' && '✅ Built' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Electron (Windows) | ${{ needs.build-electron.result == 'success' && '✅ Built' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| Electron (Linux) | ${{ needs.build-electron.result == 'success' && '✅ Built' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| PyPI Package | $pypi_icon |" >> $GITHUB_STEP_SUMMARY
+          echo "| Electron (macOS) | $electron_icon |" >> $GITHUB_STEP_SUMMARY
+          echo "| Electron (Windows) | $electron_icon |" >> $GITHUB_STEP_SUMMARY
+          echo "| Electron (Linux) | $electron_icon |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           
-          if [ "${{ needs.release-pypi.result }}" != "success" ] || [ "${{ needs.build-electron.result }}" != "success" ]; then
+          if [ "$pypi_status" != "success" ] || [ "$electron_status" != "success" ]; then
             echo "❌ Release had failures"
             exit 1
           else
