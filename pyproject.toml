@@ -25,6 +25,7 @@ dependencies = [
     "fastmcp>=2.0.0",
     "httpx[socks]>=0.28.1",
     "loguru>=0.7.3",
+    "numpy>=1.24.0",  # Required by MAI agent
     "openai>=2.9.0",
     "openai-agents>=0.6.4",
     "pillow>=11.3.0",

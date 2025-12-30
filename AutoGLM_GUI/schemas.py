@@ -344,6 +344,10 @@ class ConfigResponse(BaseModel):
     decision_model_name: str = ""
     decision_api_key: str = ""
 
+    # Agent 类型配置
+    agent_type: str = "glm"  # Agent type (e.g., "glm", "mai")
+    agent_config_params: dict | None = None  # Agent-specific configuration
+
     conflicts: list[dict] | None = None  # 配置冲突信息（可选）
 
 
@@ -359,6 +363,10 @@ class ConfigSaveRequest(BaseModel):
     decision_base_url: str | None = None
     decision_model_name: str | None = None
     decision_api_key: str | None = None
+
+    # Agent 类型配置
+    agent_type: str = "glm"  # Agent type to use (e.g., "glm", "mai")
+    agent_config_params: dict | None = None  # Agent-specific configuration parameters
 
     @field_validator("base_url")
     @classmethod

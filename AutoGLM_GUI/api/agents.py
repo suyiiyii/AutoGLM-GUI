@@ -517,6 +517,8 @@ def save_config_endpoint(request: ConfigSaveRequest) -> dict:
             decision_base_url=request.decision_base_url,
             decision_model_name=request.decision_model_name,
             decision_api_key=request.decision_api_key,
+            agent_type=request.agent_type,
+            agent_config_params=request.agent_config_params,
             merge_mode=True,
         )
 

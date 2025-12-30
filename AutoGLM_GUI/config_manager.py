@@ -331,6 +331,8 @@ class UnifiedConfigManager:
         decision_base_url: Optional[str] = None,
         decision_model_name: Optional[str] = None,
         decision_api_key: Optional[str] = None,
+        agent_type: Optional[str] = None,
+        agent_config_params: Optional[dict] = None,
         merge_mode: bool = True,
     ) -> bool:
         """
@@ -344,6 +346,8 @@ class UnifiedConfigManager:
             decision_base_url: 决策模型 Base URL
             decision_model_name: 决策模型名称
             decision_api_key: 决策模型 API key
+            agent_type: Agent 类型（可选，如 "glm", "mai"）
+            agent_config_params: Agent 特定配置参数（可选）
             merge_mode: 是否合并现有配置（True: 保留未提供的字段）
 
         Returns:
@@ -369,6 +373,10 @@ class UnifiedConfigManager:
                 new_config["decision_model_name"] = decision_model_name
             if decision_api_key:
                 new_config["decision_api_key"] = decision_api_key
+            if agent_type is not None:
+                new_config["agent_type"] = agent_type
+            if agent_config_params is not None:
+                new_config["agent_config_params"] = agent_config_params
 
             # 合并模式：保留现有文件中未提供的字段
             if merge_mode and self._config_path.exists():
@@ -383,6 +391,8 @@ class UnifiedConfigManager:
                         "decision_base_url",
                         "decision_model_name",
                         "decision_api_key",
+                        "agent_type",
+                        "agent_config_params",
                     ]
                     for key in preserve_keys:
                         if key not in new_config and key in existing:
