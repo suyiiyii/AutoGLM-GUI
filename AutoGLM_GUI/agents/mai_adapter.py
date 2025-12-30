@@ -214,9 +214,13 @@ class MAIAgentAdapter:
         }
 
         # 4. Call MAI agent predict
+        # IMPORTANT: Always pass self._current_instruction, not just on the first step.
+        # MAI agent's _build_messages uses instruction to populate the primary user message,
+        # and does not re-inject it from history. Without the instruction in subsequent steps,
+        # the model would lose track of the task goal as history grows.
         try:
             prediction_text, action_dict = self.mai_agent.predict(
-                instruction=self._current_instruction if is_first else "",
+                instruction=self._current_instruction,
                 obs=obs,
             )
         except Exception as e:
@@ -346,7 +350,9 @@ class MAIAgentAdapter:
         # Swipe action
         if action_type == "swipe":
             direction = mai_action.get("direction", "up")
-            coordinate = mai_action.get("coordinate") or [500, 500]
+            # Default to normalized center [0.5, 0.5], not [500, 500]
+            # MAI coordinates are normalized to [0, 1], so we use normalized values
+            coordinate = mai_action.get("coordinate") or [0.5, 0.5]
             x = self._convert_coordinate(coordinate[0])
             y = self._convert_coordinate(coordinate[1])
 
