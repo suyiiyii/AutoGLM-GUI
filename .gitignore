@@ -34,3 +34,6 @@ logs/
 
 # macOS
 .DS_Store
+
+# serena
+.serena/

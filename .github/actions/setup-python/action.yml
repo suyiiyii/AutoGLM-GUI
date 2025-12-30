@@ -1,5 +1,5 @@
 name: Setup Python & uv
-description: Setup Python and uv package manager
+description: Setup Python and uv package manager with caching
 
 inputs:
   python-version:
@@ -14,6 +14,7 @@ runs:
       uses: astral-sh/setup-uv@v4
       with:
         enable-cache: true
+        cache-dependency-glob: "uv.lock"
 
     - name: Setup Python
       uses: actions/setup-python@v5
@@ -22,4 +23,9 @@ runs:
 
     - name: Install dependencies
       shell: bash
-      run: uv sync
+      run: |
+        if [ -f uv.lock ]; then
+          uv sync
+        else
+          uv pip install -e .
+        fi

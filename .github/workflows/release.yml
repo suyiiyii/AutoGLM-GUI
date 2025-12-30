@@ -5,14 +5,17 @@ on:
     tags:
       - v*
 
+permissions:
+  contents: write
+  id-token: write
+
 jobs:
-  release:
-    name: Release
+  # 并行发布 - PyPI 包和所有平台的 Electron 构建
+  release-pypi:
+    name: Publish to PyPI
     runs-on: ubuntu-latest
     environment: release
-    permissions:
-      id-token: write
-      contents: write
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -20,22 +23,24 @@ jobs:
       - name: Setup Python & uv
         uses: ./.github/actions/setup-python
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Node.js & pnpm
+        uses: ./.github/actions/setup-node-pnpm
         with:
-          node-version: "20"
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
+          node-version: '20'
 
       - name: Get Version
         id: version
         run: |
-          echo "VERSION=$(uvx --from=toml-cli toml get --toml-path=pyproject.toml project.version)" >> $GITHUB_OUTPUT
-          echo "TAG_VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
-          echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          VERSION=$(uvx --from=toml-cli toml get --toml-path=pyproject.toml project.version)
+          TAG_VERSION=${GITHUB_REF#refs/tags/v}
+          TAG_NAME=${GITHUB_REF#refs/tags/}
+          
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "TAG_VERSION=$TAG_VERSION" >> $GITHUB_OUTPUT
+          echo "TAG_NAME=$TAG_NAME" >> $GITHUB_OUTPUT
+          
+          echo "Version: $VERSION"
+          echo "Tag: $TAG_VERSION"
 
       - name: Check Version
         if: steps.version.outputs.VERSION != steps.version.outputs.TAG_VERSION
@@ -65,7 +70,9 @@ jobs:
       - name: Create Release if not exists
         run: |
           gh release view ${{ steps.version.outputs.TAG_NAME }} || \
-          gh release create ${{ steps.version.outputs.TAG_NAME }} --title "${{ steps.version.outputs.TAG_NAME }}" --notes "Release ${{ steps.version.outputs.TAG_NAME }}"
+          gh release create ${{ steps.version.outputs.TAG_NAME }} \
+            --title "${{ steps.version.outputs.TAG_NAME }}" \
+            --notes "Release ${{ steps.version.outputs.TAG_NAME }}"
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -74,92 +81,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-  # Build Electron application for macOS
-  build-electron-macos:
-    name: Build Electron (macOS ARM64)
-    runs-on: macos-latest
-    needs: release
-    permissions:
-      contents: write
+  # Electron 构建使用 matrix 策略，与 PyPI 发布并行
+  build-electron:
+    name: Build Electron (${{ matrix.os }})
+    runs-on: ${{ matrix.runs-on }}
 
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-          cache-dependency-path: 'frontend/pnpm-lock.yaml'
-
-      - name: Get pnpm store directory
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
-      - name: Cache uv
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-uv-
-
-      - name: Build Electron application
-        run: uv run python scripts/build_electron.py
-
-      - name: Get version
-        id: version
-        run: echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
-
-      - name: Find and upload macOS artifacts
-        run: |
-          # Find DMG file
-          dmg_file=$(find electron/dist -type f -name "*.dmg" ! -name "*.blockmap" | head -n 1)
-          if [ -n "$dmg_file" ]; then
-            echo "Uploading DMG: $(basename "$dmg_file")"
-            gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} "$dmg_file"
-          fi
-
-          # Find blockmap file
-          blockmap_file=$(find electron/dist -type f -name "*.dmg.blockmap" | head -n 1)
-          if [ -n "$blockmap_file" ]; then
-            echo "Uploading blockmap: $(basename "$blockmap_file")"
-            gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} "$blockmap_file"
-          fi
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # Build Electron application for Windows
-  build-electron-windows:
-    name: Build Electron (Windows x64)
-    runs-on: windows-latest
-    needs: release
-    permissions:
-      contents: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macOS
+            runs-on: macos-latest
+            node-version: '20'
+          - os: Windows
+            runs-on: windows-latest
+            node-version: '24'
+          - os: Linux
+            runs-on: ubuntu-latest
+            node-version: '20'
 
     env:
       PYTHONIOENCODING: utf-8
@@ -168,139 +107,33 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup Python & uv
+        uses: ./.github/actions/setup-python
+
+      - name: Setup Node.js & pnpm
+        uses: ./.github/actions/setup-node-pnpm
         with:
-          python-version: '3.11'
+          node-version: ${{ matrix.node-version }}
 
-      - name: Install uv
-        shell: pwsh
-        run: |
-          irm https://astral.sh/uv/install.ps1 | iex
-          echo "$env:USERPROFILE\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'pnpm'
-          cache-dependency-path: 'frontend/pnpm-lock.yaml'
-
-      - name: Get pnpm store directory
-        shell: pwsh
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $env:GITHUB_ENV
-
-      - name: Cache pnpm store
+      - name: Cache Electron
         uses: actions/cache@v4
         with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+            ~/Library/Caches/electron
+            ~/Library/Caches/electron-builder
+          key: ${{ runner.os }}-electron-${{ hashFiles('electron/package-lock.json') }}
           restore-keys: |
-            ${{ runner.os }}-pnpm-store-
+            ${{ runner.os }}-electron-
 
-      - name: Cache uv
+      - name: Cache ADB tools
         uses: actions/cache@v4
         with:
-          path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
+          path: resources/adb
+          key: ${{ runner.os }}-adb-${{ hashFiles('scripts/download_adb.py') }}
           restore-keys: |
-            ${{ runner.os }}-uv-
-
-      - name: Build Electron application
-        run: uv run python scripts/build_electron.py
-
-      - name: Get version
-        id: version
-        shell: pwsh
-        run: |
-          $tagName = $env:GITHUB_REF -replace '^refs/tags/', ''
-          echo "TAG_NAME=$tagName" >> $env:GITHUB_OUTPUT
-
-      - name: Find and upload Windows artifacts
-        shell: pwsh
-        run: |
-          # Find portable exe (not containing "Setup")
-          $portableExe = Get-ChildItem -Path electron\dist -Filter *.exe -File | Where-Object { $_.Name -notmatch "Setup" } | Select-Object -First 1
-          if ($portableExe) {
-            Write-Host "Uploading portable: $($portableExe.Name)"
-            gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} $portableExe.FullName
-          }
-
-          # Find setup exe (containing "Setup")
-          $setupExe = Get-ChildItem -Path electron\dist -Filter *.exe -File | Where-Object { $_.Name -match "Setup" } | Select-Object -First 1
-          if ($setupExe) {
-            Write-Host "Uploading setup: $($setupExe.Name)"
-            gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} $setupExe.FullName
-          }
-
-          # Find blockmap
-          $blockmap = Get-ChildItem -Path electron\dist -Filter *.exe.blockmap -File | Select-Object -First 1
-          if ($blockmap) {
-            Write-Host "Uploading blockmap: $($blockmap.Name)"
-            gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} $blockmap.FullName
-          }
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-  # Build Electron application for Linux
-  build-electron-linux:
-    name: Build Electron (Linux x64)
-    runs-on: ubuntu-latest
-    needs: release
-    permissions:
-      contents: write
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-          cache-dependency-path: 'frontend/pnpm-lock.yaml'
-
-      - name: Get pnpm store directory
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
-      - name: Cache uv
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-uv-
+            ${{ runner.os }}-adb-
 
       - name: Build Electron application
         run: uv run python scripts/build_electron.py
@@ -309,27 +142,69 @@ jobs:
         id: version
         run: echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
 
-      - name: Find and upload Linux artifacts
+      - name: Upload artifacts to release
+        shell: bash
         run: |
-          # Find AppImage file
-          appimage_file=$(find electron/dist -type f -name "*.AppImage" | head -n 1)
-          if [ -n "$appimage_file" ]; then
-            echo "Uploading AppImage: $(basename "$appimage_file")"
-            gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} "$appimage_file"
-          fi
-
-          # Find deb file
-          deb_file=$(find electron/dist -type f -name "*.deb" | head -n 1)
-          if [ -n "$deb_file" ]; then
-            echo "Uploading deb: $(basename "$deb_file")"
-            gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} "$deb_file"
-          fi
-
-          # Find tar.gz file
-          targz_file=$(find electron/dist -type f -name "*.tar.gz" | head -n 1)
-          if [ -n "$targz_file" ]; then
-            echo "Uploading tar.gz: $(basename "$targz_file")"
-            gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} "$targz_file"
+          TAG_NAME="${{ steps.version.outputs.TAG_NAME }}"
+          
+          # 根据平台上传不同的文件
+          if [ "$RUNNER_OS" == "Windows" ]; then
+            # Windows
+            for file in electron/dist/*.exe; do
+              if [ -f "$file" ]; then
+                echo "Uploading: $(basename "$file")"
+                gh release upload --clobber "$TAG_NAME" "$file"
+              fi
+            done
+            for file in electron/dist/*.blockmap; do
+              if [ -f "$file" ]; then
+                echo "Uploading: $(basename "$file")"
+                gh release upload --clobber "$TAG_NAME" "$file"
+              fi
+            done
+          elif [ "$RUNNER_OS" == "macOS" ]; then
+            # macOS
+            for file in electron/dist/*.dmg electron/dist/*.dmg.blockmap; do
+              if [ -f "$file" ]; then
+                echo "Uploading: $(basename "$file")"
+                gh release upload --clobber "$TAG_NAME" "$file"
+              fi
+            done
+          else
+            # Linux
+            for file in electron/dist/*.{AppImage,deb,tar.gz}; do
+              if [ -f "$file" ]; then
+                echo "Uploading: $(basename "$file")"
+                gh release upload --clobber "$TAG_NAME" "$file"
+              fi
+            done
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # 发布摘要
+  release-summary:
+    name: Release Summary
+    runs-on: ubuntu-latest
+    needs: [release-pypi, build-electron]
+    if: always()
+
+    steps:
+      - name: Create release summary
+        run: |
+          echo "### Release Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| PyPI Package | ${{ needs.release-pypi.result == 'success' && '✅ Published' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Electron (macOS) | ${{ needs.build-electron.result == 'success' && '✅ Built' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Electron (Windows) | ${{ needs.build-electron.result == 'success' && '✅ Built' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Electron (Linux) | ${{ needs.build-electron.result == 'success' && '✅ Built' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [ "${{ needs.release-pypi.result }}" != "success" ] || [ "${{ needs.build-electron.result }}" != "success" ]; then
+            echo "❌ Release had failures"
+            exit 1
+          else
+            echo "✅ Release completed successfully"
+          fi
