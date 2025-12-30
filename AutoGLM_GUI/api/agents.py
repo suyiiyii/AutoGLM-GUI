@@ -481,6 +481,8 @@ def get_config_endpoint() -> ConfigResponse:
         decision_api_key=effective_config.decision_api_key
         if effective_config.decision_api_key
         else "",
+        agent_type=effective_config.agent_type,
+        agent_config_params=effective_config.agent_config_params,
         conflicts=[
             {
                 "field": c.field,

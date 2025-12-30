@@ -234,6 +234,7 @@ class MAIAgentAdapter:
             )
 
         # 5. Extract thinking from prediction_text
+        # MAI Agent uses <thinking> tags
         thinking = self._extract_thinking(prediction_text)
 
         # 6. Convert action format
@@ -507,17 +508,41 @@ class MAIAgentAdapter:
         return start, end
 
     def _extract_thinking(self, prediction_text: str) -> str:
-        """Extract thinking content from MAI response.
+        """Extract thinking content from agent response.
+
+        MAI Agent format:
+        <thinking>reasoning process</thinking>
+        <tool_call>...</tool_call>
+
+        GLM Agent format:
+        ```
+        详细的推理过程...
+        ```
+        <answer>action</answer>
 
         Args:
-            prediction_text: Full prediction text from MAI agent.
+            prediction_text: Full prediction text from agent.
 
         Returns:
-            Thinking content (empty string if not found).
+            Thinking content (empty string if not found or truncated).
         """
+        # Try <thinking> tags first (MAI Agent format)
         match = re.search(r"<thinking>(.*?)</thinking>", prediction_text, re.DOTALL)
         if match:
-            return match.group(1).strip()
+            thinking = match.group(1).strip()
+            # Truncate if too long (MAI Agent can produce very long reasoning)
+            if len(thinking) > 500:
+                thinking = thinking[:500] + "..."
+            return thinking
+
+        # Fallback to ``` tags (GLM format)
+        match = re.search(r"```(.*?)```", prediction_text, re.DOTALL)
+        if match:
+            thinking = match.group(1).strip()
+            if len(thinking) > 500:
+                thinking = thinking[:500] + "..."
+            return thinking
+
         return ""
 
     @property
