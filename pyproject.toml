@@ -24,6 +24,7 @@ dependencies = [
     "fastapi>=0.124.0",
     "fastmcp>=2.0.0",
     "httpx[socks]>=0.28.1",
+    "jinja2>=3.1.0",  # Required by MAI agent for prompt templating
     "loguru>=0.7.3",
     "numpy>=1.24.0",  # Required by MAI agent
     "openai>=2.9.0",
