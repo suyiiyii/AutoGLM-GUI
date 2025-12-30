@@ -311,7 +311,9 @@ class UnifiedConfigManager:
                 decision_base_url=config_data.get("decision_base_url"),
                 decision_model_name=config_data.get("decision_model_name"),
                 decision_api_key=config_data.get("decision_api_key"),
-                agent_type=config_data.get("agent_type"),
+                agent_type=config_data.get(
+                    "agent_type", "glm"
+                ),  # 默认 'glm'，兼容旧配置
                 agent_config_params=config_data.get("agent_config_params"),
                 source=ConfigSource.FILE,
             )
