@@ -311,10 +311,33 @@ class MAIAgentAdapter:
         # System button
         if action_type == "system_button":
             button_name = mai_action.get("button", "")
+
+            # Special handling for Enter key
+            # ActionHandler doesn't have an "Enter" handler, so we handle it directly here
+            if button_name == "enter":
+                # Use platform_utils to run ADB keyevent command
+                from AutoGLM_GUI.platform_utils import run_cmd_silently_sync
+
+                adb_prefix = (
+                    ["adb", "-s", self.agent_config.device_id]
+                    if self.agent_config.device_id
+                    else ["adb"]
+                )
+                run_cmd_silently_sync(
+                    adb_prefix + ["shell", "input", "keyevent", "KEYCODE_ENTER"],
+                    timeout=5,
+                )
+                # Return a Wait action to indicate success
+                return {
+                    "_metadata": "do",
+                    "action": "Wait",
+                    "duration": "0.5 seconds",
+                }
+
+            # Other system buttons use standard handlers
             action_map = {
                 "back": "Back",
                 "home": "Home",
-                "enter": "Enter",
             }
             return {
                 "_metadata": "do",
@@ -370,13 +393,16 @@ class MAIAgentAdapter:
             start_coord = mai_action.get("start_coordinate", [0, 0])
             end_coord = mai_action.get("end_coordinate", [0, 0])
 
+            # IMPORTANT: start_coordinate and end_coordinate are NOT normalized by MAI.
+            # They remain in SCALE_FACTOR range [0, 999], unlike the "coordinate" field
+            # which is normalized to [0, 1]. We must use the scale factor conversion.
             start = [
-                self._convert_coordinate(start_coord[0]),
-                self._convert_coordinate(start_coord[1]),
+                self._convert_coordinate_from_scale_factor(start_coord[0]),
+                self._convert_coordinate_from_scale_factor(start_coord[1]),
             ]
             end = [
-                self._convert_coordinate(end_coord[0]),
-                self._convert_coordinate(end_coord[1]),
+                self._convert_coordinate_from_scale_factor(end_coord[0]),
+                self._convert_coordinate_from_scale_factor(end_coord[1]),
             ]
 
             return {
@@ -426,6 +452,26 @@ class MAIAgentAdapter:
             500
         """
         return int(coord * 1000)
+
+    def _convert_coordinate_from_scale_factor(self, coord: float) -> int:
+        """Convert coordinate from MAI SCALE_FACTOR to PhoneAgent scale.
+
+        For drag actions, MAI does NOT normalize start_coordinate/end_coordinate.
+        These coordinates remain in the SCALE_FACTOR range [0, 999].
+        PhoneAgent uses normalized coordinates in [0, 1000] range.
+
+        Args:
+            coord: Coordinate in MAI SCALE_FACTOR [0, 999].
+
+        Returns:
+            Coordinate in PhoneAgent scale [0, 1000].
+
+        Example:
+            >>> _convert_coordinate_from_scale_factor(500)  # Center of screen
+            500
+        """
+        SCALE_FACTOR = 999
+        return int(coord * 1000 / SCALE_FACTOR)
 
     def _calculate_swipe_coordinates(
         self, direction: str, x: int, y: int
