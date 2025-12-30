@@ -667,7 +667,11 @@ function ChatComponent() {
                       type="number"
                       min={1}
                       max={10}
-                      value={tempConfig.agent_config_params?.history_n || 3}
+                      value={
+                        (tempConfig.agent_config_params?.history_n as
+                          | number
+                          | undefined) || 3
+                      }
                       onChange={e => {
                         const value = parseInt(e.target.value) || 3;
                         setTempConfig(prev => ({
