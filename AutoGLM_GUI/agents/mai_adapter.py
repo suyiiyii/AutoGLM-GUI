@@ -6,9 +6,15 @@ to make it compatible with the PhoneAgent interface used in AutoGLM-GUI.
 
 from __future__ import annotations
 
+import base64
 import re
+import sys
 from dataclasses import dataclass
+from io import BytesIO
+from pathlib import Path
 from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple
+
+from PIL import Image
 
 from phone_agent.actions.handler import ActionHandler
 from phone_agent.agent import AgentConfig, StepResult
@@ -17,8 +23,15 @@ from phone_agent.model import ModelConfig
 
 from AutoGLM_GUI.logger import logger
 
+# Add project root to sys.path so mai_agent modules can be imported
+# This is necessary because mai_agent uses top-level imports like "from base import BaseAgent"
+# which only work when the mai_agent directory is in the Python path
+_mai_agent_path = Path(__file__).parent.parent.parent / "mai_agent"
+if str(_mai_agent_path) not in sys.path:
+    sys.path.insert(0, str(_mai_agent_path))
+
 if TYPE_CHECKING:
-    from mai_agent.mai_naivigation_agent import MAIUINaivigationAgent
+    from mai_naivigation_agent import MAIUINaivigationAgent
 
 
 @dataclass
@@ -81,7 +94,9 @@ class MAIAgentAdapter:
         self.mai_config = mai_config
 
         # Import and create MAI agent
-        from mai_agent.mai_naivigation_agent import MAIUINaivigationAgent
+        # Note: We import from mai_naivigation_agent directly (not mai_agent.mai_naivigation_agent)
+        # because we've added the mai_agent directory to sys.path
+        from mai_naivigation_agent import MAIUINaivigationAgent
 
         runtime_conf = {
             "history_n": mai_config.history_n,
@@ -164,7 +179,9 @@ class MAIAgentAdapter:
             if len(self.mai_agent.traj_memory.steps) == 0:
                 self.mai_agent.reset()
 
-        return self._execute_step(is_first=is_first)
+        result = self._execute_step(is_first=is_first)
+        self._step_count += 1
+        return result
 
     def reset(self) -> None:
         """Reset the agent state."""
@@ -185,13 +202,18 @@ class MAIAgentAdapter:
         device_factory = get_device_factory()
         screenshot = device_factory.get_screenshot(self.agent_config.device_id)
 
-        # 2. Build observation dictionary
+        # 2. Convert base64_data to PIL Image
+        # The Screenshot object contains base64_data, not pil_image
+        image_data = base64.b64decode(screenshot.base64_data)
+        pil_image = Image.open(BytesIO(image_data))
+
+        # 3. Build observation dictionary
         obs = {
-            "screenshot": screenshot.pil_image,
+            "screenshot": pil_image,
             "accessibility_tree": None,  # Not supported yet
         }
 
-        # 3. Call MAI agent predict
+        # 4. Call MAI agent predict
         try:
             prediction_text, action_dict = self.mai_agent.predict(
                 instruction=self._current_instruction if is_first else "",
@@ -207,13 +229,13 @@ class MAIAgentAdapter:
                 message=f"Prediction error: {e}",
             )
 
-        # 4. Extract thinking from prediction_text
+        # 5. Extract thinking from prediction_text
         thinking = self._extract_thinking(prediction_text)
 
-        # 5. Convert action format
+        # 6. Convert action format
         converted_action = self._convert_action(action_dict)
 
-        # 6. Execute action
+        # 7. Execute action
         try:
             action_result = self.action_handler.execute(
                 converted_action,
@@ -230,7 +252,7 @@ class MAIAgentAdapter:
                 message=f"Action error: {e}",
             )
 
-        # 7. Check if finished
+        # 8. Check if finished
         finished = (
             converted_action.get("_metadata") == "finish" or action_result.should_finish
         )
@@ -381,19 +403,23 @@ class MAIAgentAdapter:
             "message": f"Unknown action: {action_type}",
         }
 
-    def _convert_coordinate(self, coord: int) -> int:
+    def _convert_coordinate(self, coord: float) -> int:
         """Convert coordinate from MAI scale to PhoneAgent scale.
 
-        MAI: 0-999
-        PhoneAgent: 0-1000
+        MAI agent normalizes coordinates to [0, 1] in parse_action_to_structure_output.
+        PhoneAgent uses normalized coordinates in [0, 1000] range.
 
         Args:
-            coord: Coordinate in MAI scale (0-999).
+            coord: Coordinate in MAI scale [0, 1] (normalized).
 
         Returns:
-            Coordinate in PhoneAgent scale (0-1000).
+            Coordinate in PhoneAgent scale [0, 1000].
+
+        Example:
+            >>> _convert_coordinate(0.5)  # Center of screen
+            500
         """
-        return int(coord / 999 * 1000)
+        return int(coord * 1000)
 
     def _calculate_swipe_coordinates(
         self, direction: str, x: int, y: int
