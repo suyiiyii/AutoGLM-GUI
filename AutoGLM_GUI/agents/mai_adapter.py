@@ -23,12 +23,67 @@ from phone_agent.model import ModelConfig
 
 from AutoGLM_GUI.logger import logger
 
-# Add project root to sys.path so mai_agent modules can be imported
-# This is necessary because mai_agent uses top-level imports like "from base import BaseAgent"
-# which only work when the mai_agent directory is in the Python path
-_mai_agent_path = Path(__file__).parent.parent.parent / "mai_agent"
-if str(_mai_agent_path) not in sys.path:
-    sys.path.insert(0, str(_mai_agent_path))
+
+# Add mai_agent to sys.path for import
+# mai_agent uses top-level imports (e.g., "from base import BaseAgent")
+# which require the mai_agent directory to be in Python path
+def _ensure_mai_agent_importable() -> None:
+    """Ensure mai_agent directory is in sys.path for importing.
+
+    This function handles multiple environments:
+    - Development: mai_agent is in project root
+    - Wheel installation: mai_agent is installed as data file
+    - PyInstaller: mai_agent is in sys._MEIPASS
+    """
+    # Check if already importable
+    try:
+        import mai_naivigation_agent  # noqa: F401
+
+        return
+    except ImportError:
+        pass
+
+    # Try to locate mai_agent directory
+    mai_agent_paths = []
+
+    # 1. PyInstaller environment: check sys._MEIPASS
+    if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+        meipass = Path(sys._MEIPASS)
+        mai_agent_paths.append(meipass / "mai_agent")
+
+    # 2. Wheel installation: check site-packages
+    # Try to get the package location
+    try:
+        import AutoGLM_GUI
+
+        pkg_root = Path(AutoGLM_GUI.__file__).parent.parent
+        mai_agent_paths.append(pkg_root / "mai_agent")
+    except (ImportError, AttributeError):
+        pass
+
+    # 3. Development environment: check project root relative to this file
+    # This file is at: AutoGLM_GUI/agents/mai_adapter.py
+    # Project root is 3 levels up
+    current_file = Path(__file__)
+    project_root = current_file.parent.parent.parent
+    mai_agent_paths.append(project_root / "mai_agent")
+
+    # Add first existing path to sys.path
+    for mai_path in mai_agent_paths:
+        if mai_path.exists() and mai_path.is_dir():
+            mai_path_str = str(mai_path)
+            if mai_path_str not in sys.path:
+                sys.path.insert(0, mai_path_str)
+                logger.debug(f"Added {mai_path_str} to sys.path for mai_agent imports")
+            return
+
+    # If we get here, mai_agent was not found
+    logger.warning(
+        "mai_agent directory not found. MAI Agent functionality may not work."
+    )
+
+
+_ensure_mai_agent_importable()
 
 if TYPE_CHECKING:
     from mai_naivigation_agent import MAIUINaivigationAgent

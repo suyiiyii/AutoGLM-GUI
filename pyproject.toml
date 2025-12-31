@@ -49,10 +49,10 @@ build-backend = "hatchling.build"
 
 [tool.hatch.build.targets.wheel]
 packages = ["AutoGLM_GUI", "phone_agent"]
-force-include = {"scrcpy-server-v3.3.3" = "scrcpy-server-v3.3.3"}
+force-include = {"scrcpy-server-v3.3.3" = "scrcpy-server-v3.3.3", "mai_agent" = "mai_agent"}
 
 [tool.hatch.build.targets.sdist]
-include = ["AutoGLM_GUI/**/*", "phone_agent/**/*", "scrcpy-server-v3.3.3"]
+include = ["AutoGLM_GUI/**/*", "phone_agent/**/*", "mai_agent/**/*", "scrcpy-server-v3.3.3"]
 
 [tool.hatch.build]
 artifacts = ["AutoGLM_GUI/static/**/*"]

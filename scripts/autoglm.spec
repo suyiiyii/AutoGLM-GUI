@@ -41,6 +41,9 @@ a = Analysis(
         # ADB Keyboard APK 及许可证文件（自动安装功能）
         (str(ROOT_DIR / 'AutoGLM_GUI' / 'resources' / 'apks'), 'AutoGLM_GUI/resources/apks'),
 
+        # mai_agent 目录（MAI Agent 第三方代码，不修改）
+        (str(ROOT_DIR / 'mai_agent'), 'mai_agent'),
+
         # Package metadata（运行时需要）
         *copy_metadata('fastmcp'),
         *copy_metadata('lupa'),
@@ -94,7 +97,7 @@ a = Analysis(
         # 排除不需要的模块以减小体积
         'tkinter',
         'matplotlib',
-        'numpy',  # 如果不需要的话
+        # 注意: numpy 被 mai_agent 依赖，不能排除
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
