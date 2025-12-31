@@ -64,6 +64,9 @@ class InitRequest(BaseModel):
     agent_type: str = "glm"  # Agent type to use (e.g., "glm", "mai")
     agent_config_params: dict | None = None  # Agent-specific configuration parameters
 
+    # Hot-reload support
+    force: bool = False  # Force re-initialization even if agent already exists
+
     @field_validator("agent_type")
     @classmethod
     def validate_agent_type(cls, v: str) -> str:

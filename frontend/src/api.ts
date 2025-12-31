@@ -93,6 +93,8 @@ export interface InitRequest {
   // Agent 类型配置
   agent_type?: string;
   agent_config_params?: Record<string, unknown>;
+  // Hot-reload support
+  force?: boolean;
 }
 
 export interface ScreenshotRequest {

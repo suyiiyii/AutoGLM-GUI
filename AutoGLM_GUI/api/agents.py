@@ -164,6 +164,7 @@ def init_agent(request: InitRequest) -> dict:
             agent_config=agent_config,
             agent_specific_config=request.agent_config_params or {},
             takeover_callback=non_blocking_takeover,
+            force=request.force,
         )
 
         logger.info(

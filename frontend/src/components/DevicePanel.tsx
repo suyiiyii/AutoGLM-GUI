@@ -243,7 +243,7 @@ export function DevicePanel({
     };
   }, []);
 
-  const handleInit = useCallback(async () => {
+  const handleInit = useCallback(async (force: boolean = false) => {
     if (!config) return;
 
     try {
@@ -258,6 +258,7 @@ export function DevicePanel({
         },
         agent_type: config.agent_type,
         agent_config_params: config.agent_config_params,
+        force,
       });
       setInitialized(true);
       setError(null);
@@ -406,13 +407,14 @@ export function DevicePanel({
       prevConfig &&
       (prevConfig.base_url !== config.base_url ||
         prevConfig.model_name !== config.model_name ||
-        prevConfig.api_key !== config.api_key)
+        prevConfig.api_key !== config.api_key ||
+        prevConfig.agent_type !== config.agent_type)
     ) {
-      // Config changed, re-initialize
+      // Config changed, force re-initialize to apply new settings
       console.log(
-        `[DevicePanel] Config changed for device ${deviceId}, re-initializing...`
+        `[DevicePanel] Config changed for device ${deviceId}, force re-initializing...`
       );
-      handleInit();
+      handleInit(true);
     }
 
     // Update previous config
