@@ -606,6 +606,14 @@ export function ChatKitPanel({
         return prev;
       });
 
+      // Notify backend to abort (don't wait for response)
+      // Use deviceId as session_id (same as in handleSend)
+      import('../api').then(({ abortLayeredAgentChat }) => {
+        abortLayeredAgentChat(deviceId).catch(e =>
+          console.error('Backend abort failed:', e)
+        );
+      });
+
       // Show feedback
       showFeedback(t.chat?.aborted || '任务已中断', 2000, 'success');
     } catch (error) {
@@ -615,7 +623,7 @@ export function ChatKitPanel({
       setLoading(false);
       setAborting(false);
     }
-  }, [t]);
+  }, [t, deviceId]);
 
   const handleReset = React.useCallback(async () => {
     // Abort any ongoing request

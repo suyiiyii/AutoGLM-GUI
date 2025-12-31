@@ -1018,3 +1018,15 @@ export async function resetDualModel(deviceId: string): Promise<{
   const res = await axios.post('/api/dual/reset', { device_id: deviceId });
   return res.data;
 }
+
+// ==================== Layered Agent API ====================
+
+export async function abortLayeredAgentChat(sessionId: string): Promise<{
+  success: boolean;
+  message: string;
+}> {
+  const res = await axios.post('/api/layered-agent/abort', {
+    session_id: sessionId,
+  });
+  return res.data;
+}
