@@ -348,6 +348,9 @@ class ConfigResponse(BaseModel):
     agent_type: str = "glm"  # Agent type (e.g., "glm", "mai")
     agent_config_params: dict | None = None  # Agent-specific configuration
 
+    # Agent 执行配置
+    default_max_steps: int = 100  # 单次任务最大执行步数
+
     conflicts: list[dict] | None = None  # 配置冲突信息（可选）
 
 
@@ -367,6 +370,21 @@ class ConfigSaveRequest(BaseModel):
     # Agent 类型配置
     agent_type: str = "glm"  # Agent type to use (e.g., "glm", "mai")
     agent_config_params: dict | None = None  # Agent-specific configuration parameters
+
+    # Agent 执行配置
+    default_max_steps: int | None = None  # 单次任务最大执行步数
+
+    @field_validator("default_max_steps")
+    @classmethod
+    def validate_default_max_steps(cls, v: int | None) -> int | None:
+        """验证 default_max_steps 范围."""
+        if v is None:
+            return v
+        if v <= 0:
+            raise ValueError("default_max_steps must be positive")
+        if v > 1000:
+            raise ValueError("default_max_steps must be <= 1000")
+        return v
 
     @field_validator("base_url")
     @classmethod

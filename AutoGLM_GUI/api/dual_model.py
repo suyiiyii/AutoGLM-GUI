@@ -68,6 +68,7 @@ class DualModelStatusResponse(BaseModel):
 def init_dual_model(request: DualModelInitRequest) -> dict:
     """初始化双模型Agent"""
     from AutoGLM_GUI.config import config
+    from AutoGLM_GUI.config_manager import config_manager
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
     device_id = request.device_id
@@ -94,6 +95,15 @@ def init_dual_model(request: DualModelInitRequest) -> dict:
     if not vision_base_url:
         raise HTTPException(status_code=400, detail="视觉模型base_url未配置")
 
+    # 获取配置的默认最大步数
+    effective_config = config_manager.get_effective_config()
+    default_max_steps = effective_config.default_max_steps
+
+    # 如果请求中使用默认值50，则使用配置文件的值
+    max_steps = request.max_steps
+    if max_steps == 50:  # DualModelInitRequest 的默认值
+        max_steps = default_max_steps
+
     # 创建配置
     decision_config = DecisionModelConfig(
         base_url=request.decision_base_url,
@@ -114,7 +124,7 @@ def init_dual_model(request: DualModelInitRequest) -> dict:
             decision_config=decision_config,
             vision_config=vision_config,
             device_id=device_id,
-            max_steps=request.max_steps,
+            max_steps=max_steps,
             thinking_mode=thinking_mode,
         )
 

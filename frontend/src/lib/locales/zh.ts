@@ -49,6 +49,8 @@ export const zh = {
     selectAgentType: '选择 Agent 类型',
     history_n: '历史记录数量',
     history_n_hint: '包含的历史截图数量（1-10）',
+    maxSteps: '最大执行步数',
+    maxStepsHint: '单次任务最大执行步数（1-1000）',
   },
   deviceSidebar: {
     devices: '设备',

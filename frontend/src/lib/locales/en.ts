@@ -49,6 +49,8 @@ export const en = {
     selectAgentType: 'Select Agent Type',
     history_n: 'History Count',
     history_n_hint: 'Number of historical screenshots (1-10)',
+    maxSteps: 'Max Execution Steps',
+    maxStepsHint: 'Maximum steps per task (1-1000)',
   },
   deviceSidebar: {
     devices: 'Devices',

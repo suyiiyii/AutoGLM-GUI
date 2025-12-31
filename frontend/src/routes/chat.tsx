@@ -182,6 +182,7 @@ function ChatComponent() {
     decision_api_key: '',
     agent_type: 'glm',
     agent_config_params: {} as Record<string, unknown>,
+    default_max_steps: 100,
   });
 
   useEffect(() => {
@@ -198,6 +199,7 @@ function ChatComponent() {
           decision_api_key: data.decision_api_key || undefined,
           agent_type: data.agent_type || 'glm',
           agent_config_params: data.agent_config_params || undefined,
+          default_max_steps: data.default_max_steps || 100,
         });
         setTempConfig({
           base_url: data.base_url,
@@ -209,6 +211,7 @@ function ChatComponent() {
           decision_api_key: data.decision_api_key || '',
           agent_type: data.agent_type || 'glm',
           agent_config_params: data.agent_config_params || {},
+          default_max_steps: data.default_max_steps || 100,
         });
 
         if (!data.base_url) {
@@ -354,6 +357,7 @@ function ChatComponent() {
           Object.keys(tempConfig.agent_config_params).length > 0
             ? tempConfig.agent_config_params
             : undefined,
+        default_max_steps: tempConfig.default_max_steps,
       });
 
       setConfig({
@@ -369,6 +373,7 @@ function ChatComponent() {
           Object.keys(tempConfig.agent_config_params).length > 0
             ? tempConfig.agent_config_params
             : undefined,
+        default_max_steps: tempConfig.default_max_steps,
       });
       setShowConfig(false);
       showToast(t.toasts.configSaved, 'success');
@@ -689,6 +694,31 @@ function ChatComponent() {
                     </p>
                   </div>
                 )}
+
+                {/* 最大执行步数配置 */}
+                <div className="space-y-2">
+                  <Label htmlFor="default_max_steps">
+                    {t.chat.maxSteps || '最大执行步数'}
+                  </Label>
+                  <Input
+                    id="default_max_steps"
+                    type="number"
+                    min={1}
+                    max={1000}
+                    value={tempConfig.default_max_steps}
+                    onChange={e => {
+                      const value = parseInt(e.target.value) || 100;
+                      setTempConfig(prev => ({
+                        ...prev,
+                        default_max_steps: Math.min(1000, Math.max(1, value)),
+                      }));
+                    }}
+                    className="w-full"
+                  />
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {t.chat.maxStepsHint || '单次任务最大执行步数（1-1000）'}
+                  </p>
+                </div>
               </>
             ) : (
               <>
@@ -847,6 +877,7 @@ function ChatComponent() {
                     decision_api_key: config.decision_api_key || '',
                     agent_type: config.agent_type || 'glm',
                     agent_config_params: config.agent_config_params || {},
+                    default_max_steps: config.default_max_steps || 100,
                   });
                 }
               }}

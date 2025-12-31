@@ -122,6 +122,10 @@ def init_agent(request: InitRequest) -> dict:
     api_key = req_model_config.api_key or config.api_key
     model_name = req_model_config.model_name or config.model_name
 
+    # 获取配置的默认最大步数
+    effective_config = config_manager.get_effective_config()
+    default_max_steps = effective_config.default_max_steps
+
     if not base_url:
         raise HTTPException(
             status_code=400,
@@ -138,8 +142,13 @@ def init_agent(request: InitRequest) -> dict:
         frequency_penalty=req_model_config.frequency_penalty,
     )
 
+    # 如果请求中未指定 max_steps (使用默认值100)，则使用配置文件的值
+    max_steps = req_agent_config.max_steps
+    if max_steps == 100:  # 默认值，可能需要覆盖
+        max_steps = default_max_steps
+
     agent_config = AgentConfig(
-        max_steps=req_agent_config.max_steps,
+        max_steps=max_steps,
         device_id=device_id,
         lang=req_agent_config.lang,
         system_prompt=req_agent_config.system_prompt,
@@ -483,6 +492,7 @@ def get_config_endpoint() -> ConfigResponse:
         else "",
         agent_type=effective_config.agent_type,
         agent_config_params=effective_config.agent_config_params,
+        default_max_steps=effective_config.default_max_steps,
         conflicts=[
             {
                 "field": c.field,
@@ -521,6 +531,7 @@ def save_config_endpoint(request: ConfigSaveRequest) -> dict:
             decision_api_key=request.decision_api_key,
             agent_type=request.agent_type,
             agent_config_params=request.agent_config_params,
+            default_max_steps=request.default_max_steps,
             merge_mode=True,
         )
 

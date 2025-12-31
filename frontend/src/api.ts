@@ -581,6 +581,8 @@ export interface ConfigResponse {
   // Agent 类型配置
   agent_type?: string;
   agent_config_params?: Record<string, unknown>;
+  // Agent 执行配置
+  default_max_steps: number;
 }
 
 export interface ConfigSaveRequest {
@@ -595,6 +597,8 @@ export interface ConfigSaveRequest {
   // Agent 类型配置
   agent_type?: string;
   agent_config_params?: Record<string, unknown>;
+  // Agent 执行配置
+  default_max_steps?: number;
 }
 
 export async function getConfig(): Promise<ConfigResponse> {

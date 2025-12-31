@@ -62,6 +62,19 @@ class ConfigModel(BaseModel):
     agent_type: str = "glm"  # Agent type (e.g., "glm", "mai")
     agent_config_params: dict | None = None  # Agent-specific configuration
 
+    # Agent 执行配置
+    default_max_steps: int = 100  # 单次任务最大执行步数
+
+    @field_validator("default_max_steps")
+    @classmethod
+    def validate_default_max_steps(cls, v: int) -> int:
+        """验证 default_max_steps 范围."""
+        if v <= 0:
+            raise ValueError("default_max_steps must be positive")
+        if v > 1000:
+            raise ValueError("default_max_steps must be <= 1000")
+        return v
+
     @field_validator("base_url")
     @classmethod
     def validate_base_url(cls, v: str) -> str:
@@ -105,6 +118,8 @@ class ConfigLayer:
     # Agent 类型配置
     agent_type: Optional[str] = None
     agent_config_params: Optional[dict] = None
+    # Agent 执行配置
+    default_max_steps: Optional[int] = None
 
     source: ConfigSource = ConfigSource.DEFAULT
 
@@ -138,6 +153,7 @@ class ConfigLayer:
                 "decision_api_key": self.decision_api_key,
                 "agent_type": self.agent_type,
                 "agent_config_params": self.agent_config_params,
+                "default_max_steps": self.default_max_steps,
             }.items()
             if v is not None
         }
@@ -199,6 +215,7 @@ class UnifiedConfigManager:
             api_key="EMPTY",
             agent_type="glm",
             agent_config_params=None,
+            default_max_steps=100,
             source=ConfigSource.DEFAULT,
         )
 
@@ -315,6 +332,7 @@ class UnifiedConfigManager:
                     "agent_type", "glm"
                 ),  # 默认 'glm'，兼容旧配置
                 agent_config_params=config_data.get("agent_config_params"),
+                default_max_steps=config_data.get("default_max_steps"),
                 source=ConfigSource.FILE,
             )
             self._effective_config = None  # 清除缓存
@@ -348,6 +366,7 @@ class UnifiedConfigManager:
         decision_api_key: Optional[str] = None,
         agent_type: Optional[str] = None,
         agent_config_params: Optional[dict] = None,
+        default_max_steps: Optional[int] = None,
         merge_mode: bool = True,
     ) -> bool:
         """
@@ -363,6 +382,7 @@ class UnifiedConfigManager:
             decision_api_key: 决策模型 API key
             agent_type: Agent 类型（可选，如 "glm", "mai"）
             agent_config_params: Agent 特定配置参数（可选）
+            default_max_steps: 默认最大执行步数（可选）
             merge_mode: 是否合并现有配置（True: 保留未提供的字段）
 
         Returns:
@@ -392,6 +412,8 @@ class UnifiedConfigManager:
                 new_config["agent_type"] = agent_type
             if agent_config_params is not None:
                 new_config["agent_config_params"] = agent_config_params
+            if default_max_steps is not None:
+                new_config["default_max_steps"] = default_max_steps
 
             # 合并模式：保留现有文件中未提供的字段
             if merge_mode and self._config_path.exists():
@@ -408,6 +430,7 @@ class UnifiedConfigManager:
                         "decision_api_key",
                         "agent_type",
                         "agent_config_params",
+                        "default_max_steps",
                     ]
                     for key in preserve_keys:
                         if key not in new_config and key in existing:
@@ -498,6 +521,7 @@ class UnifiedConfigManager:
             "decision_api_key",
             "agent_type",
             "agent_config_params",
+            "default_max_steps",
         ]
 
         for key in config_keys:
@@ -666,6 +690,7 @@ class UnifiedConfigManager:
             "decision_api_key": config.decision_api_key,
             "agent_type": config.agent_type,
             "agent_config_params": config.agent_config_params,
+            "default_max_steps": config.default_max_steps,
         }
 
 
