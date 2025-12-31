@@ -150,10 +150,13 @@ export function DeviceCard({
             >
               {model || id}
             </span>
+          </div>
 
+          {/* Right column: Agent status + Connection type badges */}
+          <div className="flex-shrink-0 flex flex-col items-end gap-1">
             {/* Agent status */}
             {agent && (
-              <div className="flex items-center gap-1.5 mt-1">
+              <>
                 {agent.state === 'busy' && (
                   <Badge
                     variant="secondary"
@@ -190,28 +193,28 @@ export function DeviceCard({
                     {t.deviceCard.agentInitializing}
                   </Badge>
                 )}
-              </div>
+              </>
+            )}
+
+            {/* Connection type badge */}
+            {isUsb && (
+              <Badge
+                variant="outline"
+                className="text-xs border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-400"
+              >
+                USB
+              </Badge>
+            )}
+            {isRemote && (
+              <Badge
+                variant="outline"
+                className="text-xs border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-400"
+              >
+                <WifiOff className="w-2.5 h-2.5 mr-1" />
+                Remote
+              </Badge>
             )}
           </div>
-
-          {/* Connection type badge */}
-          {isUsb && (
-            <Badge
-              variant="outline"
-              className="flex-shrink-0 text-xs border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-400"
-            >
-              USB
-            </Badge>
-          )}
-          {isRemote && (
-            <Badge
-              variant="outline"
-              className="flex-shrink-0 text-xs border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-400"
-            >
-              <WifiOff className="w-2.5 h-2.5 mr-1" />
-              Remote
-            </Badge>
-          )}
 
           {/* Action buttons */}
           <div className="flex items-center gap-1 flex-shrink-0">

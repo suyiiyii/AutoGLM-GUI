@@ -95,10 +95,8 @@ class PhoneAgentManager:
         self._device_locks_lock = threading.Lock()
 
         # Agent metadata (indexed by device_id)
+        # State is stored in AgentMetadata.state (single source of truth)
         self._metadata: dict[str, AgentMetadata] = {}
-
-        # State tracking
-        self._states: dict[str, AgentState] = {}
 
         # Streaming agent state (device_id -> StreamingAgentContext)
         self._streaming_contexts: dict[str, StreamingAgentContext] = {}
@@ -165,8 +163,15 @@ class PhoneAgentManager:
                     f"Device {device_id} is currently processing a request"
                 )
 
-            # Set initializing state
-            self._states[device_id] = AgentState.INITIALIZING
+            # Create metadata first with INITIALIZING state
+            self._metadata[device_id] = AgentMetadata(
+                device_id=device_id,
+                state=AgentState.INITIALIZING,
+                model_config=model_config,
+                agent_config=agent_config,
+                created_at=time.time(),
+                last_used=time.time(),
+            )
 
             try:
                 # Create agent
@@ -180,16 +185,8 @@ class PhoneAgentManager:
                 agents[device_id] = agent
                 agent_configs[device_id] = (model_config, agent_config)
 
-                # Update metadata
-                self._metadata[device_id] = AgentMetadata(
-                    device_id=device_id,
-                    state=AgentState.IDLE,
-                    model_config=model_config,
-                    agent_config=agent_config,
-                    created_at=time.time(),
-                    last_used=time.time(),
-                )
-                self._states[device_id] = AgentState.IDLE
+                # Update state to IDLE on success
+                self._metadata[device_id].state = AgentState.IDLE
 
                 logger.info(f"Agent initialized for device {device_id}")
                 return agent
@@ -198,8 +195,8 @@ class PhoneAgentManager:
                 # Rollback on error
                 agents.pop(device_id, None)
                 agent_configs.pop(device_id, None)
-                self._metadata.pop(device_id, None)
-                self._states[device_id] = AgentState.ERROR
+                self._metadata[device_id].state = AgentState.ERROR
+                self._metadata[device_id].error_message = str(e)
 
                 logger.error(f"Failed to initialize agent for {device_id}: {e}")
                 raise AgentInitializationError(
@@ -467,8 +464,7 @@ class PhoneAgentManager:
             if device_id in self._metadata:
                 self._metadata[device_id].last_used = time.time()
                 self._metadata[device_id].error_message = None
-
-            self._states[device_id] = AgentState.IDLE
+                self._metadata[device_id].state = AgentState.IDLE
 
             logger.info(f"Agent reset for device {device_id}")
 
@@ -495,7 +491,6 @@ class PhoneAgentManager:
 
             # Remove metadata
             self._metadata.pop(device_id, None)
-            self._states.pop(device_id, None)
 
             logger.info(f"Agent destroyed for device {device_id}")
 
@@ -582,8 +577,8 @@ class PhoneAgentManager:
         if acquired:
             # Update state
             with self._manager_lock:
-                self._states[device_id] = AgentState.BUSY
                 if device_id in self._metadata:
+                    self._metadata[device_id].state = AgentState.BUSY
                     self._metadata[device_id].last_used = time.time()
 
             logger.debug(f"Device lock acquired for {device_id}")
@@ -610,7 +605,8 @@ class PhoneAgentManager:
 
             # Update state
             with self._manager_lock:
-                self._states[device_id] = AgentState.IDLE
+                if device_id in self._metadata:
+                    self._metadata[device_id].state = AgentState.IDLE
 
             logger.debug(f"Device lock released for {device_id}")
 
@@ -671,13 +667,14 @@ class PhoneAgentManager:
     def get_state(self, device_id: str) -> AgentState:
         """Get current agent state."""
         with self._manager_lock:
-            return self._states.get(device_id, AgentState.ERROR)
+            metadata = self._metadata.get(device_id)
+            return metadata.state if metadata else AgentState.ERROR
 
     def set_error_state(self, device_id: str, error_message: str) -> None:
         """Mark agent as errored."""
         with self._manager_lock:
-            self._states[device_id] = AgentState.ERROR
             if device_id in self._metadata:
+                self._metadata[device_id].state = AgentState.ERROR
                 self._metadata[device_id].error_message = error_message
 
             logger.error(f"Agent error for {device_id}: {error_message}")
