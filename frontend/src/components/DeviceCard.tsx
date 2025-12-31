@@ -1,15 +1,12 @@
 import React, { useState } from 'react';
-import {
-  Wifi,
-  WifiOff,
-  CheckCircle2,
-  Smartphone,
-  Loader2,
-  XCircle,
-  Clock,
-} from 'lucide-react';
+import { Wifi, WifiOff, Smartphone, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { ConfirmDialog } from './ConfirmDialog';
 import { useTranslation } from '../lib/i18n-context';
 import type { AgentStatus } from '../api';
@@ -48,6 +45,41 @@ export function DeviceCard({
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
 
   const displayName = model || t.deviceCard.unknownDevice;
+
+  // Determine agent status indicator class and tooltip
+  const getAgentStatusClass = () => {
+    if (!isOnline) return 'status-agent-none';
+    if (!agent) return 'status-agent-none';
+    switch (agent.state) {
+      case 'idle':
+        return 'status-agent-idle';
+      case 'busy':
+        return 'status-agent-busy';
+      case 'error':
+        return 'status-agent-error';
+      case 'initializing':
+        return 'status-agent-initializing';
+      default:
+        return 'status-agent-none';
+    }
+  };
+
+  const getCurrentStatusText = () => {
+    if (!isOnline) return t.deviceCard.statusTooltip.none;
+    if (!agent) return t.deviceCard.statusTooltip.none;
+    switch (agent.state) {
+      case 'idle':
+        return t.deviceCard.statusTooltip.idle;
+      case 'busy':
+        return t.deviceCard.statusTooltip.busy;
+      case 'error':
+        return t.deviceCard.statusTooltip.error;
+      case 'initializing':
+        return t.deviceCard.statusTooltip.initializing;
+      default:
+        return t.deviceCard.statusTooltip.none;
+    }
+  };
 
   const handleWifiClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -112,14 +144,30 @@ export function DeviceCard({
         )}
 
         <div className="flex items-center gap-3 pl-2">
-          {/* Status indicator */}
-          <div
-            className={`relative flex-shrink-0 ${
-              isOnline ? 'status-online' : 'status-offline'
-            } w-3 h-3 rounded-full transition-all ${
-              isActive ? 'scale-110' : ''
-            }`}
-          />
+          {/* Agent status indicator with tooltip */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div
+                className={`relative flex-shrink-0 ${getAgentStatusClass()} w-3 h-3 rounded-full transition-all cursor-help ${
+                  isActive ? 'scale-110' : ''
+                }`}
+              />
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8} className="max-w-xs">
+              <div className="space-y-1.5">
+                <p className="font-medium">
+                  {t.deviceCard.statusTooltip.title}
+                  {getCurrentStatusText()}
+                </p>
+                <div className="text-xs opacity-80 space-y-0.5">
+                  <p>{t.deviceCard.statusTooltip.legend.green}</p>
+                  <p>{t.deviceCard.statusTooltip.legend.yellow}</p>
+                  <p>{t.deviceCard.statusTooltip.legend.red}</p>
+                  <p>{t.deviceCard.statusTooltip.legend.gray}</p>
+                </div>
+              </div>
+            </TooltipContent>
+          </Tooltip>
 
           {/* Device icon and info */}
           <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
@@ -152,50 +200,8 @@ export function DeviceCard({
             </span>
           </div>
 
-          {/* Right column: Agent status + Connection type badges */}
+          {/* Right column: Connection type badges */}
           <div className="flex-shrink-0 flex flex-col items-end gap-1">
-            {/* Agent status */}
-            {agent && (
-              <>
-                {agent.state === 'busy' && (
-                  <Badge
-                    variant="secondary"
-                    className="text-xs px-1.5 py-0 bg-[#1d9bf0]/10 text-[#1d9bf0] hover:bg-[#1d9bf0]/20"
-                  >
-                    <Loader2 className="w-2.5 h-2.5 animate-spin mr-1" />
-                    {t.deviceCard.agentBusy}
-                  </Badge>
-                )}
-                {agent.state === 'idle' && (
-                  <Badge
-                    variant="secondary"
-                    className="text-xs px-1.5 py-0 bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"
-                  >
-                    <CheckCircle2 className="w-2.5 h-2.5 mr-1" />
-                    {t.deviceCard.agentIdle}
-                  </Badge>
-                )}
-                {agent.state === 'error' && (
-                  <Badge
-                    variant="secondary"
-                    className="text-xs px-1.5 py-0 bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400"
-                  >
-                    <XCircle className="w-2.5 h-2.5 mr-1" />
-                    {t.deviceCard.agentError}
-                  </Badge>
-                )}
-                {agent.state === 'initializing' && (
-                  <Badge
-                    variant="secondary"
-                    className="text-xs px-1.5 py-0 bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
-                  >
-                    <Clock className="w-2.5 h-2.5 mr-1" />
-                    {t.deviceCard.agentInitializing}
-                  </Badge>
-                )}
-              </>
-            )}
-
             {/* Connection type badge */}
             {isUsb && (
               <Badge

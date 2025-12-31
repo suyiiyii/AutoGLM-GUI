@@ -193,6 +193,27 @@ html {
   @apply bg-muted-foreground;
 }
 
+/* Agent status indicators */
+.status-agent-idle {
+  @apply bg-green-500 shadow-[0_0_8px_rgba(34,197,94,0.6)];
+}
+
+.status-agent-busy {
+  @apply bg-yellow-500 shadow-[0_0_8px_rgba(234,179,8,0.6)];
+}
+
+.status-agent-error {
+  @apply bg-red-500 shadow-[0_0_8px_rgba(239,68,68,0.6)];
+}
+
+.status-agent-initializing {
+  @apply bg-slate-400;
+}
+
+.status-agent-none {
+  @apply bg-slate-400;
+}
+
 /* Input focus states */
 .input-focused {
   @apply ring-2 ring-primary ring-offset-2 dark:ring-offset-background;

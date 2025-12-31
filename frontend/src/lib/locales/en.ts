@@ -189,6 +189,20 @@ export const en = {
     deleteDeviceTitle: 'Delete Device',
     deleteDeviceContent:
       'Are you sure you want to delete this device? This will disconnect the device.',
+    statusTooltip: {
+      title: 'Current status: ',
+      idle: 'Idle',
+      busy: 'Busy',
+      error: 'Error',
+      initializing: 'Initializing',
+      none: 'Not initialized',
+      legend: {
+        green: '🟢 Green - Idle, ready for tasks',
+        yellow: '🟡 Yellow - Busy, executing task',
+        red: '🔴 Red - Error, encountered issue',
+        gray: '⚪ Gray - Not initialized / Initializing',
+      },
+    },
   },
   presetConfigs: {
     bigmodel: {

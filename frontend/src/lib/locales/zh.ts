@@ -181,6 +181,20 @@ export const zh = {
       '确定要断开此设备的所有连接吗？这将断开 USB 和 WiFi 连接。',
     deleteDeviceTitle: '删除设备',
     deleteDeviceContent: '确定要删除此设备吗？这将断开连接。',
+    statusTooltip: {
+      title: '当前状态：',
+      idle: '空闲',
+      busy: '忙碌',
+      error: '错误',
+      initializing: '初始化中',
+      none: '未初始化',
+      legend: {
+        green: '🟢 绿色 - 空闲，可接收任务',
+        yellow: '🟡 黄色 - 忙碌，正在执行任务',
+        red: '🔴 红色 - 错误，遇到问题',
+        gray: '⚪ 灰色 - 未初始化/初始化中',
+      },
+    },
   },
   presetConfigs: {
     bigmodel: {
