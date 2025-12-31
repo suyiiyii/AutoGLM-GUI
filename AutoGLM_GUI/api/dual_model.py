@@ -97,12 +97,7 @@ def init_dual_model(request: DualModelInitRequest) -> dict:
 
     # 获取配置的默认最大步数
     effective_config = config_manager.get_effective_config()
-    default_max_steps = effective_config.default_max_steps
-
-    # 如果请求中使用默认值50，则使用配置文件的值
-    max_steps = request.max_steps
-    if max_steps == 50:  # DualModelInitRequest 的默认值
-        max_steps = default_max_steps
+    max_steps = effective_config.default_max_steps
 
     # 创建配置
     decision_config = DecisionModelConfig(

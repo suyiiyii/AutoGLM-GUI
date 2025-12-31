@@ -124,7 +124,7 @@ def init_agent(request: InitRequest) -> dict:
 
     # 获取配置的默认最大步数
     effective_config = config_manager.get_effective_config()
-    default_max_steps = effective_config.default_max_steps
+    max_steps = effective_config.default_max_steps
 
     if not base_url:
         raise HTTPException(
@@ -141,11 +141,6 @@ def init_agent(request: InitRequest) -> dict:
         top_p=req_model_config.top_p,
         frequency_penalty=req_model_config.frequency_penalty,
     )
-
-    # 如果请求中未指定 max_steps (使用默认值100)，则使用配置文件的值
-    max_steps = req_agent_config.max_steps
-    if max_steps == 100:  # 默认值，可能需要覆盖
-        max_steps = default_max_steps
 
     agent_config = AgentConfig(
         max_steps=max_steps,
