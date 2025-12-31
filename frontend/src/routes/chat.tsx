@@ -173,12 +173,12 @@ function ChatComponent() {
   const [showApiKey, setShowApiKey] = useState(false);
   const [showDecisionApiKey, setShowDecisionApiKey] = useState(false);
   const [tempConfig, setTempConfig] = useState({
-    base_url: '',
-    model_name: '',
+    base_url: VISION_PRESETS[0].config.base_url as string,
+    model_name: VISION_PRESETS[0].config.model_name as string,
     api_key: '',
     dual_model_enabled: false,
-    decision_base_url: '',
-    decision_model_name: '',
+    decision_base_url: DECISION_PRESETS[0].config.base_url as string,
+    decision_model_name: DECISION_PRESETS[0].config.model_name as string,
     decision_api_key: '',
     agent_type: 'glm',
     agent_config_params: {} as Record<string, unknown>,
@@ -199,19 +199,27 @@ function ChatComponent() {
           agent_type: data.agent_type || 'glm',
           agent_config_params: data.agent_config_params || undefined,
         });
+        // 当后端返回空配置时，使用智谱预设作为默认值
+        const useDefault = !data.base_url;
         setTempConfig({
-          base_url: data.base_url,
-          model_name: data.model_name,
+          base_url: useDefault
+            ? VISION_PRESETS[0].config.base_url
+            : data.base_url,
+          model_name: useDefault
+            ? VISION_PRESETS[0].config.model_name
+            : data.model_name,
           api_key: data.api_key || '',
           dual_model_enabled: data.dual_model_enabled || false,
-          decision_base_url: data.decision_base_url || '',
-          decision_model_name: data.decision_model_name || '',
+          decision_base_url:
+            data.decision_base_url || DECISION_PRESETS[0].config.base_url,
+          decision_model_name:
+            data.decision_model_name || DECISION_PRESETS[0].config.model_name,
           decision_api_key: data.decision_api_key || '',
           agent_type: data.agent_type || 'glm',
           agent_config_params: data.agent_config_params || {},
         });
 
-        if (!data.base_url) {
+        if (useDefault) {
           setShowConfig(true);
         }
       } catch (err) {
