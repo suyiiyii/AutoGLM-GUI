@@ -266,6 +266,11 @@ export function DevicePanel({
       } catch (err) {
         const errorMessage = getErrorMessage(err);
         setError(errorMessage);
+        // 如果是强制重新初始化失败，后端已回滚删除了原有 agent，
+        // 需要将 initialized 设为 false 保持状态一致
+        if (force) {
+          setInitialized(false);
+        }
       }
     },
     [deviceId, config]
