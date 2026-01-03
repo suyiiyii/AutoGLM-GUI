@@ -38,3 +38,4 @@ logs/
 # serena
 .serena/
 docs/.docusaurus/
+.vercel
