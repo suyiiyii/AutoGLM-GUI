@@ -40,10 +40,7 @@ nsis:
 
 mac:
   target:
-    - target: dmg
-      arch:
-        - arm64
-        - x64
+    - dmg
   icon: icon.icns
   category: public.app-category.developer-tools
   # 开发阶段不签名，使用 xattr -cr 移除隔离属性
