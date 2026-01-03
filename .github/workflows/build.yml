@@ -229,6 +229,105 @@ jobs:
           path: ${{ steps.artifacts.outputs.blockmap_path }}
           retention-days: 7
 
+  build-macos-x64:
+    name: Build for macOS (x64)
+    runs-on: macos-15-intel  # macOS Intel runner (last Intel runner available)
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install uv
+        run: |
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v3
+        with:
+          version: 10
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'pnpm'
+          cache-dependency-path: 'frontend/pnpm-lock.yaml'
+
+      - name: Verify pnpm installation
+        run: |
+          pnpm --version
+          which pnpm
+
+      - name: Get pnpm store directory
+        run: |
+          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ env.STORE_PATH }}
+          key: ${{ runner.os }}-x64-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-x64-pnpm-store-
+
+      - name: Cache uv
+        uses: actions/cache@v4
+        with:
+          path: ~/.cache/uv
+          key: ${{ runner.os }}-x64-uv-${{ hashFiles('**/uv.lock') }}
+          restore-keys: |
+            ${{ runner.os }}-x64-uv-
+
+      - name: Build application
+        run: uv run python scripts/build_electron.py
+
+      - name: List dist directory
+        run: |
+          ls -lh electron/dist/
+
+      - name: Get macOS artifact paths
+        id: artifacts
+        run: |
+          # Find DMG file (excluding blockmap)
+          dmg_file=$(find electron/dist -type f -name "*.dmg" ! -name "*.blockmap" | head -n 1)
+          if [ -n "$dmg_file" ]; then
+            dmg_name=$(basename "$dmg_file" | tr ' ' '-')
+            echo "dmg_name=$dmg_name" >> $GITHUB_OUTPUT
+            echo "dmg_path=$dmg_file" >> $GITHUB_OUTPUT
+            echo "Found DMG: $dmg_name"
+          fi
+
+          # Find blockmap file
+          blockmap_file=$(find electron/dist -type f -name "*.dmg.blockmap" | head -n 1)
+          if [ -n "$blockmap_file" ]; then
+            blockmap_name=$(basename "$blockmap_file" | tr ' ' '-')
+            echo "blockmap_name=$blockmap_name" >> $GITHUB_OUTPUT
+            echo "blockmap_path=$blockmap_file" >> $GITHUB_OUTPUT
+            echo "Found blockmap: $blockmap_name"
+          fi
+
+      - name: Upload macOS x64 DMG
+        if: steps.artifacts.outputs.dmg_name
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifacts.outputs.dmg_name }}
+          path: ${{ steps.artifacts.outputs.dmg_path }}
+          retention-days: 7
+
+      - name: Upload macOS x64 blockmap
+        if: steps.artifacts.outputs.blockmap_name
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.artifacts.outputs.blockmap_name }}
+          path: ${{ steps.artifacts.outputs.blockmap_path }}
+          retention-days: 7
+
   build-linux:
     name: Build for Linux
     runs-on: ubuntu-22.04  # Use Ubuntu 22.04 for better GLIBC compatibility
@@ -349,17 +448,18 @@ jobs:
   build-summary:
     name: Build Summary
     runs-on: ubuntu-latest
-    needs: [build-windows, build-macos, build-linux]
+    needs: [build-windows, build-macos, build-macos-x64, build-linux]
     if: always()
 
     steps:
       - name: Check build results
         run: |
           echo "Windows build: ${{ needs.build-windows.result }}"
-          echo "macOS build: ${{ needs.build-macos.result }}"
+          echo "macOS ARM64 build: ${{ needs.build-macos.result }}"
+          echo "macOS x64 build: ${{ needs.build-macos-x64.result }}"
           echo "Linux build: ${{ needs.build-linux.result }}"
 
-          if [ "${{ needs.build-windows.result }}" != "success" ] || [ "${{ needs.build-macos.result }}" != "success" ] || [ "${{ needs.build-linux.result }}" != "success" ]; then
+          if [ "${{ needs.build-windows.result }}" != "success" ] || [ "${{ needs.build-macos.result }}" != "success" ] || [ "${{ needs.build-macos-x64.result }}" != "success" ] || [ "${{ needs.build-linux.result }}" != "success" ]; then
             echo "❌ Some builds failed"
             exit 1
           else
