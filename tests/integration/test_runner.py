@@ -72,7 +72,7 @@ class TestRunner:
         # Import here to avoid circular imports
         import phone_agent.device_factory as device_factory_module
         from phone_agent import PhoneAgent
-        from phone_agent.agent import AgentConfig, StepResult
+        from phone_agent.agent import AgentConfig
         from phone_agent.model import ModelConfig
 
         # Create configs if not provided
@@ -116,28 +116,22 @@ class TestRunner:
                 agent_config=agent_config,
             )
 
-            last_result: StepResult | None = agent.step(self.instruction)
-            finished = last_result.finished if last_result else False
+            result_message = agent.run(self.instruction)
 
-            while not finished and agent.step_count < agent_config.max_steps:
-                last_result = agent.step()
-                finished = last_result.finished
-
-            if finished and last_result and last_result.success:
-                # Check if Agent finished properly
-                self.state_machine.handle_finish(last_result.message)
-            elif not finished:
+            # Check if Agent finished properly (not timeout or error)
+            # agent.run() returns "Max steps reached" on timeout
+            if result_message == "Max steps reached":
+                # Agent timed out - this is a test failure
                 self.state_machine.failure_reason = (
-                    f"Agent did not finish before reaching max steps "
-                    f"({agent_config.max_steps}). "
-                    f"Last message: {last_result.message if last_result else 'N/A'}"
+                    f"Agent exceeded max steps ({self.max_steps}) without completing task. "
+                    f"Final state: {self.state_machine.current_state_id}"
                 )
-                print(f"\n[TestRunner] {self.state_machine.failure_reason}")
+                print(
+                    f"\n[TestRunner] Test FAILED: {self.state_machine.failure_reason}"
+                )
             else:
-                self.state_machine.failure_reason = (
-                    last_result.message if last_result else "Agent finished with errors"
-                )
-                print(f"\n[TestRunner] {self.state_machine.failure_reason}")
+                # Agent explicitly called finish() - check if in correct state
+                self.state_machine.handle_finish(result_message)
 
         except TestFailedError as e:
             print(f"\n[TestRunner] Test failed with error: {e}")
