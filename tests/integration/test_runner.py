@@ -69,6 +69,9 @@ class TestRunner:
         if self.state_machine is None:
             self.load_test_case()
 
+        assert self.state_machine is not None
+        assert self.instruction is not None
+
         # Import here to avoid circular imports
         import phone_agent.device_factory as device_factory_module
         from phone_agent import PhoneAgent

@@ -49,8 +49,8 @@ class ActionStep:
     need_generate: bool = False
     direction: Optional[str] = None
 
-    def to_dict(self) -> dict:
-        result = {"action": self.action, "target": self.target}
+    def to_dict(self) -> dict[str, str | bool]:
+        result: dict[str, str | bool] = {"action": self.action, "target": self.target}
         if self.content:
             result["content"] = self.content
         if self.need_generate:
@@ -127,7 +127,7 @@ class DecisionModel:
         self.client = OpenAI(
             base_url=config.base_url,
             api_key=config.api_key,
-        )
+        )  # type: ignore[call-arg]
         self.model_name = config.model_name
         self.conversation_history: list[dict] = []
         self.current_task: str = ""
@@ -159,7 +159,7 @@ class DecisionModel:
         try:
             response = self.client.chat.completions.create(
                 model=self.model_name,
-                messages=messages,
+                messages=messages,  # type: ignore[arg-type]
                 max_tokens=self.config.max_tokens,
                 temperature=self.config.temperature,
                 stream=True,

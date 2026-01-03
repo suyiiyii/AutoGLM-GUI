@@ -15,6 +15,7 @@ from AutoGLM_GUI.logger import logger
 
 from AutoGLM_GUI.schemas import (
     DeviceListResponse,
+    DeviceResponse,
     WiFiConnectRequest,
     WiFiConnectResponse,
     WiFiDisconnectRequest,
@@ -32,26 +33,13 @@ from AutoGLM_GUI.schemas import (
 
 
 def _build_device_response_with_agent(
-    device: ManagedDevice, agent_manager: PhoneAgentManager
-) -> dict:
-    """组合设备信息和 Agent 状态（API 层职责）。
-
-    Args:
-        device: ManagedDevice 实例
-        agent_manager: PhoneAgentManager 实例
-
-    Returns:
-        dict: 完整的设备响应，匹配 DeviceResponse schema
-    """
-    # 获取纯设备信息
+    device: "ManagedDevice", agent_manager: "PhoneAgentManager"
+) -> DeviceResponse:
     response = device.to_dict()
-
-    # 通过 serial 查找 Agent（支持连接切换）
     agent_device_id = agent_manager.find_agent_by_serial(device.serial)
 
     if agent_device_id:
         metadata = agent_manager.get_metadata(agent_device_id)
-
         if metadata:
             response["agent"] = {
                 "state": metadata.state.value,
@@ -65,7 +53,7 @@ def _build_device_response_with_agent(
     else:
         response["agent"] = None
 
-    return response
+    return DeviceResponse.model_validate(response)
 
 
 router = APIRouter()
@@ -97,8 +85,14 @@ def list_devices() -> DeviceListResponse:
 
 @router.post("/api/devices/connect_wifi", response_model=WiFiConnectResponse)
 def connect_wifi(request: WiFiConnectRequest) -> WiFiConnectResponse:
-    """从 USB 启用 TCP/IP 并连接到 WiFi。"""
     from AutoGLM_GUI.device_manager import DeviceManager
+
+    if not request.device_id:
+        return WiFiConnectResponse(
+            success=False,
+            message="device_id is required",
+            error="device_not_found",
+        )
 
     device_manager = DeviceManager.get_instance()
     success, message, wifi_id = device_manager.connect_wifi(

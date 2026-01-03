@@ -37,7 +37,7 @@ def _ensure_mai_agent_importable() -> None:
     """
     # Check if already importable
     try:
-        import mai_naivigation_agent  # noqa: F401
+        import mai_naivigation_agent  # type: ignore[import-not-found]  # noqa: F401
 
         return
     except ImportError:
@@ -48,7 +48,7 @@ def _ensure_mai_agent_importable() -> None:
 
     # 1. PyInstaller environment: check sys._MEIPASS
     if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-        meipass = Path(sys._MEIPASS)
+        meipass = Path(getattr(sys, "_MEIPASS"))
         mai_agent_paths.append(meipass / "mai_agent")
 
     # 2. Wheel installation: check site-packages
@@ -86,7 +86,7 @@ def _ensure_mai_agent_importable() -> None:
 _ensure_mai_agent_importable()
 
 if TYPE_CHECKING:
-    from mai_naivigation_agent import MAIUINaivigationAgent
+    from mai_naivigation_agent import MAIUINaivigationAgent  # type: ignore[import-not-found]
 
 
 @dataclass
@@ -148,10 +148,7 @@ class MAIAgentAdapter:
         self.agent_config = agent_config
         self.mai_config = mai_config
 
-        # Import and create MAI agent
-        # Note: We import from mai_naivigation_agent directly (not mai_agent.mai_naivigation_agent)
-        # because we've added the mai_agent directory to sys.path
-        from mai_naivigation_agent import MAIUINaivigationAgent
+        from mai_naivigation_agent import MAIUINaivigationAgent  # type: ignore[import-not-found]
 
         runtime_conf = {
             "history_n": mai_config.history_n,

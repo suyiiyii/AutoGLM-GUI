@@ -10,19 +10,14 @@ from typing import TYPE_CHECKING, Any, Callable, Dict
 
 from AutoGLM_GUI.logger import logger
 
+from .protocols import BaseAgent
+
 if TYPE_CHECKING:
-    from phone_agent.agent import AgentConfig, StepResult
+    from phone_agent import PhoneAgent
+    from phone_agent.agent import AgentConfig
     from phone_agent.model import ModelConfig
 
-    # Base agent interface (protocol)
-    class BaseAgent:
-        """Common interface that all agents must implement."""
-
-        def run(self, task: str) -> str: ...
-        def step(self, task: str | None) -> StepResult: ...
-        def reset(self) -> None: ...
-        @property
-        def step_count(self) -> int: ...
+    from .mai_adapter import MAIAgentAdapter
 
 
 # Agent registry: agent_type -> (creator_function, config_schema)
@@ -121,8 +116,7 @@ def _create_phone_agent(
     agent_specific_config: dict[str, Any],
     takeover_callback: Callable | None = None,
     confirmation_callback: Callable | None = None,
-) -> "BaseAgent":
-    """Create PhoneAgent instance."""
+) -> "PhoneAgent":
     from phone_agent import PhoneAgent
 
     return PhoneAgent(
@@ -139,8 +133,7 @@ def _create_mai_agent(
     agent_specific_config: dict[str, Any],
     takeover_callback: Callable | None = None,
     confirmation_callback: Callable | None = None,
-) -> "BaseAgent":
-    """Create MAI Agent adapter instance."""
+) -> "MAIAgentAdapter":
     from .mai_adapter import MAIAgentAdapter, MAIAgentConfig
 
     # Build MAI config from dict

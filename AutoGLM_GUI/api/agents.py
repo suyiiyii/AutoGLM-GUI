@@ -234,8 +234,8 @@ def chat_stream(request: ChatRequest):
         )
 
     def event_generator():
-        """SSE 事件生成器."""
         threads: list[threading.Thread] = []
+        stop_event: threading.Event | None = None
 
         try:
             # 创建事件队列用于 agent → SSE 通信
@@ -304,6 +304,9 @@ def chat_stream(request: ChatRequest):
                             raise error_result[0]
 
                         result = step_result[0]
+                        if result is None:
+                            raise RuntimeError("step_result is None after step_done")
+
                         event_data = _create_sse_event(
                             "step",
                             {
@@ -376,8 +379,7 @@ def chat_stream(request: ChatRequest):
             yield "event: error\n"
             yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
         finally:
-            # 通知线程停止
-            if "stop_event" in locals():
+            if stop_event is not None:
                 stop_event.set()
 
             # 等待线程完成（带超时）

@@ -124,9 +124,9 @@ class QRPairingListener(ServiceListener):
 
         self.last_paired_host: Optional[str] = None
 
-    def add_service(self, zc: Zeroconf, service_type: str, name: str) -> None:
+    def add_service(self, zc: Zeroconf, type_: str, name: str) -> None:
         """Handle new service discovery."""
-        info = zc.get_service_info(service_type, name, timeout=3000)
+        info = zc.get_service_info(type_, name, timeout=3000)
         if not info:
             logger.debug(f"[QR Pair] No info for service: {name}")
             return
@@ -144,7 +144,7 @@ class QRPairingListener(ServiceListener):
         key = (host, port)
 
         # Handle pairing service
-        if service_type == PAIR_SERVICE_TYPE and not self.paired:
+        if type_ == PAIR_SERVICE_TYPE and not self.paired:
             if key in self.attempted_pair:
                 logger.debug(f"[QR Pair] Already attempted pairing for {host}:{port}")
                 return
@@ -161,7 +161,7 @@ class QRPairingListener(ServiceListener):
                 logger.info("[QR Pair] Pairing OK. Waiting for connect service...")
 
         # Handle connect service
-        if service_type == CONNECT_SERVICE_TYPE and self.paired and not self.connected:
+        if type_ == CONNECT_SERVICE_TYPE and self.paired and not self.connected:
             # Prefer same host as paired if we have it
             if self.last_paired_host and host != self.last_paired_host:
                 logger.debug(
@@ -186,13 +186,13 @@ class QRPairingListener(ServiceListener):
                 self.session.device_id = f"{host}:{port}"
                 logger.info(f"[QR Pair] Connected! Device ID: {self.session.device_id}")
 
-    def update_service(self, zc: Zeroconf, service_type: str, name: str) -> None:
+    def update_service(self, zc: Zeroconf, type_: str, name: str) -> None:
         """Handle service updates (treat as adds)."""
-        self.add_service(zc, service_type, name)
+        self.add_service(zc, type_, name)
 
-    def remove_service(self, _zc: Zeroconf, _service_type: str, _name: str) -> None:
+    def remove_service(self, zc: Zeroconf, type_: str, name: str) -> None:
         """Handle service removal (no action needed)."""
-        pass
+        _ = (zc, type_, name)  # Mark as intentionally unused
 
 
 class QRPairingManager:

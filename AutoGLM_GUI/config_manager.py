@@ -393,7 +393,7 @@ class UnifiedConfigManager:
             self._config_path.parent.mkdir(parents=True, exist_ok=True)
 
             # 准备新配置
-            new_config = {
+            new_config: dict[str, str | bool | int | dict | None] = {
                 "base_url": base_url,
                 "model_name": model_name,
             }

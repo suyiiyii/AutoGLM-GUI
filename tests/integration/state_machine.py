@@ -57,10 +57,12 @@ class TestState:
                 data = f.read()
                 self._screenshot_base64 = base64.b64encode(data).decode("utf-8")
 
-            # Get image dimensions
             img = Image.open(self.screenshot_path)
             self._screenshot_width, self._screenshot_height = img.size
 
+        assert (
+            self._screenshot_width is not None and self._screenshot_height is not None
+        )
         return self._screenshot_base64, self._screenshot_width, self._screenshot_height
 
 

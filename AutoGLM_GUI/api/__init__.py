@@ -29,10 +29,9 @@ from . import (
 
 
 def _get_static_dir() -> Path | None:
-    """Locate packaged static assets."""
-    # Priority 1: PyInstaller bundled path (for packaged executable)
-    if getattr(sys, "_MEIPASS", None):
-        bundled_static = Path(sys._MEIPASS) / "AutoGLM_GUI" / "static"
+    meipass = getattr(sys, "_MEIPASS", None)
+    if meipass:
+        bundled_static = Path(meipass) / "AutoGLM_GUI" / "static"
         if bundled_static.exists():
             return bundled_static
 

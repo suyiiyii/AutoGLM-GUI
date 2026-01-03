@@ -1,8 +1,10 @@
 """MCP (Model Context Protocol) tools for AutoGLM-GUI."""
 
-from typing import Any, Dict, List
+from typing import Any
 
 from fastmcp import FastMCP
+
+from AutoGLM_GUI.schemas import DeviceResponse
 
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.prompts import MCP_SYSTEM_PROMPT_ZH
@@ -15,7 +17,7 @@ MCP_MAX_STEPS = 5
 
 
 @mcp.tool()
-def chat(device_id: str, message: str) -> Dict[str, Any]:
+def chat(device_id: str, message: str) -> dict[str, Any]:
     """
     Send a task to the AutoGLM Phone Agent for execution.
 
@@ -84,7 +86,7 @@ def chat(device_id: str, message: str) -> Dict[str, Any]:
 
 
 @mcp.tool()
-def list_devices() -> List[Dict[str, Any]]:
+def list_devices() -> list[DeviceResponse]:
     """
     List all connected ADB devices and their agent status.
 

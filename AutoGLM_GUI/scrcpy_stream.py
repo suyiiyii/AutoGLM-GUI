@@ -69,7 +69,7 @@ class ScrcpyStreamer:
         self.idr_interval_s = idr_interval_s
         self.stream_options = stream_options or ScrcpyVideoStreamOptions()
 
-        self.scrcpy_process: Any | None = None
+        self.scrcpy_process: Any = None
         self.tcp_socket: socket.socket | None = None
         self.forward_cleanup_needed = False
 
@@ -83,8 +83,9 @@ class ScrcpyStreamer:
     def _find_scrcpy_server(self) -> str:
         """Find scrcpy-server binary path."""
         # Priority 1: PyInstaller bundled path (for packaged executable)
-        if getattr(sys, "_MEIPASS", None):
-            bundled_server = Path(sys._MEIPASS) / "scrcpy-server-v3.3.3"
+        meipass = getattr(sys, "_MEIPASS", None)
+        if meipass:
+            bundled_server = Path(meipass) / "scrcpy-server-v3.3.3"
             if bundled_server.exists():
                 logger.info(f"Using bundled scrcpy-server: {bundled_server}")
                 return str(bundled_server)
@@ -262,14 +263,16 @@ class ScrcpyStreamer:
 
             # Check if process is still running
             error_msg = None
-            if is_windows():
-                if self.scrcpy_process.poll() is not None:
-                    stdout, stderr = self.scrcpy_process.communicate()
-                    error_msg = stderr.decode() if stderr else stdout.decode()
-            else:
-                if self.scrcpy_process.returncode is not None:
-                    stdout, stderr = await self.scrcpy_process.communicate()
-                    error_msg = stderr.decode() if stderr else stdout.decode()
+            proc = self.scrcpy_process
+            if proc is not None:
+                if is_windows():
+                    if proc.poll() is not None:  # type: ignore[union-attr]
+                        stdout, stderr = proc.communicate()  # type: ignore[union-attr]
+                        error_msg = stderr.decode() if stderr else stdout.decode()
+                else:
+                    if proc.returncode is not None:  # type: ignore[union-attr]
+                        stdout, stderr = await proc.communicate()  # type: ignore[union-attr]
+                        error_msg = stderr.decode() if stderr else stdout.decode()
 
             if error_msg is not None:
                 if "Address already in use" in error_msg:

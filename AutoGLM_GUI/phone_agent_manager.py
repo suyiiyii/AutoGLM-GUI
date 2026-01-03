@@ -9,6 +9,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import TYPE_CHECKING, Any, Callable, Optional
 
+from AutoGLM_GUI.agents.protocols import BaseAgent
 from AutoGLM_GUI.exceptions import (
     AgentInitializationError,
     AgentNotInitializedError,
@@ -17,19 +18,8 @@ from AutoGLM_GUI.exceptions import (
 from AutoGLM_GUI.logger import logger
 
 if TYPE_CHECKING:
-    from phone_agent import PhoneAgent
     from phone_agent.agent import AgentConfig
     from phone_agent.model import ModelConfig
-
-    # Base agent interface (protocol)
-    class BaseAgent:
-        """Common interface that all agents must implement."""
-
-        def run(self, task: str) -> str: ...
-        def step(self, task: str | None) -> Any: ...  # StepResult
-        def reset(self) -> None: ...
-        @property
-        def step_count(self) -> int: ...
 
 
 class AgentState(str, Enum):
@@ -56,10 +46,8 @@ class AgentMetadata:
 
 @dataclass
 class StreamingAgentContext:
-    """Streaming agent 会话上下文."""
-
-    streaming_agent: "PhoneAgent"
-    original_agent: "PhoneAgent"
+    streaming_agent: BaseAgent
+    original_agent: BaseAgent
     stop_event: threading.Event
 
 
@@ -116,8 +104,8 @@ class PhoneAgentManager:
         self._abort_events: dict[str, threading.Event] = {}
 
         # Agent storage (transition from global state to instance state)
-        self._agents: dict[str, "PhoneAgent"] = {}
-        self._agent_configs: dict[str, tuple[ModelConfig, AgentConfig]] = {}
+        self._agents: dict[str, BaseAgent] = {}
+        self._agent_configs: dict[str, tuple["ModelConfig", "AgentConfig"]] = {}
 
     @classmethod
     def get_instance(cls) -> PhoneAgentManager:
@@ -134,11 +122,11 @@ class PhoneAgentManager:
     def initialize_agent(
         self,
         device_id: str,
-        model_config: ModelConfig,
-        agent_config: AgentConfig,
+        model_config: "ModelConfig",
+        agent_config: "AgentConfig",
         takeover_callback: Optional[Callable] = None,
         force: bool = False,
-    ) -> PhoneAgent:
+    ) -> BaseAgent:
         """
         Initialize PhoneAgent for a device (thread-safe, idempotent).
 
@@ -336,8 +324,8 @@ class PhoneAgentManager:
 
         model_config, agent_config = self.get_config(device_id)
 
+        streaming_agent: BaseAgent
         if isinstance(original_agent, MAIAgentAdapter):
-            # 创建 MAI Agent streaming 实例
             streaming_agent = MAIAgentAdapter(
                 model_config=model_config,
                 agent_config=agent_config,
@@ -346,31 +334,29 @@ class PhoneAgentManager:
                 confirmation_callback=original_agent.action_handler.confirmation_callback,
                 on_thinking_chunk=on_thinking_chunk,
             )
-            # 复制轨迹状态
             streaming_agent.mai_agent.traj_memory = original_agent.mai_agent.traj_memory
             streaming_agent._step_count = original_agent._step_count
             streaming_agent._current_instruction = original_agent._current_instruction
-        else:
-            # 创建 PhoneAgent streaming 实例
+        elif isinstance(original_agent, PhoneAgent):
             from AutoGLM_GUI.state import non_blocking_takeover
 
-            streaming_agent = PhoneAgent(
+            phone_streaming_agent = PhoneAgent(
                 model_config=model_config,
                 agent_config=agent_config,
                 takeover_callback=non_blocking_takeover,
             )
 
-            # Monkey-patch model_client.request 以支持流式回调
-            original_request = streaming_agent.model_client.request
+            original_request = phone_streaming_agent.model_client.request
 
-            def patched_request(messages, **kwargs):
-                return original_request(messages, on_thinking_chunk=on_thinking_chunk)
+            def patched_request(messages, **kwargs):  # type: ignore[no-untyped-def]
+                return original_request(messages, on_thinking_chunk=on_thinking_chunk)  # type: ignore[call-arg]
 
-            streaming_agent.model_client.request = patched_request
-
-            # 复制上下文
-            streaming_agent._context = original_agent._context.copy()
-            streaming_agent._step_count = original_agent._step_count
+            phone_streaming_agent.model_client.request = patched_request  # type: ignore[method-assign]
+            phone_streaming_agent._context = original_agent._context.copy()
+            phone_streaming_agent._step_count = original_agent._step_count
+            streaming_agent = phone_streaming_agent
+        else:
+            raise ValueError(f"Unknown agent type: {type(original_agent)}")
 
         return streaming_agent
 
@@ -451,14 +437,15 @@ class PhoneAgentManager:
             yield streaming_agent, stop_event
 
         finally:
-            # 同步状态回原始 agent
             if streaming_agent and not stop_event.is_set():
                 original_agent = self.get_agent_safe(device_id)
                 if original_agent:
                     from AutoGLM_GUI.agents.mai_adapter import MAIAgentAdapter
+                    from phone_agent import PhoneAgent
 
-                    if isinstance(original_agent, MAIAgentAdapter):
-                        # 同步 MAI Agent 状态
+                    if isinstance(original_agent, MAIAgentAdapter) and isinstance(
+                        streaming_agent, MAIAgentAdapter
+                    ):
                         original_agent.mai_agent.traj_memory = (
                             streaming_agent.mai_agent.traj_memory
                         )
@@ -466,8 +453,9 @@ class PhoneAgentManager:
                         original_agent._current_instruction = (
                             streaming_agent._current_instruction
                         )
-                    else:
-                        # 同步 PhoneAgent 状态
+                    elif isinstance(original_agent, PhoneAgent) and isinstance(
+                        streaming_agent, PhoneAgent
+                    ):
                         original_agent._context = streaming_agent._context
                         original_agent._step_count = streaming_agent._step_count
 
@@ -524,37 +512,13 @@ class PhoneAgentManager:
         self.initialize_agent(device_id, model_config, agent_config)
         logger.info(f"Agent auto-initialized for device {device_id}")
 
-    def get_agent(self, device_id: str) -> PhoneAgent:
-        """
-        Get initialized agent for a device.
-
-        Auto-initializes the agent using global config if not already initialized.
-
-        Args:
-            device_id: Device identifier
-
-        Returns:
-            PhoneAgent: Agent instance
-
-        Raises:
-            AgentInitializationError: If agent not initialized and auto-init fails
-        """
+    def get_agent(self, device_id: str) -> BaseAgent:
         with self._manager_lock:
             if device_id not in self._agents:
-                # 自动初始化：使用全局配置
                 self._auto_initialize_agent(device_id)
             return self._agents[device_id]
 
-    def get_agent_safe(self, device_id: str) -> Optional[PhoneAgent]:
-        """
-        Get initialized agent for a device (safe version, no exception).
-
-        Args:
-            device_id: Device identifier
-
-        Returns:
-            PhoneAgent or None: Agent instance or None if not initialized
-        """
+    def get_agent_safe(self, device_id: str) -> Optional[BaseAgent]:
         with self._manager_lock:
             return self._agents.get(device_id)
 

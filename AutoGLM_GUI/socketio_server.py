@@ -87,7 +87,7 @@ async def disconnect(sid: str) -> None:
     await _stop_stream_for_sid(sid)
 
 
-@sio.on("connect-device")
+@sio.on("connect-device")  # type: ignore[misc]
 async def connect_device(sid: str, data: dict | None) -> None:
     payload = data or {}
     device_id = payload.get("device_id") or payload.get("deviceId")

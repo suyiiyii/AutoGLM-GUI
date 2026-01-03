@@ -421,32 +421,33 @@ async def layered_agent_chat(request: LayeredAgentRequest):
                                     except Exception:
                                         tool_args = {"raw": str(args_str)}
                                 else:
-                                    # Chat Completions API format: raw_item.function.name
-                                    if hasattr(raw, "function") and raw.function:
-                                        func = raw.function
-                                        if hasattr(func, "name"):
-                                            tool_name = func.name
-                                        if hasattr(func, "arguments"):
+                                    func = getattr(raw, "function", None)
+                                    if func:
+                                        tool_name = getattr(func, "name", "unknown")
+                                        args_val = getattr(func, "arguments", None)
+                                        if args_val:
                                             try:
                                                 tool_args = (
-                                                    json.loads(func.arguments)
-                                                    if isinstance(func.arguments, str)
-                                                    else func.arguments
+                                                    json.loads(args_val)
+                                                    if isinstance(args_val, str)
+                                                    else args_val
                                                 )
                                             except Exception:
-                                                tool_args = {"raw": str(func.arguments)}
-                                    # Responses API format: raw_item.name directly
-                                    elif hasattr(raw, "name") and raw.name:
-                                        tool_name = raw.name
-                                        if hasattr(raw, "arguments"):
-                                            try:
-                                                tool_args = (
-                                                    json.loads(raw.arguments)
-                                                    if isinstance(raw.arguments, str)
-                                                    else raw.arguments
-                                                )
-                                            except Exception:
-                                                tool_args = {"raw": str(raw.arguments)}
+                                                tool_args = {"raw": str(args_val)}
+                                    else:
+                                        name_val = getattr(raw, "name", None)
+                                        if name_val:
+                                            tool_name = name_val
+                                            args_val = getattr(raw, "arguments", None)
+                                            if args_val:
+                                                try:
+                                                    tool_args = (
+                                                        json.loads(args_val)
+                                                        if isinstance(args_val, str)
+                                                        else args_val
+                                                    )
+                                                except Exception:
+                                                    tool_args = {"raw": str(args_val)}
 
                             # Fallback to direct item attributes
                             if tool_name == "unknown":
@@ -509,14 +510,11 @@ async def layered_agent_chat(request: LayeredAgentRequest):
                                 else "unknown"
                             )
 
-                            # Try to get tool name from raw_item if available
-                            if (
-                                tool_name == "unknown"
-                                and hasattr(item, "raw_item")
-                                and item.raw_item
-                            ):
-                                if hasattr(item.raw_item, "name"):
-                                    tool_name = item.raw_item.name
+                            raw_item = getattr(item, "raw_item", None)
+                            if tool_name == "unknown" and raw_item:
+                                name_val = getattr(raw_item, "name", None)
+                                if name_val:
+                                    tool_name = name_val
 
                             logger.info(
                                 f"[LayeredAgent] Tool result for {tool_name}: {str(output)[:100] if output else 'empty'}..."
@@ -531,16 +529,15 @@ async def layered_agent_chat(request: LayeredAgentRequest):
                             current_tool_call = None
 
                         elif item_type == "message_output_item":
-                            # Final message
                             content = ""
-                            if hasattr(item, "raw_item") and item.raw_item:
-                                if (
-                                    hasattr(item.raw_item, "content")
-                                    and item.raw_item.content
-                                ):
-                                    for c in item.raw_item.content:
-                                        if hasattr(c, "text"):
-                                            content += c.text
+                            raw_item = getattr(item, "raw_item", None)
+                            if raw_item:
+                                raw_content = getattr(raw_item, "content", None)
+                                if raw_content:
+                                    for c in raw_content:
+                                        text_val = getattr(c, "text", None)
+                                        if text_val:
+                                            content += text_val
 
                             if content:
                                 event_data = {

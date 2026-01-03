@@ -8,8 +8,8 @@ from phone_agent.actions.handler import ActionHandler
 from phone_agent.model import ModelConfig
 
 from AutoGLM_GUI.logger import logger
-from AutoGLM_GUI.mai_ui.mai_navigation_agent import MAIUINaivigationAgent
-from AutoGLM_GUI.mai_ui_adapter.action_adapter import MAIUIActionAdapter
+from AutoGLM_GUI.mai_ui.mai_navigation_agent import MAIUINaivigationAgent  # type: ignore[import-not-found]
+from AutoGLM_GUI.mai_ui_adapter.action_adapter import MAIUIActionAdapter  # type: ignore[import-not-found]
 
 
 @dataclass
