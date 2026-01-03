@@ -156,7 +156,7 @@ jobs:
   # Build Electron application for macOS (Intel x64)
   build-electron-macos-x64:
     name: Build Electron (macOS x64)
-    runs-on: macos-13  # macOS Intel runner
+    runs-on: macos-15-intel  # macOS Intel runner
     needs: release
     permissions:
       contents: write
