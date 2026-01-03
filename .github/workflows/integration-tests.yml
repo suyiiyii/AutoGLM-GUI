@@ -60,7 +60,7 @@ jobs:
         run: |
           echo "## Integration Test Results" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          if [ $? -eq 0 ]; then
+          if [ "${{ job.status }}" = "success" ]; then
             echo "✅ All integration tests passed!" >> $GITHUB_STEP_SUMMARY
           else
             echo "❌ Some tests failed. Check the logs above." >> $GITHUB_STEP_SUMMARY
