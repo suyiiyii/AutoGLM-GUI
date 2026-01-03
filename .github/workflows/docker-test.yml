@@ -1,0 +1,100 @@
+name: Docker Build & Test
+
+on:
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - '.dockerignore'
+      - 'AutoGLM_GUI/**'
+      - 'phone_agent/**'
+      - 'mai_agent/**'
+      - 'frontend/**'
+      - 'pyproject.toml'
+      - '.github/workflows/docker-test.yml'
+  push:
+    branches: [main, dev]
+    paths:
+      - 'Dockerfile'
+      - 'docker-compose.yml'
+      - '.dockerignore'
+  workflow_dispatch:
+
+jobs:
+  docker-test:
+    name: Build and Test Docker Image
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: false
+          load: true
+          tags: autoglm-gui:test
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Start container
+        run: |
+          docker run -d \
+            --name autoglm-test \
+            -p 8000:8000 \
+            -e AUTOGLM_BASE_URL=http://localhost:8080/v1 \
+            -e AUTOGLM_MODEL_NAME=test-model \
+            -e AUTOGLM_API_KEY=test-key \
+            autoglm-gui:test
+
+      - name: Wait for container to be ready
+        run: |
+          echo "Waiting for container to start..."
+          for i in {1..30}; do
+            if curl -s http://localhost:8000/api/health > /dev/null 2>&1; then
+              echo "Container is ready!"
+              exit 0
+            fi
+            echo "Attempt $i/30 - waiting..."
+            sleep 2
+          done
+          echo "Container failed to become ready"
+          docker logs autoglm-test
+          exit 1
+
+      - name: Test health endpoint
+        run: |
+          response=$(curl -s http://localhost:8000/api/health)
+          echo "Health check response: $response"
+          
+          status=$(echo "$response" | jq -r '.status')
+          if [ "$status" != "healthy" ]; then
+            echo "Health check failed: expected 'healthy', got '$status'"
+            exit 1
+          fi
+          
+          echo "Health check passed!"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          docker stop autoglm-test || true
+          docker rm autoglm-test || true
+
+      - name: Generate test summary
+        if: always()
+        run: |
+          echo "## Docker Build & Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ Docker image built and health check passed!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Docker build or health check failed." >> $GITHUB_STEP_SUMMARY
+          fi
