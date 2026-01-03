@@ -79,7 +79,10 @@ class TestRunner:
         if model_config is None:
             from AutoGLM_GUI.config_manager import config_manager
 
-            config_manager.load_file_config()
+            # Load config from both file and environment variables
+            # Priority: CLI > ENV > File > Default
+            config_manager.load_env_config()  # Load from environment variables (GitHub Secrets)
+            config_manager.load_file_config()  # Load from config file
             effective_config = config_manager.get_effective_config()
 
             model_config = ModelConfig(
