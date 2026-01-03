@@ -32,12 +32,36 @@ const sidebars: SidebarsConfig = {
         'features/chat-tasks',
         'features/workflows',
         'features/manual-control',
+        'features/logging-auditing',
+        'features/permissions-roles',
+        'features/integrations-models',
+        'features/import-export',
+        'features/device-management',
       ],
     },
     {
       type: 'category',
-      label: '部署与配置',
-      items: ['deployment'],
+      label: '进阶教程',
+      items: [
+        'tutorials/workflow-from-zero',
+        'tutorials/automation-scenarios',
+        'tutorials/advanced-troubleshooting',
+      ],
+    },
+    {
+      type: 'category',
+      label: '部署与运维',
+      items: [
+        'deployment',
+        'deployment/vercel',
+        'deployment/gh-pages',
+        'deployment/docker',
+      ],
+    },
+    {
+      type: 'category',
+      label: '参考资料',
+      items: ['architecture', 'configuration', 'shortcuts', 'changelog'],
     },
   ],
 };
