@@ -1,0 +1,31 @@
+services:
+  autoglm-gui:
+    build: .
+    image: autoglm-gui:latest
+    container_name: autoglm-gui
+
+    # Linux: use host network for mDNS/USB support
+    # macOS/Windows: use port mapping instead (comment out network_mode, uncomment ports)
+    network_mode: host
+
+    # Alternative: bridge network with port mapping
+    # ports:
+    #   - "8000:8000"
+
+    environment:
+      - AUTOGLM_BASE_URL=${AUTOGLM_BASE_URL:-}
+      - AUTOGLM_MODEL_NAME=${AUTOGLM_MODEL_NAME:-autoglm-phone}
+      - AUTOGLM_API_KEY=${AUTOGLM_API_KEY:-}
+      - AUTOGLM_CORS_ORIGINS=${AUTOGLM_CORS_ORIGINS:-*}
+
+    volumes:
+      - autoglm_config:/root/.config/autoglm
+      - autoglm_logs:/app/logs
+      # USB device passthrough (Linux only, optional)
+      # - /dev/bus/usb:/dev/bus/usb
+
+    restart: unless-stopped
+
+volumes:
+  autoglm_config:
+  autoglm_logs:
