@@ -39,7 +39,7 @@ const config: Config = {
           sidebarPath: './sidebars.ts',
           // Please change this to your repo.
           // Remove this to remove the "edit this page" links.
-          editUrl: 'https://github.com/AutoGLM/AutoGLM-GUI-2/tree/main/docs/',
+          editUrl: 'https://github.com/suyiiyii/AutoGLM-GUI/tree/main/docs/',
         },
         blog: false,
         theme: {
@@ -69,7 +69,7 @@ const config: Config = {
           label: '指南',
         },
         {
-          href: 'https://github.com/AutoGLM/AutoGLM-GUI-2',
+          href: 'https://github.com/suyiiyii/AutoGLM-GUI',
           label: 'GitHub',
           position: 'right',
         },
@@ -91,16 +91,12 @@ const config: Config = {
           title: 'Community',
           items: [
             {
-              label: 'Stack Overflow',
-              href: 'https://stackoverflow.com/questions/tagged/docusaurus',
+              label: 'QQ 交流群',
+              href: 'https://qm.qq.com/q/J5eAs9tn0W',
             },
             {
-              label: 'Discord',
-              href: 'https://discordapp.com/invite/docusaurus',
-            },
-            {
-              label: 'X',
-              href: 'https://x.com/docusaurus',
+              label: 'GitHub Issues',
+              href: 'https://github.com/suyiiyii/AutoGLM-GUI/issues',
             },
           ],
         },
