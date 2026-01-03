@@ -1,13 +1,14 @@
 """Test runner for Agent state machine integration tests.
 
 This module provides the TestRunner that orchestrates the test execution,
-injecting the mock device factory and running the Agent through test scenarios.
+injecting the mock device via DeviceProtocol and running the Agent through test scenarios.
 """
 
 from pathlib import Path
 from typing import Any
 
-from tests.integration.mock_device import MockDeviceFactory
+from AutoGLM_GUI.device_adapter import DeviceProtocolContext
+from AutoGLM_GUI.devices.mock_device import MockDevice
 from tests.integration.state_machine import (
     StateMachine,
     TestFailedError,
@@ -21,8 +22,8 @@ class TestRunner:
 
     The runner:
     1. Loads test case from YAML
-    2. Creates mock device factory
-    3. Patches the global device factory
+    2. Creates MockDevice (DeviceProtocol implementation)
+    3. Injects via DeviceProtocolAdapter
     4. Runs the Agent with the test instruction
     5. Verifies the final state
     """
@@ -38,14 +39,14 @@ class TestRunner:
         self.state_machine: StateMachine | None = None
         self.instruction: str | None = None
         self.max_steps: int = 10
-        self.mock_factory: MockDeviceFactory | None = None
+        self.mock_device: MockDevice | None = None
 
     def load_test_case(self) -> None:
         """Load the test case from YAML file."""
         self.state_machine, self.instruction, self.max_steps = load_test_case(
             self.test_case_path
         )
-        self.mock_factory = MockDeviceFactory(self.state_machine)
+        self.mock_device = MockDevice("mock_device", self.state_machine)
         print(f"[TestRunner] Loaded test case: {self.test_case_path.name}")
         print(f"[TestRunner] Instruction: {self.instruction}")
         print(f"[TestRunner] Max steps: {self.max_steps}")
@@ -70,10 +71,13 @@ class TestRunner:
             self.load_test_case()
 
         assert self.state_machine is not None
+        assert self.mock_device is not None
         assert self.instruction is not None
 
+        state_machine = self.state_machine
+        mock_device = self.mock_device
+        instruction = self.instruction
         # Import here to avoid circular imports
-        import phone_agent.device_factory as device_factory_module
         from phone_agent import PhoneAgent
         from phone_agent.agent import AgentConfig
         from phone_agent.model import ModelConfig
@@ -104,54 +108,43 @@ class TestRunner:
             # Override max_steps from test case
             agent_config.max_steps = self.max_steps
 
-        # Patch the global device factory
-        original_factory = device_factory_module._device_factory
-        device_factory_module._device_factory = self.mock_factory
-
         print("\n" + "=" * 60)
         print("[TestRunner] Starting test execution...")
         print("=" * 60 + "\n")
 
-        try:
-            # Create and run agent
-            agent = PhoneAgent(
-                model_config=model_config,
-                agent_config=agent_config,
-            )
-
-            result_message = agent.run(self.instruction)
-
-            # Check if Agent finished properly (not timeout or error)
-            # agent.run() returns "Max steps reached" on timeout
-            if result_message == "Max steps reached":
-                # Agent timed out - this is a test failure
-                self.state_machine.failure_reason = (
-                    f"Agent exceeded max steps ({self.max_steps}) without completing task. "
-                    f"Final state: {self.state_machine.current_state_id}"
+        with DeviceProtocolContext(
+            get_device=lambda _: mock_device,
+            default_device_id="mock_device",
+        ):
+            try:
+                # Create and run agent
+                agent = PhoneAgent(
+                    model_config=model_config,
+                    agent_config=agent_config,
                 )
-                print(
-                    f"\n[TestRunner] Test FAILED: {self.state_machine.failure_reason}"
-                )
-            else:
-                # Agent explicitly called finish() - check if in correct state
-                self.state_machine.handle_finish(result_message)
 
-        except TestFailedError as e:
-            print(f"\n[TestRunner] Test failed with error: {e}")
+                result_message = agent.run(instruction)
 
-        except Exception as e:
-            self.state_machine.failure_reason = f"Unexpected error: {e}"
-            print(f"\n[TestRunner] Unexpected error: {e}")
-            import traceback
+                if result_message == "Max steps reached":
+                    state_machine.failure_reason = (
+                        f"Agent exceeded max steps ({self.max_steps}) without completing task. "
+                        f"Final state: {state_machine.current_state_id}"
+                    )
+                    print(f"\n[TestRunner] Test FAILED: {state_machine.failure_reason}")
+                else:
+                    state_machine.handle_finish(result_message)
 
-            traceback.print_exc()
+            except TestFailedError as e:
+                print(f"\n[TestRunner] Test failed with error: {e}")
 
-        finally:
-            # Restore original factory
-            device_factory_module._device_factory = original_factory
+            except Exception as e:
+                state_machine.failure_reason = f"Unexpected error: {e}"
+                print(f"\n[TestRunner] Unexpected error: {e}")
+                import traceback
 
-        # Get and print result
-        result = self.state_machine.get_result()
+                traceback.print_exc()
+
+        result = state_machine.get_result()
         self._print_result(result)
 
         return result
@@ -161,7 +154,7 @@ class TestRunner:
         print("\n" + "=" * 60)
         print("TEST RESULT")
         print("=" * 60)
-        print(f"  Status: {'✅ PASSED' if result['passed'] else '❌ FAILED'}")
+        print(f"  Status: {'PASSED' if result['passed'] else 'FAILED'}")
         print(f"  Final State: {result['final_state']}")
         print(f"  State History: {' -> '.join(result['state_history'])}")
         print(f"  Total Actions: {result['action_count']}")
