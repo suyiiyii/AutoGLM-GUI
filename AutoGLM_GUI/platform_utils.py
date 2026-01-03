@@ -3,7 +3,8 @@
 import asyncio
 import platform
 import subprocess
-from typing import Any, Sequence
+from asyncio.subprocess import Process as AsyncProcess
+from typing import Sequence
 
 
 def is_windows() -> bool:
@@ -51,7 +52,9 @@ async def run_cmd_silently(cmd: Sequence[str]) -> subprocess.CompletedProcess:
     return subprocess.CompletedProcess(cmd, return_code, stdout_str, stderr_str)
 
 
-async def spawn_process(cmd: Sequence[str], *, capture_output: bool = False) -> Any:
+async def spawn_process(
+    cmd: Sequence[str], *, capture_output: bool = False
+) -> subprocess.Popen[bytes] | AsyncProcess:
     """Start a long-running process with optional stdio capture."""
     stdout = subprocess.PIPE if capture_output else None
     stderr = subprocess.PIPE if capture_output else None

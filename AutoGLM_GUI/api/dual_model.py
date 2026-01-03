@@ -1,7 +1,7 @@
 """双模型协作API端点"""
 
 import threading
-from typing import Any, Optional
+from typing import Optional
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
@@ -170,8 +170,8 @@ def dual_model_chat_stream(request: DualModelChatRequest):
             logger.info(f"开始双模型任务: {request.message[:50]}...")
 
             # 在后台线程运行Agent
-            result_holder: list[Any] = [None]
-            error_holder: list[Any] = [None]
+            result_holder: list[dict | None] = [None]
+            error_holder: list[Exception | None] = [None]
 
             def run_agent():
                 try:

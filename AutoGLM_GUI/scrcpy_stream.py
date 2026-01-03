@@ -7,7 +7,7 @@ import subprocess
 import sys
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from asyncio.subprocess import Process as AsyncProcess
 
 from AutoGLM_GUI.adb_plus import check_device_available
 from AutoGLM_GUI.logger import logger
@@ -69,7 +69,7 @@ class ScrcpyStreamer:
         self.idr_interval_s = idr_interval_s
         self.stream_options = stream_options or ScrcpyVideoStreamOptions()
 
-        self.scrcpy_process: Any = None
+        self.scrcpy_process: subprocess.Popen[bytes] | AsyncProcess | None = None
         self.tcp_socket: socket.socket | None = None
         self.forward_cleanup_needed = False
 
@@ -434,7 +434,8 @@ class ScrcpyStreamer:
         if self.scrcpy_process:
             try:
                 self.scrcpy_process.terminate()
-                self.scrcpy_process.wait(timeout=2)
+                if isinstance(self.scrcpy_process, subprocess.Popen):
+                    self.scrcpy_process.wait(timeout=2)
             except Exception:
                 try:
                     self.scrcpy_process.kill()

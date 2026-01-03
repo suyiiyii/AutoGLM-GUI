@@ -6,9 +6,10 @@ making it easy to add new agent types without modifying existing code.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Any, Callable, Dict
+from typing import TYPE_CHECKING, Callable, Dict
 
 from AutoGLM_GUI.logger import logger
+from AutoGLM_GUI.types import AgentSpecificConfig
 
 from .protocols import BaseAgent
 
@@ -53,7 +54,7 @@ def create_agent(
     agent_type: str,
     model_config: "ModelConfig",
     agent_config: "AgentConfig",
-    agent_specific_config: dict[str, Any],
+    agent_specific_config: AgentSpecificConfig,
     takeover_callback: Callable | None = None,
     confirmation_callback: Callable | None = None,
 ) -> "BaseAgent":
@@ -113,7 +114,7 @@ def is_agent_type_registered(agent_type: str) -> bool:
 def _create_phone_agent(
     model_config: "ModelConfig",
     agent_config: "AgentConfig",
-    agent_specific_config: dict[str, Any],
+    agent_specific_config: AgentSpecificConfig,
     takeover_callback: Callable | None = None,
     confirmation_callback: Callable | None = None,
 ) -> "PhoneAgent":
@@ -130,7 +131,7 @@ def _create_phone_agent(
 def _create_mai_agent(
     model_config: "ModelConfig",
     agent_config: "AgentConfig",
-    agent_specific_config: dict[str, Any],
+    agent_specific_config: AgentSpecificConfig,
     takeover_callback: Callable | None = None,
     confirmation_callback: Callable | None = None,
 ) -> "MAIAgentAdapter":

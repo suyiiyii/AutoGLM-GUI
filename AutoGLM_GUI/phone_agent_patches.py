@@ -7,6 +7,7 @@ This module patches the upstream phone_agent code without modifying the original
 from typing import Any, Callable
 
 from phone_agent.model import ModelClient
+from phone_agent.model.client import ModelResponse
 
 
 # Store original methods
@@ -17,7 +18,7 @@ def _patched_model_request(
     self,
     messages: list[dict[str, Any]],
     on_thinking_chunk: Callable[[str], None] | None = None,
-) -> Any:
+) -> ModelResponse:
     """
     Patched version of ModelClient.request that supports streaming thinking chunks.
 

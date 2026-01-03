@@ -4,13 +4,22 @@ from __future__ import annotations
 
 import asyncio
 import time
-from typing import Any
+from typing import NotRequired, TypedDict
 
 import socketio
 
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.scrcpy_protocol import ScrcpyMediaStreamPacket
 from AutoGLM_GUI.scrcpy_stream import ScrcpyStreamer
+
+
+class VideoPacketPayload(TypedDict):
+    type: str
+    data: bytes
+    timestamp: int
+    keyframe: NotRequired[bool | None]
+    pts: NotRequired[int | None]
+
 
 sio = socketio.AsyncServer(
     async_mode="asgi",
@@ -64,8 +73,8 @@ async def _stream_packets(sid: str, streamer: ScrcpyStreamer) -> None:
         await _stop_stream_for_sid(sid)
 
 
-def _packet_to_payload(packet: ScrcpyMediaStreamPacket) -> dict[str, Any]:
-    payload: dict[str, Any] = {
+def _packet_to_payload(packet: ScrcpyMediaStreamPacket) -> VideoPacketPayload:
+    payload: VideoPacketPayload = {
         "type": packet.type,
         "data": packet.data,
         "timestamp": int(time.time() * 1000),

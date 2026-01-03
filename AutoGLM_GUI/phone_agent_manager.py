@@ -7,9 +7,10 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Any, Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
 from AutoGLM_GUI.agents.protocols import BaseAgent
+from AutoGLM_GUI.types import AgentSpecificConfig
 from AutoGLM_GUI.exceptions import (
     AgentInitializationError,
     AgentNotInitializedError,
@@ -210,7 +211,7 @@ class PhoneAgentManager:
         agent_type: str,
         model_config: ModelConfig,
         agent_config: AgentConfig,
-        agent_specific_config: dict[str, Any],
+        agent_specific_config: AgentSpecificConfig,
         takeover_callback: Optional[Callable] = None,
         confirmation_callback: Optional[Callable] = None,
         force: bool = False,

@@ -3,10 +3,10 @@
 import json
 import queue
 import threading
-from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
+from phone_agent.agent import StepResult
 from pydantic import ValidationError
 
 from AutoGLM_GUI.logger import logger
@@ -90,9 +90,12 @@ def _initialize_agent_with_config(
     logger.info(f"Agent initialized successfully for device {device_id}")
 
 
+SSEPayload = dict[str, str | int | bool | None | dict]
+
+
 def _create_sse_event(
-    event_type: str, data: dict[str, Any], role: str = "assistant"
-) -> dict[str, Any]:
+    event_type: str, data: SSEPayload, role: str = "assistant"
+) -> SSEPayload:
     """Create an SSE event with standardized fields including role."""
     event_data = {"type": event_type, "role": role, **data}
     return event_data
@@ -162,12 +165,19 @@ def init_agent(request: InitRequest) -> dict:
         manager = PhoneAgentManager.get_instance()
 
         # Initialize agent using factory pattern
+        from typing import cast
+
+        from AutoGLM_GUI.types import AgentSpecificConfig
+
+        agent_config_params = cast(
+            AgentSpecificConfig, request.agent_config_params or {}
+        )
         manager.initialize_agent_with_factory(
             device_id=device_id,
             agent_type=request.agent_type,
             model_config=model_config,
             agent_config=agent_config,
-            agent_specific_config=request.agent_config_params or {},
+            agent_specific_config=agent_config_params,
             takeover_callback=non_blocking_takeover,
             force=request.force,
         )
@@ -239,7 +249,7 @@ def chat_stream(request: ChatRequest):
 
         try:
             # 创建事件队列用于 agent → SSE 通信
-            event_queue: queue.Queue[tuple[str, Any]] = queue.Queue()
+            event_queue: queue.Queue[tuple[str, SSEPayload | None]] = queue.Queue()
 
             # 思考块回调
             def on_thinking_chunk(chunk: str):
@@ -258,8 +268,8 @@ def chat_stream(request: ChatRequest):
                     return
 
                 # 在线程中运行 agent 步骤
-                step_result: list[Any] = [None]
-                error_result: list[Any] = [None]
+                step_result: list[StepResult | None] = [None]
+                error_result: list[Exception | None] = [None]
 
                 def run_step(is_first: bool = True, task: str | None = None):
                     try:
