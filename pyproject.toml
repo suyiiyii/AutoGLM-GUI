@@ -64,6 +64,7 @@ allow-direct-references = true
 [dependency-groups]
 dev = [
     "pyinstaller>=6.17.0",
+    "pyright>=1.1.407",
     "pytest>=9.0.2",
     "ruff>=0.14.9",
 ]
