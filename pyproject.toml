@@ -32,6 +32,7 @@ dependencies = [
     "pillow>=11.3.0",
     "prometheus-client>=0.21.0",
     "python-socketio>=5.11.0",
+    "pyyaml>=6.0.3",
     "uvicorn[standard]>=0.38.0",
     "zeroconf>=0.148.0",
 ]

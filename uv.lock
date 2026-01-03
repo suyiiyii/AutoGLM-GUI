@@ -94,6 +94,7 @@ dependencies = [
     { name = "pillow" },
     { name = "prometheus-client" },
     { name = "python-socketio" },
+    { name = "pyyaml" },
     { name = "uvicorn", extra = ["standard"] },
     { name = "zeroconf" },
 ]
@@ -117,6 +118,7 @@ requires-dist = [
     { name = "pillow", specifier = ">=11.3.0" },
     { name = "prometheus-client", specifier = ">=0.21.0" },
     { name = "python-socketio", specifier = ">=5.11.0" },
+    { name = "pyyaml", specifier = ">=6.0.3" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.38.0" },
     { name = "zeroconf", specifier = ">=0.148.0" },
 ]

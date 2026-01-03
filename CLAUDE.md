@@ -226,34 +226,97 @@ See: `AutoGLM_GUI/resources/apks/ADBKeyBoard.LICENSE.txt`
 
 ### Request Flow
 
-1. **User Chat Request** → Frontend (`/chat` route) → WebSocket (`/ws/chat`) → Backend (`server.py`)
-2. **Backend** → `PhoneAgent.run()` orchestrates the task
-3. **PhoneAgent** → Uses `ModelClient` to call OpenAI-compatible LLM API with screenshots
-4. **LLM Response** → `ActionHandler` executes phone actions via ADB
-5. **Real-time Updates** → Streamed back through WebSocket to frontend
+**Basic PhoneAgent Flow**:
+1. **User Chat Request** → Frontend (`ChatKitPanel.tsx`) → API (`/api/chat`) → Backend (`api/agents.py`)
+2. **PhoneAgentManager** → `run_chat()` acquires device lock, gets or creates agent
+3. **PhoneAgent.run()** → Orchestrates multi-step task execution
+4. **Each Step**: Screenshot → `ModelClient` → LLM API (with vision) → `ActionHandler` → ADB execution
+5. **Streaming Updates** → SSE (Server-Sent Events) → Frontend updates in real-time
+
+**Layered Agent Flow** (NEW):
+1. **User Request** → Frontend → API (`/api/layered/chat`) → Backend (`api/layered_agent.py`)
+2. **Decision Model** → Plans high-level strategy using `openai-agents` session
+3. **Function Tools** → Calls `do()` tool for device actions or `chat()` for information
+4. **Vision Model** → PhoneAgent executes `do()` actions on device
+5. **Session Persistence** → SQLiteSession stores conversation history
+6. **Streaming** → SSE streams both decision thinking and execution updates
+
+**Dual Model Flow** (NEW):
+1. **User Request** → Frontend → API (`/api/dual-model/chat`) → Backend (`api/dual_model.py`)
+2. **Decision Model** → Analyzes task, decides strategy (text-only model)
+3. **DualModelCoordinator** → Mediates between decision and vision models
+4. **Vision Model** → PhoneAgent executes actions based on decision model guidance
+5. **Anomaly Detection** → Monitors for stuck states, triggers recovery
+6. **Streaming** → Separate callbacks for decision and vision model updates
+
+**Video Streaming Flow**:
+1. **Frontend** → Socket.IO `connect-device` event → Backend (`socketio_server.py`)
+2. **ScrcpyStreamer** → Starts scrcpy server on device, connects TCP socket (port 27183)
+3. **H.264 Stream** → NAL units → Backend caches SPS/PPS/IDR frames
+4. **Socket.IO** → Emits `video-data` events → Frontend (`ScrcpyPlayer.tsx`)
+5. **jmuxer** → Decodes H.264 → Canvas rendering with letterbox
 
 ### Backend Architecture (`AutoGLM_GUI/`)
 
-- **`server.py`**: FastAPI application with REST and WebSocket endpoints
-  - `/api/init` - Initialize agent with model/agent configs
-  - `/api/chat` - Chat endpoint (REST fallback)
-  - `/ws/chat` - WebSocket chat with streaming responses
-  - `/api/screenshot` - Capture device screenshot
-  - `/api/tap` - Send tap command to device
-  - `/api/scrcpy/stream` - H.264 video stream endpoint
-  - `/api/scrcpy/info` - Get device resolution info
+**Modular FastAPI Application**:
+- **`server.py`**: Wrapper that imports the FastAPI app from `api/__init__.py`
+- **`api/__init__.py`**: App factory pattern with modular routers:
+  - `agents.py` - Agent lifecycle (init, chat, reset, abort, status)
+  - `layered_agent.py` - Hierarchical execution (decision model + vision model)
+  - `devices.py` - Device discovery/management (list, WiFi, mDNS, QR pairing)
+  - `control.py` - Direct device control (tap, swipe, screenshot)
+  - `media.py` - Screenshot/video endpoints
+  - `dual_model.py` - Dual model coordination (decision + vision)
+  - `metrics.py` - Prometheus metrics
+  - `version.py` - Version information
+  - `workflows.py` - Workflow execution
+
+**Core Backend Modules**:
+- **`device_manager.py`**: Singleton managing device discovery and state
+  - Two-layer device ID system (device_id for ADB, serial for aggregation)
+  - Background polling thread (~2s intervals)
+  - Connection priority: USB > WiFi > mDNS
+  - mDNS discovery support
+- **`phone_agent_manager.py`**: Singleton managing PhoneAgent lifecycle
+  - Agent states: IDLE, BUSY, ERROR, INITIALIZING
+  - Per-device locking (RLock) for concurrency control
+  - Configuration hot-reload support
+  - Streaming chat with abort capability
+  - **NEW**: Agent storage (agents, configs) is now internal to the singleton
+  - **Removed**: Dependency on global state.agents and state.agent_configs
 - **`scrcpy_stream.py`**: `ScrcpyStreamer` class manages scrcpy server lifecycle and H.264 video streaming
   - Spawns scrcpy-server process on device
   - Handles TCP socket for video data
   - Caches SPS/PPS/IDR frames for new client connections
   - Critical: Uses bundled `scrcpy-server-v3.3.3` binary (must be in project root and package)
+- **`socketio_server.py`**: Socket.IO integration for real-time video streaming
+  - Events: `connect-device`, `disconnect`
+  - Emits: `video-metadata`, `video-data`, `error`
+- **`config_manager.py`**: Type-safe configuration management with Pydantic
+  - Config file: `~/.config/autoglm/config.json`
+  - Hot-reload support (mtime checking)
+  - Validation for URLs and model names
 - **`logger.py`**: Centralized logging configuration using loguru
   - Provides colorized console output with timestamps, levels, and source locations
   - Automatic file logging with rotation (100MB) and retention (7 days)
   - Separate error log files (50MB rotation, 30 days retention)
   - Configurable via CLI parameters (--log-level, --log-file, --no-log-file)
   - Used throughout AutoGLM_GUI/ (phone_agent/ uses original print statements)
-- **`adb_plus/`**: Extended ADB utilities (screenshot capture, etc.)
+- **`phone_agent_patches.py`**: Monkey patches for upstream phone_agent
+  - Adds streaming thinking chunks callback
+  - Performance metrics tracking (TTFT, thinking time, total time)
+- **`platform_utils.py`**: Cross-platform subprocess management
+  - Async command execution (event loop safe)
+  - Windows compatibility (subprocess.run vs asyncio)
+- **`adb_plus/`**: Extended ADB utilities
+  - `device.py` - Device availability and info
+  - `screenshot.py` - Screenshot capture
+  - `keyboard_installer.py` - ADB Keyboard auto-setup (GPL-2.0)
+  - `qr_pair.py` - QR code pairing for wireless debugging
+  - `serial.py` - Hardware serial extraction
+  - `ip.py` - WiFi IP retrieval
+  - `mdns.py` - mDNS device discovery
+  - `touch.py` - Touch/swipe primitives
 
 ### Phone Agent (`phone_agent/`)
 
@@ -325,17 +388,44 @@ DeviceManager aggregates both connections:
 
 ### Frontend Architecture (`frontend/src/`)
 
-- **`routes/chat.tsx`**: Main chat interface
-  - WebSocket connection to `/ws/chat`
-  - Real-time video player (`ScrcpyPlayer` component)
-  - Message history display
-  - Manual tap controls on video stream
-- **`components/ScrcpyPlayer.tsx`**: Scrcpy video player component
-  - Uses `jmuxer` for H.264 decoding and playback
-  - Fetches device resolution from `/api/scrcpy/info`
-  - Handles coordinate transformation for tap events
-  - Letterbox calculation for proper click positioning
+**Routing (TanStack Router)**:
+```
+/ (index.tsx)
+├── /chat (chat.tsx) - Main chat interface
+├── /workflows (workflows.tsx) - Workflow management
+└── /about (about.tsx) - About page
+```
+
+**Root Layout** (`__root.tsx`):
+- Theme provider (light/dark mode)
+- i18n context (Chinese/English)
+- Global error boundary
+- Navigation sidebar
+
+**Key Components**:
+- **`ScrcpyPlayer.tsx`**: H.264 video player with Socket.IO streaming
+  - Uses jmuxer for H.264 NAL unit decoding
+  - WebCodecs Video Decoder API fallback
+  - Canvas rendering with letterbox calculation
+  - Touch coordinate transformation
   - Ripple animation on tap
+- **`ChatKitPanel.tsx`**: Multi-mode chat interface
+  - Basic mode: Direct PhoneAgent execution
+  - Dual model mode: Decision model + vision model
+  - Layered mode: Hierarchical task execution
+- **`DevicePanel.tsx`**: Device info and initialization UI
+  - Agent configuration (model, base URL, API key)
+  - Connection status display
+  - Initialization controls
+- **`DeviceSidebar.tsx`**: Device list with connection management
+  - USB/WiFi device listing
+  - WiFi pairing controls
+  - QR code pairing (wireless debugging)
+  - mDNS device discovery
+- **`DualModelPanel.tsx`**: Dual model configuration
+  - Decision model settings
+  - Vision model settings
+  - Model coordination options
 - **`api.ts`**: API client functions (uses `redaxios` - lightweight axios alternative)
 
 ### Electron Desktop Application (`electron/`)
@@ -372,23 +462,75 @@ AutoGLM-GUI can be packaged as a standalone desktop application using Electron, 
 
 - **Server Binary**: `scrcpy-server-v3.3.3` must exist at project root
 - **Deployment**: Binary is bundled in wheel via `pyproject.toml` force-include
+- **Stream Protocol**: Socket.IO-based H.264 NAL unit streaming
+  - Backend: `socketio_server.py` emits `video-data` events
+  - Frontend: `ScrcpyPlayer.tsx` receives and decodes via jmuxer
 - **Stream Format**: Raw H.264 NAL units over TCP socket (port 27183)
-- **Parameter Sets**: SPS/PPS are cached on first capture and sent to new clients for immediate playback
+- **Parameter Sets**: SPS/PPS/IDR frames are cached on first capture and sent to new clients for immediate playback
 - **Coordinate Mapping**: Frontend gets device resolution (e.g., 1080x2400) and video size (e.g., 576x1280), calculates letterbox offsets, transforms click coords back to device scale
 
 ### Model API Integration
 
+**Basic PhoneAgent Mode**:
 - **Compatible APIs**: Any OpenAI-compatible endpoint (智谱 BigModel, ModelScope, vLLM, SGLang)
 - **Vision Messages**: Each step sends current screenshot as base64 PNG in message content
 - **Response Format**: LLM returns JSON with `thinking` and `action` fields
 - **Action Schema**: `{type: "do"|"finish"|"takeover", ...params}` parsed by `ActionHandler`
 
+**Dual Model Mode** (NEW):
+- **Architecture**: Decision model (large, text-only) coordinates Vision model (small, vision-capable)
+- **Decision Model**: Plans high-level strategy, decides when to use vision model
+- **Vision Model**: Executes device actions based on screenshots
+- **Coordination**: `DualModelCoordinator` manages model communication
+- **Anomaly Detection**: Detects stuck states (repeated screenshots, consecutive failures)
+
+**Layered Agent Mode** (NEW):
+- **Architecture**: Hierarchical execution with decision model + vision model
+- **Decision Layer**: Uses `openai-agents` library for session management and planning
+- **Execution Layer**: PhoneAgent executes planned actions on device
+- **Function Tools**: `do()` for device actions, `chat()` for information extraction
+- **Session Persistence**: SQLiteSession stores conversation history
+- **API Endpoint**: `/api/layered/chat` with streaming support
+
 ### ADB Device Control
 
 - **Connection**: Uses `adb` CLI tool (must be in PATH)
+- **Platform Utilities**: Always use `AutoGLM_GUI/platform_utils.py` for ADB command execution
+  - Async command execution (event loop safe)
+  - Cross-platform compatibility (Windows vs Unix)
 - **Coordinate System**: LLM outputs normalized coords (0-1000), converted to pixels based on device resolution
 - **Keyboard Handling**: Temporarily switches to ADB keyboard for text input, restores original after
 - **Screenshot**: Captures via ADB screencap, converts to PNG with Pillow
+
+### Concurrency Control and State Management
+
+**PhoneAgentManager Locking**:
+- **Manager Lock**: RLock for thread-safe manager operations
+- **Per-Device Locks**: Dictionary of locks indexed by `device_id`
+- **Prevents**: Concurrent execution on same device (would corrupt state)
+- **Pattern**: Use `use_agent(device_id)` context manager for safe access
+
+**DeviceManager Polling**:
+- **Background Thread**: Runs every ~2 seconds in daemon thread
+- **State Tracking**: Monitors device connections without blocking API
+- **Connection Aggregation**: Groups connections by hardware serial
+- **Primary Selection**: Automatically selects best connection (USB > WiFi)
+
+**Streaming State**:
+- **Per-Device Streamers**: Dictionary in `state.scrcpy_streamers`
+- **Stream Locks**: Async locks in `state.scrcpy_locks` prevent concurrent starts
+- **Cleanup**: Automatic cleanup on disconnect or error
+
+**Agent State Management** (NEW):
+- **Storage**: Agent instances and configs are stored internally in PhoneAgentManager singleton
+- **Thread Safety**: All state access is protected by `self._manager_lock` (RLock)
+- **No Global State**: Removed dependency on `state.agents` and `state.agent_configs` in 2026 refactoring
+- **Benefits**:
+  - **Encapsulation**: Manager owns its state completely
+  - **Testability**: Easier to test in isolation
+  - **Clarity**: Single source of truth for agent lifecycle
+  - **Safety**: No risk of external code accidentally modifying global state
+- **API**: Always use PhoneAgentManager methods (get_agent, use_agent, etc.) for state access
 
 ### Logging System
 
@@ -453,12 +595,44 @@ See `AutoGLM_GUI/__main__.py` for full list. Key args:
 ```
 AutoGLM_GUI/           # Backend FastAPI app (entry point)
   __main__.py          # CLI entry point
-  server.py            # FastAPI routes and WebSocket
+  server.py            # FastAPI + Socket.IO wrapper
+  api/                 # Modular route handlers
+    __init__.py        # App factory
+    agents.py          # Agent lifecycle
+    layered_agent.py   # Layered agent API
+    devices.py         # Device management
+    control.py         # Direct device control
+    media.py           # Screenshot/video
+    dual_model.py      # Dual model coordination
+    metrics.py         # Prometheus metrics
+    version.py         # Version info
+    workflows.py       # Workflow execution
   scrcpy_stream.py     # Scrcpy video streaming
+  socketio_server.py   # Socket.IO integration
+  device_manager.py    # Device discovery singleton
+  phone_agent_manager.py # Agent lifecycle singleton
+  config_manager.py    # Type-safe config management
+  logger.py            # Loguru logging setup
+  phone_agent_patches.py # Monkey patches for phone_agent
+  platform_utils.py    # Cross-platform utilities
   adb_plus/            # Extended ADB utilities
+    device.py
+    screenshot.py
+    keyboard_installer.py
+    qr_pair.py
+    serial.py
+    ip.py
+    mdns.py
+    touch.py
+  dual_model/          # Decision + vision coordination
+    dual_agent.py
+    decision_model.py
+    vision_model.py
   static/              # Built frontend (copied from frontend/dist)
+  resources/           # Bundled resources
+    apks/              # ADB Keyboard APK (GPL-2.0)
 
-phone_agent/           # Core automation engine
+phone_agent/           # Core automation engine (third-party, DO NOT MODIFY)
   agent.py             # PhoneAgent orchestrator
   actions/handler.py   # Action execution
   adb/                 # Low-level ADB operations
@@ -467,8 +641,16 @@ phone_agent/           # Core automation engine
 
 frontend/              # React frontend
   src/
-    routes/chat.tsx    # Main UI
-    components/ScrcpyPlayer.tsx
+    routes/
+      chat.tsx         # Main chat interface
+      workflows.tsx    # Workflow management
+      __root.tsx       # Layout + theme
+    components/
+      ScrcpyPlayer.tsx # Video player
+      ChatKitPanel.tsx # Multi-mode chat
+      DevicePanel.tsx  # Device UI
+      DeviceSidebar.tsx # Device list
+      DualModelPanel.tsx # Dual model config
     api.ts             # API client
   dist/                # Build output (not in git)
 
@@ -485,6 +667,7 @@ resources/             # Bundled resources (not in git)
   adb/                 # Platform-specific ADB tools
     windows/
     darwin/
+    linux/
 
 scripts/
   build.py             # Web app build
@@ -492,6 +675,7 @@ scripts/
   autoglm.spec         # PyInstaller configuration
   download_adb.py      # ADB downloader
   pyi_rth_utf8.py      # PyInstaller runtime hook (UTF-8)
+  lint.py              # Code linting
 
 scrcpy-server-v3.3.3   # Scrcpy server binary (bundled)
 ```
@@ -505,6 +689,11 @@ scrcpy-server-v3.3.3   # Scrcpy server binary (bundled)
 4. **Frontend Not Built**: Backend serves static files from `AutoGLM_GUI/static/` - must run `scripts/build.py` first
 5. **ADB Not in PATH**: All ADB operations will fail silently or with cryptic errors
 6. **Model API Compatibility**: LLM must support vision inputs (base64 images) and follow action schema conventions
+7. **Direct State Access**: Never access `state.agents` directly - use `PhoneAgentManager.use_agent()` context manager
+8. **ADB Command Execution**: Always use `platform_utils.py` functions instead of direct subprocess calls
+9. **Device ID vs Serial**: Remember `device_id` changes with connection type, `serial` is stable
+10. **Concurrent Execution**: PhoneAgentManager prevents concurrent tasks on same device - respect the locks
+11. **phone_agent Modifications**: NEVER modify code under `phone_agent/` - use monkey patches in `phone_agent_patches.py`
 
 ### Electron Desktop Application
 1. **Resources Not Prepared**: Electron build requires `resources/backend/` and `resources/adb/` - use `build_electron.py`

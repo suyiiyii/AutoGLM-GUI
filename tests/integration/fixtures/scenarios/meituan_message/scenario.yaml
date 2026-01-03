@@ -1,0 +1,16 @@
+test_name: "美团外卖测试"
+instruction: "点击屏幕下方的消息按钮"
+max_steps: 10
+states:
+  - id: "home"
+    screenshot: "state_home.jpg"
+    current_app: "com.sankuai.meituan"
+    transitions:
+      - click_region: [487, 2516, 721, 2667]  # x1, y1, x2, y2
+        next_state: "message"
+        description: "点击消息按钮"
+  - id: "message"
+    screenshot: "state_message.jpg"
+    current_app: "com.sankuai.meituan"
+    is_terminal: true
+    expected_finish: true
