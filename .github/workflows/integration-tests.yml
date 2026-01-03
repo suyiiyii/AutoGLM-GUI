@@ -45,7 +45,7 @@ jobs:
 
       - name: Install dependencies
         run: |
-          uv sync --frozen
+          uv sync --dev --frozen
 
       - name: Run integration tests
         env:
