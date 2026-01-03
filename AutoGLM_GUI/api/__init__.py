@@ -15,14 +15,6 @@ from fastapi.staticfiles import StaticFiles
 from AutoGLM_GUI.adb_plus.qr_pair import qr_pairing_manager
 from AutoGLM_GUI.version import APP_VERSION
 
-
-def _get_cors_origins() -> list[str]:
-    cors_origins_str = os.getenv("AUTOGLM_CORS_ORIGINS", "http://localhost:3000")
-    if cors_origins_str == "*":
-        return ["*"]
-    return [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
-
-
 from . import (
     agents,
     control,
@@ -36,6 +28,13 @@ from . import (
     version,
     workflows,
 )
+
+
+def _get_cors_origins() -> list[str]:
+    cors_origins_str = os.getenv("AUTOGLM_CORS_ORIGINS", "http://localhost:3000")
+    if cors_origins_str == "*":
+        return ["*"]
+    return [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
 
 
 def _get_static_dir() -> Path | None:
