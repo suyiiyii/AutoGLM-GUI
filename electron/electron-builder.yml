@@ -46,6 +46,12 @@ mac:
   # 开发阶段不签名，使用 xattr -cr 移除隔离属性
   identity: null
 
+dmg:
+  # 禁用 writeUpdateInfo 避免额外的磁盘操作
+  writeUpdateInfo: false
+  # 使用简单的 DMG 格式，减少 hdiutil 操作
+  format: ULFO
+
 linux:
   target:
     - AppImage    # 最通用的格式，无需安装

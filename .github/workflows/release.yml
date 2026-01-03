@@ -156,7 +156,7 @@ jobs:
   # Build Electron application for macOS (Intel x64)
   build-electron-macos-x64:
     name: Build Electron (macOS x64)
-    runs-on: macos-15-intel  # macOS Intel runner (last Intel runner available)
+    runs-on: macos-13  # macOS Intel runner
     needs: release
     permissions:
       contents: write
@@ -164,6 +164,14 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+
+      - name: Disable Spotlight indexing
+        run: |
+          # Disable Spotlight indexing to prevent hdiutil resource busy errors
+          sudo mdutil -a -i off || true
+          # Kill any mds processes that might be accessing disk images
+          sudo pkill -9 mds || true
+          sudo pkill -9 mds_stores || true
 
       - name: Setup Python
         uses: actions/setup-python@v5
