@@ -72,7 +72,7 @@ class TestRunner:
         # Import here to avoid circular imports
         import phone_agent.device_factory as device_factory_module
         from phone_agent import PhoneAgent
-        from phone_agent.agent import AgentConfig
+        from phone_agent.agent import AgentConfig, StepResult
         from phone_agent.model import ModelConfig
 
         # Create configs if not provided
@@ -116,10 +116,28 @@ class TestRunner:
                 agent_config=agent_config,
             )
 
-            result_message = agent.run(self.instruction)
+            last_result: StepResult | None = agent.step(self.instruction)
+            finished = last_result.finished if last_result else False
 
-            # Check if Agent finished properly
-            self.state_machine.handle_finish(result_message)
+            while not finished and agent.step_count < agent_config.max_steps:
+                last_result = agent.step()
+                finished = last_result.finished
+
+            if finished and last_result and last_result.success:
+                # Check if Agent finished properly
+                self.state_machine.handle_finish(last_result.message)
+            elif not finished:
+                self.state_machine.failure_reason = (
+                    f"Agent did not finish before reaching max steps "
+                    f"({agent_config.max_steps}). "
+                    f"Last message: {last_result.message if last_result else 'N/A'}"
+                )
+                print(f"\n[TestRunner] {self.state_machine.failure_reason}")
+            else:
+                self.state_machine.failure_reason = (
+                    last_result.message if last_result else "Agent finished with errors"
+                )
+                print(f"\n[TestRunner] {self.state_machine.failure_reason}")
 
         except TestFailedError as e:
             print(f"\n[TestRunner] Test failed with error: {e}")
