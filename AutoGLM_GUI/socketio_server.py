@@ -26,6 +26,7 @@ class VideoPacketPayload(TypedDict):
 sio = socketio.AsyncServer(
     async_mode="asgi",
     cors_allowed_origins="*",
+    server_kwargs={"socketio_path": "/socket.io"},
 )
 
 _socket_streamers: dict[str, ScrcpyStreamer] = {}
