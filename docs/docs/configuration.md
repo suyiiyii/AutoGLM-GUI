@@ -1,42 +1,35 @@
 ---
-sidebar_position: 7
+id: configuration
+title: 模型配置
 ---
 
-# 配置与环境
+## 🎯 模型服务配置
 
-本页汇总运行 AutoGLM-GUI 所需的环境变量、应用设置与网络端口，提供示例与最佳实践。
+AutoGLM-GUI 只需要一个 OpenAI 兼容的模型服务。你可以：
 
-## 环境变量
+- 使用官方已托管的第三方服务
+  - 智谱 BigModel：`--base-url https://open.bigmodel.cn/api/paas/v4`，`--model autoglm-phone`，`--apikey <你的 API Key>`
+  - ModelScope：`--base-url https://api-inference.modelscope.cn/v1`，`--model ZhipuAI/AutoGLM-Phone-9B`，`--apikey <你的 API Key>`
+- 或自建服务：参考上游项目的[部署文档](https://github.com/zai-org/Open-AutoGLM/blob/main/README.md)用 vLLM/SGLang 部署 `zai-org/AutoGLM-Phone-9B`，启动 OpenAI 兼容端口后将 `--base-url` 指向你的服务。
 
-- `API_KEY`：外部服务或模型的访问密钥
-- `HTTP_PORT`：前端或服务监听端口
-- `WS_PORT`：实时通信端口
-- `LOG_LEVEL`：日志级别（`info`、`debug`、`warn`、`error`）
-
-> 如使用托管平台，请通过其环境配置界面设置以上变量。
-
-## 应用设置
-
-- 设备发现：开启/关闭自动发现、广播与子网策略
-- 安全选项：关键操作的二次确认、权限校验与审计
-- 存储策略：日志与数据的保存周期与导出路径
-
-## 网络与端口
-
-- 本地运行：确保端口不冲突并在防火墙放行
-- 远程访问：按需开启反向代理或穿透策略，注意鉴权
-
-## 示例配置
+示例：
 
 ```bash
-API_KEY=xxxx
-HTTP_PORT=3000
-WS_PORT=3001
-LOG_LEVEL=info
+# 使用智谱 BigModel
+pip install autoglm-gui
+autoglm-gui \
+  --base-url https://open.bigmodel.cn/api/paas/v4 \
+  --model autoglm-phone \
+  --apikey sk-xxxxx
+
+# 使用 ModelScope
+pip install autoglm-gui
+autoglm-gui \
+  --base-url https://api-inference.modelscope.cn/v1 \
+  --model ZhipuAI/AutoGLM-Phone-9B \
+  --apikey sk-xxxxx
+
+# 指向你自建的 vLLM/SGLang 服务
+pip install autoglm-gui
+autoglm-gui --base-url http://localhost:8000/v1 --model autoglm-phone-9b
 ```
-
-## 常见问题
-
-- 端口占用：修改端口或释放占用进程
-- 环境变量未生效：检查导出与进程重启、托管平台的配置生效方式
-

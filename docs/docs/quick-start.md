@@ -1,23 +1,50 @@
 ---
-sidebar_position: 2
+id: quick-start
+title: 快速开始
 ---
 
-# 快速开始
+## 🚀 快速开始
 
-本页介绍最小可行的使用路径，帮助你 5 分钟内跑通。
+### 前置要求
 
-## 桌面版运行
+- Python 3.10+
+- Android 设备（Android 11+ 支持完全无线配对，无需数据线）
+- 已安装 ADB 并添加到系统 PATH（桌面版已内置）
+- 一个 OpenAI 兼容的 API 端点
 
-1. 下载并安装最新的桌面客户端（详见仓库 README 的发布与下载说明）
-2. 启动应用并按提示完成设备连接（二维码/USB/WiFi）
-3. 打开「对话与任务」，选择合适模式并开始交互
+**关于设备连接**：
+- **Android 11+**：支持二维码扫码配对，完全无需数据线即可连接和控制设备
+- **Android 10 及更低版本**：需要先通过 USB 数据线连接并开启无线调试，之后可拔掉数据线无线使用
 
-## 源码运行
+### 快捷运行（推荐）
 
-1. 克隆仓库并按照 README 安装后端与前端依赖
-2. 启动后端服务与前端开发服务器，确保二者联通
-3. 打开浏览器访问前端地址，按「用户指南」完成设备连接与使用
+**无需手动准备环境，直接安装运行：**
 
-## 常见问题
+```bash
+# 通过 pip 安装并启动
+pip install autoglm-gui
+autoglm-gui --base-url http://localhost:8080/v1
+```
 
-如遇端口占用、网络受限或设备不兼容，请参考「FAQ」页面的故障排查。
+也可以使用 uvx 免安装启动，自动启动最新版（需已安装 uv，[安装教程](https://docs.astral.sh/uv/getting-started/installation/)）：
+
+```bash
+uvx autoglm-gui --base-url http://localhost:8080/v1
+```
+
+### 传统安装
+
+```bash
+# 从源码安装
+git clone https://github.com/your-repo/AutoGLM-GUI.git
+cd AutoGLM-GUI
+uv sync
+
+# 构建前端（必须）
+uv run python scripts/build.py
+
+# 启动服务
+uv run autoglm-gui --base-url http://localhost:8080/v1
+```
+
+启动后，在浏览器中打开 http://localhost:8000 即可开始使用！
