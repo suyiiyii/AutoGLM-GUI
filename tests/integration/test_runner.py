@@ -196,4 +196,3 @@ if __name__ == "__main__":
 
     result = run_test(sys.argv[1])
     sys.exit(0 if result["passed"] else 1)
-

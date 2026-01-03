@@ -82,15 +82,11 @@ class MockDeviceFactory:
         """Handle swipe action."""
         self.state_machine.handle_swipe(start_x, start_y, end_x, end_y)
 
-    def back(
-        self, device_id: str | None = None, delay: float | None = None
-    ) -> None:
+    def back(self, device_id: str | None = None, delay: float | None = None) -> None:
         """Handle back button (no-op in testing)."""
         pass
 
-    def home(
-        self, device_id: str | None = None, delay: float | None = None
-    ) -> None:
+    def home(self, device_id: str | None = None, delay: float | None = None) -> None:
         """Handle home button (no-op in testing)."""
         pass
 
@@ -126,4 +122,3 @@ class MockDeviceFactory:
     def get_connection_class(self):
         """Not applicable for mock."""
         raise NotImplementedError("Mock device does not support connection class")
-

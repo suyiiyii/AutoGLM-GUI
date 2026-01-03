@@ -181,9 +181,7 @@ class StateMachine:
 
         return False
 
-    def handle_swipe(
-        self, start_x: int, start_y: int, end_x: int, end_y: int
-    ) -> bool:
+    def handle_swipe(self, start_x: int, start_y: int, end_x: int, end_y: int) -> bool:
         """Handle a swipe action (currently just logs it)."""
         self.action_history.append(
             {
@@ -240,7 +238,9 @@ class TestFailedError(Exception):
     pass
 
 
-def load_test_case(yaml_path: str | Path, base_dir: str | Path | None = None) -> tuple[StateMachine, str, int]:
+def load_test_case(
+    yaml_path: str | Path, base_dir: str | Path | None = None
+) -> tuple[StateMachine, str, int]:
     """
     Load a test case from YAML file.
 
@@ -314,4 +314,3 @@ def load_test_case(yaml_path: str | Path, base_dir: str | Path | None = None) ->
         data["instruction"],
         data.get("max_steps", 10),
     )
-

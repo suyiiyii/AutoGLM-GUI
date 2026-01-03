@@ -13,13 +13,13 @@ class TransitionSchema(BaseModel):
         "Should include any desired tolerance in the boundary."
     )
     next_state: str = Field(description="ID of the next state to transition to")
-    description: str = Field(
-        default="", description="Optional description for logging"
-    )
+    description: str = Field(default="", description="Optional description for logging")
 
     @field_validator("click_region")
     @classmethod
-    def validate_click_region(cls, v: tuple[int, int, int, int]) -> tuple[int, int, int, int]:
+    def validate_click_region(
+        cls, v: tuple[int, int, int, int]
+    ) -> tuple[int, int, int, int]:
         """Validate click region coordinates."""
         if len(v) != 4:
             raise ValueError("click_region must have exactly 4 values (x1, y1, x2, y2)")
@@ -77,9 +77,7 @@ class StateSchema(BaseModel):
         # Access other field values through info.data
         is_terminal = info.data.get("is_terminal", False)
         if v and not is_terminal:
-            raise ValueError(
-                "expected_finish can only be True if is_terminal is True"
-            )
+            raise ValueError("expected_finish can only be True if is_terminal is True")
         return v
 
 
