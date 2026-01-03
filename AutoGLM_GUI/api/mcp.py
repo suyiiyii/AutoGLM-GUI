@@ -1,6 +1,6 @@
 """MCP (Model Context Protocol) tools for AutoGLM-GUI."""
 
-from typing import TypedDict
+from typing_extensions import TypedDict
 
 from fastmcp import FastMCP
 
