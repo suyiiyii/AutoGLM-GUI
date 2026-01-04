@@ -257,10 +257,10 @@ function ChatComponent() {
       }
 
       Array.from(serialMap.values()).forEach(devices => {
-        const remoteDevice = devices.find(
-          (d: Device) => d.connection_type === 'remote'
+        const wifiDevice = devices.find(
+          (d: Device) => d.connection_type === 'wifi'
         );
-        const selectedDevice = remoteDevice || devices[0];
+        const selectedDevice = wifiDevice || devices[0];
         deviceMap.set(selectedDevice.id, selectedDevice);
       });
 
@@ -1050,6 +1050,7 @@ function ChatComponent() {
                     deviceId={device.id}
                     deviceSerial={device.serial}
                     deviceName={device.model}
+                    deviceConnectionType={device.connection_type}
                     isVisible={
                       device.id === currentDeviceId && chatMode === 'chatkit'
                     }
@@ -1064,6 +1065,7 @@ function ChatComponent() {
                     deviceId={device.id}
                     deviceSerial={device.serial}
                     deviceName={device.model}
+                    deviceConnectionType={device.connection_type}
                     config={config}
                     isVisible={
                       device.id === currentDeviceId && chatMode !== 'chatkit'

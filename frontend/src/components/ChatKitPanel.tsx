@@ -47,6 +47,7 @@ interface ChatKitPanelProps {
   deviceId: string;
   deviceSerial: string; // Used for history storage
   deviceName: string;
+  deviceConnectionType?: string;
   isVisible: boolean;
 }
 
@@ -77,6 +78,7 @@ export function ChatKitPanel({
   deviceId,
   deviceSerial,
   deviceName,
+  deviceConnectionType,
   isVisible,
 }: ChatKitPanelProps) {
   const t = useTranslation();
@@ -927,7 +929,12 @@ export function ChatKitPanel({
         </div>
       </Card>
 
-      <DeviceMonitor deviceId={deviceId} isVisible={isVisible} />
+      <DeviceMonitor
+        deviceId={deviceId}
+        serial={deviceSerial}
+        connectionType={deviceConnectionType}
+        isVisible={isVisible}
+      />
     </div>
   );
 }

@@ -196,8 +196,8 @@ export const en = {
     agentBusy: 'Busy',
     agentError: 'Error',
     agentInitializing: 'Initializing',
-    httpRemote: 'HTTP Remote',
-    wifiRemote: 'WiFi',
+    remote: 'Remote',
+    wifi: 'WiFi',
     removeRemote: 'Remove Remote Device',
     connectWifiTitle: 'Connect via WiFi',
     connectWifiContent:

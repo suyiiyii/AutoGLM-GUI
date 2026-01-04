@@ -48,7 +48,7 @@ def _inject_unified_device_protocol() -> None:
         if not managed:
             raise ValueError(f"Device {device_id} not found")
 
-        if managed.serial.startswith("remote:"):
+        if managed.connection_type.value == "remote":
             remote_device = device_manager.get_remote_device_instance(managed.serial)
             if not remote_device:
                 raise ValueError(f"Remote device instance not found: {managed.serial}")

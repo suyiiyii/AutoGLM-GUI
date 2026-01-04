@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from enum import Enum
 from typing import Literal
 
 from typing_extensions import TypedDict
@@ -123,3 +124,19 @@ ConversationContext = list[ChatMessage]
 class Observation(TypedDict, total=False):
     screenshot: object
     accessibility_tree: dict[str, object] | None
+
+
+class DeviceConnectionType(Enum):
+    """Device connection type.
+
+    Unified enum for device connection types to avoid confusion
+    with phone_agent's ConnectionType.
+
+    - USB: Physical USB connection
+    - WIFI: ADB over WiFi (local network)
+    - REMOTE: HTTP Remote Device (via Device Agent Server)
+    """
+
+    USB = "usb"
+    WIFI = "wifi"
+    REMOTE = "remote"

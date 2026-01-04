@@ -93,6 +93,7 @@ interface DevicePanelProps {
   deviceId: string; // Used for API calls
   deviceSerial: string; // Used for history storage
   deviceName: string;
+  deviceConnectionType?: string; // Device connection type (usb/wifi/remote)
   config: GlobalConfig | null;
   isVisible: boolean;
   isConfigured: boolean;
@@ -105,6 +106,7 @@ export function DevicePanel({
   deviceId,
   deviceSerial,
   deviceName,
+  deviceConnectionType,
   config,
   isConfigured,
   thinkingMode = 'deep',
@@ -1383,7 +1385,12 @@ export function DevicePanel({
         </div>
       </Card>
 
-      <DeviceMonitor deviceId={deviceId} isVisible={true} />
+      <DeviceMonitor
+        deviceId={deviceId}
+        serial={deviceSerial}
+        connectionType={deviceConnectionType}
+        isVisible={true}
+      />
     </div>
   );
 }

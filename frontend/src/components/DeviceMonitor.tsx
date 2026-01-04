@@ -21,23 +21,28 @@ import {
 
 interface DeviceMonitorProps {
   deviceId: string;
+  serial?: string;
+  connectionType?: string;
   isVisible?: boolean;
   className?: string;
 }
 
 export function DeviceMonitor({
   deviceId,
+  serial: _serial,
+  connectionType,
   isVisible = true,
   className = '',
 }: DeviceMonitorProps) {
   const t = useTranslation();
 
+  const isRemoteDevice = connectionType === 'remote';
   const [screenshot, setScreenshot] = useState<ScreenshotResponse | null>(null);
-  const [useVideoStream, setUseVideoStream] = useState(true);
+  const [useVideoStream, setUseVideoStream] = useState(!isRemoteDevice);
   const [videoStreamFailed, setVideoStreamFailed] = useState(false);
   const [displayMode, setDisplayMode] = useState<
     'auto' | 'video' | 'screenshot'
-  >('auto');
+  >(isRemoteDevice ? 'screenshot' : 'auto');
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
   const [feedbackType, setFeedbackType] = useState<
     'tap' | 'swipe' | 'error' | 'success'
@@ -166,31 +171,35 @@ export function DeviceMonitor({
                 : 'opacity-0 translate-x-4 pointer-events-none'
             }`}
           >
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => toggleDisplayMode('auto')}
-              className={`h-7 px-3 text-xs rounded-lg transition-colors ${
-                displayMode === 'auto'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-foreground hover:bg-accent hover:text-accent-foreground'
-              }`}
-            >
-              {t.devicePanel?.auto || 'Auto'}
-            </Button>
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => toggleDisplayMode('video')}
-              className={`h-7 px-3 text-xs rounded-lg transition-colors ${
-                displayMode === 'video'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-foreground hover:bg-accent hover:text-accent-foreground'
-              }`}
-            >
-              <Video className="w-3 h-3 mr-1" />
-              {t.devicePanel?.video || 'Video'}
-            </Button>
+            {!isRemoteDevice && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => toggleDisplayMode('auto')}
+                className={`h-7 px-3 text-xs rounded-lg transition-colors ${
+                  displayMode === 'auto'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-foreground hover:bg-accent hover:text-accent-foreground'
+                }`}
+              >
+                {t.devicePanel?.auto || 'Auto'}
+              </Button>
+            )}
+            {!isRemoteDevice && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => toggleDisplayMode('video')}
+                className={`h-7 px-3 text-xs rounded-lg transition-colors ${
+                  displayMode === 'video'
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-foreground hover:bg-accent hover:text-accent-foreground'
+                }`}
+              >
+                <Video className="w-3 h-3 mr-1" />
+                {t.devicePanel?.video || 'Video'}
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="sm"

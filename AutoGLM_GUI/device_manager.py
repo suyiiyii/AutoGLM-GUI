@@ -12,6 +12,23 @@ from typing import Optional
 from phone_agent.adb.connection import ADBConnection, ConnectionType, DeviceInfo
 
 from AutoGLM_GUI.logger import logger
+from AutoGLM_GUI.types import DeviceConnectionType
+
+
+def convert_connection_type(ct: ConnectionType) -> DeviceConnectionType:
+    """Convert phone_agent ConnectionType to DeviceConnectionType.
+
+    phone_agent.ConnectionType.REMOTE is actually WiFi ADB,
+    so we map it to DeviceConnectionType.WIFI.
+    """
+    if ct == ConnectionType.USB:
+        return DeviceConnectionType.USB
+    elif ct == ConnectionType.WIFI:
+        return DeviceConnectionType.WIFI
+    elif ct == ConnectionType.REMOTE:
+        return DeviceConnectionType.WIFI
+    else:
+        return DeviceConnectionType.USB
 
 
 class DeviceState(str, Enum):
@@ -28,7 +45,7 @@ class DeviceConnection:
     """Single connection method for a device (USB, WiFi, mDNS, etc.)."""
 
     device_id: str  # USB serial OR IP:port
-    connection_type: ConnectionType
+    connection_type: DeviceConnectionType
     status: str  # "device" | "offline" | "unauthorized"
     last_seen: float = field(default_factory=time.time)
 
@@ -36,14 +53,13 @@ class DeviceConnection:
         """Calculate connection priority for sorting.
 
         Priority:
-        1. Connection type (USB > WiFi/Remote > mDNS)
+        1. Connection type (USB > WiFi > Remote)
         2. Status (device > offline > unauthorized)
         """
-        # Type priority (higher is better)
         type_priority = {
-            ConnectionType.USB: 300,
-            ConnectionType.WIFI: 200,
-            ConnectionType.REMOTE: 200,
+            DeviceConnectionType.USB: 300,
+            DeviceConnectionType.WIFI: 200,
+            DeviceConnectionType.REMOTE: 100,
         }
 
         # Status priority
@@ -98,7 +114,7 @@ class ManagedDevice:
         return self.primary_connection.status
 
     @property
-    def connection_type(self) -> ConnectionType:
+    def connection_type(self) -> DeviceConnectionType:
         """Type of primary connection."""
         return self.primary_connection.connection_type
 
@@ -153,7 +169,7 @@ def _create_managed_device(
     connections = [
         DeviceConnection(
             device_id=d.device_id,
-            connection_type=d.connection_type,
+            connection_type=convert_connection_type(d.connection_type),
             status=d.status,
             last_seen=time.time(),
         )
@@ -419,7 +435,10 @@ class DeviceManager:
             added_serials = current_serials - previous_serials
             removed_serials = previous_serials - current_serials
             removed_serials = {
-                s for s in removed_serials if not s.startswith("remote:")
+                s
+                for s in removed_serials
+                if s not in self._devices
+                or self._devices[s].connection_type != DeviceConnectionType.REMOTE
             }
             existing_serials = current_serials & previous_serials
 
@@ -448,7 +467,7 @@ class DeviceManager:
                 new_connections = [
                     DeviceConnection(
                         device_id=d.device_id,
-                        connection_type=d.connection_type,
+                        connection_type=convert_connection_type(d.connection_type),
                         status=d.status,
                         last_seen=time.time(),
                     )
@@ -538,8 +557,8 @@ class DeviceManager:
                                 connections=[
                                     DeviceConnection(
                                         device_id=f"{mdns_dev.ip}:{mdns_dev.port}",
-                                        connection_type=ConnectionType.REMOTE,
-                                        status="available",  # Not connected yet
+                                        connection_type=DeviceConnectionType.WIFI,
+                                        status="available",
                                         last_seen=time.time(),
                                     )
                                 ],
@@ -800,7 +819,7 @@ class DeviceManager:
                     connections=[
                         DeviceConnection(
                             device_id=f"{base_url}|{device_id}",
-                            connection_type=ConnectionType.REMOTE,
+                            connection_type=DeviceConnectionType.REMOTE,
                             status="device",
                             last_seen=time.time(),
                         )
@@ -836,11 +855,12 @@ class DeviceManager:
             Tuple of (success, message)
         """
         with self._devices_lock:
-            if not serial.startswith("remote:"):
-                return (False, "Not a remote device")
-
             if serial not in self._devices:
                 return (False, "Remote device not found")
+
+            managed = self._devices.get(serial)
+            if not managed or managed.connection_type != DeviceConnectionType.REMOTE:
+                return (False, "Not a remote device")
 
             managed = self._devices.pop(serial)
             remote_device = self._remote_devices.pop(serial, None)

@@ -47,8 +47,8 @@ export function DeviceCard({
   const t = useTranslation();
   const isOnline = status === 'device';
   const isUsb = connectionType === 'usb';
+  const isWifi = connectionType === 'wifi';
   const isRemote = connectionType === 'remote';
-  const isHttpRemote = serial.startsWith('remote:');
   const [loading, setLoading] = useState(false);
   const [showWifiConfirm, setShowWifiConfirm] = useState(false);
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
@@ -213,24 +213,24 @@ export function DeviceCard({
           <div className="flex-shrink-0 flex flex-col items-end gap-1">
             {/* Connection type badge */}
             {(() => {
-              if (isHttpRemote) {
+              if (isRemote) {
                 return (
                   <Badge
                     variant="outline"
                     className="text-xs border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-400"
                   >
                     <Server className="w-2.5 h-2.5 mr-1" />
-                    {t.deviceCard.httpRemote || 'HTTP Remote'}
+                    {t.deviceCard.remote || 'Remote'}
                   </Badge>
                 );
-              } else if (isRemote) {
+              } else if (isWifi) {
                 return (
                   <Badge
                     variant="outline"
                     className="text-xs border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-400"
                   >
-                    <WifiOff className="w-2.5 h-2.5 mr-1" />
-                    {t.deviceCard.wifiRemote || 'WiFi'}
+                    <Wifi className="w-2.5 h-2.5 mr-1" />
+                    {t.deviceCard.wifi || 'WiFi'}
                   </Badge>
                 );
               } else if (isUsb) {
@@ -265,7 +265,7 @@ export function DeviceCard({
                 )}
               </Button>
             )}
-            {onDisconnectWifi && isRemote && (
+            {onDisconnectWifi && isWifi && (
               <Button
                 variant="ghost"
                 size="icon"
@@ -281,7 +281,7 @@ export function DeviceCard({
                 )}
               </Button>
             )}
-            {isHttpRemote && (
+            {isRemote && (
               <Button
                 variant="ghost"
                 size="icon"

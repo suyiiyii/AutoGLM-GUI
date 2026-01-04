@@ -42,7 +42,7 @@ class DeviceInfo:
     status: str  # "online" | "offline" | "unauthorized"
     model: str | None = None
     platform: str = "android"  # "android" | "ios" | "harmonyos"
-    connection_type: str = "usb"  # "usb" | "wifi" | "remote"
+    connection_type: str = "usb"  # "usb" | "wifi" (ADB WiFi) | "remote" (HTTP Remote)
 
 
 @runtime_checkable
