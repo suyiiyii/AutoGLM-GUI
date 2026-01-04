@@ -31,6 +31,7 @@ from . import (
 )
 
 
+# TODO：应该要支持运行时动态切换设备
 def _maybe_inject_remote_device() -> None:
     if remote_base_url := os.getenv("REMOTE_DEVICE_BASE_URL"):
         from AutoGLM_GUI.device_adapter import inject_device_protocol

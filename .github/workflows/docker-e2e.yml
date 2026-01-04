@@ -55,6 +55,7 @@ jobs:
         run: |
           docker build -t autoglm-gui:e2e-test .
 
+      # TODO: 逻辑和 tests/integration/test_docker_e2e.py  重复了，应该只保留一个
       - name: Run Docker container with Remote Device
         env:
           AUTOGLM_BASE_URL: ${{ secrets.AUTOGLM_BASE_URL }}

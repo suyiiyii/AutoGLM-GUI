@@ -22,7 +22,6 @@ Example:
 from typing import Callable
 
 import phone_agent.device_factory as device_factory_module
-
 from AutoGLM_GUI.device_protocol import DeviceProtocol, Screenshot
 
 
@@ -200,6 +199,7 @@ def inject_device_protocol(
         ... }
         >>> inject_device_protocol(lambda did: devices.get(did, devices["phone_1"]))
     """
+    # TODO： 不应该依赖这种全部变量
     global _original_factory
 
     # Save original factory if not already saved
