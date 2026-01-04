@@ -332,9 +332,19 @@ class DeviceManager:
             return None
 
     def force_refresh(self) -> None:
-        """Trigger immediate device list refresh (blocking)."""
+        """Trigger immediate device list refresh (blocking).
+
+        Note: This method may fail if ADB is unavailable. Exceptions are logged
+        but not propagated to support remote-only deployments.
+        """
         logger.info("Force refreshing device list...")
-        self._poll_devices()
+        try:
+            self._poll_devices()
+        except Exception as e:
+            logger.warning(
+                f"Device poll failed during force refresh: {e}. "
+                f"This is expected in remote-only deployments without local ADB."
+            )
 
     # Internal methods
 

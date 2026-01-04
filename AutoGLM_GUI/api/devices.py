@@ -410,8 +410,6 @@ def add_remote_device(request: RemoteDeviceAddRequest) -> RemoteDeviceAddRespons
     )
 
     if success:
-        device_manager.force_refresh()
-
         return RemoteDeviceAddResponse(
             success=True,
             message=message,
@@ -440,9 +438,6 @@ def remove_remote_device(
 
     device_manager = DeviceManager.get_instance()
     success, message = device_manager.remove_remote_device(request.serial)
-
-    if success:
-        device_manager.force_refresh()
 
     return RemoteDeviceRemoveResponse(
         success=success,
