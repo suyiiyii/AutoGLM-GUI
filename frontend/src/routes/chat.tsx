@@ -1041,20 +1041,33 @@ function ChatComponent() {
                   device.id === currentDeviceId ? '' : 'hidden'
                 }`}
               >
-                {chatMode === 'chatkit' ? (
+                <div
+                  className={`w-full flex items-stretch justify-center ${
+                    chatMode === 'chatkit' ? '' : 'hidden'
+                  }`}
+                >
                   <ChatKitPanel
                     deviceId={device.id}
                     deviceSerial={device.serial}
                     deviceName={device.model}
-                    isVisible={device.id === currentDeviceId}
+                    isVisible={
+                      device.id === currentDeviceId && chatMode === 'chatkit'
+                    }
                   />
-                ) : (
+                </div>
+                <div
+                  className={`w-full flex items-stretch justify-center ${
+                    chatMode === 'chatkit' ? 'hidden' : ''
+                  }`}
+                >
                   <DevicePanel
                     deviceId={device.id}
                     deviceSerial={device.serial}
                     deviceName={device.model}
                     config={config}
-                    isVisible={device.id === currentDeviceId}
+                    isVisible={
+                      device.id === currentDeviceId && chatMode !== 'chatkit'
+                    }
                     isConfigured={!!config?.base_url}
                     thinkingMode={deviceThinkingModes[device.serial] || 'deep'}
                     onThinkingModeChange={mode => {
@@ -1065,7 +1078,7 @@ function ChatComponent() {
                     }}
                     dualModelEnabled={chatMode === 'dual'}
                   />
-                )}
+                </div>
               </div>
             ))
           )}
