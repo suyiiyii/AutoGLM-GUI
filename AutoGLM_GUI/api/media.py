@@ -29,14 +29,26 @@ async def reset_video_stream(device_id: str | None = None) -> dict:
 @router.post("/api/screenshot", response_model=ScreenshotResponse)
 def take_screenshot(request: ScreenshotRequest) -> ScreenshotResponse:
     """获取设备截图。此操作无副作用，不影响 PhoneAgent 运行。"""
+    from AutoGLM_GUI.device_manager import DeviceManager
+
     try:
         device_id = request.device_id
 
-        if device_id and device_id.startswith("remote:"):
-            from AutoGLM_GUI.device_manager import DeviceManager
+        if not device_id:
+            return ScreenshotResponse(
+                success=False,
+                image="",
+                width=0,
+                height=0,
+                is_sensitive=False,
+                error="device_id is required",
+            )
 
-            device_manager = DeviceManager.get_instance()
-            remote_device = device_manager.get_remote_device_instance(device_id)
+        device_manager = DeviceManager.get_instance()
+        serial = device_manager.get_serial_by_device_id(device_id)
+
+        if serial and serial.startswith("remote:"):
+            remote_device = device_manager.get_remote_device_instance(serial)
 
             if not remote_device:
                 return ScreenshotResponse(
@@ -45,7 +57,7 @@ def take_screenshot(request: ScreenshotRequest) -> ScreenshotResponse:
                     width=0,
                     height=0,
                     is_sensitive=False,
-                    error=f"Remote device {device_id} not found",
+                    error=f"Remote device {serial} not found",
                 )
 
             screenshot = remote_device.get_screenshot(timeout=10)  # type: ignore

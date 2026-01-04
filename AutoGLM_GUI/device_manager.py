@@ -868,3 +868,14 @@ class DeviceManager:
             RemoteDevice instance or None if not found
         """
         return self._remote_devices.get(serial)
+
+    def get_serial_by_device_id(self, device_id: str) -> str | None:
+        """Get serial by device_id (reverse lookup).
+
+        Args:
+            device_id: Device ID from connections
+
+        Returns:
+            Serial (synthetic or ADB) or None if not found
+        """
+        return self._device_id_to_serial.get(device_id)
