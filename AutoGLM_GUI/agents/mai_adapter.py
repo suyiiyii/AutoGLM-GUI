@@ -625,3 +625,12 @@ class MAIAgentAdapter:
     def step_count(self) -> int:
         """Return current step count."""
         return self._step_count
+
+    def abort(self) -> None:
+        """Abort current task (no-op for MAI Agent)."""
+        pass
+
+    @property
+    def is_running(self) -> bool:
+        """Check if agent is running (always False for MAI Agent)."""
+        return False

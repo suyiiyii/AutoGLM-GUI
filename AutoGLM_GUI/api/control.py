@@ -2,6 +2,7 @@
 
 from fastapi import APIRouter
 
+from AutoGLM_GUI.devices.adb_device import ADBDevice
 from AutoGLM_GUI.schemas import (
     SwipeRequest,
     SwipeResponse,
@@ -22,12 +23,13 @@ router = APIRouter()
 def control_tap(request: TapRequest) -> TapResponse:
     """Execute tap at specified device coordinates."""
     try:
-        from phone_agent.adb import tap
+        if not request.device_id:
+            return TapResponse(success=False, error="device_id is required")
 
-        tap(
+        device = ADBDevice(request.device_id)
+        device.tap(
             x=request.x,
             y=request.y,
-            device_id=request.device_id,
             delay=request.delay,
         )
 
@@ -40,15 +42,16 @@ def control_tap(request: TapRequest) -> TapResponse:
 def control_swipe(request: SwipeRequest) -> SwipeResponse:
     """Execute swipe from start to end coordinates."""
     try:
-        from phone_agent.adb import swipe
+        if not request.device_id:
+            return SwipeResponse(success=False, error="device_id is required")
 
-        swipe(
+        device = ADBDevice(request.device_id)
+        device.swipe(
             start_x=request.start_x,
             start_y=request.start_y,
             end_x=request.end_x,
             end_y=request.end_y,
             duration_ms=request.duration_ms,
-            device_id=request.device_id,
             delay=request.delay,
         )
 

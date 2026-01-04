@@ -141,7 +141,21 @@ def _patched_model_request(
     )
 
 
+def _patched_agent_abort(self) -> None:
+    """Abort current task (no-op for PhoneAgent)."""
+    pass
+
+
+def _patched_agent_is_running(self) -> bool:
+    """Check if agent is running (always False for PhoneAgent)."""
+    return False
+
+
 def apply_patches():
     """Apply all monkey patches to phone_agent."""
-    # Patch ModelClient.request to support streaming callbacks
+    from phone_agent import PhoneAgent
+
     ModelClient.request = _patched_model_request
+
+    setattr(PhoneAgent, "abort", _patched_agent_abort)
+    setattr(PhoneAgent, "is_running", property(_patched_agent_is_running))
