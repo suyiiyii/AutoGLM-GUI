@@ -260,6 +260,21 @@ export const en = {
   navigation: {
     chat: 'Chat',
     workflows: 'Workflows',
+    logs: 'Logs',
+  },
+  logs: {
+    title: 'Log Files',
+    refresh: 'Refresh',
+    openFolder: 'Open Log Folder',
+    noLogs: 'No log files yet',
+    selectLog: 'Select a log file to view its content',
+    loading: 'Loading...',
+    webVersionNotice:
+      'You are using the Web version. The log viewer feature is only available in the desktop app.<br />Please check the backend console or server log files.',
+    compressedFileNote: 'Compressed file, please view in file manager',
+    loadFailed: 'Failed to load log list: {error}',
+    readFailed: 'Failed to read log: {error}',
+    openFolderFailed: 'Failed to open log folder: {error}',
   },
   workflows: {
     title: 'Workflow Management',

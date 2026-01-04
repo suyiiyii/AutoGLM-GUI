@@ -252,6 +252,21 @@ export const zh = {
   navigation: {
     chat: '对话',
     workflows: 'Workflows',
+    logs: '日志',
+  },
+  logs: {
+    title: '日志文件',
+    refresh: '刷新列表',
+    openFolder: '打开日志目录',
+    noLogs: '暂无日志文件',
+    selectLog: '选择一个日志文件查看内容',
+    loading: '加载中...',
+    webVersionNotice:
+      '您正在使用 Web 版本，日志查看功能仅在桌面版中可用。<br />请查看后端控制台或服务器日志文件。',
+    compressedFileNote: '压缩文件，请在文件管理器中查看',
+    loadFailed: '加载日志列表失败: {error}',
+    readFailed: '读取日志失败: {error}',
+    openFolderFailed: '打开日志目录失败: {error}',
   },
   workflows: {
     title: 'Workflow 管理',

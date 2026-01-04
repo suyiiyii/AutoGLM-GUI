@@ -1,7 +1,8 @@
 import { createFileRoute } from '@tanstack/react-router';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { FileText, FolderOpen, RefreshCw, AlertCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { useTranslation } from '../lib/i18n-context';
 
 interface LogFile {
   name: string;
@@ -25,6 +26,7 @@ export const Route = createFileRoute('/logs')({
 });
 
 function LogsComponent() {
+  const t = useTranslation();
   const [logFiles, setLogFiles] = useState<LogFile[]>([]);
   const [selectedLog, setSelectedLog] = useState<string | null>(null);
   const [logContent, setLogContent] = useState<string>('');
@@ -33,18 +35,7 @@ function LogsComponent() {
   const [error, setError] = useState<string>('');
   const [isElectron, setIsElectron] = useState(false);
 
-  useEffect(() => {
-    const electronAPI = (window as Window & { electronAPI?: ElectronAPI })
-      .electronAPI;
-    if (electronAPI?.logs) {
-      setIsElectron(true);
-      loadLogFiles();
-    } else {
-      setError('您正在使用 Web 版本，日志查看功能仅在桌面版中可用。请查看后端控制台或服务器日志文件。');
-    }
-  }, []);
-
-  const loadLogFiles = async () => {
+  const loadLogFiles = useCallback(async () => {
     try {
       setLoading(true);
       setError('');
@@ -54,13 +45,21 @@ function LogsComponent() {
       const files = await electronAPI.logs.listFiles();
       setLogFiles(files);
     } catch (err) {
-      setError(
-        `加载日志列表失败: ${err instanceof Error ? err.message : String(err)}`
-      );
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setError(t.logs.loadFailed.replace('{error}', errorMsg));
     } finally {
       setLoading(false);
     }
-  };
+  }, [t.logs.loadFailed]);
+
+  useEffect(() => {
+    const electronAPI = (window as Window & { electronAPI?: ElectronAPI })
+      .electronAPI;
+    if (electronAPI?.logs) {
+      setIsElectron(true);
+      loadLogFiles();
+    }
+  }, [loadLogFiles]);
 
   const viewLogFile = async (filename: string) => {
     setContentLoading(true);
@@ -73,9 +72,8 @@ function LogsComponent() {
       setSelectedLog(filename);
       setLogContent(content);
     } catch (err) {
-      setError(
-        `读取日志失败: ${err instanceof Error ? err.message : String(err)}`
-      );
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setError(t.logs.readFailed.replace('{error}', errorMsg));
     } finally {
       setContentLoading(false);
     }
@@ -88,12 +86,13 @@ function LogsComponent() {
       if (!electronAPI?.logs) return;
       const result = await electronAPI.logs.openFolder();
       if (!result.success) {
-        setError(`打开日志目录失败: ${result.error}`);
+        setError(
+          t.logs.openFolderFailed.replace('{error}', result.error || '')
+        );
       }
     } catch (err) {
-      setError(
-        `打开日志目录失败: ${err instanceof Error ? err.message : String(err)}`
-      );
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      setError(t.logs.openFolderFailed.replace('{error}', errorMsg));
     }
   };
 
@@ -112,7 +111,10 @@ function LogsComponent() {
       <div className="flex items-center justify-center h-full">
         <div className="text-center">
           <AlertCircle className="w-12 h-12 mx-auto mb-4 text-slate-400" />
-          <p className="text-slate-600">{error}</p>
+          <p
+            className="text-slate-600"
+            dangerouslySetInnerHTML={{ __html: t.logs.webVersionNotice }}
+          />
         </div>
       </div>
     );
@@ -123,13 +125,13 @@ function LogsComponent() {
       <div className="w-80 border-r border-slate-200 dark:border-slate-800 flex flex-col">
         <div className="p-4 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center justify-between mb-3">
-            <h2 className="text-lg font-semibold">日志文件</h2>
+            <h2 className="text-lg font-semibold">{t.logs.title}</h2>
             <Button
               variant="ghost"
               size="icon"
               onClick={loadLogFiles}
               disabled={loading}
-              title="刷新列表"
+              title={t.logs.refresh}
             >
               <RefreshCw
                 className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`}
@@ -138,14 +140,14 @@ function LogsComponent() {
           </div>
           <Button variant="outline" className="w-full" onClick={openLogsFolder}>
             <FolderOpen className="w-4 h-4 mr-2" />
-            打开日志目录
+            {t.logs.openFolder}
           </Button>
         </div>
 
         <div className="flex-1 overflow-y-auto">
           {logFiles.length === 0 ? (
             <div className="p-4 text-center text-slate-500 text-sm">
-              暂无日志文件
+              {t.logs.noLogs}
             </div>
           ) : (
             <div className="divide-y divide-slate-200 dark:divide-slate-800">
@@ -177,7 +179,7 @@ function LogsComponent() {
                   </div>
                   {file.isCompressed && (
                     <div className="text-xs text-slate-400 mt-2 ml-8">
-                      压缩文件，请在文件管理器中查看
+                      {t.logs.compressedFileNote}
                     </div>
                   )}
                 </div>
@@ -196,7 +198,7 @@ function LogsComponent() {
             <div className="flex-1 overflow-auto p-4 bg-slate-50 dark:bg-slate-950">
               {contentLoading ? (
                 <div className="flex items-center justify-center h-full">
-                  <div className="text-slate-500">加载中...</div>
+                  <div className="text-slate-500">{t.logs.loading}</div>
                 </div>
               ) : (
                 <pre className="text-xs font-mono whitespace-pre-wrap break-all">
@@ -209,7 +211,7 @@ function LogsComponent() {
           <div className="flex-1 flex items-center justify-center text-slate-500">
             <div className="text-center">
               <FileText className="w-12 h-12 mx-auto mb-4 text-slate-300" />
-              <p>选择一个日志文件查看内容</p>
+              <p>{t.logs.selectLog}</p>
             </div>
           </div>
         )}

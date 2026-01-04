@@ -45,7 +45,7 @@ export function NavigationSidebar({ className }: NavigationSidebarProps) {
     {
       id: 'logs',
       icon: FileText,
-      label: '日志',
+      label: t.navigation.logs,
       path: '/logs',
     },
   ];
