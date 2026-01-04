@@ -23,6 +23,17 @@ from tests.integration.device_agent.test_client import MockAgentTestClient
 def mock_agent_server():
     """Start mock agent server on host machine."""
     port = 18001
+
+    try:
+        subprocess.run(
+            ["fuser", "-k", f"{port}/tcp"],
+            capture_output=True,
+            timeout=5,
+        )
+        time.sleep(0.5)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
     proc = subprocess.Popen(
         [
             "uv",
@@ -85,6 +96,12 @@ def docker_container(mock_agent_server: str):
     agent_url = mock_agent_server
     host_port = 8000
     is_linux = platform.system() == "Linux"
+
+    subprocess.run(
+        ["docker", "rm", "-f", container_name],
+        capture_output=True,
+    )
+    time.sleep(0.5)
 
     print(f"\n[Docker E2E] Building Docker image: {image_name}")
     subprocess.run(
