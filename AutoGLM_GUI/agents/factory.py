@@ -161,9 +161,9 @@ def _create_glm_agent_v2(
     takeover_callback: Callable | None = None,
     confirmation_callback: Callable | None = None,
 ) -> "BaseAgent":
-    from .glm_adapter import GLMAgentAdapter
+    from .glm_agent import GLMAgent
 
-    return GLMAgentAdapter(
+    return GLMAgent(
         model_config=model_config,
         agent_config=agent_config,
         confirmation_callback=confirmation_callback,

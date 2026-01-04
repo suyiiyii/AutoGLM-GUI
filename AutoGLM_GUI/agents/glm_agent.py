@@ -2,48 +2,50 @@
 
 import json
 import traceback
-from dataclasses import dataclass
 from typing import Any, Callable
 
+from phone_agent.agent import AgentConfig
 from phone_agent.config import get_messages, get_system_prompt
+from phone_agent.model import ModelConfig
 
 from AutoGLM_GUI.actions import ActionHandler, ActionResult, parse_action
 from AutoGLM_GUI.device_protocol import DeviceProtocol
 from AutoGLM_GUI.logger import logger
-from AutoGLM_GUI.model import MessageBuilder, ModelClient, ModelConfig
+from AutoGLM_GUI.model import MessageBuilder
+from AutoGLM_GUI.model import ModelClient as GLMModelClient
+from AutoGLM_GUI.model import ModelConfig as GLMModelConfig
 
 from .protocols import StepResult
-
-
-@dataclass
-class GLMAgentConfig:
-    max_steps: int = 100
-    lang: str = "cn"
-    system_prompt: str | None = None
-    verbose: bool = True
-
-    def __post_init__(self):
-        if self.system_prompt is None:
-            self.system_prompt = get_system_prompt(self.lang)
 
 
 class GLMAgent:
     def __init__(
         self,
-        device: DeviceProtocol,
         model_config: ModelConfig,
-        agent_config: GLMAgentConfig | None = None,
+        agent_config: AgentConfig,
         confirmation_callback: Callable[[str], bool] | None = None,
         takeover_callback: Callable[[str], None] | None = None,
         thinking_callback: Callable[[str], None] | None = None,
     ):
-        self.device = device
         self.model_config = model_config
-        self.agent_config = agent_config or GLMAgentConfig()
+        self.agent_config = agent_config
 
-        self.model_client = ModelClient(self.model_config)
+        self.device = self._resolve_device(agent_config.device_id)
+
+        glm_model_config = GLMModelConfig(
+            base_url=model_config.base_url,
+            model_name=model_config.model_name,
+            api_key=model_config.api_key,
+            max_tokens=model_config.max_tokens,
+            temperature=model_config.temperature,
+            top_p=model_config.top_p,
+            frequency_penalty=model_config.frequency_penalty,
+            extra_body=model_config.extra_body,
+        )
+
+        self.model_client = GLMModelClient(glm_model_config)
         self.action_handler = ActionHandler(
-            device=device,
+            device=self.device,
             confirmation_callback=confirmation_callback,
             takeover_callback=takeover_callback,
         )
@@ -52,6 +54,28 @@ class GLMAgent:
         self._step_count = 0
         self._is_running = False
         self._thinking_callback = thinking_callback
+
+    @staticmethod
+    def _resolve_device(device_id: str | None) -> DeviceProtocol:
+        from AutoGLM_GUI.device_manager import DeviceManager
+        from AutoGLM_GUI.devices.adb_device import ADBDevice
+
+        if not device_id:
+            raise ValueError("device_id is required for GLM Agent")
+
+        device_manager = DeviceManager.get_instance()
+        managed = device_manager.get_device_by_device_id(device_id)
+
+        if not managed:
+            raise ValueError(f"Device {device_id} not found")
+
+        if managed.connection_type.value == "remote":
+            remote_device = device_manager.get_remote_device_instance(managed.serial)
+            if not remote_device:
+                raise ValueError(f"Remote device instance not found: {managed.serial}")
+            return remote_device  # type: ignore[return-value]
+        else:
+            return ADBDevice(managed.primary_device_id)
 
     def run(self, task: str) -> str:
         self._context = []
@@ -100,9 +124,10 @@ class GLMAgent:
         current_app = self.device.get_current_app()
 
         if is_first:
-            self._context.append(
-                MessageBuilder.create_system_message(self.agent_config.system_prompt)
+            system_prompt = self.agent_config.system_prompt or get_system_prompt(
+                self.agent_config.lang
             )
+            self._context.append(MessageBuilder.create_system_message(system_prompt))
 
             screen_info = MessageBuilder.build_screen_info(current_app)
             text_content = f"{user_prompt}\n\n{screen_info}"
