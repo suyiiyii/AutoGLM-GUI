@@ -16,6 +16,15 @@ from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.schemas import (
     DeviceListResponse,
     DeviceResponse,
+    MdnsDeviceResponse,
+    MdnsDiscoverResponse,
+    QRPairCancelResponse,
+    QRPairGenerateResponse,
+    QRPairStatusResponse,
+    RemoteDeviceAddRequest,
+    RemoteDeviceAddResponse,
+    RemoteDeviceRemoveRequest,
+    RemoteDeviceRemoveResponse,
     WiFiConnectRequest,
     WiFiConnectResponse,
     WiFiDisconnectRequest,
@@ -24,11 +33,6 @@ from AutoGLM_GUI.schemas import (
     WiFiManualConnectResponse,
     WiFiPairRequest,
     WiFiPairResponse,
-    MdnsDiscoverResponse,
-    MdnsDeviceResponse,
-    QRPairGenerateResponse,
-    QRPairStatusResponse,
-    QRPairCancelResponse,
 )
 
 
@@ -364,3 +368,57 @@ def cancel_qr_pairing(session_id: str) -> QRPairCancelResponse:
             success=False,
             message="Session not found or already completed",
         )
+
+
+@router.post("/api/devices/add_remote", response_model=RemoteDeviceAddResponse)
+def add_remote_device(request: RemoteDeviceAddRequest) -> RemoteDeviceAddResponse:
+    """Add a remote HTTP proxy device manually."""
+    from AutoGLM_GUI.device_manager import DeviceManager
+
+    device_manager = DeviceManager.get_instance()
+    success, message, serial = device_manager.add_remote_device(
+        base_url=request.base_url,
+        device_id=request.device_id,
+        label=request.label,
+    )
+
+    if success:
+        device_manager.force_refresh()
+
+        return RemoteDeviceAddResponse(
+            success=True,
+            message=message,
+            serial=serial,
+        )
+    else:
+        error_type = "add_failed"
+        if "already exists" in message.lower():
+            error_type = "already_exists"
+        elif "connection failed" in message.lower():
+            error_type = "connection_failed"
+
+        return RemoteDeviceAddResponse(
+            success=False,
+            message=message,
+            error=error_type,
+        )
+
+
+@router.post("/api/devices/remove_remote", response_model=RemoteDeviceRemoveResponse)
+def remove_remote_device(
+    request: RemoteDeviceRemoveRequest,
+) -> RemoteDeviceRemoveResponse:
+    """Remove a remote device."""
+    from AutoGLM_GUI.device_manager import DeviceManager
+
+    device_manager = DeviceManager.get_instance()
+    success, message = device_manager.remove_remote_device(request.serial)
+
+    if success:
+        device_manager.force_refresh()
+
+    return RemoteDeviceRemoveResponse(
+        success=success,
+        message=message,
+        error=None if success else "remove_failed",
+    )

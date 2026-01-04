@@ -367,6 +367,9 @@ class MAIAgentAdapter:
 
             # Special handling for Enter key
             # ActionHandler doesn't have an "Enter" handler, so we handle it directly here
+            # TODO: Hardcoded ADB command - incompatible with RemoteDevice
+            # Should use DeviceProtocol unified interface (e.g., device.type_text("\n"))
+            # Priority: Low (handle after RemoteDevice integration complete)
             if button_name == "enter":
                 # Use platform_utils to run ADB keyevent command
                 from AutoGLM_GUI.platform_utils import run_cmd_silently_sync

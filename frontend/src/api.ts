@@ -276,6 +276,29 @@ export interface MdnsDiscoverResponse {
   error?: string;
 }
 
+export interface RemoteDeviceAddRequest {
+  base_url: string;
+  device_id: string;
+  label?: string;
+}
+
+export interface RemoteDeviceAddResponse {
+  success: boolean;
+  message: string;
+  serial?: string;
+  error?: string;
+}
+
+export interface RemoteDeviceRemoveRequest {
+  serial: string;
+}
+
+export interface RemoteDeviceRemoveResponse {
+  success: boolean;
+  message: string;
+  error?: string;
+}
+
 export async function listDevices(): Promise<DeviceListResponse> {
   const res = await axios.get<DeviceListResponse>('/api/devices');
   return res.data;
@@ -324,6 +347,26 @@ export async function pairWifi(
   const res = await axios.post<WiFiPairResponse>(
     '/api/devices/pair_wifi',
     payload
+  );
+  return res.data;
+}
+
+export async function addRemoteDevice(
+  payload: RemoteDeviceAddRequest
+): Promise<RemoteDeviceAddResponse> {
+  const res = await axios.post<RemoteDeviceAddResponse>(
+    '/api/devices/add_remote',
+    payload
+  );
+  return res.data;
+}
+
+export async function removeRemoteDevice(
+  serial: string
+): Promise<RemoteDeviceRemoveResponse> {
+  const res = await axios.post<RemoteDeviceRemoveResponse>(
+    '/api/devices/remove_remote',
+    { serial }
   );
   return res.data;
 }

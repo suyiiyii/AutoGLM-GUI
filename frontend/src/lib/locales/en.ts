@@ -111,6 +111,18 @@ export const en = {
     qrTimeout: 'Timeout: No scan detected',
     qrError: 'Pairing failed',
     qrGenerateError: 'Failed to generate QR code',
+    remoteTab: 'Remote Device',
+    remoteUrl: 'Remote Server URL',
+    remoteUrlHint: 'e.g., http://192.168.1.100:8000',
+    remoteDeviceId: 'Device ID',
+    remoteDeviceIdHint: 'The device ID on the remote server',
+    remoteLabel: 'Display Name',
+    remoteLabelPlaceholder: 'e.g., My Remote Phone',
+    remoteLabelHint: 'Optional: Custom name for this device',
+    connectRemote: 'Connect',
+    remoteUrlRequired: 'Remote server URL is required',
+    remoteUrlInvalid: 'URL must start with http:// or https://',
+    remoteIdRequired: 'Device ID is required',
   },
   devicePanel: {
     noConfig: 'Please configure your API settings first',
@@ -184,6 +196,9 @@ export const en = {
     agentBusy: 'Busy',
     agentError: 'Error',
     agentInitializing: 'Initializing',
+    httpRemote: 'HTTP Remote',
+    wifiRemote: 'WiFi',
+    removeRemote: 'Remove Remote Device',
     connectWifiTitle: 'Connect via WiFi',
     connectWifiContent:
       'Switch to WiFi connection? Ensure your device and computer are on the same network.',
@@ -238,6 +253,7 @@ export const en = {
     wifiPairError: 'WiFi pairing failed',
     decisionModelNotConfigured:
       'Decision model not configured. Please set up the API Key in settings.',
+    remoteDeviceAddError: 'Failed to add remote device',
   },
   history: {
     title: 'Task History',

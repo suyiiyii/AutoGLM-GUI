@@ -30,15 +30,43 @@ async def reset_video_stream(device_id: str | None = None) -> dict:
 def take_screenshot(request: ScreenshotRequest) -> ScreenshotResponse:
     """获取设备截图。此操作无副作用，不影响 PhoneAgent 运行。"""
     try:
-        screenshot = capture_screenshot(device_id=request.device_id)
-        return ScreenshotResponse(
-            success=True,
-            image=screenshot.base64_data,
-            width=screenshot.width,
-            height=screenshot.height,
-            is_sensitive=screenshot.is_sensitive,
-        )
+        device_id = request.device_id
+
+        if device_id and device_id.startswith("remote:"):
+            from AutoGLM_GUI.device_manager import DeviceManager
+
+            device_manager = DeviceManager.get_instance()
+            remote_device = device_manager.get_remote_device_instance(device_id)
+
+            if not remote_device:
+                return ScreenshotResponse(
+                    success=False,
+                    image="",
+                    width=0,
+                    height=0,
+                    is_sensitive=False,
+                    error=f"Remote device {device_id} not found",
+                )
+
+            screenshot = remote_device.get_screenshot(timeout=10)  # type: ignore
+            return ScreenshotResponse(
+                success=True,
+                image=screenshot.base64_data,
+                width=screenshot.width,
+                height=screenshot.height,
+                is_sensitive=screenshot.is_sensitive,
+            )
+        else:
+            screenshot = capture_screenshot(device_id=device_id)
+            return ScreenshotResponse(
+                success=True,
+                image=screenshot.base64_data,
+                width=screenshot.width,
+                height=screenshot.height,
+                is_sensitive=screenshot.is_sensitive,
+            )
     except Exception as e:
+        logger.exception("Screenshot failed for device %s", request.device_id)
         return ScreenshotResponse(
             success=False,
             image="",

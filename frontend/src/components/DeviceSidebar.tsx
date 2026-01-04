@@ -29,12 +29,13 @@ import { Label } from '@/components/ui/label';
 import { QRCodeSVG } from 'qrcode.react';
 import type { Device, MdnsDevice } from '../api';
 import {
+  addRemoteDevice,
+  cancelQRPairing,
   connectWifiManual,
-  pairWifi,
   discoverMdnsDevices,
   generateQRPairing,
   getQRPairingStatus,
-  cancelQRPairing,
+  pairWifi,
 } from '../api';
 import { useTranslation } from '../lib/i18n-context';
 import { useDebouncedState } from '@/hooks/useDebouncedState';
@@ -106,6 +107,13 @@ export function DeviceSidebar({
   const [qrSession, setQrSession] = useState<QRPairingSession | null>(null);
   const [isGeneratingQR, setIsGeneratingQR] = useState(false);
   const qrPollIntervalRef = useRef<number | null>(null);
+
+  const [remoteBaseUrl, setRemoteBaseUrl] = useState('');
+  const [remoteDeviceId, setRemoteDeviceId] = useState('');
+  const [remoteLabel, setRemoteLabel] = useState('');
+  const [remoteUrlError, setRemoteUrlError] = useState('');
+  const [remoteIdError, setRemoteIdError] = useState('');
+  const [isConnectingRemote, setIsConnectingRemote] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('sidebar-collapsed', JSON.stringify(isCollapsed));
@@ -330,6 +338,54 @@ export function DeviceSidebar({
       console.error('[QR Pairing] Cancel failed:', error);
     }
   }, [qrSession, stopQRStatusPolling]);
+
+  const handleRemoteConnect = async () => {
+    setRemoteUrlError('');
+    setRemoteIdError('');
+
+    if (!remoteBaseUrl.trim()) {
+      setRemoteUrlError(
+        t.deviceSidebar.remoteUrlRequired || '请输入远程服务器地址'
+      );
+      return;
+    }
+    if (
+      !remoteBaseUrl.startsWith('http://') &&
+      !remoteBaseUrl.startsWith('https://')
+    ) {
+      setRemoteUrlError(
+        t.deviceSidebar.remoteUrlInvalid ||
+          '地址必须以 http:// 或 https:// 开头'
+      );
+      return;
+    }
+    if (!remoteDeviceId.trim()) {
+      setRemoteIdError(t.deviceSidebar.remoteIdRequired || '请输入设备 ID');
+      return;
+    }
+
+    setIsConnectingRemote(true);
+    try {
+      const result = await addRemoteDevice({
+        base_url: remoteBaseUrl,
+        device_id: remoteDeviceId,
+        label: remoteLabel.trim() || undefined,
+      });
+
+      if (result.success) {
+        setShowManualConnect(false);
+        setRemoteBaseUrl('');
+        setRemoteDeviceId('');
+        setRemoteLabel('');
+      } else {
+        setRemoteUrlError(result.message || t.toasts.remoteDeviceAddError);
+      }
+    } catch {
+      setRemoteUrlError(t.toasts.remoteDeviceAddError);
+    } finally {
+      setIsConnectingRemote(false);
+    }
+  };
 
   // Cleanup QR session when dialog closes or tab changes
   useEffect(() => {
@@ -585,12 +641,15 @@ export function DeviceSidebar({
               onValueChange={setActiveTab}
               className="w-full"
             >
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="direct">
                   {t.deviceSidebar.directConnectTab}
                 </TabsTrigger>
                 <TabsTrigger value="pair">
                   {t.deviceSidebar.pairTab}
+                </TabsTrigger>
+                <TabsTrigger value="remote">
+                  {t.deviceSidebar.remoteTab || '远程设备'}
                 </TabsTrigger>
               </TabsList>
 
@@ -1044,6 +1103,89 @@ export function DeviceSidebar({
                       : t.deviceSidebar.pairAndConnect}
                   </Button>
                 </div>
+              </TabsContent>
+
+              {/* Remote Device Tab */}
+              <TabsContent value="remote" className="space-y-4 mt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="remote-url">
+                    {t.deviceSidebar.remoteUrl || '远程服务器地址'}
+                  </Label>
+                  <Input
+                    id="remote-url"
+                    placeholder="http://192.168.1.100:8001"
+                    value={remoteBaseUrl}
+                    onChange={e => {
+                      setRemoteBaseUrl(e.target.value);
+                      setRemoteUrlError('');
+                    }}
+                    disabled={isConnectingRemote}
+                    onKeyDown={e => e.key === 'Enter' && handleRemoteConnect()}
+                    className={remoteUrlError ? 'border-red-500' : ''}
+                  />
+                  {remoteUrlError && (
+                    <p className="text-sm text-red-500">{remoteUrlError}</p>
+                  )}
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {t.deviceSidebar.remoteUrlHint ||
+                      '运行 Device Agent Server 的地址'}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="remote-device-id">
+                    {t.deviceSidebar.remoteDeviceId || '设备 ID'}
+                  </Label>
+                  <Input
+                    id="remote-device-id"
+                    placeholder="phone_001"
+                    value={remoteDeviceId}
+                    onChange={e => {
+                      setRemoteDeviceId(e.target.value);
+                      setRemoteIdError('');
+                    }}
+                    disabled={isConnectingRemote}
+                    onKeyDown={e => e.key === 'Enter' && handleRemoteConnect()}
+                    className={remoteIdError ? 'border-red-500' : ''}
+                  />
+                  {remoteIdError && (
+                    <p className="text-sm text-red-500">{remoteIdError}</p>
+                  )}
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {t.deviceSidebar.remoteDeviceIdHint ||
+                      '设备在远程服务器上的标识符'}
+                  </p>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="remote-label">
+                    {t.deviceSidebar.remoteLabel || '显示名称（可选）'}
+                  </Label>
+                  <Input
+                    id="remote-label"
+                    placeholder={
+                      t.deviceSidebar.remoteLabelPlaceholder || '测试设备 1'
+                    }
+                    value={remoteLabel}
+                    onChange={e => setRemoteLabel(e.target.value)}
+                    disabled={isConnectingRemote}
+                    onKeyDown={e => e.key === 'Enter' && handleRemoteConnect()}
+                  />
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {t.deviceSidebar.remoteLabelHint ||
+                      '自定义设备在列表中的显示名称'}
+                  </p>
+                </div>
+
+                <Button
+                  onClick={handleRemoteConnect}
+                  disabled={isConnectingRemote}
+                  className="w-full"
+                >
+                  {isConnectingRemote
+                    ? t.common.loading || '正在连接...'
+                    : t.deviceSidebar.connectRemote || '连接远程设备'}
+                </Button>
               </TabsContent>
             </Tabs>
 

@@ -31,17 +31,33 @@ from . import (
 )
 
 
-# TODO：应该要支持运行时动态切换设备
-def _maybe_inject_remote_device() -> None:
-    if remote_base_url := os.getenv("REMOTE_DEVICE_BASE_URL"):
-        from AutoGLM_GUI.device_adapter import inject_device_protocol
-        from AutoGLM_GUI.devices.remote_device import RemoteDevice
+def _inject_unified_device_protocol() -> None:
+    """Inject unified device protocol supporting both ADB and Remote devices."""
+    from AutoGLM_GUI.device_adapter import inject_device_protocol
+    from AutoGLM_GUI.device_manager import DeviceManager
+    from AutoGLM_GUI.device_protocol import DeviceProtocol
+    from AutoGLM_GUI.devices.adb_device import ADBDevice
 
-        def get_remote_device(device_id: str | None):
-            return RemoteDevice(device_id or "mock_device_001", remote_base_url)
+    device_manager = DeviceManager.get_instance()
 
-        inject_device_protocol(get_remote_device)
-        logger.info(f"Remote device mode enabled: connecting to {remote_base_url}")
+    def get_device_by_id(device_id: str | None) -> DeviceProtocol:
+        if not device_id:
+            raise ValueError("device_id is required")
+
+        managed = device_manager.get_device_by_device_id(device_id)
+        if not managed:
+            raise ValueError(f"Device {device_id} not found")
+
+        if managed.serial.startswith("remote:"):
+            remote_device = device_manager.get_remote_device_instance(managed.serial)
+            if not remote_device:
+                raise ValueError(f"Remote device instance not found: {managed.serial}")
+            return remote_device  # type: ignore
+        else:
+            return ADBDevice(managed.primary_device_id)
+
+    inject_device_protocol(get_device_by_id)
+    logger.info("Unified device protocol injected (ADB + Remote)")
 
 
 def _get_cors_origins() -> list[str]:
@@ -77,8 +93,7 @@ def _get_static_dir() -> Path | None:
 def create_app() -> FastAPI:
     """Build the FastAPI app with routers and static assets."""
 
-    # Inject RemoteDevice if REMOTE_DEVICE_BASE_URL is set
-    _maybe_inject_remote_device()
+    _inject_unified_device_protocol()
 
     # Create MCP ASGI app
     mcp_app = mcp.get_mcp_asgi_app()

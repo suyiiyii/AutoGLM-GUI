@@ -642,3 +642,52 @@ class WorkflowListResponse(BaseModel):
     """Workflow 列表响应."""
 
     workflows: list[WorkflowResponse]
+
+
+class RemoteDeviceAddRequest(BaseModel):
+    """添加远程设备请求."""
+
+    base_url: str
+    device_id: str
+    label: str | None = None
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_base_url(cls, v: str) -> str:
+        v = v.strip().rstrip("/")
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("base_url must start with http:// or https://")
+        return v
+
+    @field_validator("device_id")
+    @classmethod
+    def validate_device_id(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("device_id cannot be empty")
+        if len(v) > 100:
+            raise ValueError("device_id too long (max 100 characters)")
+        return v
+
+
+class RemoteDeviceAddResponse(BaseModel):
+    """添加远程设备响应."""
+
+    success: bool
+    message: str
+    serial: str | None = None
+    error: str | None = None
+
+
+class RemoteDeviceRemoveRequest(BaseModel):
+    """移除远程设备请求."""
+
+    serial: str
+
+
+class RemoteDeviceRemoveResponse(BaseModel):
+    """移除远程设备响应."""
+
+    success: bool
+    message: str
+    error: str | None = None
