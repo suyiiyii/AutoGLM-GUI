@@ -40,7 +40,7 @@ function LogsComponent() {
       setIsElectron(true);
       loadLogFiles();
     } else {
-      setError('日志功能仅在桌面版中可用');
+      setError('您正在使用 Web 版本，日志查看功能仅在桌面版中可用。请查看后端控制台或服务器日志文件。');
     }
   }, []);
 
