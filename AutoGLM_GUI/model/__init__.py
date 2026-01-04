@@ -2,6 +2,6 @@
 
 from .client import ModelClient
 from .message_builder import MessageBuilder
-from .types import ModelConfig, ModelResponse
+from .types import ModelResponse, VisionModelConfig
 
-__all__ = ["ModelClient", "ModelConfig", "ModelResponse", "MessageBuilder"]
+__all__ = ["ModelClient", "VisionModelConfig", "ModelResponse", "MessageBuilder"]

@@ -5,7 +5,7 @@ from typing import Any
 
 
 @dataclass
-class ModelConfig:
+class VisionModelConfig:
     """Configuration for the vision-language model.
 
     This follows OpenAI-compatible API standards, supporting any endpoint

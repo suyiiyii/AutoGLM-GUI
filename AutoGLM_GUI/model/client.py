@@ -5,11 +5,11 @@ from typing import Any, Callable
 
 from openai import OpenAI
 
-from .types import ModelConfig, ModelResponse
+from .types import ModelResponse, VisionModelConfig
 
 
 class ModelClient:
-    def __init__(self, config: ModelConfig):
+    def __init__(self, config: VisionModelConfig):
         self.config = config
         self.client = OpenAI(
             base_url=config.base_url,

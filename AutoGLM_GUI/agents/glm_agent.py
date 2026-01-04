@@ -4,16 +4,15 @@ import json
 import traceback
 from typing import Any, Callable
 
-from phone_agent.agent import AgentConfig
-from phone_agent.config import get_messages, get_system_prompt
-from phone_agent.model import ModelConfig
-
 from AutoGLM_GUI.actions import ActionHandler, ActionResult, parse_action
 from AutoGLM_GUI.device_protocol import DeviceProtocol
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.model import MessageBuilder
 from AutoGLM_GUI.model import ModelClient as GLMModelClient
-from AutoGLM_GUI.model import ModelConfig as GLMModelConfig
+from AutoGLM_GUI.model import VisionModelConfig as GLMModelConfig
+from phone_agent.agent import AgentConfig
+from phone_agent.config import get_messages, get_system_prompt
+from phone_agent.model import ModelConfig
 
 from .protocols import StepResult
 
