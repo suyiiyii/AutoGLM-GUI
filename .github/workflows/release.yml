@@ -151,14 +151,6 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Disable Spotlight indexing
-        run: |
-          # Disable Spotlight indexing to prevent hdiutil resource busy errors
-          sudo mdutil -a -i off || true
-          # Kill any mds processes that might be accessing disk images
-          sudo pkill -9 mds || true
-          sudo pkill -9 mds_stores || true
-
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
