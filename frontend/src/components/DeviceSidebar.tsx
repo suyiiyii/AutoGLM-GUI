@@ -27,12 +27,13 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { QRCodeSVG } from 'qrcode.react';
-import type { Device, MdnsDevice } from '../api';
+import type { Device, MdnsDevice, RemoteDeviceInfo } from '../api';
 import {
   addRemoteDevice,
   cancelQRPairing,
   connectWifiManual,
   discoverMdnsDevices,
+  discoverRemoteDevices,
   generateQRPairing,
   getQRPairingStatus,
   pairWifi,
@@ -109,10 +110,14 @@ export function DeviceSidebar({
   const qrPollIntervalRef = useRef<number | null>(null);
 
   const [remoteBaseUrl, setRemoteBaseUrl] = useState('');
-  const [remoteDeviceId, setRemoteDeviceId] = useState('');
-  const [remoteLabel, setRemoteLabel] = useState('');
   const [remoteUrlError, setRemoteUrlError] = useState('');
-  const [remoteIdError, setRemoteIdError] = useState('');
+  const [isDiscoveringRemote, setIsDiscoveringRemote] = useState(false);
+  const [discoveredRemoteDevices, setDiscoveredRemoteDevices] = useState<
+    RemoteDeviceInfo[]
+  >([]);
+  const [selectedRemoteDevice, setSelectedRemoteDevice] = useState<
+    string | null
+  >(null);
   const [isConnectingRemote, setIsConnectingRemote] = useState(false);
 
   useEffect(() => {
@@ -339,9 +344,8 @@ export function DeviceSidebar({
     }
   }, [qrSession, stopQRStatusPolling]);
 
-  const handleRemoteConnect = async () => {
+  const handleDiscoverRemote = async () => {
     setRemoteUrlError('');
-    setRemoteIdError('');
 
     if (!remoteBaseUrl.trim()) {
       setRemoteUrlError(
@@ -359,24 +363,44 @@ export function DeviceSidebar({
       );
       return;
     }
-    if (!remoteDeviceId.trim()) {
-      setRemoteIdError(t.deviceSidebar.remoteIdRequired || '请输入设备 ID');
-      return;
+
+    setIsDiscoveringRemote(true);
+    try {
+      const result = await discoverRemoteDevices({
+        base_url: remoteBaseUrl,
+        timeout: 5,
+      });
+
+      if (result.success) {
+        setDiscoveredRemoteDevices(result.devices);
+        setSelectedRemoteDevice(null);
+      } else {
+        setRemoteUrlError(result.message || '发现设备失败');
+        setDiscoveredRemoteDevices([]);
+      }
+    } catch {
+      setRemoteUrlError('连接失败，请检查地址是否正确');
+      setDiscoveredRemoteDevices([]);
+    } finally {
+      setIsDiscoveringRemote(false);
     }
+  };
+
+  const handleAddRemoteDevice = async () => {
+    if (!selectedRemoteDevice) return;
 
     setIsConnectingRemote(true);
     try {
       const result = await addRemoteDevice({
         base_url: remoteBaseUrl,
-        device_id: remoteDeviceId,
-        label: remoteLabel.trim() || undefined,
+        device_id: selectedRemoteDevice,
       });
 
       if (result.success) {
         setShowManualConnect(false);
         setRemoteBaseUrl('');
-        setRemoteDeviceId('');
-        setRemoteLabel('');
+        setDiscoveredRemoteDevices([]);
+        setSelectedRemoteDevice(null);
       } else {
         setRemoteUrlError(result.message || t.toasts.remoteDeviceAddError);
       }
@@ -1119,8 +1143,8 @@ export function DeviceSidebar({
                       setRemoteBaseUrl(e.target.value);
                       setRemoteUrlError('');
                     }}
-                    disabled={isConnectingRemote}
-                    onKeyDown={e => e.key === 'Enter' && handleRemoteConnect()}
+                    disabled={isDiscoveringRemote}
+                    onKeyDown={e => e.key === 'Enter' && handleDiscoverRemote()}
                     className={remoteUrlError ? 'border-red-500' : ''}
                   />
                   {remoteUrlError && (
@@ -1130,62 +1154,63 @@ export function DeviceSidebar({
                     {t.deviceSidebar.remoteUrlHint ||
                       '运行 Device Agent Server 的地址'}
                   </p>
+                  <Button
+                    onClick={handleDiscoverRemote}
+                    disabled={isDiscoveringRemote || !remoteBaseUrl}
+                    className="w-full"
+                  >
+                    {isDiscoveringRemote ? '正在发现...' : '发现设备'}
+                  </Button>
                 </div>
 
-                <div className="space-y-2">
-                  <Label htmlFor="remote-device-id">
-                    {t.deviceSidebar.remoteDeviceId || '设备 ID'}
-                  </Label>
-                  <Input
-                    id="remote-device-id"
-                    placeholder="phone_001"
-                    value={remoteDeviceId}
-                    onChange={e => {
-                      setRemoteDeviceId(e.target.value);
-                      setRemoteIdError('');
-                    }}
+                {discoveredRemoteDevices.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>可用设备</Label>
+                    <div className="space-y-2">
+                      {discoveredRemoteDevices.map(device => (
+                        <button
+                          key={device.device_id}
+                          onClick={() =>
+                            setSelectedRemoteDevice(device.device_id)
+                          }
+                          className={`
+                            w-full rounded-lg border p-3 text-left transition-colors
+                            ${
+                              selectedRemoteDevice === device.device_id
+                                ? 'border-[#1d9bf0] bg-blue-50 dark:bg-blue-950/20'
+                                : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
+                            }
+                          `}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Smartphone className="h-4 w-4 text-[#1d9bf0]" />
+                            <div className="flex-1">
+                              <p className="font-medium text-sm">
+                                {device.device_id}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                {device.model} · {device.platform}
+                              </p>
+                            </div>
+                            {selectedRemoteDevice === device.device_id && (
+                              <CheckCircle className="h-4 w-4 text-[#1d9bf0]" />
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedRemoteDevice && (
+                  <Button
+                    onClick={handleAddRemoteDevice}
                     disabled={isConnectingRemote}
-                    onKeyDown={e => e.key === 'Enter' && handleRemoteConnect()}
-                    className={remoteIdError ? 'border-red-500' : ''}
-                  />
-                  {remoteIdError && (
-                    <p className="text-sm text-red-500">{remoteIdError}</p>
-                  )}
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {t.deviceSidebar.remoteDeviceIdHint ||
-                      '设备在远程服务器上的标识符'}
-                  </p>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="remote-label">
-                    {t.deviceSidebar.remoteLabel || '显示名称（可选）'}
-                  </Label>
-                  <Input
-                    id="remote-label"
-                    placeholder={
-                      t.deviceSidebar.remoteLabelPlaceholder || '测试设备 1'
-                    }
-                    value={remoteLabel}
-                    onChange={e => setRemoteLabel(e.target.value)}
-                    disabled={isConnectingRemote}
-                    onKeyDown={e => e.key === 'Enter' && handleRemoteConnect()}
-                  />
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {t.deviceSidebar.remoteLabelHint ||
-                      '自定义设备在列表中的显示名称'}
-                  </p>
-                </div>
-
-                <Button
-                  onClick={handleRemoteConnect}
-                  disabled={isConnectingRemote}
-                  className="w-full"
-                >
-                  {isConnectingRemote
-                    ? t.common.loading || '正在连接...'
-                    : t.deviceSidebar.connectRemote || '连接远程设备'}
-                </Button>
+                    className="w-full"
+                  >
+                    {isConnectingRemote ? '正在连接...' : '连接远程设备'}
+                  </Button>
+                )}
               </TabsContent>
             </Tabs>
 

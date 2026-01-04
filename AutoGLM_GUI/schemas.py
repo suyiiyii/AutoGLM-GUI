@@ -644,12 +644,53 @@ class WorkflowListResponse(BaseModel):
     workflows: list[WorkflowResponse]
 
 
+class RemoteDeviceInfo(BaseModel):
+    """远程设备信息."""
+
+    device_id: str
+    model: str
+    platform: str
+    status: str
+
+
+class RemoteDeviceDiscoverRequest(BaseModel):
+    """远程设备发现请求."""
+
+    base_url: str
+    timeout: int = 5
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_base_url(cls, v: str) -> str:
+        v = v.strip().rstrip("/")
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("base_url must start with http:// or https://")
+        return v
+
+    @field_validator("timeout")
+    @classmethod
+    def validate_timeout(cls, v: int) -> int:
+        if v <= 0:
+            raise ValueError("timeout must be positive")
+        if v > 30:
+            raise ValueError("timeout must be <= 30 seconds")
+        return v
+
+
+class RemoteDeviceDiscoverResponse(BaseModel):
+    """远程设备发现响应."""
+
+    success: bool
+    devices: list[RemoteDeviceInfo]
+    message: str
+    error: str | None = None
+
+
 class RemoteDeviceAddRequest(BaseModel):
     """添加远程设备请求."""
 
     base_url: str
     device_id: str
-    label: str | None = None
 
     @field_validator("base_url")
     @classmethod

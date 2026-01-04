@@ -785,15 +785,49 @@ class DeviceManager:
             connection_address,
         )
 
-    def add_remote_device(
-        self, base_url: str, device_id: str, label: str | None = None
-    ) -> tuple[bool, str, str]:
+    def discover_remote_devices(
+        self, base_url: str, timeout: int = 5
+    ) -> tuple[bool, str, list[dict]]:
+        """Discover devices from a remote Device Agent Server.
+
+        Args:
+            base_url: Remote Agent Server address
+            timeout: Connection timeout in seconds
+
+        Returns:
+            Tuple of (success, message, devices_list)
+        """
+        from AutoGLM_GUI.devices.remote_device import RemoteDeviceManager
+
+        base_url = base_url.strip().rstrip("/")
+        if not base_url.startswith(("http://", "https://")):
+            return (False, "base_url must start with http:// or https://", [])
+
+        try:
+            remote_manager = RemoteDeviceManager(base_url, timeout=float(timeout))
+            devices = remote_manager.list_devices()
+
+            devices_list = [
+                {
+                    "device_id": d.device_id,
+                    "model": d.model or "Unknown",
+                    "platform": d.platform,
+                    "status": d.status,
+                }
+                for d in devices
+            ]
+
+            return (True, f"Found {len(devices_list)} device(s)", devices_list)
+        except Exception as e:
+            logger.error(f"Failed to discover remote devices: {e}")
+            return (False, f"Discovery failed: {str(e)}", [])
+
+    def add_remote_device(self, base_url: str, device_id: str) -> tuple[bool, str, str]:
         """Manually add a remote HTTP proxy device.
 
         Args:
             base_url: Remote Agent Server address (e.g., http://server:8001)
             device_id: Device ID on the remote server
-            label: Optional display label
 
         Returns:
             Tuple of (success, message, synthetic_serial)
@@ -824,7 +858,7 @@ class DeviceManager:
                             last_seen=time.time(),
                         )
                     ],
-                    model=label or f"Remote Device ({device_id})",
+                    model=device_id,
                     state=DeviceState.ONLINE,
                 )
 
@@ -833,7 +867,6 @@ class DeviceManager:
                 self._remote_device_configs[synthetic_serial] = {
                     "base_url": base_url,
                     "device_id": device_id,
-                    "label": label,
                 }
 
                 self._device_id_to_serial[managed.primary_device_id] = synthetic_serial

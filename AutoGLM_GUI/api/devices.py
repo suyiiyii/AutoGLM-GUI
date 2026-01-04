@@ -23,6 +23,9 @@ from AutoGLM_GUI.schemas import (
     QRPairStatusResponse,
     RemoteDeviceAddRequest,
     RemoteDeviceAddResponse,
+    RemoteDeviceDiscoverRequest,
+    RemoteDeviceDiscoverResponse,
+    RemoteDeviceInfo,
     RemoteDeviceRemoveRequest,
     RemoteDeviceRemoveResponse,
     WiFiConnectRequest,
@@ -370,6 +373,31 @@ def cancel_qr_pairing(session_id: str) -> QRPairCancelResponse:
         )
 
 
+@router.post(
+    "/api/devices/discover_remote", response_model=RemoteDeviceDiscoverResponse
+)
+def discover_remote_devices(
+    request: RemoteDeviceDiscoverRequest,
+) -> RemoteDeviceDiscoverResponse:
+    """Discover devices from a remote Device Agent Server."""
+    from AutoGLM_GUI.device_manager import DeviceManager
+
+    device_manager = DeviceManager.get_instance()
+    success, message, devices_list = device_manager.discover_remote_devices(
+        base_url=request.base_url,
+        timeout=request.timeout,
+    )
+
+    devices = [RemoteDeviceInfo(**d) for d in devices_list]
+
+    return RemoteDeviceDiscoverResponse(
+        success=success,
+        devices=devices,
+        message=message,
+        error=None if success else message,
+    )
+
+
 @router.post("/api/devices/add_remote", response_model=RemoteDeviceAddResponse)
 def add_remote_device(request: RemoteDeviceAddRequest) -> RemoteDeviceAddResponse:
     """Add a remote HTTP proxy device manually."""
@@ -379,7 +407,6 @@ def add_remote_device(request: RemoteDeviceAddRequest) -> RemoteDeviceAddRespons
     success, message, serial = device_manager.add_remote_device(
         base_url=request.base_url,
         device_id=request.device_id,
-        label=request.label,
     )
 
     if success:
