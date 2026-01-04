@@ -397,6 +397,19 @@ export function ScrcpyPlayer({
       console.error('[ScrcpyPlayer] Socket error:', error);
       setStatus('error');
       setErrorMessage(error?.message || 'Socket error');
+
+      if (suppressReconnectRef.current) {
+        return;
+      }
+
+      onStreamReadyRef.current?.(null);
+
+      if (!reconnectTimerRef.current) {
+        reconnectTimerRef.current = setTimeout(() => {
+          reconnectTimerRef.current = null;
+          connectDeviceRef.current?.();
+        }, 3000);
+      }
     });
 
     socket.on('disconnect', () => {

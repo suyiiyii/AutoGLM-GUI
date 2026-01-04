@@ -108,30 +108,52 @@ async def connect_device(sid: str, data: dict | None) -> None:
 
     await _stop_stream_for_sid(sid)
 
-    streamer = ScrcpyStreamer(
-        device_id=device_id,
-        max_size=max_size,
-        bit_rate=bit_rate,
-    )
+    max_retries = 3
+    retry_delay = 2.0
 
-    try:
-        await streamer.start()
-        metadata = await streamer.read_video_metadata()
-        await sio.emit(
-            "video-metadata",
-            {
-                "deviceName": metadata.device_name,
-                "width": metadata.width,
-                "height": metadata.height,
-                "codec": metadata.codec,
-            },
-            to=sid,
+    last_error: Exception | None = None
+    for attempt in range(max_retries):
+        streamer = ScrcpyStreamer(
+            device_id=device_id,
+            max_size=max_size,
+            bit_rate=bit_rate,
         )
-    except Exception as exc:
-        streamer.stop()
-        logger.exception("Failed to start scrcpy stream: %s", exc)
-        await sio.emit("error", {"message": str(exc)}, to=sid)
-        return
 
-    _socket_streamers[sid] = streamer
-    _stream_tasks[sid] = asyncio.create_task(_stream_packets(sid, streamer))
+        try:
+            await streamer.start()
+            metadata = await streamer.read_video_metadata()
+            await sio.emit(
+                "video-metadata",
+                {
+                    "deviceName": metadata.device_name,
+                    "width": metadata.width,
+                    "height": metadata.height,
+                    "codec": metadata.codec,
+                },
+                to=sid,
+            )
+
+            _socket_streamers[sid] = streamer
+            _stream_tasks[sid] = asyncio.create_task(_stream_packets(sid, streamer))
+            return
+
+        except Exception as exc:
+            last_error = exc
+            streamer.stop()
+
+            if attempt < max_retries - 1:
+                logger.warning(
+                    "Failed to connect scrcpy (attempt %d/%d): %s. Retrying in %ss...",
+                    attempt + 1,
+                    max_retries,
+                    exc,
+                    retry_delay,
+                )
+                await asyncio.sleep(retry_delay)
+            else:
+                logger.exception(
+                    "Failed to start scrcpy stream after %d attempts", max_retries
+                )
+
+    if last_error:
+        await sio.emit("error", {"message": str(last_error)}, to=sid)

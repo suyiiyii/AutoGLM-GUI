@@ -1663,7 +1663,7 @@ export function DevicePanel({
               )
             }
             onStreamReady={handleVideoStreamReady}
-            fallbackTimeout={100000}
+            fallbackTimeout={10000}
           />
         ) : (
           /* Screenshot mode */
