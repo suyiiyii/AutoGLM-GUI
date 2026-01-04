@@ -114,7 +114,10 @@ def docker_container(mock_agent_server: str):
         "AUTOGLM_CORS_ORIGINS": "*",
     }
 
-    env_list = [f"-e{k}={v}" for k, v in env.items() if v]
+    env_list = []
+    for k, v in env.items():
+        if v:
+            env_list.extend(["-e", f"{k}={v}"])
 
     print(f"[Docker E2E] Starting container: {container_name}")
     subprocess.run(
