@@ -49,9 +49,9 @@ mac:
 dmg:
   # 禁用 writeUpdateInfo 避免额外的磁盘操作
   writeUpdateInfo: false
-  # 使用默认的 UDZO 格式，兼容性更好，避免 hdiutil resource busy 错误
-  # format: ULFO
+  format: UDZO
   sign: false
+  internetEnabled: false
 
 
 linux:

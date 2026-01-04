@@ -151,6 +151,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
+      - name: Pre-clean mounted images
+        run: |
+          hdiutil info | awk '/\/dev\/disk[0-9]+/ {print $1}' | xargs -n1 -I{} hdiutil detach -force -quiet {} || true
+          sleep 2
+
       - name: Setup Python
         uses: actions/setup-python@v5
         with:
