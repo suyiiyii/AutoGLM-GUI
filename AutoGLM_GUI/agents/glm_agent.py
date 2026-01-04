@@ -7,9 +7,7 @@ from typing import Any, Callable
 from AutoGLM_GUI.actions import ActionHandler, ActionResult, parse_action
 from AutoGLM_GUI.device_protocol import DeviceProtocol
 from AutoGLM_GUI.logger import logger
-from AutoGLM_GUI.model import MessageBuilder
-from AutoGLM_GUI.model import ModelClient as GLMModelClient
-from AutoGLM_GUI.model import VisionModelConfig as GLMModelConfig
+from AutoGLM_GUI.model import MessageBuilder, ModelClient, VisionModelConfig
 from phone_agent.agent import AgentConfig
 from phone_agent.config import get_messages, get_system_prompt
 from phone_agent.model import ModelConfig
@@ -29,9 +27,7 @@ class GLMAgent:
         self.model_config = model_config
         self.agent_config = agent_config
 
-        self.device = self._resolve_device(agent_config.device_id)
-
-        glm_model_config = GLMModelConfig(
+        glm_model_config = VisionModelConfig(
             base_url=model_config.base_url,
             model_name=model_config.model_name,
             api_key=model_config.api_key,
@@ -42,7 +38,9 @@ class GLMAgent:
             extra_body=model_config.extra_body,
         )
 
-        self.model_client = GLMModelClient(glm_model_config)
+        self.model_client = ModelClient(glm_model_config)
+
+        self.device = self._resolve_device(agent_config.device_id)
         self.action_handler = ActionHandler(
             device=self.device,
             confirmation_callback=confirmation_callback,
@@ -155,7 +153,11 @@ class GLMAgent:
 
             callback = self._thinking_callback
             if callback is None and self.agent_config.verbose:
-                callback = lambda chunk: print(chunk, end="", flush=True)
+
+                def print_chunk(chunk: str) -> None:
+                    print(chunk, end="", flush=True)
+
+                callback = print_chunk
 
             response = self.model_client.request(
                 self._context, on_thinking_chunk=callback

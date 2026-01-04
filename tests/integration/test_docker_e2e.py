@@ -164,7 +164,7 @@ def docker_container(mock_agent_server: str):
     else:
         raise RuntimeError("Container failed to become ready")
 
-    yield access_url
+    yield {"access_url": access_url, "remote_url": remote_url}
 
     print(f"[Docker E2E] Stopping container: {container_name}")
     subprocess.run(["docker", "stop", container_name], capture_output=True)
@@ -179,44 +179,69 @@ class TestDockerE2E:
 
     def test_meituan_message_scenario(
         self,
-        docker_container: str,
+        docker_container: dict,
         test_client: MockAgentTestClient,
         scenario_path: str,
     ):
         """Test complete flow: Docker container -> LLM -> RemoteDevice -> Mock Agent."""
-        # Load scenario into mock agent
+        access_url = docker_container["access_url"]
+        remote_url = docker_container["remote_url"]
+
         test_client.load_scenario(scenario_path)
 
-        # Initialize agent in container
-        print(f"[Docker E2E] Initializing agent at {docker_container}")
+        print(f"[Docker E2E] Registering remote device at {access_url}")
         resp = httpx.post(
-            f"{docker_container}/api/init",
+            f"{access_url}/api/devices/add_remote",
+            json={
+                "base_url": remote_url,
+                "device_id": "mock_device_001",
+            },
+            timeout=10,
+        )
+        assert resp.status_code == 200, f"Failed to register device: {resp.text}"
+        print(f"[Docker E2E] Device registered: {resp.json()}")
+
+        print(f"[Docker E2E] Verifying device discovery at {access_url}")
+        resp = httpx.get(f"{access_url}/api/devices", timeout=10)
+        assert resp.status_code == 200
+        devices = resp.json()["devices"]
+        print(f"[Docker E2E] Found {len(devices)} device(s): {devices}")
+        assert len(devices) > 0, "No devices discovered after registration"
+
+        registered_device_id = devices[0]["id"]
+        print(f"[Docker E2E] Using device_id: {registered_device_id}")
+
+        print(f"[Docker E2E] Initializing agent at {access_url}")
+        resp = httpx.post(
+            f"{access_url}/api/init",
             json={
                 "agent_type": "glm",
-                "device_id": "mock_device_001",
+                "device_id": registered_device_id,
                 "model_config": {
                     "base_url": os.environ["AUTOGLM_BASE_URL"],
                     "api_key": os.environ["AUTOGLM_API_KEY"],
                     "model_name": os.environ["AUTOGLM_MODEL_NAME"],
                 },
                 "agent_config": {
-                    "device_id": "mock_device_001",
+                    "device_id": registered_device_id,
                     "max_steps": 10,
                     "verbose": True,
                 },
             },
             timeout=30,
         )
-        assert resp.status_code == 200
+        if resp.status_code != 200:
+            print(f"[Docker E2E] ERROR: Init failed with status {resp.status_code}")
+            print(f"[Docker E2E] Response: {resp.text}")
+        assert resp.status_code == 200, f"Init failed: {resp.text}"
         print(f"[Docker E2E] Init response: {resp.json()}")
 
-        # Send chat request
         instruction = "点击屏幕下方的消息按钮"
         print(f"[Docker E2E] Sending instruction: {instruction}")
         resp = httpx.post(
-            f"{docker_container}/api/chat",
+            f"{access_url}/api/chat",
             json={
-                "device_id": "mock_device_001",
+                "device_id": registered_device_id,
                 "message": instruction,
             },
             timeout=120,
@@ -226,24 +251,23 @@ class TestDockerE2E:
         result = resp.json()
         print(f"[Docker E2E] Chat result: {result}")
 
-        # Assert against mock agent
         print("[Docker E2E] Checking mock agent for recorded commands...")
         commands = test_client.get_commands()
         print(f"[Docker E2E] Total commands recorded: {len(commands)}")
+        for i, cmd in enumerate(commands):
+            print(f"[Docker E2E]   Command {i + 1}: {cmd}")
 
-        # Should have at least one tap
         tap_commands = [c for c in commands if c["action"] == "tap"]
+        print(f"[Docker E2E] Tap commands: {tap_commands}")
         assert len(tap_commands) >= 1, (
-            f"Expected at least 1 tap, got {len(tap_commands)}"
+            f"Expected at least 1 tap, got {len(tap_commands)}. All commands: {commands}"
         )
 
-        # First tap should be in the message button region
         tap = tap_commands[0]
         x, y = tap["params"]["x"], tap["params"]["y"]
         assert 487 <= x <= 721, f"Tap x={x} not in message button region [487, 721]"
         assert 2516 <= y <= 2667, f"Tap y={y} not in message button region [2516, 2667]"
 
-        # State should have transitioned to "message"
         state = test_client.get_state()
         assert state["current_state"] == "message", (
             f"Expected state 'message', got '{state['current_state']}'"

@@ -103,6 +103,7 @@ class ModelClient:
             total_time=total_time,
         )
 
+    # TODO parser 应该独立出来形成一个接口，这是因为不同模型要求的  parser 可能是不一样的
     def _parse_response(self, raw_content: str) -> tuple[str, str]:
         thinking = ""
         action = ""
@@ -120,6 +121,20 @@ class ModelClient:
             start = raw_content.find("<answer>") + len("<answer>")
             action = raw_content[start:].strip()
         else:
-            action = raw_content.replace(thinking, "").strip()
+            lines = raw_content.strip().split("\n")
+            for line in reversed(lines):
+                line = line.strip()
+                if line.startswith("do(") or line.startswith("finish("):
+                    action = line
+                    thinking_lines = []
+                    for content_line in lines:
+                        if content_line.strip() == action:
+                            break
+                        thinking_lines.append(content_line)
+                    thinking = "\n".join(thinking_lines).strip()
+                    break
+
+            if not action:
+                action = raw_content.replace(thinking, "").strip()
 
         return thinking, action
