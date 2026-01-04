@@ -78,12 +78,14 @@ def has_llm_config() -> bool:
 @pytest.fixture(scope="module")
 def docker_container(mock_agent_server: str):
     """Build and run Docker container for testing."""
+    import platform
+
     image_name = "autoglm-gui:e2e-test"
     container_name = "autoglm-e2e-test"
-    host_port = 8000
     agent_url = mock_agent_server
+    host_port = 8000
+    is_linux = platform.system() == "Linux"
 
-    # Build Docker image
     print(f"\n[Docker E2E] Building Docker image: {image_name}")
     subprocess.run(
         ["docker", "build", "-t", image_name, "."],
@@ -91,21 +93,29 @@ def docker_container(mock_agent_server: str):
         cwd=Path(__file__).parent.parent.parent,
     )
 
-    # For GitHub Actions (Linux): use host.docker.internal via --add-host
-    # For macOS/Windows: host.docker.internal works natively
+    if is_linux:
+        remote_url = agent_url
+        docker_args = ["--network", "host"]
+        access_url = "http://127.0.0.1:8000"
+    else:
+        remote_url = agent_url.replace("127.0.0.1", "host.docker.internal")
+        docker_args = [
+            "--add-host=host.docker.internal:host-gateway",
+            "-p",
+            f"{host_port}:8000",
+        ]
+        access_url = f"http://127.0.0.1:{host_port}"
+
     env = {
-        "REMOTE_DEVICE_BASE_URL": agent_url.replace(
-            "127.0.0.1", "host.docker.internal"
-        ),
+        "REMOTE_DEVICE_BASE_URL": remote_url,
         "AUTOGLM_BASE_URL": os.environ.get("AUTOGLM_BASE_URL", ""),
         "AUTOGLM_MODEL_NAME": os.environ.get("AUTOGLM_MODEL_NAME", ""),
         "AUTOGLM_API_KEY": os.environ.get("AUTOGLM_API_KEY", ""),
         "AUTOGLM_CORS_ORIGINS": "*",
     }
 
-    env_str = " ".join([f'-e {k}="{v}"' for k, v in env.items() if v])
+    env_list = [f"-e{k}={v}" for k, v in env.items() if v]
 
-    # Run container
     print(f"[Docker E2E] Starting container: {container_name}")
     subprocess.run(
         [
@@ -114,21 +124,17 @@ def docker_container(mock_agent_server: str):
             "-d",
             "--name",
             container_name,
-            "--add-host=host.docker.internal:host-gateway",
-            "-p",
-            f"{host_port}:8000",
-            env_str,
+            *docker_args,
+            *env_list,
             image_name,
         ],
         check=True,
-        shell=False,
     )
 
-    # Wait for container to be ready
     print("[Docker E2E] Waiting for container to start...")
     for i in range(30):
         try:
-            resp = httpx.get(f"http://127.0.0.1:{host_port}/api/health", timeout=2)
+            resp = httpx.get(f"{access_url}/api/health", timeout=2)
             if resp.status_code == 200:
                 print("[Docker E2E] Container is ready!")
                 break
@@ -138,9 +144,8 @@ def docker_container(mock_agent_server: str):
     else:
         raise RuntimeError("Container failed to become ready")
 
-    yield f"http://127.0.0.1:{host_port}"
+    yield access_url
 
-    # Cleanup
     print(f"[Docker E2E] Stopping container: {container_name}")
     subprocess.run(["docker", "stop", container_name], capture_output=True)
     subprocess.run(["docker", "rm", container_name], capture_output=True)
@@ -169,7 +174,7 @@ class TestDockerE2E:
             json={
                 "agent_type": "glm",
                 "device_id": "mock_device_001",
-                "model": {
+                "model_config": {
                     "base_url": os.environ["AUTOGLM_BASE_URL"],
                     "api_key": os.environ["AUTOGLM_API_KEY"],
                     "model_name": os.environ["AUTOGLM_MODEL_NAME"],
