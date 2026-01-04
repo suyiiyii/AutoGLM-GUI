@@ -1,7 +1,8 @@
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const net = require('net');
+const fs = require('fs');
 
 // ==================== 全局变量 ====================
 let backendProcess = null;
@@ -545,4 +546,90 @@ process.on('uncaughtException', (error) => {
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('未处理的 Promise 拒绝:', reason);
+});
+
+ipcMain.handle('get-logs-directory', () => {
+  const logPath = getActualLogFilePath();
+  return path.dirname(logPath);
+});
+
+ipcMain.handle('list-log-files', async () => {
+  const logDir = path.dirname(getActualLogFilePath());
+
+  try {
+    if (!fs.existsSync(logDir)) {
+      console.log('日志目录不存在，返回空列表:', logDir);
+      return [];
+    }
+
+    const files = fs.readdirSync(logDir);
+    return files
+      .filter(f => f.endsWith('.log') || f.endsWith('.zip'))
+      .map(f => {
+        const filePath = path.join(logDir, f);
+        const stats = fs.statSync(filePath);
+        return {
+          name: f,
+          path: filePath,
+          size: stats.size,
+          modified: stats.mtime,
+          isError: f.startsWith('errors_'),
+          isCompressed: f.endsWith('.zip')
+        };
+      })
+      .sort((a, b) => b.modified - a.modified);
+  } catch (error) {
+    console.error('读取日志目录失败:', error);
+    return [];
+  }
+});
+
+ipcMain.handle('read-log-file', async (event, filename) => {
+  const logDir = path.dirname(getActualLogFilePath());
+  const filePath = path.join(logDir, filename);
+
+  if (!filePath.startsWith(logDir)) {
+    throw new Error('非法访问：文件路径不在日志目录中');
+  }
+
+  if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+    throw new Error('非法文件名');
+  }
+
+  try {
+    if (!fs.existsSync(filePath)) {
+      throw new Error('文件不存在');
+    }
+
+    const stats = fs.statSync(filePath);
+    if (stats.size > 10 * 1024 * 1024) {
+      throw new Error('文件过大（超过 10MB），请在文件管理器中查看');
+    }
+
+    return fs.readFileSync(filePath, 'utf-8');
+  } catch (error) {
+    console.error('读取日志文件失败:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('open-logs-folder', async () => {
+  const logPath = getActualLogFilePath();
+
+  try {
+    if (fs.existsSync(logPath)) {
+      shell.showItemInFolder(logPath);
+    } else {
+      const logDir = path.dirname(logPath);
+      if (fs.existsSync(logDir)) {
+        shell.openPath(logDir);
+      } else {
+        throw new Error('日志目录不存在');
+      }
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('打开日志目录失败:', error);
+    return { success: false, error: error.message };
+  }
 });

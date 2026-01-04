@@ -1,6 +1,11 @@
 import React from 'react';
 import { Link, useMatchRoute } from '@tanstack/react-router';
-import { MessageSquare, ListChecks, type LucideIcon } from 'lucide-react';
+import {
+  MessageSquare,
+  ListChecks,
+  FileText,
+  type LucideIcon,
+} from 'lucide-react';
 import {
   Tooltip,
   TooltipTrigger,
@@ -36,6 +41,12 @@ export function NavigationSidebar({ className }: NavigationSidebarProps) {
       icon: ListChecks,
       label: t.navigation.workflows,
       path: '/workflows',
+    },
+    {
+      id: 'logs',
+      icon: FileText,
+      label: '日志',
+      path: '/logs',
     },
   ];
 
