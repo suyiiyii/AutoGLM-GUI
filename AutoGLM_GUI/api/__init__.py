@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from AutoGLM_GUI.adb_plus.qr_pair import qr_pairing_manager
+from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.version import APP_VERSION
 
 from . import (
@@ -28,6 +29,18 @@ from . import (
     version,
     workflows,
 )
+
+
+def _maybe_inject_remote_device() -> None:
+    if remote_base_url := os.getenv("REMOTE_DEVICE_BASE_URL"):
+        from AutoGLM_GUI.device_adapter import inject_device_protocol
+        from AutoGLM_GUI.devices.remote_device import RemoteDevice
+
+        def get_remote_device(device_id: str | None):
+            return RemoteDevice(device_id or "mock_device_001", remote_base_url)
+
+        inject_device_protocol(get_remote_device)
+        logger.info(f"Remote device mode enabled: connecting to {remote_base_url}")
 
 
 def _get_cors_origins() -> list[str]:
@@ -62,6 +75,9 @@ def _get_static_dir() -> Path | None:
 
 def create_app() -> FastAPI:
     """Build the FastAPI app with routers and static assets."""
+
+    # Inject RemoteDevice if REMOTE_DEVICE_BASE_URL is set
+    _maybe_inject_remote_device()
 
     # Create MCP ASGI app
     mcp_app = mcp.get_mcp_asgi_app()
