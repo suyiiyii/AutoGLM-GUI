@@ -320,13 +320,22 @@ class PhoneAgentManager:
         Returns:
             已 patch 的 agent 实例
         """
+        from AutoGLM_GUI.agents.glm_adapter import GLMAgentAdapter
         from AutoGLM_GUI.agents.mai_adapter import MAIAgentAdapter
         from phone_agent import PhoneAgent
 
         model_config, agent_config = self.get_config(device_id)
 
         streaming_agent: BaseAgent
-        if isinstance(original_agent, MAIAgentAdapter):
+        if isinstance(original_agent, GLMAgentAdapter):
+            streaming_agent = GLMAgentAdapter(
+                model_config=model_config,
+                agent_config=agent_config,
+                thinking_callback=on_thinking_chunk,
+            )
+            streaming_agent._agent._context = original_agent._agent._context.copy()
+            streaming_agent._agent._step_count = original_agent._agent._step_count
+        elif isinstance(original_agent, MAIAgentAdapter):
             streaming_agent = MAIAgentAdapter(
                 model_config=model_config,
                 agent_config=agent_config,
@@ -441,10 +450,18 @@ class PhoneAgentManager:
             if streaming_agent and not stop_event.is_set():
                 original_agent = self.get_agent_safe(device_id)
                 if original_agent:
+                    from AutoGLM_GUI.agents.glm_adapter import GLMAgentAdapter
                     from AutoGLM_GUI.agents.mai_adapter import MAIAgentAdapter
                     from phone_agent import PhoneAgent
 
-                    if isinstance(original_agent, MAIAgentAdapter) and isinstance(
+                    if isinstance(original_agent, GLMAgentAdapter) and isinstance(
+                        streaming_agent, GLMAgentAdapter
+                    ):
+                        original_agent._agent._context = streaming_agent._agent._context
+                        original_agent._agent._step_count = (
+                            streaming_agent._agent._step_count
+                        )
+                    elif isinstance(original_agent, MAIAgentAdapter) and isinstance(
                         streaming_agent, MAIAgentAdapter
                     ):
                         original_agent.mai_agent.traj_memory = (

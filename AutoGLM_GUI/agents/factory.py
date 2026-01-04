@@ -137,7 +137,6 @@ def _create_mai_agent(
 ) -> "MAIAgentAdapter":
     from .mai_adapter import MAIAgentAdapter, MAIAgentConfig
 
-    # Build MAI config from dict
     mai_config = MAIAgentConfig(
         history_n=agent_specific_config.get("history_n", 3),
         max_pixels=agent_specific_config.get("max_pixels"),
@@ -155,6 +154,23 @@ def _create_mai_agent(
     )
 
 
-# Register built-in agents
-register_agent("glm", _create_phone_agent)
+def _create_glm_agent_v2(
+    model_config: "ModelConfig",
+    agent_config: "AgentConfig",
+    agent_specific_config: AgentSpecificConfig,
+    takeover_callback: Callable | None = None,
+    confirmation_callback: Callable | None = None,
+) -> "BaseAgent":
+    from .glm_adapter import GLMAgentAdapter
+
+    return GLMAgentAdapter(
+        model_config=model_config,
+        agent_config=agent_config,
+        confirmation_callback=confirmation_callback,
+        takeover_callback=takeover_callback,
+    )
+
+
+register_agent("glm_legacy", _create_phone_agent)
+register_agent("glm", _create_glm_agent_v2)
 register_agent("mai", _create_mai_agent)
