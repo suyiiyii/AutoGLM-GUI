@@ -34,6 +34,17 @@ from . import (
 def _inject_unified_device_protocol() -> None:
     """Inject unified device protocol supporting both ADB and Remote devices."""
     from AutoGLM_GUI.device_adapter import inject_device_protocol
+
+    if remote_base_url := os.getenv("REMOTE_DEVICE_BASE_URL"):
+        from AutoGLM_GUI.devices.remote_device import RemoteDevice
+
+        def get_remote_device(device_id: str | None):
+            return RemoteDevice(device_id or "mock_device_001", remote_base_url)
+
+        inject_device_protocol(get_remote_device)
+        logger.info(f"Remote device mode enabled: connecting to {remote_base_url}")
+        return
+
     from AutoGLM_GUI.device_manager import DeviceManager
     from AutoGLM_GUI.device_protocol import DeviceProtocol
     from AutoGLM_GUI.devices.adb_device import ADBDevice

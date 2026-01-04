@@ -51,14 +51,18 @@ class TestState:
             Tuple of (base64_data, width, height)
         """
         if self._screenshot_base64 is None:
-            from PIL import Image
+            from io import BytesIO
 
-            with open(self.screenshot_path, "rb") as f:
-                data = f.read()
-                self._screenshot_base64 = base64.b64encode(data).decode("utf-8")
+            from PIL import Image
 
             img = Image.open(self.screenshot_path)
             self._screenshot_width, self._screenshot_height = img.size
+
+            buffered = BytesIO()
+            img.save(buffered, format="PNG")
+            self._screenshot_base64 = base64.b64encode(buffered.getvalue()).decode(
+                "utf-8"
+            )
 
         assert (
             self._screenshot_width is not None and self._screenshot_height is not None
