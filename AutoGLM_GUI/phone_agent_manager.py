@@ -7,7 +7,7 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import Callable, Optional
 
 from AutoGLM_GUI.agents.protocols import BaseAgent
 from AutoGLM_GUI.config import AgentConfig, ModelConfig

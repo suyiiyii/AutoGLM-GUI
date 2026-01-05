@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import Any, Protocol
 
-from AutoGLM_GUI.config import AgentConfig, ModelConfig, StepResult
+from AutoGLM_GUI.config import StepResult
 
 
 class BaseAgent(Protocol):

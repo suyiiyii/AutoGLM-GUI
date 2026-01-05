@@ -5,6 +5,9 @@ import sys
 from functools import wraps
 from importlib import metadata
 
+from AutoGLM_GUI.config import AgentConfig, ModelConfig, StepResult
+from AutoGLM_GUI.logger import logger
+
 # 修复 Windows 编码问题 - 必须在所有其他导入之前
 if sys.platform == "win32":
     import codecs
@@ -58,9 +61,6 @@ try:
     __version__ = metadata.version("autoglm-gui")
 except metadata.PackageNotFoundError:
     __version__ = "unknown"
-
-from AutoGLM_GUI.config import AgentConfig, ModelConfig, StepResult
-from AutoGLM_GUI.logger import logger
 
 __all__ = [
     "__version__",
