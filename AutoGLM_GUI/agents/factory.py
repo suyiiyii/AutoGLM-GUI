@@ -154,5 +154,28 @@ def _create_glm_agent_v2(
     )
 
 
+def _create_internal_mai_agent(
+    model_config: ModelConfig,
+    agent_config: AgentConfig,
+    agent_specific_config: AgentSpecificConfig,
+    device,
+    takeover_callback: Callable | None = None,
+    confirmation_callback: Callable | None = None,
+) -> BaseAgent:
+    from .internal_mai_agent import InternalMAIAgent
+
+    history_n = agent_specific_config.get("history_n", 3)
+
+    return InternalMAIAgent(
+        model_config=model_config,
+        agent_config=agent_config,
+        device=device,
+        history_n=history_n,
+        confirmation_callback=confirmation_callback,
+        takeover_callback=takeover_callback,
+    )
+
+
 register_agent("glm", _create_glm_agent_v2)
 register_agent("mai", _create_mai_agent)
+register_agent("mai_internal", _create_internal_mai_agent)

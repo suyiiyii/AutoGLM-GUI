@@ -1,4 +1,10 @@
-"""MAI Agent parser using XML tags and JSON."""
+"""MAI Agent parser using XML tags and JSON.
+
+从 mai_agent 的 XML 格式中提取 thinking 和 action，并转换为
+AutoGLM_GUI 的标准格式。
+
+迁移说明：基于原有实现增强，添加 parse_with_thinking 方法。
+"""
 
 import json
 import re
@@ -6,6 +12,10 @@ from typing import Any
 
 
 SCALE_FACTOR = 999
+
+
+class MAIParseError(ValueError):
+    pass
 
 
 class MAIParser:
@@ -22,6 +32,56 @@ class MAIParser:
     @property
     def coordinate_scale(self) -> int:
         return 999
+
+    def parse_with_thinking(self, raw_response: str) -> dict[str, Any]:
+        text = raw_response.strip()
+
+        if "</think>" in text and "</thinking>" not in text:
+            text = text.replace("</think>", "</thinking>")
+            text = "<thinking>" + text
+
+        pattern = r"<thinking>(.*?)</thinking>.*?<tool_call>(.*?)</tool_call>"
+        match = re.search(pattern, text, re.DOTALL)
+
+        if not match:
+            raise MAIParseError("Failed to find <thinking> and <tool_call> tags")
+
+        thinking = match.group(1).strip().strip('"')
+        tool_call_str = match.group(2).strip().strip('"')
+
+        try:
+            tool_call = json.loads(tool_call_str)
+        except json.JSONDecodeError as e:
+            raise MAIParseError(f"Invalid JSON in tool_call: {e}") from e
+
+        mai_action = tool_call.get("arguments", {})
+
+        if "coordinate" in mai_action:
+            mai_action["coordinate"] = self._normalize_coordinate_to_0_1(
+                mai_action["coordinate"]
+            )
+
+        return {
+            "thinking": thinking,
+            "raw_action": mai_action,
+            "converted_action": self._convert_action(mai_action),
+        }
+
+    def _normalize_coordinate_to_0_1(
+        self, coordinate: list[int | float]
+    ) -> list[float]:
+        if len(coordinate) == 2:
+            x, y = coordinate
+        elif len(coordinate) == 4:
+            x1, y1, x2, y2 = coordinate
+            x = (x1 + x2) / 2
+            y = (y1 + y2) / 2
+        else:
+            raise MAIParseError(
+                f"Invalid coordinate format: expected 2 or 4 values, got {len(coordinate)}"
+            )
+
+        return [x / SCALE_FACTOR, y / SCALE_FACTOR]
 
     def parse(self, raw_response: str) -> dict[str, Any]:
         """Parse MAI agent XML+JSON output.

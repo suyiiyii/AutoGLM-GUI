@@ -27,6 +27,25 @@ class MessageBuilder:
         }
 
     @staticmethod
+    def create_multi_image_user_message(
+        text: str, image_base64_list: list[str]
+    ) -> dict[str, Any]:
+        if not image_base64_list:
+            return {"role": "user", "content": text}
+
+        content_parts: list[dict[str, Any]] = [{"type": "text", "text": text}]
+
+        for image_base64 in image_base64_list:
+            content_parts.append(
+                {
+                    "type": "image_url",
+                    "image_url": {"url": f"data:image/png;base64,{image_base64}"},
+                }
+            )
+
+        return {"role": "user", "content": content_parts}
+
+    @staticmethod
     def create_assistant_message(content: str) -> dict[str, Any]:
         return {"role": "assistant", "content": content}
 
