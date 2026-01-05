@@ -10,7 +10,7 @@ from PIL import Image
 from AutoGLM_GUI.agents.internal_mai_agent import InternalMAIAgent
 from AutoGLM_GUI.agents.traj_memory import TrajMemory, TrajStep
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
-from AutoGLM_GUI.parsers.mai_parser import MAIParser
+from AutoGLM_GUI.parsers import MAIParser
 
 
 @pytest.fixture

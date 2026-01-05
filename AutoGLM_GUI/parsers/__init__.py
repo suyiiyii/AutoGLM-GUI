@@ -10,8 +10,8 @@ Each agent type has its own parser implementation:
 """
 
 from .base import ActionParser
-from .glm_parser import GLMParser
-from .mai_parser import MAIParser
+from AutoGLM_GUI.agents.glm.parser import GLMParser
+from AutoGLM_GUI.agents.mai.parser import MAIParser
 from .phone_parser import PhoneAgentParser
 
 __all__ = [
