@@ -177,5 +177,5 @@ def _create_internal_mai_agent(
 
 
 register_agent("glm", _create_glm_agent_v2)
-register_agent("mai", _create_mai_agent)
-register_agent("mai_internal", _create_internal_mai_agent)
+register_agent("mai", _create_internal_mai_agent)
+register_agent("mai_legacy", _create_mai_agent)

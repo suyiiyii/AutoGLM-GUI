@@ -6,7 +6,8 @@ Guide for AI agents working in this codebase.
 
 **Python**: `uv run python` (NEVER use raw `python`)  
 **Frontend**: `pnpm` in `frontend/` directory  
-**DO NOT** modify `phone_agent/` or `mai_agent/` - third-party code
+**DO NOT** modify `phone_agent/` - third-party code  
+**Note**: `mai_agent` is now internally implemented (see `AutoGLM_GUI/agents/internal_mai_agent.py`)
 
 ## Configuration System
 
@@ -130,9 +131,12 @@ export async function listDevices(): Promise<DeviceListResponse> {
 
 ### NEVER Modify Third-Party Code
 
-`phone_agent/` and `mai_agent/` are third-party. For modifications:
+`phone_agent/` is third-party. For modifications:
 1. Use monkey patches in `AutoGLM_GUI/phone_agent_patches.py`
 2. Or wrap functionality in `AutoGLM_GUI/` modules
+
+**Note**: `mai_agent/` was third-party but is now fully internalized.  
+Use `AutoGLM_GUI/agents/internal_mai_agent.py` for MAI Agent modifications.
 
 ### Type Safety (FORBIDDEN)
 
@@ -189,7 +193,7 @@ AutoGLM_GUI/           # Backend - FastAPI app
   platform_utils.py    # Cross-platform utils
 
 phone_agent/           # Third-party - DO NOT MODIFY
-mai_agent/             # Third-party - DO NOT MODIFY
+mai_agent/             # Legacy third-party code (internalized, kept for reference)
 
 frontend/src/          # React frontend
   routes/              # TanStack Router pages
