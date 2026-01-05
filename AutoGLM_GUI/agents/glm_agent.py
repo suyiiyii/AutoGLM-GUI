@@ -1,7 +1,6 @@
 """GLM Agent implementation with full control over the agent lifecycle."""
 
 import json
-import time
 import traceback
 from typing import Any, Callable
 
@@ -91,8 +90,6 @@ class GLMAgent:
         messages: list[dict[str, Any]],
         on_thinking_chunk: Callable[[str], None] | None = None,
     ) -> tuple[str, str, str]:
-        start_time = time.time()
-
         stream = self.openai_client.chat.completions.create(
             messages=messages,  # type: ignore[arg-type]
             model=self.model_config.model_name,
