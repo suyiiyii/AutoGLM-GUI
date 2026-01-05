@@ -322,6 +322,7 @@ class PhoneAgentManager:
             已 patch 的 agent 实例
         """
         from AutoGLM_GUI.agents.glm_agent import GLMAgent
+        from AutoGLM_GUI.agents.internal_mai_agent import InternalMAIAgent
         from AutoGLM_GUI.agents.mai_adapter import MAIAgentAdapter
         from phone_agent import PhoneAgent
 
@@ -341,6 +342,22 @@ class PhoneAgentManager:
             )
             streaming_agent._context = original_agent._context.copy()
             streaming_agent._step_count = original_agent._step_count
+        elif isinstance(original_agent, InternalMAIAgent):
+            streaming_agent = InternalMAIAgent(
+                model_config=model_config,
+                agent_config=agent_config,
+                device=device,
+                history_n=original_agent.history_n,
+                confirmation_callback=original_agent.action_handler.confirmation_callback,
+                takeover_callback=original_agent.action_handler.takeover_callback,
+                thinking_callback=on_thinking_chunk,
+            )
+            streaming_agent.traj_memory = original_agent.traj_memory
+            streaming_agent._step_count = original_agent._step_count
+            streaming_agent._is_running = original_agent._is_running
+            streaming_agent._total_llm_time = original_agent._total_llm_time
+            streaming_agent._total_action_time = original_agent._total_action_time
+            streaming_agent._total_tokens = original_agent._total_tokens
         elif isinstance(original_agent, MAIAgentAdapter):
             streaming_agent = MAIAgentAdapter(
                 model_config=model_config,
