@@ -302,9 +302,6 @@ See: `AutoGLM_GUI/resources/apks/ADBKeyBoard.LICENSE.txt`
   - Separate error log files (50MB rotation, 30 days retention)
   - Configurable via CLI parameters (--log-level, --log-file, --no-log-file)
   - Used throughout AutoGLM_GUI/ (phone_agent/ uses original print statements)
-- **`phone_agent_patches.py`**: Monkey patches for upstream phone_agent
-  - Adds streaming thinking chunks callback
-  - Performance metrics tracking (TTFT, thinking time, total time)
 - **`platform_utils.py`**: Cross-platform subprocess management
   - Async command execution (event loop safe)
   - Windows compatibility (subprocess.run vs asyncio)
@@ -613,7 +610,6 @@ AutoGLM_GUI/           # Backend FastAPI app (entry point)
   phone_agent_manager.py # Agent lifecycle singleton
   config_manager.py    # Type-safe config management
   logger.py            # Loguru logging setup
-  phone_agent_patches.py # Monkey patches for phone_agent
   platform_utils.py    # Cross-platform utilities
   adb_plus/            # Extended ADB utilities
     device.py
@@ -693,7 +689,7 @@ scrcpy-server-v3.3.3   # Scrcpy server binary (bundled)
 8. **ADB Command Execution**: Always use `platform_utils.py` functions instead of direct subprocess calls
 9. **Device ID vs Serial**: Remember `device_id` changes with connection type, `serial` is stable
 10. **Concurrent Execution**: PhoneAgentManager prevents concurrent tasks on same device - respect the locks
-11. **phone_agent Modifications**: NEVER modify code under `phone_agent/` - use monkey patches in `phone_agent_patches.py`
+11. **phone_agent**: Legacy third-party code kept for reference only - use internal agents in `AutoGLM_GUI/agents/`
 
 ### Electron Desktop Application
 1. **Resources Not Prepared**: Electron build requires `resources/backend/` and `resources/adb/` - use `build_electron.py`

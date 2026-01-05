@@ -10,7 +10,6 @@ from pydantic import ValidationError
 
 from AutoGLM_GUI.config import AgentConfig, ModelConfig, StepResult
 from AutoGLM_GUI.logger import logger
-from AutoGLM_GUI.phone_agent_patches import apply_patches
 from AutoGLM_GUI.schemas import (
     AbortRequest,
     APIAgentConfig,
@@ -27,9 +26,6 @@ from AutoGLM_GUI.state import (
     non_blocking_takeover,
 )
 from AutoGLM_GUI.version import APP_VERSION
-
-# Apply monkey patches to phone_agent
-apply_patches()
 
 router = APIRouter()
 

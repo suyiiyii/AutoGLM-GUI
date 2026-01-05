@@ -131,9 +131,8 @@ export async function listDevices(): Promise<DeviceListResponse> {
 
 ### NEVER Modify Third-Party Code
 
-`phone_agent/` is third-party. For modifications:
-1. Use monkey patches in `AutoGLM_GUI/phone_agent_patches.py`
-2. Or wrap functionality in `AutoGLM_GUI/` modules
+`phone_agent/` is third-party legacy code (kept for reference only).
+The project now uses internal agent implementations in `AutoGLM_GUI/agents/`.
 
 **Note**: `mai_agent/` was third-party but is now fully internalized.  
 Use `AutoGLM_GUI/agents/internal_mai_agent.py` for MAI Agent modifications.
