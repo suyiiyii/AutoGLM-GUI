@@ -1,4 +1,4 @@
-"""PhoneAgent lifecycle and concurrency manager (singleton)."""
+"""Agent lifecycle and concurrency manager (singleton)."""
 
 from __future__ import annotations
 
@@ -31,7 +31,7 @@ class AgentState(str, Enum):
 
 @dataclass
 class AgentMetadata:
-    """Metadata for a PhoneAgent instance."""
+    """Metadata for an agent instance."""
 
     device_id: str
     state: AgentState
@@ -52,7 +52,7 @@ class StreamingAgentContext:
 
 class PhoneAgentManager:
     """
-    Singleton manager for PhoneAgent lifecycle and concurrency control.
+    Singleton manager for agent lifecycle and concurrency control.
 
     Features:
     - Thread-safe agent creation/destruction
@@ -71,10 +71,7 @@ class PhoneAgentManager:
     Example:
         >>> manager = PhoneAgentManager.get_instance()
         >>>
-        >>> # Initialize agent
-        >>> agent = manager.initialize_agent(device_id, model_config, agent_config)
-        >>>
-        >>> # Use agent with automatic locking
+        >>> # Use agent with automatic locking (auto-initializes if needed)
         >>> with manager.use_agent(device_id) as agent:
         >>>     result = agent.run("Open WeChat")
     """
@@ -117,91 +114,6 @@ class PhoneAgentManager:
         return cls._instance
 
     # ==================== Agent Lifecycle ====================
-
-    def initialize_agent(
-        self,
-        device_id: str,
-        model_config: ModelConfig,
-        agent_config: AgentConfig,
-        takeover_callback: Optional[Callable] = None,
-        force: bool = False,
-    ) -> BaseAgent:
-        """
-        Initialize PhoneAgent for a device (thread-safe, idempotent).
-
-        DEPRECATED: Use initialize_agent_with_factory() instead.
-        This method is kept for backward compatibility but will be removed in future versions.
-
-        Args:
-            device_id: Device identifier (USB serial / IP:port)
-            model_config: Model configuration
-            agent_config: Agent configuration
-            takeover_callback: Optional takeover callback
-            force: Force re-initialization even if agent exists
-
-        Returns:
-            PhoneAgent: Initialized agent instance
-
-        Raises:
-            AgentInitializationError: If initialization fails
-            DeviceBusyError: If device is currently processing
-
-        Transactional Guarantee:
-            - On failure, state is rolled back
-            - state.agents and state.agent_configs remain consistent
-        """
-        logger.warning(
-            "initialize_agent() is deprecated. Use initialize_agent_with_factory() instead."
-        )
-        from AutoGLM_GUI.state import non_blocking_takeover
-        from phone_agent import PhoneAgent
-
-        with self._manager_lock:
-            if device_id in self._agents and not force:
-                logger.debug(f"Agent already initialized for {device_id}")
-                return self._agents[device_id]
-
-            device_lock = self._get_device_lock(device_id)
-            if device_lock.locked():
-                raise DeviceBusyError(
-                    f"Device {device_id} is currently processing a request"
-                )
-
-            self._metadata[device_id] = AgentMetadata(
-                device_id=device_id,
-                state=AgentState.INITIALIZING,
-                model_config=model_config,
-                agent_config=agent_config,
-                agent_type="glm_legacy",
-                created_at=time.time(),
-                last_used=time.time(),
-            )
-
-            try:
-                agent = PhoneAgent(
-                    model_config=model_config.to_phone_agent_config(),
-                    agent_config=agent_config.to_phone_agent_config(),
-                    takeover_callback=takeover_callback or non_blocking_takeover,
-                )
-
-                self._agents[device_id] = agent
-                self._agent_configs[device_id] = (model_config, agent_config)
-
-                self._metadata[device_id].state = AgentState.IDLE
-
-                logger.info(f"Agent initialized for device {device_id}")
-                return agent
-
-            except Exception as e:
-                self._agents.pop(device_id, None)
-                self._agent_configs.pop(device_id, None)
-                self._metadata[device_id].state = AgentState.ERROR
-                self._metadata[device_id].error_message = str(e)
-
-                logger.error(f"Failed to initialize agent for {device_id}: {e}")
-                raise AgentInitializationError(
-                    f"Failed to initialize agent: {str(e)}"
-                ) from e
 
     def initialize_agent_with_factory(
         self,
@@ -324,8 +236,6 @@ class PhoneAgentManager:
         from AutoGLM_GUI.agents.glm_agent import GLMAgent
         from AutoGLM_GUI.agents.internal_mai_agent import InternalMAIAgent
         from AutoGLM_GUI.agents.mai_adapter import MAIAgentAdapter
-        from phone_agent import PhoneAgent
-
         from AutoGLM_GUI.device_manager import DeviceManager
 
         model_config, agent_config = self.get_config(device_id)
@@ -370,24 +280,6 @@ class PhoneAgentManager:
             streaming_agent.mai_agent.traj_memory = original_agent.mai_agent.traj_memory
             streaming_agent._step_count = original_agent._step_count
             streaming_agent._current_instruction = original_agent._current_instruction
-        elif isinstance(original_agent, PhoneAgent):
-            from AutoGLM_GUI.state import non_blocking_takeover
-
-            phone_streaming_agent = PhoneAgent(
-                model_config=model_config,
-                agent_config=agent_config,
-                takeover_callback=non_blocking_takeover,
-            )
-
-            original_request = phone_streaming_agent.model_client.request
-
-            def patched_request(messages, **kwargs):  # type: ignore[no-untyped-def]
-                return original_request(messages, on_thinking_chunk=on_thinking_chunk)  # type: ignore[call-arg]
-
-            phone_streaming_agent.model_client.request = patched_request  # type: ignore[method-assign]
-            phone_streaming_agent._context = original_agent._context.copy()
-            phone_streaming_agent._step_count = original_agent._step_count
-            streaming_agent = phone_streaming_agent
         else:
             raise ValueError(f"Unknown agent type: {type(original_agent)}")
 
@@ -410,7 +302,7 @@ class PhoneAgentManager:
 
         By default, automatically initializes the agent using global configuration
         if not already initialized. Set auto_initialize=False to require explicit
-        initialization via initialize_agent().
+        initialization via initialize_agent_with_factory().
 
         Args:
             device_id: 设备标识符
@@ -419,7 +311,7 @@ class PhoneAgentManager:
             auto_initialize: 自动初始化（默认: True）
 
         Yields:
-            tuple[PhoneAgent, threading.Event]: (streaming_agent, stop_event)
+            tuple[BaseAgent, threading.Event]: (streaming_agent, stop_event)
 
         Raises:
             DeviceBusyError: 设备忙
@@ -475,7 +367,6 @@ class PhoneAgentManager:
                 if original_agent:
                     from AutoGLM_GUI.agents.glm_agent import GLMAgent
                     from AutoGLM_GUI.agents.mai_adapter import MAIAgentAdapter
-                    from phone_agent import PhoneAgent
 
                     if isinstance(original_agent, GLMAgent) and isinstance(
                         streaming_agent, GLMAgent
@@ -492,11 +383,6 @@ class PhoneAgentManager:
                         original_agent._current_instruction = (
                             streaming_agent._current_instruction
                         )
-                    elif isinstance(original_agent, PhoneAgent) and isinstance(
-                        streaming_agent, PhoneAgent
-                    ):
-                        original_agent._context = streaming_agent._context
-                        original_agent._step_count = streaming_agent._step_count
 
                     logger.debug(
                         f"Synchronized context back to original agent for {device_id}"
@@ -576,7 +462,7 @@ class PhoneAgentManager:
 
     def reset_agent(self, device_id: str) -> None:
         """
-        Reset agent state and rebuild from cached config.
+        Reset agent state by calling the agent's reset() method.
 
         Args:
             device_id: Device identifier
@@ -584,31 +470,14 @@ class PhoneAgentManager:
         Raises:
             AgentNotInitializedError: If agent not initialized
         """
-        from AutoGLM_GUI.state import non_blocking_takeover
-        from phone_agent import PhoneAgent
-
         with self._manager_lock:
             if device_id not in self._agents:
                 raise AgentNotInitializedError(
                     f"Agent not initialized for device {device_id}"
                 )
 
-            # Get cached config
-            if device_id not in self._agent_configs:
-                logger.warning(
-                    f"No cached config for {device_id}, only resetting agent state"
-                )
-                self._agents[device_id].reset()
-                return
-
-            # Rebuild agent from cached config
-            model_config, agent_config = self._agent_configs[device_id]
-
-            self._agents[device_id] = PhoneAgent(
-                model_config=model_config,
-                agent_config=agent_config,
-                takeover_callback=non_blocking_takeover,
-            )
+            # Reset agent state using its reset() method
+            self._agents[device_id].reset()
 
             # Update metadata
             if device_id in self._metadata:
@@ -768,7 +637,7 @@ class PhoneAgentManager:
 
         By default, automatically initializes the agent using global configuration
         if not already initialized. Set auto_initialize=False to require explicit
-        initialization via initialize_agent().
+        initialization via initialize_agent_with_factory().
 
         Args:
             device_id: Device identifier
@@ -776,7 +645,7 @@ class PhoneAgentManager:
             auto_initialize: Auto-initialize if not already initialized (default: True)
 
         Yields:
-            PhoneAgent: Agent instance
+            BaseAgent: Agent instance
 
         Raises:
             DeviceBusyError: If device is busy
