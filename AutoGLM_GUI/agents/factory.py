@@ -6,19 +6,13 @@ making it easy to add new agent types without modifying existing code.
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING, Callable, Dict
+from typing import Callable, Dict
 
+from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.types import AgentSpecificConfig
 
 from .protocols import BaseAgent
-
-if TYPE_CHECKING:
-    from phone_agent import PhoneAgent
-    from phone_agent.agent import AgentConfig
-    from phone_agent.model import ModelConfig
-
-    from .mai_adapter import MAIAgentAdapter
 
 
 # Agent registry: agent_type -> (creator_function, config_schema)
@@ -52,12 +46,12 @@ def register_agent(
 
 def create_agent(
     agent_type: str,
-    model_config: "ModelConfig",
-    agent_config: "AgentConfig",
+    model_config: ModelConfig,
+    agent_config: AgentConfig,
     agent_specific_config: AgentSpecificConfig,
     takeover_callback: Callable | None = None,
     confirmation_callback: Callable | None = None,
-) -> "BaseAgent":
+) -> BaseAgent:
     """
     Create an agent instance using the factory pattern.
 
@@ -112,32 +106,32 @@ def is_agent_type_registered(agent_type: str) -> bool:
 
 
 def _create_phone_agent(
-    model_config: "ModelConfig",
-    agent_config: "AgentConfig",
+    model_config: ModelConfig,
+    agent_config: AgentConfig,
     agent_specific_config: AgentSpecificConfig,
     takeover_callback: Callable | None = None,
     confirmation_callback: Callable | None = None,
-) -> "PhoneAgent":
+) -> BaseAgent:
     from phone_agent import PhoneAgent
 
-    return PhoneAgent(
-        model_config=model_config,
-        agent_config=agent_config,
+    agent = PhoneAgent(
+        model_config=model_config.to_phone_agent_config(),
+        agent_config=agent_config.to_phone_agent_config(),
         takeover_callback=takeover_callback,
         confirmation_callback=confirmation_callback,
     )
+    return agent  # type: ignore[return-value]
 
 
 def _create_mai_agent(
-    model_config: "ModelConfig",
-    agent_config: "AgentConfig",
+    model_config: ModelConfig,
+    agent_config: AgentConfig,
     agent_specific_config: AgentSpecificConfig,
     takeover_callback: Callable | None = None,
     confirmation_callback: Callable | None = None,
-) -> "MAIAgentAdapter":
+) -> BaseAgent:
     from .mai_adapter import MAIAgentAdapter, MAIAgentConfig
 
-    # Build MAI config from dict
     mai_config = MAIAgentConfig(
         history_n=agent_specific_config.get("history_n", 3),
         max_pixels=agent_specific_config.get("max_pixels"),
@@ -155,6 +149,23 @@ def _create_mai_agent(
     )
 
 
-# Register built-in agents
-register_agent("glm", _create_phone_agent)
+def _create_glm_agent_v2(
+    model_config: ModelConfig,
+    agent_config: AgentConfig,
+    agent_specific_config: AgentSpecificConfig,
+    takeover_callback: Callable | None = None,
+    confirmation_callback: Callable | None = None,
+) -> BaseAgent:
+    from .glm_agent import GLMAgent
+
+    return GLMAgent(
+        model_config=model_config,
+        agent_config=agent_config,
+        confirmation_callback=confirmation_callback,
+        takeover_callback=takeover_callback,
+    )
+
+
+register_agent("glm_legacy", _create_phone_agent)
+register_agent("glm", _create_glm_agent_v2)
 register_agent("mai", _create_mai_agent)

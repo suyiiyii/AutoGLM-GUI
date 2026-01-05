@@ -6,9 +6,9 @@ import threading
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
-from phone_agent.agent import StepResult
 from pydantic import ValidationError
 
+from AutoGLM_GUI.config import AgentConfig, ModelConfig, StepResult
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.phone_agent_patches import apply_patches
 from AutoGLM_GUI.schemas import (
@@ -27,8 +27,6 @@ from AutoGLM_GUI.state import (
     non_blocking_takeover,
 )
 from AutoGLM_GUI.version import APP_VERSION
-from phone_agent.agent import AgentConfig
-from phone_agent.model import ModelConfig
 
 # Apply monkey patches to phone_agent
 apply_patches()
@@ -346,7 +344,7 @@ def chat_stream(request: ChatRequest):
 
                         if (
                             streaming_agent.step_count
-                            >= streaming_agent.agent_config.max_steps
+                            >= streaming_agent.agent_config.max_steps  # type: ignore[attr-defined]
                         ):
                             done_data = _create_sse_event(
                                 "done",

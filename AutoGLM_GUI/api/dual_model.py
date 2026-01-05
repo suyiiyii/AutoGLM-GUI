@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
+from AutoGLM_GUI.config import ModelConfig
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.dual_model import (
     DecisionModelConfig,
@@ -15,7 +16,6 @@ from AutoGLM_GUI.dual_model import (
     DualModelEventType,
 )
 from AutoGLM_GUI.dual_model.protocols import ThinkingMode
-from phone_agent.model import ModelConfig
 
 router = APIRouter(prefix="/api/dual", tags=["dual-model"])
 

@@ -17,10 +17,9 @@ from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple
 from PIL import Image
 
 from phone_agent.actions.handler import ActionHandler
-from phone_agent.agent import AgentConfig, StepResult
 from phone_agent.device_factory import get_device_factory
-from phone_agent.model import ModelConfig
 
+from AutoGLM_GUI.config import AgentConfig, ModelConfig, StepResult
 from AutoGLM_GUI.logger import logger
 
 

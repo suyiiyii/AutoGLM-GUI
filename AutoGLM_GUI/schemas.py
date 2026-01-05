@@ -6,6 +6,11 @@ from pydantic import BaseModel, Field, field_validator
 
 
 class APIModelConfig(BaseModel):
+    """API layer model configuration (Pydantic).
+
+    This will be converted to AutoGLM_GUI.config.ModelConfig internally.
+    """
+
     base_url: str | None = None
     api_key: str | None = None
     model_name: str | None = None
@@ -30,6 +35,11 @@ class APIModelConfig(BaseModel):
 
 
 class APIAgentConfig(BaseModel):
+    """API layer agent configuration (Pydantic).
+
+    This will be converted to AutoGLM_GUI.config.AgentConfig internally.
+    """
+
     max_steps: int = 100
     device_id: str | None = None
     lang: str = "cn"

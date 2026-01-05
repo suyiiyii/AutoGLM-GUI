@@ -7,9 +7,10 @@ import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import Callable, Optional
 
 from AutoGLM_GUI.agents.protocols import BaseAgent
+from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.types import AgentSpecificConfig
 from AutoGLM_GUI.exceptions import (
     AgentInitializationError,
@@ -17,10 +18,6 @@ from AutoGLM_GUI.exceptions import (
     DeviceBusyError,
 )
 from AutoGLM_GUI.logger import logger
-
-if TYPE_CHECKING:
-    from phone_agent.agent import AgentConfig
-    from phone_agent.model import ModelConfig
 
 
 class AgentState(str, Enum):
@@ -106,7 +103,7 @@ class PhoneAgentManager:
 
         # Agent storage (transition from global state to instance state)
         self._agents: dict[str, BaseAgent] = {}
-        self._agent_configs: dict[str, tuple["ModelConfig", "AgentConfig"]] = {}
+        self._agent_configs: dict[str, tuple[ModelConfig, AgentConfig]] = {}
 
     @classmethod
     def get_instance(cls) -> PhoneAgentManager:
@@ -123,8 +120,8 @@ class PhoneAgentManager:
     def initialize_agent(
         self,
         device_id: str,
-        model_config: "ModelConfig",
-        agent_config: "AgentConfig",
+        model_config: ModelConfig,
+        agent_config: AgentConfig,
         takeover_callback: Optional[Callable] = None,
         force: bool = False,
     ) -> BaseAgent:
@@ -176,10 +173,10 @@ class PhoneAgentManager:
             )
 
             try:
-                # Create agent
+                # Create agent (convert config to phone_agent types)
                 agent = PhoneAgent(
-                    model_config=model_config,
-                    agent_config=agent_config,
+                    model_config=model_config.to_phone_agent_config(),
+                    agent_config=agent_config.to_phone_agent_config(),
                     takeover_callback=takeover_callback or non_blocking_takeover,
                 )
 
@@ -320,13 +317,22 @@ class PhoneAgentManager:
         Returns:
             已 patch 的 agent 实例
         """
+        from AutoGLM_GUI.agents.glm_agent import GLMAgent
         from AutoGLM_GUI.agents.mai_adapter import MAIAgentAdapter
         from phone_agent import PhoneAgent
 
         model_config, agent_config = self.get_config(device_id)
 
         streaming_agent: BaseAgent
-        if isinstance(original_agent, MAIAgentAdapter):
+        if isinstance(original_agent, GLMAgent):
+            streaming_agent = GLMAgent(
+                model_config=model_config,
+                agent_config=agent_config,
+                thinking_callback=on_thinking_chunk,
+            )
+            streaming_agent._context = original_agent._context.copy()
+            streaming_agent._step_count = original_agent._step_count
+        elif isinstance(original_agent, MAIAgentAdapter):
             streaming_agent = MAIAgentAdapter(
                 model_config=model_config,
                 agent_config=agent_config,
@@ -441,10 +447,16 @@ class PhoneAgentManager:
             if streaming_agent and not stop_event.is_set():
                 original_agent = self.get_agent_safe(device_id)
                 if original_agent:
+                    from AutoGLM_GUI.agents.glm_agent import GLMAgent
                     from AutoGLM_GUI.agents.mai_adapter import MAIAgentAdapter
                     from phone_agent import PhoneAgent
 
-                    if isinstance(original_agent, MAIAgentAdapter) and isinstance(
+                    if isinstance(original_agent, GLMAgent) and isinstance(
+                        streaming_agent, GLMAgent
+                    ):
+                        original_agent._context = streaming_agent._context
+                        original_agent._step_count = streaming_agent._step_count
+                    elif isinstance(original_agent, MAIAgentAdapter) and isinstance(
                         streaming_agent, MAIAgentAdapter
                     ):
                         original_agent.mai_agent.traj_memory = (

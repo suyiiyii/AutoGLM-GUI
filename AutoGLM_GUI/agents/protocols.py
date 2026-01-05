@@ -1,34 +1,14 @@
 """Agent protocol and shared types.
 
 This module defines the protocol (interface) that all agent implementations
-must follow, as well as shared data types to avoid leaking third-party
-dependencies to the API layer.
+must follow.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from typing import TYPE_CHECKING, Any, Protocol
+from typing import Any, Protocol
 
-
-if TYPE_CHECKING:
-    from phone_agent.agent import AgentConfig
-    from phone_agent.model import ModelConfig
-
-
-@dataclass
-class StepResult:
-    """Result of a single agent step.
-
-    This is our own type definition to avoid exposing phone_agent.agent.StepResult
-    directly to the API layer.
-    """
-
-    success: bool
-    finished: bool
-    action: dict[str, Any] | None
-    thinking: str
-    message: str | None = None
+from AutoGLM_GUI.config import StepResult
 
 
 class BaseAgent(Protocol):
@@ -36,10 +16,10 @@ class BaseAgent(Protocol):
 
     All concrete agent implementations (PhoneAgent, MAIAgent, etc.) must
     implement this interface.
-    """
 
-    agent_config: "AgentConfig"
-    model_config: "ModelConfig"
+    Note: agent_config and model_config are not declared here to avoid
+    Protocol invariance issues. Implementations should provide these attributes.
+    """
 
     def run(self, task: str) -> str:
         """Execute a task end-to-end (blocking).

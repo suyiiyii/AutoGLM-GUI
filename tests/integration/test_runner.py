@@ -79,8 +79,7 @@ class TestRunner:
         instruction = self.instruction
         # Import here to avoid circular imports
         from phone_agent import PhoneAgent
-        from phone_agent.agent import AgentConfig
-        from phone_agent.model import ModelConfig
+        from AutoGLM_GUI.config import AgentConfig, ModelConfig
 
         # Create configs if not provided
         if model_config is None:

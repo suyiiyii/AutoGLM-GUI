@@ -8,6 +8,35 @@ Guide for AI agents working in this codebase.
 **Frontend**: `pnpm` in `frontend/` directory  
 **DO NOT** modify `phone_agent/` or `mai_agent/` - third-party code
 
+## Configuration System
+
+AutoGLM-GUI uses its own configuration system, independent of `phone_agent` config classes.
+
+### Core Configuration Classes
+
+- `AutoGLM_GUI.config.ModelConfig`: Model API configuration
+- `AutoGLM_GUI.config.AgentConfig`: Agent behavior configuration
+- `AutoGLM_GUI.config.StepResult`: Execution result type
+
+### Type Conversion
+
+When interfacing with `phone_agent` (e.g., creating PhoneAgent instances),
+use `to_phone_agent_config()` methods:
+
+```python
+from AutoGLM_GUI.config import ModelConfig, AgentConfig
+
+# Create configs using AutoGLM-GUI types
+model_config = ModelConfig(base_url="...", model_name="...")
+agent_config = AgentConfig(device_id="...", max_steps=100)
+
+# Convert to phone_agent types (only needed internally in factories)
+phone_model = model_config.to_phone_agent_config()
+phone_agent = agent_config.to_phone_agent_config()
+```
+
+**Important**: Always use `AutoGLM_GUI.config` types in business logic. Only convert to `phone_agent` types at the boundary (e.g., inside agent factories).
+
 ## Build / Lint / Test Commands
 
 ### Backend (Python)
