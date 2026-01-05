@@ -5,8 +5,8 @@ a DeviceProtocol-compliant implementation.
 """
 
 from phone_agent import adb
-from phone_agent.adb import ADBConnection
 
+from AutoGLM_GUI.adb import ADBConnection
 from AutoGLM_GUI.device_protocol import (
     DeviceInfo,
     DeviceManagerProtocol,

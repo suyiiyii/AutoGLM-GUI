@@ -236,7 +236,7 @@ def pair_wifi(request: WiFiPairRequest) -> WiFiPairResponse:
 @router.get("/api/devices/discover_mdns", response_model=MdnsDiscoverResponse)
 def discover_mdns() -> MdnsDiscoverResponse:
     """Discover wireless ADB devices via mDNS."""
-    from phone_agent.adb import ADBConnection
+    from AutoGLM_GUI.adb import ADBConnection
     from AutoGLM_GUI.adb_plus import discover_mdns_devices
 
     try:
@@ -282,7 +282,7 @@ def generate_qr_pairing(timeout: int = 90) -> QRPairGenerateResponse:
         QR code payload and session information
     """
     try:
-        from phone_agent.adb import ADBConnection
+        from AutoGLM_GUI.adb import ADBConnection
 
         conn = ADBConnection()
         session = qr_pairing_manager.create_session(

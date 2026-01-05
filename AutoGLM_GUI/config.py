@@ -89,7 +89,7 @@ class AgentConfig:
 
     def __post_init__(self):
         if self.system_prompt is None:
-            from phone_agent.config import get_system_prompt
+            from AutoGLM_GUI.prompt_config import get_system_prompt
 
             self.system_prompt = get_system_prompt(self.lang)
 

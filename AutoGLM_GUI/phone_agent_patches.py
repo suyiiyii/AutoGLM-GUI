@@ -115,7 +115,7 @@ def _patched_model_request(
     thinking, action = self._parse_response(raw_content)
 
     # Print performance metrics
-    from phone_agent.config.i18n import get_message
+    from AutoGLM_GUI.prompt_config import get_message
 
     lang = self.config.lang
     print()

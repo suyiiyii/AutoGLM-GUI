@@ -9,8 +9,7 @@ from dataclasses import dataclass, field
 from enum import Enum
 from typing import TYPE_CHECKING, Optional
 
-from phone_agent.adb.connection import ADBConnection, ConnectionType, DeviceInfo
-
+from AutoGLM_GUI.adb import ADBConnection, ConnectionType, DeviceInfo
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.types import DeviceConnectionType
 
@@ -628,7 +627,7 @@ class DeviceManager:
         Returns:
             Tuple of (success, message, wifi_device_id)
         """
-        from phone_agent.adb.connection import ADBConnection, ConnectionType
+        from AutoGLM_GUI.adb import ADBConnection, ConnectionType
 
         from AutoGLM_GUI.adb_plus import get_wifi_ip
 
@@ -675,7 +674,7 @@ class DeviceManager:
         Returns:
             Tuple of (success, message)
         """
-        from phone_agent.adb.connection import ADBConnection
+        from AutoGLM_GUI.adb import ADBConnection
 
         conn = ADBConnection(adb_path=self._adb_path)
         ok, msg = conn.disconnect(device_id)
@@ -701,7 +700,7 @@ class DeviceManager:
         """
         import re
 
-        from phone_agent.adb.connection import ADBConnection
+        from AutoGLM_GUI.adb import ADBConnection
 
         # IP format validation
         ip_pattern = r"^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$"
@@ -739,7 +738,7 @@ class DeviceManager:
         """
         import re
 
-        from phone_agent.adb.connection import ADBConnection
+        from AutoGLM_GUI.adb import ADBConnection
 
         from AutoGLM_GUI.adb_plus import pair_device
 
