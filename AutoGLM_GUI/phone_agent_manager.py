@@ -234,7 +234,7 @@ class PhoneAgentManager:
             已 patch 的 agent 实例
         """
         from AutoGLM_GUI.agents.glm.agent import GLMAgent
-        from AutoGLM_GUI.agents.internal_mai_agent import InternalMAIAgent
+        from AutoGLM_GUI.agents.mai.agent import InternalMAIAgent
         from AutoGLM_GUI.agents.mai_adapter import MAIAgentAdapter
         from AutoGLM_GUI.device_manager import DeviceManager
 

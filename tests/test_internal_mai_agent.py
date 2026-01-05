@@ -7,8 +7,8 @@ from unittest.mock import Mock
 import pytest
 from PIL import Image
 
-from AutoGLM_GUI.agents.internal_mai_agent import InternalMAIAgent
-from AutoGLM_GUI.agents.traj_memory import TrajMemory, TrajStep
+from AutoGLM_GUI.agents.mai.agent import InternalMAIAgent
+from AutoGLM_GUI.agents.mai.traj_memory import TrajMemory, TrajStep
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.parsers import MAIParser
 

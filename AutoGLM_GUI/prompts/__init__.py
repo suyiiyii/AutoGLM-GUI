@@ -2,12 +2,12 @@
 
 from pathlib import Path
 
-# Import from mai_prompts module
-from .mai_prompts import MAI_MOBILE_SYSTEM_PROMPT
+# Import MAI prompt from new location
+from AutoGLM_GUI.agents.mai.prompts import MAI_MOBILE_SYSTEM_PROMPT
 
 # Import from parent-level prompts.py file
 # When prompts/ directory exists, Python prioritizes it over prompts.py
-# We need to import from the sibling prompts.py file
+# We need to import from sibling prompts.py file
 parent_dir = Path(__file__).parent.parent
 prompts_file = parent_dir / "prompts.py"
 
