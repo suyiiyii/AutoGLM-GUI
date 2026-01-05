@@ -1,4 +1,4 @@
-const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell, Menu } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const net = require('net');
@@ -480,6 +480,85 @@ function createWindow() {
   });
 }
 
+/**
+ * 创建自定义菜单
+ */
+function createMenu() {
+  const isMac = process.platform === 'darwin';
+
+  const template = [
+    // macOS 上的应用菜单
+    ...(isMac ? [{
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' }
+      ]
+    }] : []),
+    // 文件菜单
+    {
+      label: '文件',
+      submenu: [
+        isMac ? { role: 'close' } : { role: 'quit', label: '退出' }
+      ]
+    },
+    // 视图菜单
+    {
+      label: '视图',
+      submenu: [
+        { role: 'reload', label: '重新加载' },
+        { role: 'forceReload', label: '强制重新加载' },
+        { type: 'separator' },
+        { role: 'toggleDevTools', label: '开发者工具' },
+        { type: 'separator' },
+        {
+          label: '在浏览器中打开',
+          click: () => {
+            shell.openExternal(`http://127.0.0.1:${backendPort}`);
+          }
+        },
+        {
+          label: '打开日志目录',
+          click: () => {
+            const logDir = path.dirname(getActualLogFilePath());
+            if (fs.existsSync(logDir)) {
+              shell.openPath(logDir);
+            } else {
+              dialog.showMessageBox({
+                type: 'info',
+                title: '日志目录',
+                message: '日志目录尚未创建',
+                detail: `日志目录将在应用运行后创建:\n${logDir}`
+              });
+            }
+          }
+        }
+      ]
+    },
+    // 窗口菜单
+    {
+      label: '窗口',
+      submenu: [
+        { role: 'minimize', label: '最小化' },
+        ...(isMac ? [
+          { type: 'separator' },
+          { role: 'front', label: '全部置于顶层' }
+        ] : [
+          { role: 'close', label: '关闭' }
+        ])
+      ]
+    }
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+}
+
 // ==================== 应用生命周期 ====================
 
 /**
@@ -509,6 +588,9 @@ app.whenReady().then(async () => {
 
     // 4. 创建主窗口
     createWindow();
+
+    // 5. 创建自定义菜单
+    createMenu();
 
     console.log('✓ AutoGLM GUI 启动流程完成');
   } catch (error) {
