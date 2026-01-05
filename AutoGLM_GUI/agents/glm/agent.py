@@ -8,9 +8,9 @@ from AutoGLM_GUI.actions import ActionHandler, ActionResult
 from AutoGLM_GUI.config import AgentConfig, ModelConfig, StepResult
 from AutoGLM_GUI.device_protocol import DeviceProtocol
 from AutoGLM_GUI.logger import logger
-from AutoGLM_GUI.model import MessageBuilder
 from AutoGLM_GUI.prompt_config import get_messages, get_system_prompt
 
+from .message_builder import MessageBuilder
 from .parser import GLMParser
 
 
@@ -147,53 +147,26 @@ class GLMAgent:
         thinking, action = self._parse_raw_response(raw_content)
         return thinking, action, raw_content
 
-    def _parse_raw_response(self, raw_content: str) -> tuple[str, str]:
-        thinking = ""
-        action = ""
+    def _parse_raw_response(self, content: str) -> tuple[str, str]:
+        if "finish(message=" in content:
+            parts = content.split("finish(message=", 1)
+            thinking = parts[0].strip()
+            action = "finish(message=" + parts[1]
+            return thinking, action
 
-        if "<think>" in raw_content and "</think>" in raw_content:
-            start = raw_content.find("<think>") + len("<think>")
-            end = raw_content.find("</think>")
-            thinking = raw_content[start:end].strip()
+        if "do(action=" in content:
+            parts = content.split("do(action=", 1)
+            thinking = parts[0].strip()
+            action = "do(action=" + parts[1]
+            return thinking, action
 
-        if "<answer>" in raw_content and "</answer>" in raw_content:
-            start = raw_content.find("<answer>") + len("<answer>")
-            end = raw_content.find("</answer>")
-            action = raw_content[start:end].strip()
-        elif "<answer>" in raw_content:
-            start = raw_content.find("<answer>") + len("<answer>")
-            action = raw_content[start:].strip()
-        else:
-            lines = raw_content.strip().split("\n")
-            do_action = None
-            finish_action = None
+        if "<answer>" in content:
+            parts = content.split("<answer>", 1)
+            thinking = parts[0].replace("<think>", "").replace("</think>", "").strip()
+            action = parts[1].replace("</answer>", "").strip()
+            return thinking, action
 
-            for line in lines:
-                line = line.strip()
-                if line.startswith("do("):
-                    do_action = line
-                    break
-
-            if not do_action:
-                for line in reversed(lines):
-                    line = line.strip()
-                    if line.startswith("finish("):
-                        finish_action = line
-                        break
-
-            action = do_action or finish_action or ""
-
-            if action:
-                thinking_lines = []
-                for content_line in lines:
-                    if content_line.strip() == action:
-                        break
-                    thinking_lines.append(content_line)
-                thinking = "\n".join(thinking_lines).strip()
-            else:
-                action = raw_content.replace(thinking, "").strip()
-
-        return thinking, action
+        return "", content
 
     def _execute_step(
         self, user_prompt: str | None = None, is_first: bool = False
@@ -219,7 +192,7 @@ class GLMAgent:
             )
         else:
             screen_info = MessageBuilder.build_screen_info(current_app)
-            text_content = screen_info
+            text_content = f"** Screen Info **\n\n{screen_info}"
 
             self._context.append(
                 MessageBuilder.create_user_message(
