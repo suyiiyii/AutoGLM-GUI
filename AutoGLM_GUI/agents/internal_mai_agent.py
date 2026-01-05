@@ -132,46 +132,78 @@ class InternalMAIAgent:
             current_screenshot_base64=screenshot.base64_data,
         )
 
-        try:
-            if self.agent_config.verbose:
-                print("\n" + "=" * 50)
-                print(f"💭 步骤 {self._step_count} - 思考中...")
-                print("-" * 50)
+        max_retries = 3
+        response = None
+        thinking = ""
+        raw_action = None
+        converted_action = None
 
-            callback = self._thinking_callback
-            if callback is None and self.agent_config.verbose:
+        for attempt in range(max_retries):
+            try:
+                if self.agent_config.verbose:
+                    retry_info = (
+                        f" (尝试 {attempt + 1}/{max_retries})" if attempt > 0 else ""
+                    )
+                    print("\n" + "=" * 50)
+                    print(f"💭 步骤 {self._step_count}{retry_info} - 思考中...")
+                    print("-" * 50)
 
-                def print_chunk(chunk: str) -> None:
-                    print(chunk, end="", flush=True)
+                callback = self._thinking_callback
+                if callback is None and self.agent_config.verbose:
 
-                callback = print_chunk
+                    def print_chunk(chunk: str) -> None:
+                        print(chunk, end="", flush=True)
 
-            response = self.model_client.request(messages, on_thinking_chunk=callback)
-        except Exception as e:
-            if self.agent_config.verbose:
-                traceback.print_exc()
+                    callback = print_chunk
+
+                response = self.model_client.request(
+                    messages, on_thinking_chunk=callback
+                )
+
+                parsed = self.parser.parse_with_thinking(response.action)
+                thinking = parsed["thinking"]
+                raw_action = parsed["raw_action"]
+                converted_action = parsed["converted_action"]
+
+                break
+
+            except MAIParseError as e:
+                if self.agent_config.verbose:
+                    logger.warning(f"解析失败 (尝试 {attempt + 1}/{max_retries}): {e}")
+                if attempt == max_retries - 1:
+                    return StepResult(
+                        success=False,
+                        finished=True,
+                        action=None,
+                        thinking="",
+                        message=f"Parse error after {max_retries} retries: {e}",
+                    )
+                continue
+
+            except Exception as e:
+                if self.agent_config.verbose:
+                    logger.warning(
+                        f"模型调用失败 (尝试 {attempt + 1}/{max_retries}): {e}"
+                    )
+                if attempt == max_retries - 1:
+                    if self.agent_config.verbose:
+                        traceback.print_exc()
+                    return StepResult(
+                        success=False,
+                        finished=True,
+                        action=None,
+                        thinking="",
+                        message=f"Model error after {max_retries} retries: {e}",
+                    )
+                continue
+
+        if response is None or raw_action is None or converted_action is None:
             return StepResult(
                 success=False,
                 finished=True,
                 action=None,
-                thinking="",
-                message=f"Model error: {e}",
-            )
-
-        try:
-            parsed = self.parser.parse_with_thinking(response.action)
-            thinking = parsed["thinking"]
-            raw_action = parsed["raw_action"]
-            converted_action = parsed["converted_action"]
-        except MAIParseError as e:
-            if self.agent_config.verbose:
-                logger.warning(f"Failed to parse action: {e}, treating as finish")
-            return StepResult(
-                success=False,
-                finished=True,
-                action=None,
-                thinking=response.thinking or "",
-                message=f"Parse error: {e}",
+                thinking=thinking,
+                message="Failed to get valid response after retries",
             )
 
         if self.agent_config.verbose:
