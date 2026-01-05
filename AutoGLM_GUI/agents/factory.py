@@ -162,7 +162,7 @@ def _create_internal_mai_agent(
     takeover_callback: Callable | None = None,
     confirmation_callback: Callable | None = None,
 ) -> BaseAgent:
-    from .internal_mai_agent import InternalMAIAgent
+    from .mai.agent import InternalMAIAgent
 
     history_n = agent_specific_config.get("history_n", 3)
 
