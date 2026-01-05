@@ -122,17 +122,31 @@ class ModelClient:
             action = raw_content[start:].strip()
         else:
             lines = raw_content.strip().split("\n")
-            for line in reversed(lines):
+            do_action = None
+            finish_action = None
+
+            for line in lines:
                 line = line.strip()
-                if line.startswith("do(") or line.startswith("finish("):
-                    action = line
-                    thinking_lines = []
-                    for content_line in lines:
-                        if content_line.strip() == action:
-                            break
-                        thinking_lines.append(content_line)
-                    thinking = "\n".join(thinking_lines).strip()
+                if line.startswith("do("):
+                    do_action = line
                     break
+
+            if not do_action:
+                for line in reversed(lines):
+                    line = line.strip()
+                    if line.startswith("finish("):
+                        finish_action = line
+                        break
+
+            action = do_action or finish_action or ""
+
+            if action:
+                thinking_lines = []
+                for content_line in lines:
+                    if content_line.strip() == action:
+                        break
+                    thinking_lines.append(content_line)
+                thinking = "\n".join(thinking_lines).strip()
 
             if not action:
                 action = raw_content.replace(thinking, "").strip()
