@@ -4,9 +4,10 @@ from dataclasses import dataclass
 from typing import Any, Callable, Optional
 
 from phone_agent.agent import AgentConfig, StepResult
-from phone_agent.actions.handler import ActionHandler
 from phone_agent.model import ModelConfig
 
+from AutoGLM_GUI.actions.handler import ActionHandler
+from AutoGLM_GUI.device_manager import DeviceManager
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.mai_ui.mai_navigation_agent import MAIUINaivigationAgent  # type: ignore[import-not-found]
 from AutoGLM_GUI.mai_ui_adapter.action_adapter import MAIUIActionAdapter  # type: ignore[import-not-found]
@@ -75,8 +76,15 @@ class MAIUIPhoneAgent:
 
         # Action adapter and handler
         self._action_adapter = MAIUIActionAdapter()
+
+        if not agent_config.device_id:
+            raise ValueError("device_id is required for MAI-UI Agent")
+
+        device_manager = DeviceManager.get_instance()
+        self._device = device_manager.get_device_protocol(agent_config.device_id)
+
         self.action_handler = ActionHandler(
-            device_id=agent_config.device_id,
+            device=self._device,
             takeover_callback=takeover_callback,
         )
 
@@ -147,7 +155,6 @@ class MAIUIPhoneAgent:
         self, user_prompt: Optional[str] = None, is_first: bool = False
     ) -> StepResult:
         """Execute a single step of the agent loop."""
-        from phone_agent.device_factory import get_device_factory
         from PIL import Image
         from io import BytesIO
 
@@ -155,8 +162,7 @@ class MAIUIPhoneAgent:
         logger.info(f"[MAI-UI] Executing step {self._step_count}")
 
         # Get screenshot
-        device_factory = get_device_factory()
-        screenshot = device_factory.get_screenshot(self.agent_config.device_id)
+        screenshot = self._device.get_screenshot()
 
         # Convert base64 to PIL Image
         import base64

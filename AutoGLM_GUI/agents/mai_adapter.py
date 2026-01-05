@@ -16,10 +16,9 @@ from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from PIL import Image
 
-from phone_agent.actions.handler import ActionHandler
-from phone_agent.device_factory import get_device_factory
-
+from AutoGLM_GUI.actions.handler import ActionHandler
 from AutoGLM_GUI.config import AgentConfig, ModelConfig, StepResult
+from AutoGLM_GUI.device_manager import DeviceManager
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.parsers import MAIParser
 
@@ -171,8 +170,15 @@ class MAIAgentAdapter:
         )
 
         self.parser = MAIParser()
+
+        if not agent_config.device_id:
+            raise ValueError("device_id is required for MAI Agent")
+
+        device_manager = DeviceManager.get_instance()
+        self._device = device_manager.get_device_protocol(agent_config.device_id)
+
         self.action_handler = ActionHandler(
-            device_id=agent_config.device_id,
+            device=self._device,
             confirmation_callback=confirmation_callback,
             takeover_callback=takeover_callback,
         )
@@ -250,8 +256,7 @@ class MAIAgentAdapter:
             StepResult
         """
         # 1. Get current screenshot
-        device_factory = get_device_factory()
-        screenshot = device_factory.get_screenshot(self.agent_config.device_id)
+        screenshot = self._device.get_screenshot()
 
         # 2. Convert base64_data to PIL Image
         # The Screenshot object contains base64_data, not pil_image

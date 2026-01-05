@@ -7,10 +7,9 @@
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-from phone_agent.actions.handler import ActionHandler
-from phone_agent.device_factory import get_device_factory
-
+from AutoGLM_GUI.actions.handler import ActionHandler
 from AutoGLM_GUI.config import ModelConfig
+from AutoGLM_GUI.device_manager import DeviceManager
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.model import MessageBuilder, ModelClient
 from AutoGLM_GUI.parsers import PhoneAgentParser
@@ -59,12 +58,15 @@ class VisionModel:
         self.device_id = device_id
         self.model_client = ModelClient(model_config.to_vision_model_config())
         self.parser = PhoneAgentParser()
+
+        device_manager = DeviceManager.get_instance()
+        self._device = device_manager.get_device_protocol(device_id)
+
         self.action_handler = ActionHandler(
-            device_id=device_id,
+            device=self._device,
             confirmation_callback=confirmation_callback,
             takeover_callback=takeover_callback,
         )
-        self.device_factory = get_device_factory()
 
         logger.info(f"视觉小模型初始化: {model_config.model_name}, 设备: {device_id}")
 
@@ -77,7 +79,7 @@ class VisionModel:
         """
         logger.debug("正在截取屏幕...")
 
-        screenshot = self.device_factory.get_screenshot(self.device_id)
+        screenshot = self._device.get_screenshot()
 
         logger.debug(f"截图完成: {screenshot.width}x{screenshot.height}")
         return (
@@ -110,7 +112,7 @@ class VisionModel:
             screenshot_base64, width, height = self.capture_screenshot()
 
         # 获取当前应用
-        current_app = self.device_factory.get_current_app(self.device_id)
+        current_app = self._device.get_current_app()
 
         # 构建消息，要求模型描述屏幕
         messages = [
@@ -189,7 +191,7 @@ class VisionModel:
         if screenshot_base64 is None:
             screenshot_base64, width, height = self.capture_screenshot()
         else:
-            screenshot = self.device_factory.get_screenshot(self.device_id)
+            screenshot = self._device.get_screenshot()
             width, height = screenshot.width, screenshot.height
 
         # 处理完成动作
@@ -442,4 +444,4 @@ do(action="Tap", element=[x, y])
 
     def get_current_app(self) -> str:
         """获取当前应用"""
-        return self.device_factory.get_current_app(self.device_id)
+        return self._device.get_current_app()
