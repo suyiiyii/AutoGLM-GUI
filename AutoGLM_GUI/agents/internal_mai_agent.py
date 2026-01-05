@@ -15,6 +15,7 @@ import traceback
 from io import BytesIO
 from typing import Any, Callable
 
+from openai import OpenAI
 from PIL import Image
 
 from AutoGLM_GUI.actions import ActionHandler, ActionResult
@@ -22,7 +23,7 @@ from AutoGLM_GUI.agents.traj_memory import TrajMemory, TrajStep
 from AutoGLM_GUI.config import AgentConfig, ModelConfig, StepResult
 from AutoGLM_GUI.device_protocol import DeviceProtocol
 from AutoGLM_GUI.logger import logger
-from AutoGLM_GUI.model import MessageBuilder, ModelClient, VisionModelConfig
+from AutoGLM_GUI.model import MessageBuilder
 from AutoGLM_GUI.parsers.mai_parser import MAIParseError, MAIParser
 from AutoGLM_GUI.prompts.mai_prompts import MAI_MOBILE_SYSTEM_PROMPT
 
@@ -42,18 +43,11 @@ class InternalMAIAgent:
         self.agent_config = agent_config
         self.history_n = history_n
 
-        vision_config = VisionModelConfig(
+        self.openai_client = OpenAI(
             base_url=model_config.base_url,
-            model_name=model_config.model_name,
             api_key=model_config.api_key,
-            max_tokens=model_config.max_tokens,
-            temperature=model_config.temperature,
-            top_p=model_config.top_p,
-            frequency_penalty=model_config.frequency_penalty,
-            extra_body=model_config.extra_body,
+            timeout=120,
         )
-
-        self.model_client = ModelClient(vision_config)
         self.parser = MAIParser()
 
         self.device = device
@@ -116,6 +110,68 @@ class InternalMAIAgent:
         self._is_running = False
         logger.info("InternalMAIAgent aborted by user")
 
+    def _stream_request(
+        self,
+        messages: list[dict[str, Any]],
+        on_thinking_chunk: Callable[[str], None] | None = None,
+    ) -> str:
+        stream = self.openai_client.chat.completions.create(
+            messages=messages,  # type: ignore[arg-type]
+            model=self.model_config.model_name,
+            max_tokens=self.model_config.max_tokens,
+            temperature=self.model_config.temperature,
+            top_p=self.model_config.top_p,
+            frequency_penalty=self.model_config.frequency_penalty,
+            extra_body=self.model_config.extra_body,
+            stream=True,
+        )
+
+        raw_content = ""
+        buffer = ""
+        action_markers = ["</thinking>", "<tool_call>"]
+        in_action_phase = False
+
+        for chunk in stream:
+            if len(chunk.choices) == 0:
+                continue
+            if chunk.choices[0].delta.content is not None:
+                content = chunk.choices[0].delta.content
+                raw_content += content
+
+                if in_action_phase:
+                    continue
+
+                buffer += content
+
+                marker_found = False
+                for marker in action_markers:
+                    if marker in buffer:
+                        thinking_part = buffer.split(marker, 1)[0]
+                        if on_thinking_chunk:
+                            on_thinking_chunk(thinking_part)
+                        in_action_phase = True
+                        marker_found = True
+                        break
+
+                if marker_found:
+                    continue
+
+                is_potential_marker = False
+                for marker in action_markers:
+                    for i in range(1, len(marker)):
+                        if buffer.endswith(marker[:i]):
+                            is_potential_marker = True
+                            break
+                    if is_potential_marker:
+                        break
+
+                if not is_potential_marker:
+                    if on_thinking_chunk:
+                        on_thinking_chunk(buffer)
+                    buffer = ""
+
+        return raw_content
+
     def _execute_step(
         self, user_prompt: str | None = None, is_first: bool = False
     ) -> StepResult:
@@ -141,7 +197,7 @@ class InternalMAIAgent:
         )
 
         max_retries = 3
-        response = None
+        raw_content = ""
         thinking = ""
         raw_action = None
         converted_action = None
@@ -165,16 +221,14 @@ class InternalMAIAgent:
                     callback = print_chunk
 
                 llm_start = time.time()
-                response = self.model_client.request(
-                    messages, on_thinking_chunk=callback
-                )
+                raw_content = self._stream_request(messages, on_thinking_chunk=callback)
                 llm_time = time.time() - llm_start
                 self._total_llm_time += llm_time
 
                 if self.agent_config.verbose:
                     print(f"\n⏱️  LLM 耗时: {llm_time:.2f}s")
 
-                parsed = self.parser.parse_with_thinking(response.action)
+                parsed = self.parser.parse_with_thinking(raw_content)
                 thinking = parsed["thinking"]
                 raw_action = parsed["raw_action"]
                 converted_action = parsed["converted_action"]
@@ -211,7 +265,7 @@ class InternalMAIAgent:
                     )
                 continue
 
-        if response is None or raw_action is None or converted_action is None:
+        if not raw_content or raw_action is None or converted_action is None:
             return StepResult(
                 success=False,
                 finished=True,
@@ -231,7 +285,7 @@ class InternalMAIAgent:
         traj_step = TrajStep(
             screenshot=pil_image,
             accessibility_tree=None,
-            prediction=response.action,
+            prediction=raw_content,
             action=raw_action,
             conclusion="",
             thought=thinking,
