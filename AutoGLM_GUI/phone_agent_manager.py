@@ -235,7 +235,6 @@ class PhoneAgentManager:
         """
         from AutoGLM_GUI.agents.glm.agent import GLMAgent
         from AutoGLM_GUI.agents.mai.agent import InternalMAIAgent
-        from AutoGLM_GUI.agents.mai_adapter import MAIAgentAdapter
         from AutoGLM_GUI.device_manager import DeviceManager
 
         model_config, agent_config = self.get_config(device_id)
@@ -268,18 +267,6 @@ class PhoneAgentManager:
             streaming_agent._total_llm_time = original_agent._total_llm_time
             streaming_agent._total_action_time = original_agent._total_action_time
             streaming_agent._total_tokens = original_agent._total_tokens
-        elif isinstance(original_agent, MAIAgentAdapter):
-            streaming_agent = MAIAgentAdapter(
-                model_config=model_config,
-                agent_config=agent_config,
-                mai_config=original_agent.mai_config,
-                takeover_callback=original_agent.action_handler.takeover_callback,
-                confirmation_callback=original_agent.action_handler.confirmation_callback,
-                on_thinking_chunk=on_thinking_chunk,
-            )
-            streaming_agent.mai_agent.traj_memory = original_agent.mai_agent.traj_memory
-            streaming_agent._step_count = original_agent._step_count
-            streaming_agent._current_instruction = original_agent._current_instruction
         else:
             raise ValueError(f"Unknown agent type: {type(original_agent)}")
 
@@ -366,23 +353,24 @@ class PhoneAgentManager:
                 original_agent = self.get_agent_safe(device_id)
                 if original_agent:
                     from AutoGLM_GUI.agents.glm.agent import GLMAgent
-                    from AutoGLM_GUI.agents.mai_adapter import MAIAgentAdapter
+                    from AutoGLM_GUI.agents.mai.agent import InternalMAIAgent
 
                     if isinstance(original_agent, GLMAgent) and isinstance(
                         streaming_agent, GLMAgent
                     ):
                         original_agent._context = streaming_agent._context
                         original_agent._step_count = streaming_agent._step_count
-                    elif isinstance(original_agent, MAIAgentAdapter) and isinstance(
-                        streaming_agent, MAIAgentAdapter
+                    elif isinstance(original_agent, InternalMAIAgent) and isinstance(
+                        streaming_agent, InternalMAIAgent
                     ):
-                        original_agent.mai_agent.traj_memory = (
-                            streaming_agent.mai_agent.traj_memory
-                        )
+                        original_agent.traj_memory = streaming_agent.traj_memory
                         original_agent._step_count = streaming_agent._step_count
-                        original_agent._current_instruction = (
-                            streaming_agent._current_instruction
+                        original_agent._is_running = streaming_agent._is_running
+                        original_agent._total_llm_time = streaming_agent._total_llm_time
+                        original_agent._total_action_time = (
+                            streaming_agent._total_action_time
                         )
+                        original_agent._total_tokens = streaming_agent._total_tokens
 
                     logger.debug(
                         f"Synchronized context back to original agent for {device_id}"
