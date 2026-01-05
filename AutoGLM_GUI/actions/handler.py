@@ -37,6 +37,13 @@ class ActionHandler:
             )
 
         action_name = action.get("action")
+        if not isinstance(action_name, str) or not action_name:
+            return ActionResult(
+                success=False,
+                should_finish=False,
+                message=f"Unknown action: {action_name}",
+            )
+
         handler_method = self._get_handler(action_name)
 
         if handler_method is None:

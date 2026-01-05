@@ -104,8 +104,10 @@ class ADBKeyboardInstaller:
             from importlib.resources import files
 
             logger.debug("Searching for bundled APK in wheel package")
-            resource = files("AutoGLM_GUI").joinpath(
-                "resources/apks", ADB_KEYBOARD_APK_FILENAME
+            resource = (
+                files("AutoGLM_GUI")
+                .joinpath("resources/apks")
+                .joinpath(ADB_KEYBOARD_APK_FILENAME)
             )
             # Convert to Path
             if hasattr(resource, "read_bytes"):

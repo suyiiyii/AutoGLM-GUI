@@ -39,6 +39,8 @@ class PhoneAgentParser:
                 action = {"_metadata": "do"}
                 for keyword in call.keywords:
                     key = keyword.arg
+                    if key is None:
+                        raise ValueError("Keyword argument name missing")
                     value = ast.literal_eval(keyword.value)
                     action[key] = value
 

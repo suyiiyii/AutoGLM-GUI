@@ -1,0 +1,17 @@
+{
+  "pythonVersion": "3.10",
+  "pythonPlatform": "All",
+  "include": [
+    "AutoGLM_GUI"
+  ],
+  "exclude": [
+    "**/node_modules",
+    "**/__pycache__",
+    "**/.venv",
+    "**/dist",
+    "**/build"
+  ],
+  "typeCheckingMode": "basic",
+  "reportMissingImports": true,
+  "reportMissingTypeStubs": false
+}

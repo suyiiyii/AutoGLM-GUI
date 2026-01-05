@@ -48,7 +48,7 @@ class ModelConfig:
         Returns:
             VisionModelConfig 实例
         """
-        from AutoGLM_GUI.model import VisionModelConfig
+        from AutoGLM_GUI.model.types import VisionModelConfig
 
         return VisionModelConfig(
             base_url=self.base_url,
