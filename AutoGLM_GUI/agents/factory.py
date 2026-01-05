@@ -108,33 +108,6 @@ def is_agent_type_registered(agent_type: str) -> bool:
 # ==================== Built-in Agent Creators ====================
 
 
-def _create_mai_agent(
-    model_config: ModelConfig,
-    agent_config: AgentConfig,
-    agent_specific_config: AgentSpecificConfig,
-    device,
-    takeover_callback: Callable | None = None,
-    confirmation_callback: Callable | None = None,
-) -> BaseAgent:
-    from .mai_adapter import MAIAgentAdapter, MAIAgentConfig
-
-    mai_config = MAIAgentConfig(
-        history_n=agent_specific_config.get("history_n", 3),
-        max_pixels=agent_specific_config.get("max_pixels"),
-        min_pixels=agent_specific_config.get("min_pixels"),
-        tools=agent_specific_config.get("tools"),
-        use_mai_prompt=agent_specific_config.get("use_mai_prompt", False),
-    )
-
-    return MAIAgentAdapter(
-        model_config=model_config,
-        agent_config=agent_config,
-        mai_config=mai_config,
-        takeover_callback=takeover_callback,
-        confirmation_callback=confirmation_callback,
-    )
-
-
 def _create_glm_agent_v2(
     model_config: ModelConfig,
     agent_config: AgentConfig,
@@ -178,4 +151,3 @@ def _create_internal_mai_agent(
 
 register_agent("glm", _create_glm_agent_v2)
 register_agent("mai", _create_internal_mai_agent)
-register_agent("mai_legacy", _create_mai_agent)
