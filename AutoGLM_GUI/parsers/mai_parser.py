@@ -225,7 +225,7 @@ class MAIParser:
             return {
                 "_metadata": "do",
                 "action": "Launch",
-                "app_name": mai_action.get("app", ""),
+                "app": mai_action.get("app", ""),
             }
 
         raise ValueError(f"Unknown MAI action type: {action_type}")
