@@ -11,13 +11,13 @@ from typing import Callable, Optional
 
 from AutoGLM_GUI.agents.protocols import BaseAgent
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
-from AutoGLM_GUI.types import AgentSpecificConfig
 from AutoGLM_GUI.exceptions import (
     AgentInitializationError,
     AgentNotInitializedError,
     DeviceBusyError,
 )
 from AutoGLM_GUI.logger import logger
+from AutoGLM_GUI.types import AgentSpecificConfig
 
 
 class AgentState(str, Enum):
@@ -216,6 +216,7 @@ class PhoneAgentManager:
                     f"Failed to initialize agent: {str(e)}"
                 ) from e
 
+    # TODO 毫无必要的函数，应该要移除掉
     def _create_streaming_agent(
         self,
         device_id: str,
@@ -397,10 +398,11 @@ class PhoneAgentManager:
         Raises:
             AgentInitializationError: 如果配置不完整或初始化失败
         """
+        from typing import cast
+
         from AutoGLM_GUI.config import AgentConfig, ModelConfig
         from AutoGLM_GUI.config_manager import config_manager
         from AutoGLM_GUI.types import AgentSpecificConfig
-        from typing import cast
 
         logger.info(f"Auto-initializing agent for device {device_id}...")
 
@@ -719,8 +721,9 @@ class PhoneAgentManager:
             new_model_config = model_config or old_model_config
             new_agent_config = agent_config or old_agent_config
 
-            from AutoGLM_GUI.types import AgentSpecificConfig
             from typing import cast
+
+            from AutoGLM_GUI.types import AgentSpecificConfig
 
             # Get agent_type from metadata (default to "glm" for backward compatibility)
             agent_type = metadata.agent_type if metadata else "glm"
