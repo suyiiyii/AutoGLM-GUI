@@ -266,21 +266,24 @@ class PhoneAgentManager:
             )
 
             try:
-                # Create agent using factory
+                from AutoGLM_GUI.device_manager import DeviceManager
+
+                device_manager = DeviceManager.get_instance()
+                device = device_manager.get_device_protocol(device_id)
+
                 agent = create_agent(
                     agent_type=agent_type,
                     model_config=model_config,
                     agent_config=agent_config,
                     agent_specific_config=agent_specific_config,
+                    device=device,
                     takeover_callback=takeover_callback,
                     confirmation_callback=confirmation_callback,
                 )
 
-                # Store in state (transactional)
                 self._agents[device_id] = agent
                 self._agent_configs[device_id] = (model_config, agent_config)
 
-                # Update state to IDLE on success
                 self._metadata[device_id].state = AgentState.IDLE
 
                 logger.info(
@@ -289,7 +292,6 @@ class PhoneAgentManager:
                 return agent
 
             except Exception as e:
-                # Rollback on error
                 self._agents.pop(device_id, None)
                 self._agent_configs.pop(device_id, None)
                 self._metadata[device_id].state = AgentState.ERROR
@@ -321,13 +323,18 @@ class PhoneAgentManager:
         from AutoGLM_GUI.agents.mai_adapter import MAIAgentAdapter
         from phone_agent import PhoneAgent
 
+        from AutoGLM_GUI.device_manager import DeviceManager
+
         model_config, agent_config = self.get_config(device_id)
+        device_manager = DeviceManager.get_instance()
+        device = device_manager.get_device_protocol(device_id)
 
         streaming_agent: BaseAgent
         if isinstance(original_agent, GLMAgent):
             streaming_agent = GLMAgent(
                 model_config=model_config,
                 agent_config=agent_config,
+                device=device,
                 thinking_callback=on_thinking_chunk,
             )
             streaming_agent._context = original_agent._context.copy()

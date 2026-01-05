@@ -17,6 +17,7 @@ class GLMAgent:
         self,
         model_config: ModelConfig,
         agent_config: AgentConfig,
+        device: DeviceProtocol,
         confirmation_callback: Callable[[str], bool] | None = None,
         takeover_callback: Callable[[str], None] | None = None,
         thinking_callback: Callable[[str], None] | None = None,
@@ -37,7 +38,7 @@ class GLMAgent:
 
         self.model_client = ModelClient(glm_model_config)
 
-        self.device = self._resolve_device(agent_config.device_id)
+        self.device = device
         self.action_handler = ActionHandler(
             device=self.device,
             confirmation_callback=confirmation_callback,
@@ -48,28 +49,6 @@ class GLMAgent:
         self._step_count = 0
         self._is_running = False
         self._thinking_callback = thinking_callback
-
-    @staticmethod
-    def _resolve_device(device_id: str | None) -> DeviceProtocol:
-        from AutoGLM_GUI.device_manager import DeviceManager
-        from AutoGLM_GUI.devices.adb_device import ADBDevice
-
-        if not device_id:
-            raise ValueError("device_id is required for GLM Agent")
-
-        device_manager = DeviceManager.get_instance()
-        managed = device_manager.get_device_by_device_id(device_id)
-
-        if not managed:
-            raise ValueError(f"Device {device_id} not found")
-
-        if managed.connection_type.value == "remote":
-            remote_device = device_manager.get_remote_device_instance(managed.serial)
-            if not remote_device:
-                raise ValueError(f"Remote device instance not found: {managed.serial}")
-            return remote_device  # type: ignore[return-value]
-        else:
-            return ADBDevice(managed.primary_device_id)
 
     def run(self, task: str) -> str:
         self._context = []

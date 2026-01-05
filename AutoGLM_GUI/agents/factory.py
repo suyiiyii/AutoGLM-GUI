@@ -49,6 +49,7 @@ def create_agent(
     model_config: ModelConfig,
     agent_config: AgentConfig,
     agent_specific_config: AgentSpecificConfig,
+    device,
     takeover_callback: Callable | None = None,
     confirmation_callback: Callable | None = None,
 ) -> BaseAgent:
@@ -60,6 +61,7 @@ def create_agent(
         model_config: Model configuration
         agent_config: Agent configuration
         agent_specific_config: Agent-specific configuration (e.g., MAIConfig fields)
+        device: DeviceProtocol instance (provided by PhoneAgentManager)
         takeover_callback: Takeover callback
         confirmation_callback: Confirmation callback
 
@@ -82,6 +84,7 @@ def create_agent(
             model_config=model_config,
             agent_config=agent_config,
             agent_specific_config=agent_specific_config,
+            device=device,
             takeover_callback=takeover_callback,
             confirmation_callback=confirmation_callback,
         )
@@ -109,6 +112,7 @@ def _create_phone_agent(
     model_config: ModelConfig,
     agent_config: AgentConfig,
     agent_specific_config: AgentSpecificConfig,
+    device,
     takeover_callback: Callable | None = None,
     confirmation_callback: Callable | None = None,
 ) -> BaseAgent:
@@ -127,6 +131,7 @@ def _create_mai_agent(
     model_config: ModelConfig,
     agent_config: AgentConfig,
     agent_specific_config: AgentSpecificConfig,
+    device,
     takeover_callback: Callable | None = None,
     confirmation_callback: Callable | None = None,
 ) -> BaseAgent:
@@ -153,6 +158,7 @@ def _create_glm_agent_v2(
     model_config: ModelConfig,
     agent_config: AgentConfig,
     agent_specific_config: AgentSpecificConfig,
+    device,
     takeover_callback: Callable | None = None,
     confirmation_callback: Callable | None = None,
 ) -> BaseAgent:
@@ -161,6 +167,7 @@ def _create_glm_agent_v2(
     return GLMAgent(
         model_config=model_config,
         agent_config=agent_config,
+        device=device,
         confirmation_callback=confirmation_callback,
         takeover_callback=takeover_callback,
     )
