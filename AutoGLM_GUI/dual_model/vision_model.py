@@ -7,14 +7,14 @@
 from dataclasses import dataclass
 from typing import Callable, Optional
 
-from phone_agent.model.client import ModelClient, MessageBuilder
 from phone_agent.actions.handler import ActionHandler
-
-from AutoGLM_GUI.parsers import PhoneAgentParser
 from phone_agent.device_factory import get_device_factory
 
 from AutoGLM_GUI.config import ModelConfig
 from AutoGLM_GUI.logger import logger
+from AutoGLM_GUI.model import MessageBuilder, ModelClient
+from AutoGLM_GUI.parsers import PhoneAgentParser
+
 from .protocols import VISION_DESCRIBE_PROMPT
 
 
@@ -57,7 +57,7 @@ class VisionModel:
     ):
         self.model_config = model_config
         self.device_id = device_id
-        self.model_client = ModelClient(model_config.to_phone_agent_config())
+        self.model_client = ModelClient(model_config.to_vision_model_config())
         self.parser = PhoneAgentParser()
         self.action_handler = ActionHandler(
             device_id=device_id,
