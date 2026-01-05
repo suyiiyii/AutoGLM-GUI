@@ -757,3 +757,4 @@ scrcpy-server-v3.3.3   # Scrcpy server binary (bundled)
 
 - phone_agent 下面是第三方的代码，目前通过直接拷贝代码的情况下进行引用，为了保持兼容性，任何时候不能修改里面的代码
 - 运行 adb 命令的时候，尽量使用AutoGLM_GUI/platform_utils.py 下面的代码执行命令，为了更好的兼容性
+- phone_agent 已经被弃用，请在本项目下的代码寻找替代

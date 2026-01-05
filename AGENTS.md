@@ -196,3 +196,5 @@ frontend/src/          # React frontend
   components/          # UI components
   api.ts               # API client
 ```
+
+- phone_agent 已经被弃用，请在本项目下的代码寻找替代
