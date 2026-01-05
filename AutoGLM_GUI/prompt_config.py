@@ -5,8 +5,7 @@ now extracted to avoid dependency on phone_agent.
 """
 
 from AutoGLM_GUI.i18n import MESSAGES_EN, MESSAGES_ZH, get_message, get_messages
-from AutoGLM_GUI.prompts_en import SYSTEM_PROMPT as SYSTEM_PROMPT_EN
-from AutoGLM_GUI.prompts_zh import SYSTEM_PROMPT as SYSTEM_PROMPT_ZH
+from AutoGLM_GUI.agents.glm import SYSTEM_PROMPT_EN, SYSTEM_PROMPT_ZH
 
 
 def get_system_prompt(lang: str = "cn") -> str:
