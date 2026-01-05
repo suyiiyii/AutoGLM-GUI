@@ -1,14 +1,17 @@
 """GLM Agent implementation with full control over the agent lifecycle."""
 
 import json
+import time
 import traceback
 from typing import Any, Callable
+
+from openai import OpenAI
 
 from AutoGLM_GUI.actions import ActionHandler, ActionResult
 from AutoGLM_GUI.config import AgentConfig, ModelConfig, StepResult
 from AutoGLM_GUI.device_protocol import DeviceProtocol
 from AutoGLM_GUI.logger import logger
-from AutoGLM_GUI.model import MessageBuilder, ModelClient, VisionModelConfig
+from AutoGLM_GUI.model import MessageBuilder
 from AutoGLM_GUI.parsers import GLMParser
 from AutoGLM_GUI.prompt_config import get_messages, get_system_prompt
 
@@ -26,18 +29,11 @@ class GLMAgent:
         self.model_config = model_config
         self.agent_config = agent_config
 
-        glm_model_config = VisionModelConfig(
+        self.openai_client = OpenAI(
             base_url=model_config.base_url,
-            model_name=model_config.model_name,
             api_key=model_config.api_key,
-            max_tokens=model_config.max_tokens,
-            temperature=model_config.temperature,
-            top_p=model_config.top_p,
-            frequency_penalty=model_config.frequency_penalty,
-            extra_body=model_config.extra_body,
+            timeout=120,
         )
-
-        self.model_client = ModelClient(glm_model_config)
         self.parser = GLMParser()
 
         self.device = device
@@ -90,6 +86,119 @@ class GLMAgent:
         self._is_running = False
         logger.info("Agent aborted by user")
 
+    def _stream_request(
+        self,
+        messages: list[dict[str, Any]],
+        on_thinking_chunk: Callable[[str], None] | None = None,
+    ) -> tuple[str, str, str]:
+        start_time = time.time()
+
+        stream = self.openai_client.chat.completions.create(
+            messages=messages,  # type: ignore[arg-type]
+            model=self.model_config.model_name,
+            max_tokens=self.model_config.max_tokens,
+            temperature=self.model_config.temperature,
+            top_p=self.model_config.top_p,
+            frequency_penalty=self.model_config.frequency_penalty,
+            extra_body=self.model_config.extra_body,
+            stream=True,
+        )
+
+        raw_content = ""
+        buffer = ""
+        action_markers = ["finish(message=", "do(action="]
+        in_action_phase = False
+
+        for chunk in stream:
+            if len(chunk.choices) == 0:
+                continue
+            if chunk.choices[0].delta.content is not None:
+                content = chunk.choices[0].delta.content
+                raw_content += content
+
+                if in_action_phase:
+                    continue
+
+                buffer += content
+
+                marker_found = False
+                for marker in action_markers:
+                    if marker in buffer:
+                        thinking_part = buffer.split(marker, 1)[0]
+                        if on_thinking_chunk:
+                            on_thinking_chunk(thinking_part)
+                        in_action_phase = True
+                        marker_found = True
+                        break
+
+                if marker_found:
+                    continue
+
+                is_potential_marker = False
+                for marker in action_markers:
+                    for i in range(1, len(marker)):
+                        if buffer.endswith(marker[:i]):
+                            is_potential_marker = True
+                            break
+                    if is_potential_marker:
+                        break
+
+                if not is_potential_marker:
+                    if on_thinking_chunk:
+                        on_thinking_chunk(buffer)
+                    buffer = ""
+
+        thinking, action = self._parse_raw_response(raw_content)
+        return thinking, action, raw_content
+
+    def _parse_raw_response(self, raw_content: str) -> tuple[str, str]:
+        thinking = ""
+        action = ""
+
+        if "<think>" in raw_content and "</think>" in raw_content:
+            start = raw_content.find("<think>") + len("<think>")
+            end = raw_content.find("</think>")
+            thinking = raw_content[start:end].strip()
+
+        if "<answer>" in raw_content and "</answer>" in raw_content:
+            start = raw_content.find("<answer>") + len("<answer>")
+            end = raw_content.find("</answer>")
+            action = raw_content[start:end].strip()
+        elif "<answer>" in raw_content:
+            start = raw_content.find("<answer>") + len("<answer>")
+            action = raw_content[start:].strip()
+        else:
+            lines = raw_content.strip().split("\n")
+            do_action = None
+            finish_action = None
+
+            for line in lines:
+                line = line.strip()
+                if line.startswith("do("):
+                    do_action = line
+                    break
+
+            if not do_action:
+                for line in reversed(lines):
+                    line = line.strip()
+                    if line.startswith("finish("):
+                        finish_action = line
+                        break
+
+            action = do_action or finish_action or ""
+
+            if action:
+                thinking_lines = []
+                for content_line in lines:
+                    if content_line.strip() == action:
+                        break
+                    thinking_lines.append(content_line)
+                thinking = "\n".join(thinking_lines).strip()
+            else:
+                action = raw_content.replace(thinking, "").strip()
+
+        return thinking, action
+
     def _execute_step(
         self, user_prompt: str | None = None, is_first: bool = False
     ) -> StepResult:
@@ -137,7 +246,7 @@ class GLMAgent:
 
                 callback = print_chunk
 
-            response = self.model_client.request(
+            thinking, action_str, raw_content = self._stream_request(
                 self._context, on_thinking_chunk=callback
             )
         except Exception as e:
@@ -152,11 +261,11 @@ class GLMAgent:
             )
 
         try:
-            action = self.parser.parse(response.action)
+            action = self.parser.parse(action_str)
         except ValueError as e:
             if self.agent_config.verbose:
                 logger.warning(f"Failed to parse action: {e}, treating as finish")
-            action = {"_metadata": "finish", "message": response.action}
+            action = {"_metadata": "finish", "message": action_str}
 
         if self.agent_config.verbose:
             print()
@@ -178,7 +287,7 @@ class GLMAgent:
 
         self._context.append(
             MessageBuilder.create_assistant_message(
-                f"<think>{response.thinking}</think><answer>{response.action}</answer>"
+                f"<think>{thinking}</think><answer>{action_str}</answer>"
             )
         )
 
@@ -196,7 +305,7 @@ class GLMAgent:
             success=result.success,
             finished=finished,
             action=action,
-            thinking=response.thinking,
+            thinking=thinking,
             message=result.message or action.get("message"),
         )
 
