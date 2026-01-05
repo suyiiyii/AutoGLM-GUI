@@ -37,8 +37,9 @@ class AgentMetadata:
     state: AgentState
     model_config: ModelConfig
     agent_config: AgentConfig
-    created_at: float
-    last_used: float
+    agent_type: str = "glm"
+    created_at: float = 0.0
+    last_used: float = 0.0
     error_message: Optional[str] = None
 
 
@@ -128,6 +129,9 @@ class PhoneAgentManager:
         """
         Initialize PhoneAgent for a device (thread-safe, idempotent).
 
+        DEPRECATED: Use initialize_agent_with_factory() instead.
+        This method is kept for backward compatibility but will be removed in future versions.
+
         Args:
             device_id: Device identifier (USB serial / IP:port)
             model_config: Model configuration
@@ -146,52 +150,49 @@ class PhoneAgentManager:
             - On failure, state is rolled back
             - state.agents and state.agent_configs remain consistent
         """
+        logger.warning(
+            "initialize_agent() is deprecated. Use initialize_agent_with_factory() instead."
+        )
         from AutoGLM_GUI.state import non_blocking_takeover
         from phone_agent import PhoneAgent
 
         with self._manager_lock:
-            # Check if already initialized
             if device_id in self._agents and not force:
                 logger.debug(f"Agent already initialized for {device_id}")
                 return self._agents[device_id]
 
-            # Check device availability (non-blocking check)
             device_lock = self._get_device_lock(device_id)
             if device_lock.locked():
                 raise DeviceBusyError(
                     f"Device {device_id} is currently processing a request"
                 )
 
-            # Create metadata first with INITIALIZING state
             self._metadata[device_id] = AgentMetadata(
                 device_id=device_id,
                 state=AgentState.INITIALIZING,
                 model_config=model_config,
                 agent_config=agent_config,
+                agent_type="glm_legacy",
                 created_at=time.time(),
                 last_used=time.time(),
             )
 
             try:
-                # Create agent (convert config to phone_agent types)
                 agent = PhoneAgent(
                     model_config=model_config.to_phone_agent_config(),
                     agent_config=agent_config.to_phone_agent_config(),
                     takeover_callback=takeover_callback or non_blocking_takeover,
                 )
 
-                # Store in state (transactional)
                 self._agents[device_id] = agent
                 self._agent_configs[device_id] = (model_config, agent_config)
 
-                # Update state to IDLE on success
                 self._metadata[device_id].state = AgentState.IDLE
 
                 logger.info(f"Agent initialized for device {device_id}")
                 return agent
 
             except Exception as e:
-                # Rollback on error
                 self._agents.pop(device_id, None)
                 self._agent_configs.pop(device_id, None)
                 self._metadata[device_id].state = AgentState.ERROR
@@ -261,6 +262,7 @@ class PhoneAgentManager:
                 state=AgentState.INITIALIZING,
                 model_config=model_config,
                 agent_config=agent_config,
+                agent_type=agent_type,
                 created_at=time.time(),
                 last_used=time.time(),
             )
@@ -496,15 +498,18 @@ class PhoneAgentManager:
         """
         使用全局配置自动初始化 agent（内部方法，需在 manager_lock 内调用）.
 
+        使用 factory 模式创建 agent，避免直接依赖 phone_agent.PhoneAgent。
+
         Args:
             device_id: 设备标识符
 
         Raises:
             AgentInitializationError: 如果配置不完整或初始化失败
         """
+        from AutoGLM_GUI.config import AgentConfig, ModelConfig
         from AutoGLM_GUI.config_manager import config_manager
-        from phone_agent.agent import AgentConfig
-        from phone_agent.model import ModelConfig
+        from AutoGLM_GUI.types import AgentSpecificConfig
+        from typing import cast
 
         logger.info(f"Auto-initializing agent for device {device_id}...")
 
@@ -520,6 +525,7 @@ class PhoneAgentManager:
                 f"Please configure base_url via /api/config or call /api/init explicitly."
             )
 
+        # 使用本地配置类型
         model_config = ModelConfig(
             base_url=effective_config.base_url,
             api_key=effective_config.api_key,
@@ -528,8 +534,17 @@ class PhoneAgentManager:
 
         agent_config = AgentConfig(device_id=device_id)
 
-        # 调用 initialize_agent（RLock 支持重入，不会死锁）
-        self.initialize_agent(device_id, model_config, agent_config)
+        # 调用 factory 方法创建 agent（避免直接依赖 phone_agent）
+        agent_specific_config = cast(
+            AgentSpecificConfig, effective_config.agent_config_params or {}
+        )
+        self.initialize_agent_with_factory(
+            device_id=device_id,
+            agent_type=effective_config.agent_type,
+            model_config=model_config,
+            agent_config=agent_config,
+            agent_specific_config=agent_specific_config,
+        )
         logger.info(f"Agent auto-initialized for device {device_id}")
 
     def get_agent(self, device_id: str) -> BaseAgent:
@@ -825,15 +840,24 @@ class PhoneAgentManager:
                 )
 
             old_model_config, old_agent_config = self._agent_configs[device_id]
+            metadata = self._metadata.get(device_id)
 
             new_model_config = model_config or old_model_config
             new_agent_config = agent_config or old_agent_config
 
-            # Reinitialize with new config
-            self.initialize_agent(
-                device_id,
-                new_model_config,
-                new_agent_config,
+            from AutoGLM_GUI.types import AgentSpecificConfig
+            from typing import cast
+
+            # Get agent_type from metadata (default to "glm" for backward compatibility)
+            agent_type = metadata.agent_type if metadata else "glm"
+
+            # Reinitialize with factory pattern
+            self.initialize_agent_with_factory(
+                device_id=device_id,
+                agent_type=agent_type,
+                model_config=new_model_config,
+                agent_config=new_agent_config,
+                agent_specific_config=cast(AgentSpecificConfig, {}),
                 force=True,
             )
 

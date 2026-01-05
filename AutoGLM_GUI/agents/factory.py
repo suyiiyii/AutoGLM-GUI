@@ -108,25 +108,6 @@ def is_agent_type_registered(agent_type: str) -> bool:
 # ==================== Built-in Agent Creators ====================
 
 
-def _create_phone_agent(
-    model_config: ModelConfig,
-    agent_config: AgentConfig,
-    agent_specific_config: AgentSpecificConfig,
-    device,
-    takeover_callback: Callable | None = None,
-    confirmation_callback: Callable | None = None,
-) -> BaseAgent:
-    from phone_agent import PhoneAgent
-
-    agent = PhoneAgent(
-        model_config=model_config.to_phone_agent_config(),
-        agent_config=agent_config.to_phone_agent_config(),
-        takeover_callback=takeover_callback,
-        confirmation_callback=confirmation_callback,
-    )
-    return agent  # type: ignore[return-value]
-
-
 def _create_mai_agent(
     model_config: ModelConfig,
     agent_config: AgentConfig,
@@ -173,6 +154,5 @@ def _create_glm_agent_v2(
     )
 
 
-register_agent("glm_legacy", _create_phone_agent)
 register_agent("glm", _create_glm_agent_v2)
 register_agent("mai", _create_mai_agent)

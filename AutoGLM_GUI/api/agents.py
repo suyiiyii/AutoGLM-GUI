@@ -57,37 +57,6 @@ def _setup_adb_keyboard(device_id: str) -> None:
         logger.info(f"✓ Device {device_id}: ADB Keyboard ready")
 
 
-def _initialize_agent_with_config(
-    device_id: str,
-    model_config: ModelConfig,
-    agent_config: AgentConfig,
-) -> None:
-    """使用给定配置初始化 Agent。
-
-    Args:
-        device_id: 设备 ID
-        model_config: 模型配置
-        agent_config: Agent 配置
-
-    Raises:
-        Exception: 初始化失败时抛出异常
-    """
-    from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
-
-    # Setup ADB Keyboard first
-    _setup_adb_keyboard(device_id)
-
-    # Initialize agent
-    manager = PhoneAgentManager.get_instance()
-    manager.initialize_agent(
-        device_id=device_id,
-        model_config=model_config,
-        agent_config=agent_config,
-        takeover_callback=non_blocking_takeover,
-    )
-    logger.info(f"Agent initialized successfully for device {device_id}")
-
-
 SSEPayload = dict[str, str | int | bool | None | dict]
 
 
