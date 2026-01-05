@@ -3,12 +3,7 @@
 import subprocess
 import time
 
-
-def _get_adb_prefix(device_id: str | None, adb_path: str = "adb") -> list[str]:
-    """Get ADB command prefix with optional device specifier."""
-    if device_id:
-        return [adb_path, "-s", device_id]
-    return [adb_path]
+from AutoGLM_GUI.platform_utils import build_adb_command
 
 
 def touch_down(
@@ -28,7 +23,7 @@ def touch_down(
         delay: Delay in seconds after event (default: 0.0 for real-time).
         adb_path: Path to adb binary.
     """
-    adb_prefix = _get_adb_prefix(device_id, adb_path)
+    adb_prefix = build_adb_command(device_id, adb_path)
 
     subprocess.run(
         adb_prefix + ["shell", "input", "motionevent", "DOWN", str(x), str(y)],
@@ -55,7 +50,7 @@ def touch_move(
         delay: Delay in seconds after event (default: 0.0 for real-time).
         adb_path: Path to adb binary.
     """
-    adb_prefix = _get_adb_prefix(device_id, adb_path)
+    adb_prefix = build_adb_command(device_id, adb_path)
 
     subprocess.run(
         adb_prefix + ["shell", "input", "motionevent", "MOVE", str(x), str(y)],
@@ -82,7 +77,7 @@ def touch_up(
         delay: Delay in seconds after event (default: 0.0 for real-time).
         adb_path: Path to adb binary.
     """
-    adb_prefix = _get_adb_prefix(device_id, adb_path)
+    adb_prefix = build_adb_command(device_id, adb_path)
 
     subprocess.run(
         adb_prefix + ["shell", "input", "motionevent", "UP", str(x), str(y)],

@@ -1,85 +1,11 @@
-"""Screenshot utilities for capturing Android device screen."""
+"""Screenshot utilities for capturing Android device screen.
 
-import base64
-import os
-import subprocess
-import tempfile
-import uuid
-from dataclasses import dataclass
-from io import BytesIO
+DEPRECATED: This module now delegates to adb_plus.screenshot for the actual implementation.
+Use adb_plus.screenshot directly for new code.
+"""
 
-from PIL import Image
-
-
-@dataclass
-class Screenshot:
-    base64_data: str
-    width: int
-    height: int
-    is_sensitive: bool = False
+from AutoGLM_GUI.adb_plus.screenshot import Screenshot, capture_screenshot
 
 
 def get_screenshot(device_id: str | None = None, timeout: int = 10) -> Screenshot:
-    temp_path = os.path.join(tempfile.gettempdir(), f"screenshot_{uuid.uuid4()}.png")
-    adb_prefix = _get_adb_prefix(device_id)
-
-    try:
-        result = subprocess.run(
-            adb_prefix + ["shell", "screencap", "-p", "/sdcard/tmp.png"],
-            capture_output=True,
-            text=True,
-            timeout=timeout,
-        )
-
-        output = result.stdout + result.stderr
-        if "Status: -1" in output or "Failed" in output:
-            return _create_fallback_screenshot(is_sensitive=True)
-
-        subprocess.run(
-            adb_prefix + ["pull", "/sdcard/tmp.png", temp_path],
-            capture_output=True,
-            text=True,
-            timeout=5,
-        )
-
-        if not os.path.exists(temp_path):
-            return _create_fallback_screenshot(is_sensitive=False)
-
-        img = Image.open(temp_path)
-        width, height = img.size
-
-        buffered = BytesIO()
-        img.save(buffered, format="PNG")
-        base64_data = base64.b64encode(buffered.getvalue()).decode("utf-8")
-
-        os.remove(temp_path)
-
-        return Screenshot(
-            base64_data=base64_data, width=width, height=height, is_sensitive=False
-        )
-
-    except Exception as e:
-        print(f"Screenshot error: {e}")
-        return _create_fallback_screenshot(is_sensitive=False)
-
-
-def _get_adb_prefix(device_id: str | None) -> list:
-    if device_id:
-        return ["adb", "-s", device_id]
-    return ["adb"]
-
-
-def _create_fallback_screenshot(is_sensitive: bool) -> Screenshot:
-    default_width, default_height = 1080, 2400
-
-    black_img = Image.new("RGB", (default_width, default_height), color="black")
-    buffered = BytesIO()
-    black_img.save(buffered, format="PNG")
-    base64_data = base64.b64encode(buffered.getvalue()).decode("utf-8")
-
-    return Screenshot(
-        base64_data=base64_data,
-        width=default_width,
-        height=default_height,
-        is_sensitive=is_sensitive,
-    )
+    return capture_screenshot(device_id=device_id, timeout=timeout)

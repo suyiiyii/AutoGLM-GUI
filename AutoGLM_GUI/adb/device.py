@@ -5,10 +5,11 @@ import time
 
 from AutoGLM_GUI.adb.apps import APP_PACKAGES
 from AutoGLM_GUI.adb.timing import TIMING_CONFIG
+from AutoGLM_GUI.platform_utils import build_adb_command
 
 
 def get_current_app(device_id: str | None = None) -> str:
-    adb_prefix = _get_adb_prefix(device_id)
+    adb_prefix = build_adb_command(device_id)
 
     result = subprocess.run(
         adb_prefix + ["shell", "dumpsys", "window"],
@@ -35,7 +36,7 @@ def tap(
     if delay is None:
         delay = TIMING_CONFIG.device.default_tap_delay
 
-    adb_prefix = _get_adb_prefix(device_id)
+    adb_prefix = build_adb_command(device_id)
 
     subprocess.run(
         adb_prefix + ["shell", "input", "tap", str(x), str(y)], capture_output=True
@@ -49,7 +50,7 @@ def double_tap(
     if delay is None:
         delay = TIMING_CONFIG.device.default_double_tap_delay
 
-    adb_prefix = _get_adb_prefix(device_id)
+    adb_prefix = build_adb_command(device_id)
 
     subprocess.run(
         adb_prefix + ["shell", "input", "tap", str(x), str(y)], capture_output=True
@@ -71,7 +72,7 @@ def long_press(
     if delay is None:
         delay = TIMING_CONFIG.device.default_long_press_delay
 
-    adb_prefix = _get_adb_prefix(device_id)
+    adb_prefix = build_adb_command(device_id)
 
     subprocess.run(
         adb_prefix
@@ -93,7 +94,7 @@ def swipe(
     if delay is None:
         delay = TIMING_CONFIG.device.default_swipe_delay
 
-    adb_prefix = _get_adb_prefix(device_id)
+    adb_prefix = build_adb_command(device_id)
 
     if duration_ms is None:
         dist_sq = (start_x - end_x) ** 2 + (start_y - end_y) ** 2
@@ -121,7 +122,7 @@ def back(device_id: str | None = None, delay: float | None = None) -> None:
     if delay is None:
         delay = TIMING_CONFIG.device.default_back_delay
 
-    adb_prefix = _get_adb_prefix(device_id)
+    adb_prefix = build_adb_command(device_id)
 
     subprocess.run(
         adb_prefix + ["shell", "input", "keyevent", "4"], capture_output=True
@@ -133,7 +134,7 @@ def home(device_id: str | None = None, delay: float | None = None) -> None:
     if delay is None:
         delay = TIMING_CONFIG.device.default_home_delay
 
-    adb_prefix = _get_adb_prefix(device_id)
+    adb_prefix = build_adb_command(device_id)
 
     subprocess.run(
         adb_prefix + ["shell", "input", "keyevent", "KEYCODE_HOME"], capture_output=True
@@ -150,7 +151,7 @@ def launch_app(
     if app_name not in APP_PACKAGES:
         return False
 
-    adb_prefix = _get_adb_prefix(device_id)
+    adb_prefix = build_adb_command(device_id)
     package = APP_PACKAGES[app_name]
 
     subprocess.run(
@@ -168,9 +169,3 @@ def launch_app(
     )
     time.sleep(delay)
     return True
-
-
-def _get_adb_prefix(device_id: str | None) -> list:
-    if device_id:
-        return ["adb", "-s", device_id]
-    return ["adb"]

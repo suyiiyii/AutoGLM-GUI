@@ -63,3 +63,29 @@ async def spawn_process(
         return subprocess.Popen(cmd, stdout=stdout, stderr=stderr)
 
     return await asyncio.create_subprocess_exec(*cmd, stdout=stdout, stderr=stderr)
+
+
+def build_adb_command(device_id: str | None = None, adb_path: str = "adb") -> list[str]:
+    """Build ADB command prefix with optional device specifier.
+
+    This centralizes the logic for constructing ADB commands across all modules.
+
+    Args:
+        device_id: Optional ADB device serial (e.g., "192.168.1.100:5555" or USB serial)
+        adb_path: Path to ADB executable (default: "adb")
+
+    Returns:
+        List of command parts to use with subprocess (e.g., ["adb", "-s", "device_id"])
+
+    Examples:
+        >>> build_adb_command()
+        ['adb']
+        >>> build_adb_command(device_id="192.168.1.100:5555")
+        ['adb', '-s', '192.168.1.100:5555']
+        >>> build_adb_command(device_id="emulator-5554", adb_path="/usr/local/bin/adb")
+        ['/usr/local/bin/adb', '-s', 'emulator-5554']
+    """
+    cmd = [adb_path]
+    if device_id:
+        cmd.extend(["-s", device_id])
+    return cmd

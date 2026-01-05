@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from enum import Enum
 
 from AutoGLM_GUI.adb.timing import TIMING_CONFIG
+from AutoGLM_GUI.adb_plus.ip import get_wifi_ip
 
 
 class ConnectionType(Enum):
@@ -261,51 +262,15 @@ class ADBConnection:
         """
         Get the IP address of a connected device.
 
+        Delegates to adb_plus.ip.get_wifi_ip() for better WiFi interface detection.
+
         Args:
             device_id: Device ID. If None, uses first available device.
 
         Returns:
             IP address string or None if not found.
         """
-        try:
-            cmd = [self.adb_path]
-            if device_id:
-                cmd.extend(["-s", device_id])
-            cmd.extend(["shell", "ip", "route"])
-
-            result = subprocess.run(
-                cmd, capture_output=True, text=True, encoding="utf-8", timeout=5
-            )
-
-            # Parse IP from route output
-            for line in result.stdout.split("\n"):
-                if "src" in line:
-                    parts = line.split()
-                    for i, part in enumerate(parts):
-                        if part == "src" and i + 1 < len(parts):
-                            return parts[i + 1]
-
-            # Alternative: try wlan0 interface
-            cmd[-1] = "ip addr show wlan0"
-            result = subprocess.run(
-                cmd[:-1] + ["shell", "ip", "addr", "show", "wlan0"],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                timeout=5,
-            )
-
-            for line in result.stdout.split("\n"):
-                if "inet " in line:
-                    parts = line.strip().split()
-                    if len(parts) >= 2:
-                        return parts[1].split("/")[0]
-
-            return None
-
-        except Exception as e:
-            print(f"Error getting device IP: {e}")
-            return None
+        return get_wifi_ip(adb_path=self.adb_path, device_id=device_id)
 
     def restart_server(self) -> tuple[bool, str]:
         """

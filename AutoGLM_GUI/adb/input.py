@@ -3,9 +3,11 @@
 import base64
 import subprocess
 
+from AutoGLM_GUI.platform_utils import build_adb_command
+
 
 def type_text(text: str, device_id: str | None = None) -> None:
-    adb_prefix = _get_adb_prefix(device_id)
+    adb_prefix = build_adb_command(device_id)
     encoded_text = base64.b64encode(text.encode("utf-8")).decode("utf-8")
 
     subprocess.run(
@@ -26,7 +28,7 @@ def type_text(text: str, device_id: str | None = None) -> None:
 
 
 def clear_text(device_id: str | None = None) -> None:
-    adb_prefix = _get_adb_prefix(device_id)
+    adb_prefix = build_adb_command(device_id)
 
     subprocess.run(
         adb_prefix + ["shell", "am", "broadcast", "-a", "ADB_CLEAR_TEXT"],
@@ -36,7 +38,7 @@ def clear_text(device_id: str | None = None) -> None:
 
 
 def detect_and_set_adb_keyboard(device_id: str | None = None) -> str:
-    adb_prefix = _get_adb_prefix(device_id)
+    adb_prefix = build_adb_command(device_id)
 
     result = subprocess.run(
         adb_prefix + ["shell", "settings", "get", "secure", "default_input_method"],
@@ -58,14 +60,8 @@ def detect_and_set_adb_keyboard(device_id: str | None = None) -> str:
 
 
 def restore_keyboard(ime: str, device_id: str | None = None) -> None:
-    adb_prefix = _get_adb_prefix(device_id)
+    adb_prefix = build_adb_command(device_id)
 
     subprocess.run(
         adb_prefix + ["shell", "ime", "set", ime], capture_output=True, text=True
     )
-
-
-def _get_adb_prefix(device_id: str | None) -> list:
-    if device_id:
-        return ["adb", "-s", device_id]
-    return ["adb"]
