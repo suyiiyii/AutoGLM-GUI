@@ -11,8 +11,7 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 from queue import Queue
 
-from phone_agent.model.client import ModelConfig
-
+from AutoGLM_GUI.config import ModelConfig
 from AutoGLM_GUI.logger import logger
 from .decision_model import (
     DecisionModel,

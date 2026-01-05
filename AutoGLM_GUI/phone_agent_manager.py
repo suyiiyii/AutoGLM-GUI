@@ -10,6 +10,7 @@ from enum import Enum
 from typing import TYPE_CHECKING, Callable, Optional
 
 from AutoGLM_GUI.agents.protocols import BaseAgent
+from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.types import AgentSpecificConfig
 from AutoGLM_GUI.exceptions import (
     AgentInitializationError,
@@ -17,10 +18,6 @@ from AutoGLM_GUI.exceptions import (
     DeviceBusyError,
 )
 from AutoGLM_GUI.logger import logger
-
-if TYPE_CHECKING:
-    from phone_agent.agent import AgentConfig
-    from phone_agent.model import ModelConfig
 
 
 class AgentState(str, Enum):
@@ -106,7 +103,7 @@ class PhoneAgentManager:
 
         # Agent storage (transition from global state to instance state)
         self._agents: dict[str, BaseAgent] = {}
-        self._agent_configs: dict[str, tuple["ModelConfig", "AgentConfig"]] = {}
+        self._agent_configs: dict[str, tuple[ModelConfig, AgentConfig]] = {}
 
     @classmethod
     def get_instance(cls) -> PhoneAgentManager:
@@ -123,8 +120,8 @@ class PhoneAgentManager:
     def initialize_agent(
         self,
         device_id: str,
-        model_config: "ModelConfig",
-        agent_config: "AgentConfig",
+        model_config: ModelConfig,
+        agent_config: AgentConfig,
         takeover_callback: Optional[Callable] = None,
         force: bool = False,
     ) -> BaseAgent:
@@ -176,10 +173,10 @@ class PhoneAgentManager:
             )
 
             try:
-                # Create agent
+                # Create agent (convert config to phone_agent types)
                 agent = PhoneAgent(
-                    model_config=model_config,
-                    agent_config=agent_config,
+                    model_config=model_config.to_phone_agent_config(),
+                    agent_config=agent_config.to_phone_agent_config(),
                     takeover_callback=takeover_callback or non_blocking_takeover,
                 )
 

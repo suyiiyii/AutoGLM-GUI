@@ -382,6 +382,39 @@ class DualModelAgent:
 
 ### 🔥 立即修复（影响架构清晰度）
 1. ✅ 统一类型定义（`StepResult`, `ModelConfig` 等）
+
+---
+
+## ✅ 已完成的重构 (2026-01-05)
+
+### 配置类解耦
+
+**目标**: 将项目中对 `phone_agent.agent.AgentConfig` 和 `phone_agent.model.ModelConfig` 的依赖替换为 AutoGLM-GUI 自己的配置类
+
+**完成情况**:
+- ✅ 创建 `AutoGLM_GUI/config.py`，定义 `ModelConfig`, `AgentConfig`, `StepResult`
+- ✅ 提供 `to_phone_agent_config()` 适配器方法用于类型转换
+- ✅ 更新所有核心模块使用新配置类：
+  - PhoneAgentManager
+  - Agent Factory (factory.py, glm_agent.py, mai_adapter.py)
+  - Dual Model System (dual_agent.py, vision_model.py)
+  - API Layer (agents.py, dual_model.py)
+  - Tests (test_runner.py, test_e2e_with_adapter.py)
+- ✅ 更新 `BaseAgent` Protocol，移除配置属性声明以避免不变性问题
+- ✅ 更新文档 (AGENTS.md)
+
+**影响范围**: 17 个文件
+
+**收益**:
+- 配置层完全独立于 `phone_agent`
+- 未来替换底层实现时无需修改大量代码
+- 避免第三方类型泄露到 API 层
+- 架构更清晰，符合分层设计原则
+
+**技术细节**:
+- 通过适配器模式实现渐进式迁移
+- 在工厂内部完成类型转换，业务层无感知
+- 运行时完全兼容，字段一致性保证
 2. ✅ 移除 `api/control.py` 对 `phone_agent.adb` 的直接依赖
 3. ✅ 补全 `BaseAgent` 接口（添加 `abort()`, `is_running`）
 

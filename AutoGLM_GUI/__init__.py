@@ -58,3 +58,14 @@ try:
     __version__ = metadata.version("autoglm-gui")
 except metadata.PackageNotFoundError:
     __version__ = "unknown"
+
+from AutoGLM_GUI.config import AgentConfig, ModelConfig, StepResult
+from AutoGLM_GUI.logger import logger
+
+__all__ = [
+    "__version__",
+    "ModelConfig",
+    "AgentConfig",
+    "StepResult",
+    "logger",
+]

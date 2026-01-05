@@ -90,8 +90,7 @@ class TestE2EWithPhoneAgent:
         """Test that phone_agent's tap commands are recorded by mock agent."""
         from AutoGLM_GUI.config_manager import config_manager
         from phone_agent import PhoneAgent
-        from phone_agent.agent import AgentConfig
-        from phone_agent.model import ModelConfig
+from AutoGLM_GUI.config import AgentConfig, ModelConfig
 
         test_client.load_scenario(scenario_path)
 
