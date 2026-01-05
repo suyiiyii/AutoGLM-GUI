@@ -12,7 +12,7 @@ import sys
 from dataclasses import dataclass
 from io import BytesIO
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Callable, Optional, Tuple
+from typing import TYPE_CHECKING, Any, Callable, Optional
 
 from PIL import Image
 
@@ -21,6 +21,7 @@ from phone_agent.device_factory import get_device_factory
 
 from AutoGLM_GUI.config import AgentConfig, ModelConfig, StepResult
 from AutoGLM_GUI.logger import logger
+from AutoGLM_GUI.parsers import MAIParser
 
 
 # Add mai_agent to sys.path for import
@@ -169,14 +170,13 @@ class MAIAgentAdapter:
             tools=mai_config.tools,
         )
 
-        # Create action handler (reuse from phone_agent)
+        self.parser = MAIParser()
         self.action_handler = ActionHandler(
             device_id=agent_config.device_id,
             confirmation_callback=confirmation_callback,
             takeover_callback=takeover_callback,
         )
 
-        # State management
         self._step_count = 0
         self._current_instruction = ""
         self._on_thinking_chunk = on_thinking_chunk
@@ -285,11 +285,32 @@ class MAIAgentAdapter:
             )
 
         # 5. Extract thinking from prediction_text
-        # MAI Agent uses <thinking> tags
         thinking = self._extract_thinking(prediction_text)
 
-        # 6. Convert action format
-        converted_action = self._convert_action(action_dict)
+        # 6. Convert action format using MAIParser
+        converted_action = self.parser._convert_action(action_dict)
+
+        # 6.1. Special handling for Enter key (hardcoded ADB command)
+        if (
+            converted_action.get("_metadata") == "do"
+            and converted_action.get("action") == "Enter"
+        ):
+            from AutoGLM_GUI.platform_utils import run_cmd_silently_sync
+
+            adb_prefix = (
+                ["adb", "-s", self.agent_config.device_id]
+                if self.agent_config.device_id
+                else ["adb"]
+            )
+            run_cmd_silently_sync(
+                adb_prefix + ["shell", "input", "keyevent", "KEYCODE_ENTER"],
+                timeout=5,
+            )
+            converted_action = {
+                "_metadata": "do",
+                "action": "Wait",
+                "duration": "0.5 seconds",
+            }
 
         # 7. Execute action
         try:
@@ -320,246 +341,6 @@ class MAIAgentAdapter:
             thinking=thinking,
             message=action_result.message,
         )
-
-    def _convert_action(self, mai_action: dict[str, Any]) -> dict[str, Any]:
-        """Convert MAI action format to PhoneAgent format.
-
-        MAI format: {"action": "click", "coordinate": [x, y]}
-        PhoneAgent format: {"_metadata": "do", "action": "Tap", "element": [x, y]}
-
-        Coordinate conversion: MAI uses 0-999, PhoneAgent uses 0-1000.
-
-        Args:
-            mai_action: Action dictionary from MAI agent.
-
-        Returns:
-            Converted action dictionary for PhoneAgent.
-        """
-        action_type = mai_action.get("action")
-
-        # Terminate action
-        if action_type == "terminate":
-            status = mai_action.get("status", "success")
-            return {
-                "_metadata": "finish",
-                "message": "Task completed" if status == "success" else "Task failed",
-            }
-
-        # Answer action (no operation)
-        if action_type == "answer":
-            return {
-                "_metadata": "finish",
-                "message": mai_action.get("text", ""),
-            }
-
-        # Wait action
-        if action_type == "wait":
-            return {
-                "_metadata": "do",
-                "action": "Wait",
-                "duration": "1 seconds",
-            }
-
-        # System button
-        if action_type == "system_button":
-            button_name = mai_action.get("button", "")
-
-            # Special handling for Enter key
-            # ActionHandler doesn't have an "Enter" handler, so we handle it directly here
-            # TODO: Hardcoded ADB command - incompatible with RemoteDevice
-            # Should use DeviceProtocol unified interface (e.g., device.type_text("\n"))
-            # Priority: Low (handle after RemoteDevice integration complete)
-            if button_name == "enter":
-                # Use platform_utils to run ADB keyevent command
-                from AutoGLM_GUI.platform_utils import run_cmd_silently_sync
-
-                adb_prefix = (
-                    ["adb", "-s", self.agent_config.device_id]
-                    if self.agent_config.device_id
-                    else ["adb"]
-                )
-                run_cmd_silently_sync(
-                    adb_prefix + ["shell", "input", "keyevent", "KEYCODE_ENTER"],
-                    timeout=5,
-                )
-                # Return a Wait action to indicate success
-                return {
-                    "_metadata": "do",
-                    "action": "Wait",
-                    "duration": "0.5 seconds",
-                }
-
-            # Other system buttons use standard handlers
-            action_map = {
-                "back": "Back",
-                "home": "Home",
-            }
-            return {
-                "_metadata": "do",
-                "action": action_map.get(button_name, "Back"),
-            }
-
-        # Click-type actions (require coordinates)
-        coordinate = mai_action.get("coordinate")
-        if coordinate:
-            # Coordinate conversion: 0-999 -> 0-1000
-            x = self._convert_coordinate(coordinate[0])
-            y = self._convert_coordinate(coordinate[1])
-
-            if action_type == "click":
-                return {
-                    "_metadata": "do",
-                    "action": "Tap",
-                    "element": [x, y],
-                }
-            elif action_type == "long_press":
-                return {
-                    "_metadata": "do",
-                    "action": "Long Press",
-                    "element": [x, y],
-                }
-            elif action_type == "double_click":
-                return {
-                    "_metadata": "do",
-                    "action": "Double Tap",
-                    "element": [x, y],
-                }
-
-        # Swipe action
-        if action_type == "swipe":
-            direction = mai_action.get("direction", "up")
-            # Default to normalized center [0.5, 0.5], not [500, 500]
-            # MAI coordinates are normalized to [0, 1], so we use normalized values
-            coordinate = mai_action.get("coordinate") or [0.5, 0.5]
-            x = self._convert_coordinate(coordinate[0])
-            y = self._convert_coordinate(coordinate[1])
-
-            start, end = self._calculate_swipe_coordinates(direction, x, y)
-
-            return {
-                "_metadata": "do",
-                "action": "Swipe",
-                "start": start,
-                "end": end,
-            }
-
-        # Drag action
-        if action_type == "drag":
-            start_coord = mai_action.get("start_coordinate", [0, 0])
-            end_coord = mai_action.get("end_coordinate", [0, 0])
-
-            # IMPORTANT: start_coordinate and end_coordinate are NOT normalized by MAI.
-            # They remain in SCALE_FACTOR range [0, 999], unlike the "coordinate" field
-            # which is normalized to [0, 1]. We must use the scale factor conversion.
-            start = [
-                self._convert_coordinate_from_scale_factor(start_coord[0]),
-                self._convert_coordinate_from_scale_factor(start_coord[1]),
-            ]
-            end = [
-                self._convert_coordinate_from_scale_factor(end_coord[0]),
-                self._convert_coordinate_from_scale_factor(end_coord[1]),
-            ]
-
-            return {
-                "_metadata": "do",
-                "action": "Swipe",
-                "start": start,
-                "end": end,
-            }
-
-        # Text input
-        if action_type == "type":
-            return {
-                "_metadata": "do",
-                "action": "Type",
-                "text": mai_action.get("text", ""),
-            }
-
-        # Open app
-        if action_type == "open":
-            return {
-                "_metadata": "do",
-                "action": "Launch",
-                "app": mai_action.get("text", ""),
-            }
-
-        # Unknown action - treat as finish
-        logger.warning(f"Unknown MAI action type: {action_type}")
-        return {
-            "_metadata": "finish",
-            "message": f"Unknown action: {action_type}",
-        }
-
-    def _convert_coordinate(self, coord: float) -> int:
-        """Convert coordinate from MAI scale to PhoneAgent scale.
-
-        MAI agent normalizes coordinates to [0, 1] in parse_action_to_structure_output.
-        PhoneAgent uses normalized coordinates in [0, 1000] range.
-
-        Args:
-            coord: Coordinate in MAI scale [0, 1] (normalized).
-
-        Returns:
-            Coordinate in PhoneAgent scale [0, 1000].
-
-        Example:
-            >>> _convert_coordinate(0.5)  # Center of screen
-            500
-        """
-        return int(coord * 1000)
-
-    def _convert_coordinate_from_scale_factor(self, coord: float) -> int:
-        """Convert coordinate from MAI SCALE_FACTOR to PhoneAgent scale.
-
-        For drag actions, MAI does NOT normalize start_coordinate/end_coordinate.
-        These coordinates remain in the SCALE_FACTOR range [0, 999].
-        PhoneAgent uses normalized coordinates in [0, 1000] range.
-
-        Args:
-            coord: Coordinate in MAI SCALE_FACTOR [0, 999].
-
-        Returns:
-            Coordinate in PhoneAgent scale [0, 1000].
-
-        Example:
-            >>> _convert_coordinate_from_scale_factor(500)  # Center of screen
-            500
-        """
-        SCALE_FACTOR = 999
-        return int(coord * 1000 / SCALE_FACTOR)
-
-    def _calculate_swipe_coordinates(
-        self, direction: str, x: int, y: int
-    ) -> Tuple[list[int], list[int]]:
-        """Calculate swipe coordinates based on direction.
-
-        Args:
-            direction: Swipe direction (up, down, left, right).
-            x: Center X coordinate.
-            y: Center Y coordinate.
-
-        Returns:
-            Tuple of [start_x, start_y] and [end_x, end_y].
-        """
-        distance = 300  # Default swipe distance
-
-        if direction == "up":
-            start = [x, y + distance // 2]
-            end = [x, y - distance // 2]
-        elif direction == "down":
-            start = [x, y - distance // 2]
-            end = [x, y + distance // 2]
-        elif direction == "left":
-            start = [x + distance // 2, y]
-            end = [x - distance // 2, y]
-        elif direction == "right":
-            start = [x - distance // 2, y]
-            end = [x + distance // 2, y]
-        else:
-            start = [x, y]
-            end = [x, y]
-
-        return start, end
 
     def _extract_thinking(self, prediction_text: str) -> str:
         """Extract thinking content from agent response.

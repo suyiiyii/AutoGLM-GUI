@@ -8,7 +8,9 @@ from dataclasses import dataclass
 from typing import Callable, Optional
 
 from phone_agent.model.client import ModelClient, MessageBuilder
-from phone_agent.actions.handler import ActionHandler, parse_action
+from phone_agent.actions.handler import ActionHandler
+
+from AutoGLM_GUI.parsers import PhoneAgentParser
 from phone_agent.device_factory import get_device_factory
 
 from AutoGLM_GUI.config import ModelConfig
@@ -56,6 +58,7 @@ class VisionModel:
         self.model_config = model_config
         self.device_id = device_id
         self.model_client = ModelClient(model_config.to_phone_agent_config())
+        self.parser = PhoneAgentParser()
         self.action_handler = ActionHandler(
             device_id=device_id,
             confirmation_callback=confirmation_callback,
@@ -404,8 +407,7 @@ do(action="Tap", element=[x, y])
         try:
             response = self.model_client.request(messages)
 
-            # 解析响应获取坐标
-            action = parse_action(response.action)
+            action = self.parser.parse(response.action)
 
             if action.get("_metadata") == "do" and "element" in action:
                 element = action["element"]

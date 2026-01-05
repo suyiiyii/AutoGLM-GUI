@@ -4,11 +4,12 @@ import json
 import traceback
 from typing import Any, Callable
 
-from AutoGLM_GUI.actions import ActionHandler, ActionResult, parse_action
+from AutoGLM_GUI.actions import ActionHandler, ActionResult
 from AutoGLM_GUI.config import AgentConfig, ModelConfig, StepResult
 from AutoGLM_GUI.device_protocol import DeviceProtocol
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.model import MessageBuilder, ModelClient, VisionModelConfig
+from AutoGLM_GUI.parsers import GLMParser
 from phone_agent.config import get_messages, get_system_prompt
 
 
@@ -37,6 +38,7 @@ class GLMAgent:
         )
 
         self.model_client = ModelClient(glm_model_config)
+        self.parser = GLMParser()
 
         self.device = device
         self.action_handler = ActionHandler(
@@ -150,7 +152,7 @@ class GLMAgent:
             )
 
         try:
-            action = parse_action(response.action)
+            action = self.parser.parse(response.action)
         except ValueError as e:
             if self.agent_config.verbose:
                 logger.warning(f"Failed to parse action: {e}, treating as finish")
