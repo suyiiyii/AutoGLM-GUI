@@ -2,7 +2,7 @@
 
 import base64
 from io import BytesIO
-from unittest.mock import Mock, patch
+from unittest.mock import Mock
 
 import pytest
 from PIL import Image

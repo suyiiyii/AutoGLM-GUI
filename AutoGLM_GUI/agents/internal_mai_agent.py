@@ -10,6 +10,7 @@
 """
 
 import base64
+import time
 import traceback
 from io import BytesIO
 from typing import Any, Callable
@@ -67,6 +68,10 @@ class InternalMAIAgent:
         self._is_running = False
         self._thinking_callback = thinking_callback
 
+        self._total_llm_time = 0.0
+        self._total_action_time = 0.0
+        self._total_tokens = 0
+
     def run(self, task: str) -> str:
         self.traj_memory = TrajMemory(task_goal=task, task_id="", steps=[])
         self._step_count = 0
@@ -103,6 +108,9 @@ class InternalMAIAgent:
         self.traj_memory.clear()
         self._step_count = 0
         self._is_running = False
+        self._total_llm_time = 0.0
+        self._total_action_time = 0.0
+        self._total_tokens = 0
 
     def abort(self) -> None:
         self._is_running = False
@@ -156,9 +164,15 @@ class InternalMAIAgent:
 
                     callback = print_chunk
 
+                llm_start = time.time()
                 response = self.model_client.request(
                     messages, on_thinking_chunk=callback
                 )
+                llm_time = time.time() - llm_start
+                self._total_llm_time += llm_time
+
+                if self.agent_config.verbose:
+                    print(f"\n⏱️  LLM 耗时: {llm_time:.2f}s")
 
                 parsed = self.parser.parse_with_thinking(response.action)
                 thinking = parsed["thinking"]
@@ -230,9 +244,15 @@ class InternalMAIAgent:
         self.traj_memory.add_step(traj_step)
 
         try:
+            action_start = time.time()
             result = self.action_handler.execute(
                 converted_action, screenshot.width, screenshot.height
             )
+            action_time = time.time() - action_start
+            self._total_action_time += action_time
+
+            if self.agent_config.verbose:
+                print(f"⚡ 动作执行耗时: {action_time:.2f}s")
         except Exception as e:
             if self.agent_config.verbose:
                 traceback.print_exc()
@@ -245,6 +265,16 @@ class InternalMAIAgent:
             print(
                 f"✅ 任务完成: {result.message or converted_action.get('message', '完成')}"
             )
+            print("=" * 50)
+            print("\n📊 性能统计:")
+            print(f"  总步数: {self._step_count}")
+            print(f"  总 LLM 耗时: {self._total_llm_time:.2f}s")
+            print(f"  总动作耗时: {self._total_action_time:.2f}s")
+            print(
+                f"  平均每步耗时: {(self._total_llm_time + self._total_action_time) / self._step_count:.2f}s"
+            )
+            if self._total_tokens > 0:
+                print(f"  总 Token 使用: {self._total_tokens}")
             print("=" * 50 + "\n")
 
         return StepResult(
