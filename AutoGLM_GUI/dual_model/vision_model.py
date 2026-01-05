@@ -5,13 +5,15 @@
 """
 
 from dataclasses import dataclass
-from typing import Callable, Optional
+from typing import Any, Callable, Optional
+
+from openai import OpenAI
 
 from AutoGLM_GUI.actions.handler import ActionHandler
 from AutoGLM_GUI.config import ModelConfig
 from AutoGLM_GUI.device_manager import DeviceManager
 from AutoGLM_GUI.logger import logger
-from AutoGLM_GUI.model import MessageBuilder, ModelClient
+from AutoGLM_GUI.model import MessageBuilder
 from AutoGLM_GUI.parsers import PhoneAgentParser
 
 from .protocols import VISION_DESCRIBE_PROMPT
@@ -56,7 +58,11 @@ class VisionModel:
     ):
         self.model_config = model_config
         self.device_id = device_id
-        self.model_client = ModelClient(model_config.to_vision_model_config())
+        self.openai_client = OpenAI(
+            base_url=model_config.base_url,
+            api_key=model_config.api_key,
+            timeout=120,
+        )
         self.parser = PhoneAgentParser()
 
         device_manager = DeviceManager.get_instance()
@@ -69,6 +75,47 @@ class VisionModel:
         )
 
         logger.info(f"视觉小模型初始化: {model_config.model_name}, 设备: {device_id}")
+
+    def _request(self, messages: list[dict[str, Any]]) -> tuple[str, str]:
+        response = self.openai_client.chat.completions.create(
+            messages=messages,  # type: ignore[arg-type]
+            model=self.model_config.model_name,
+            max_tokens=self.model_config.max_tokens,
+            temperature=self.model_config.temperature,
+            top_p=self.model_config.top_p,
+            frequency_penalty=self.model_config.frequency_penalty,
+            extra_body=self.model_config.extra_body,
+            stream=False,
+        )
+
+        raw_content = response.choices[0].message.content or ""
+
+        thinking = ""
+        action = ""
+
+        if "<think>" in raw_content and "</think>" in raw_content:
+            start = raw_content.find("<think>") + len("<think>")
+            end = raw_content.find("</think>")
+            thinking = raw_content[start:end].strip()
+
+        if "<answer>" in raw_content and "</answer>" in raw_content:
+            start = raw_content.find("<answer>") + len("<answer>")
+            end = raw_content.find("</answer>")
+            action = raw_content[start:end].strip()
+        elif "<answer>" in raw_content:
+            start = raw_content.find("<answer>") + len("<answer>")
+            action = raw_content[start:].strip()
+        else:
+            lines = raw_content.strip().split("\n")
+            for line in reversed(lines):
+                line = line.strip()
+                if line.startswith("do(") or line.startswith("finish("):
+                    action = line
+                    break
+            if not action:
+                action = raw_content
+
+        return thinking, action
 
     def capture_screenshot(self) -> tuple[str, int, int]:
         """
@@ -133,12 +180,10 @@ class VisionModel:
 
         # 调用视觉模型
         try:
-            response = self.model_client.request(messages)
+            thinking, action = self._request(messages)
 
             # 解析描述
-            description = (
-                response.thinking if response.thinking else response.raw_content
-            )
+            description = thinking if thinking else action
 
             # 提取元素列表（简单解析）
             elements = self._extract_elements(description)
@@ -147,7 +192,7 @@ class VisionModel:
                 description=description,
                 current_app=current_app,
                 elements=elements,
-                raw_response=response.raw_content,
+                raw_response=f"{thinking}\n{action}",
             )
 
             logger.info(f"屏幕识别完成: {current_app}, 识别到 {len(elements)} 个元素")
@@ -407,9 +452,9 @@ do(action="Tap", element=[x, y])
         ]
 
         try:
-            response = self.model_client.request(messages)
+            thinking, action_str = self._request(messages)
 
-            action = self.parser.parse(response.action)
+            action = self.parser.parse(action_str)
 
             if action.get("_metadata") == "do" and "element" in action:
                 element = action["element"]
@@ -418,7 +463,7 @@ do(action="Tap", element=[x, y])
                     logger.info(f"元素定位成功: ({x}, {y})")
                     return (x, y)
 
-            logger.warning(f"无法从响应中解析坐标: {response.action}")
+            logger.warning(f"无法从响应中解析坐标: {action_str}")
             return None
 
         except Exception as e:
