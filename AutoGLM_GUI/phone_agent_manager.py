@@ -233,7 +233,7 @@ class PhoneAgentManager:
         Returns:
             已 patch 的 agent 实例
         """
-        from AutoGLM_GUI.agents.glm_agent import GLMAgent
+        from AutoGLM_GUI.agents.glm.agent import GLMAgent
         from AutoGLM_GUI.agents.internal_mai_agent import InternalMAIAgent
         from AutoGLM_GUI.agents.mai_adapter import MAIAgentAdapter
         from AutoGLM_GUI.device_manager import DeviceManager
@@ -365,7 +365,7 @@ class PhoneAgentManager:
             if streaming_agent and not stop_event.is_set():
                 original_agent = self.get_agent_safe(device_id)
                 if original_agent:
-                    from AutoGLM_GUI.agents.glm_agent import GLMAgent
+                    from AutoGLM_GUI.agents.glm.agent import GLMAgent
                     from AutoGLM_GUI.agents.mai_adapter import MAIAgentAdapter
 
                     if isinstance(original_agent, GLMAgent) and isinstance(

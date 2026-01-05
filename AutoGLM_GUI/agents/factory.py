@@ -143,7 +143,7 @@ def _create_glm_agent_v2(
     takeover_callback: Callable | None = None,
     confirmation_callback: Callable | None = None,
 ) -> BaseAgent:
-    from .glm_agent import GLMAgent
+    from .glm.agent import GLMAgent
 
     return GLMAgent(
         model_config=model_config,
