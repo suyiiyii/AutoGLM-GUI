@@ -9,10 +9,19 @@ from tests.integration.test_runner import TestRunner
 class TestAgentIntegration:
     """Test Agent integration using state machine."""
 
-    def test_sample_case(self, sample_test_case: Path):
+    def test_sample_case(self, sample_test_case: Path, mock_llm_server: str):
         """Test the sample test case (美团外卖消息按钮)."""
+        from AutoGLM_GUI.config import ModelConfig
+
+        # Use mock LLM config
+        model_config = ModelConfig(
+            base_url=mock_llm_server + "/v1",
+            api_key="mock-key",
+            model_name="mock-glm-model",
+        )
+
         runner = TestRunner(sample_test_case)
-        result = runner.run()
+        result = runner.run(model_config=model_config)
 
         assert result["passed"], f"Test failed: {result['failure_reason']}"
         assert result["final_state"] == "message"
