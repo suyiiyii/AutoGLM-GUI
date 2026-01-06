@@ -77,8 +77,6 @@ class TestRunner:
         state_machine = self.state_machine
         mock_device = self.mock_device
         instruction = self.instruction
-        from unittest.mock import MagicMock, patch
-
         # Import here to avoid circular imports
         from AutoGLM_GUI.agents.glm.agent import GLMAgent
         from AutoGLM_GUI.config import AgentConfig, ModelConfig
