@@ -43,48 +43,6 @@ jobs:
         run: |
           uv sync --dev --frozen
 
-      - name: Start Mock Device Agent
-        run: |
-          uv run uvicorn tests.integration.device_agent.mock_agent_server:app \
-            --host 127.0.0.1 --port 18001 --log-level warning &
-          echo "Waiting for mock agent to start..."
-          sleep 5
-          curl -f http://127.0.0.1:18001/test/state || exit 1
-
-      - name: Build Docker image
-        run: |
-          docker build -t autoglm-gui:e2e-test .
-
-      # TODO: 逻辑和 tests/integration/test_docker_e2e.py  重复了，应该只保留一个
-      - name: Run Docker container with Remote Device
-        env:
-          AUTOGLM_BASE_URL: ${{ secrets.AUTOGLM_BASE_URL }}
-          AUTOGLM_MODEL_NAME: ${{ secrets.AUTOGLM_MODEL_NAME }}
-          AUTOGLM_API_KEY: ${{ secrets.AUTOGLM_API_KEY }}
-        run: |
-          docker run -d \
-            --name autoglm-e2e-test \
-            --add-host=host.docker.internal:host-gateway \
-            -p 8000:8000 \
-            -e REMOTE_DEVICE_BASE_URL=http://host.docker.internal:18001 \
-            -e AUTOGLM_BASE_URL="$AUTOGLM_BASE_URL" \
-            -e AUTOGLM_MODEL_NAME="$AUTOGLM_MODEL_NAME" \
-            -e AUTOGLM_API_KEY="$AUTOGLM_API_KEY" \
-            -e AUTOGLM_CORS_ORIGINS="*" \
-            autoglm-gui:e2e-test
-
-      - name: Wait for container to be ready
-        run: |
-          echo "Waiting for container to start..."
-          for i in {1..30}; do
-            if curl -s http://localhost:8000/api/health > /dev/null 2>&1; then
-              echo "Container is ready!"
-              break
-            fi
-            echo "Attempt $i/30 - waiting..."
-            sleep 2
-          done
-
       - name: Run Docker E2E tests
         env:
           AUTOGLM_BASE_URL: ${{ secrets.AUTOGLM_BASE_URL }}
@@ -92,18 +50,6 @@ jobs:
           AUTOGLM_API_KEY: ${{ secrets.AUTOGLM_API_KEY }}
         run: |
           uv run pytest tests/integration/test_docker_e2e.py -v -s
-
-      - name: Collect container logs on failure
-        if: failure()
-        run: |
-          echo "=== Container Logs ==="
-          docker logs autoglm-e2e-test || true
-
-      - name: Cleanup
-        if: always()
-        run: |
-          docker stop autoglm-e2e-test || true
-          docker rm autoglm-e2e-test || true
 
       - name: Generate test summary
         if: always()
