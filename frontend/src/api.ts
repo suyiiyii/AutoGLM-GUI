@@ -673,6 +673,21 @@ export async function deleteConfig(): Promise<{
   return res.data;
 }
 
+export interface ReinitAllAgentsResponse {
+  success: boolean;
+  total: number;
+  succeeded: string[];
+  failed: Record<string, string>;
+  message: string;
+}
+
+export async function reinitAllAgents(): Promise<ReinitAllAgentsResponse> {
+  const res = await axios.post<ReinitAllAgentsResponse>(
+    '/api/agents/reinit-all'
+  );
+  return res.data;
+}
+
 export interface VersionCheckResponse {
   current_version: string;
   latest_version: string | null;

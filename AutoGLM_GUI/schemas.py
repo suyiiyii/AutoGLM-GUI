@@ -687,3 +687,13 @@ class RemoteDeviceRemoveResponse(BaseModel):
     success: bool
     message: str
     error: str | None = None
+
+
+class ReinitAllAgentsResponse(BaseModel):
+    """批量重新初始化 agent 响应."""
+
+    success: bool
+    total: int
+    succeeded: list[str]
+    failed: dict[str, str]
+    message: str

@@ -620,3 +620,105 @@ class PhoneAgentManager:
         """检查设备是否有活跃的流式会话."""
         with self._streaming_contexts_lock:
             return device_id in self._abort_events
+
+    def reinit_all_agents(self) -> dict[str, list[str] | dict[str, str] | int]:
+        """
+        重新初始化所有已存在的 agent，使用最新的全局配置.
+
+        Returns:
+            dict: {
+                "success": List[str],  # 成功的 device_id 列表
+                "failed": Dict[str, str],  # 失败的 device_id -> 错误信息
+                "total": int,  # 总数
+            }
+        """
+        from typing import cast
+
+        from AutoGLM_GUI.config import AgentConfig, ModelConfig
+        from AutoGLM_GUI.config_manager import config_manager
+        from AutoGLM_GUI.types import AgentSpecificConfig
+
+        results: dict[str, list[str] | dict[str, str] | int] = {
+            "success": [],
+            "failed": {},
+            "total": 0,
+        }
+
+        with self._manager_lock:
+            # 获取所有已初始化的 device_id
+            device_ids = list(self._agents.keys())
+            results["total"] = len(device_ids)
+
+            if not device_ids:
+                logger.info("No agents to reinitialize")
+                return results
+
+            # 热重载配置
+            config_manager.load_file_config(force_reload=True)
+            config_manager.sync_to_env()
+
+            effective_config = config_manager.get_effective_config()
+
+            if not effective_config.base_url:
+                error_msg = "Cannot reinitialize agents: base_url not configured"
+                logger.error(error_msg)
+                failed_dict = cast(dict[str, str], results["failed"])
+                for device_id in device_ids:
+                    failed_dict[device_id] = error_msg
+                return results
+
+            # 准备新配置
+            model_config = ModelConfig(
+                base_url=effective_config.base_url,
+                api_key=effective_config.api_key,
+                model_name=effective_config.model_name,
+            )
+
+            logger.info(f"Reinitializing {len(device_ids)} agents with new config")
+
+            # 逐个重新初始化
+            success_list = cast(list[str], results["success"])
+            failed_dict = cast(dict[str, str], results["failed"])
+
+            for device_id in device_ids:
+                try:
+                    # 获取原有元数据中的 agent_type
+                    metadata = self._metadata.get(device_id)
+                    agent_type = metadata.agent_type if metadata else "glm"
+
+                    agent_config = AgentConfig(
+                        device_id=device_id,
+                        max_steps=effective_config.default_max_steps,
+                    )
+
+                    agent_specific_config = cast(
+                        AgentSpecificConfig,
+                        effective_config.agent_config_params or {},
+                    )
+
+                    # 强制重新初始化
+                    self.initialize_agent_with_factory(
+                        device_id=device_id,
+                        agent_type=agent_type,
+                        model_config=model_config,
+                        agent_config=agent_config,
+                        agent_specific_config=agent_specific_config,
+                        force=True,
+                    )
+
+                    success_list.append(device_id)
+                    logger.info(f"✓ Agent reinitialized for {device_id}")
+
+                except Exception as e:
+                    error_msg = str(e)
+                    failed_dict[device_id] = error_msg
+                    logger.error(
+                        f"✗ Failed to reinitialize agent for {device_id}: {error_msg}"
+                    )
+
+            logger.info(
+                f"Batch reinitialization completed: "
+                f"{len(success_list)} succeeded, {len(failed_dict)} failed"
+            )
+
+            return results

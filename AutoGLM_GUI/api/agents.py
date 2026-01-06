@@ -424,3 +424,63 @@ def delete_config_endpoint() -> dict:
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/api/agents/reinit-all")
+def reinit_all_agents() -> dict:
+    """
+    重新初始化所有已存在的 agent，使用最新的全局配置.
+
+    用于配置更新后批量应用新配置到所有设备。
+
+    Returns:
+        {
+            "success": bool,
+            "total": int,
+            "succeeded": List[str],
+            "failed": Dict[str, str],
+            "message": str
+        }
+    """
+    from typing import cast
+
+    from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
+
+    manager = PhoneAgentManager.get_instance()
+
+    try:
+        results = manager.reinit_all_agents()
+
+        # Type-safe extraction with cast
+        success_list = cast(list[str], results["success"])
+        failed_dict = cast(dict[str, str], results["failed"])
+        total = cast(int, results["total"])
+
+        success_count = len(success_list)
+        failed_count = len(failed_dict)
+
+        if total == 0:
+            message = "No agents to reinitialize"
+        elif failed_count == 0:
+            message = f"Successfully reinitialized all {success_count} agents"
+        elif success_count == 0:
+            message = f"Failed to reinitialize all {failed_count} agents"
+        else:
+            message = (
+                f"Partially succeeded: {success_count}/{total} agents reinitialized, "
+                f"{failed_count} failed"
+            )
+
+        logger.info(message)
+
+        return {
+            "success": failed_count == 0 and total > 0,  # 全部成功才返回 true
+            "total": total,
+            "succeeded": success_list,
+            "failed": failed_dict,
+            "message": message,
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to reinitialize agents: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

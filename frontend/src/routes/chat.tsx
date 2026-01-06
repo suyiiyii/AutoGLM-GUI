@@ -7,6 +7,7 @@ import {
   listDevices,
   getConfig,
   saveConfig,
+  reinitAllAgents,
   getErrorMessage,
   type Device,
   type ConfigSaveRequest,
@@ -341,6 +342,7 @@ function ChatComponent() {
     }
 
     try {
+      // 1. 保存配置
       await saveConfig({
         base_url: tempConfig.base_url,
         model_name: tempConfig.model_name || 'autoglm-phone-9b',
@@ -370,8 +372,40 @@ function ChatComponent() {
         decision_model_name: tempConfig.decision_model_name || undefined,
         decision_api_key: tempConfig.decision_api_key || undefined,
       });
-      setShowConfig(false);
+
       showToast(t.toasts.configSaved, 'success');
+
+      // 2. 重新初始化所有 agent
+      try {
+        const reinitResult = await reinitAllAgents();
+
+        if (reinitResult.total === 0) {
+          // 没有需要更新的 agent - 静默处理
+          console.log('No agents to reinitialize');
+        } else if (reinitResult.success) {
+          // 全部成功
+          showToast(
+            `Configuration applied to ${reinitResult.succeeded.length} device(s)`,
+            'success'
+          );
+        } else {
+          // 部分成功或全部失败
+          const failedCount = Object.keys(reinitResult.failed).length;
+          showToast(
+            `Configuration partially applied: ${reinitResult.succeeded.length}/${reinitResult.total} succeeded, ${failedCount} failed`,
+            'warning'
+          );
+        }
+      } catch (reinitError) {
+        // 重新初始化失败不影响配置保存
+        console.error('Failed to reinitialize agents:', reinitError);
+        showToast(
+          'Configuration saved, but failed to update devices. Please reinitialize manually.',
+          'warning'
+        );
+      }
+
+      setShowConfig(false);
     } catch (err) {
       console.error('Failed to save config:', err);
       showToast(`Failed to save: ${getErrorMessage(err)}`, 'error');
