@@ -220,15 +220,21 @@ class TestDockerE2E:
         print(f"[Docker E2E] Registering remote device at {access_url}")
         print(f"[Docker E2E] Remote URL: {remote_url}")
 
-        # Try to remove existing device first (if any)
+        # Clean up any existing devices with matching serial
         try:
-            resp = httpx.delete(
-                f"{access_url}/api/devices/mock_device_001",
-                timeout=10,
-            )
-            print(f"[Docker E2E] Cleaned up existing device: {resp.status_code}")
+            resp = httpx.get(f"{access_url}/api/devices", timeout=10)
+            if resp.status_code == 200:
+                devices = resp.json()["devices"]
+                for device in devices:
+                    if device.get("model") == "mock_device_001":
+                        device_id = device["id"]
+                        resp = httpx.delete(
+                            f"{access_url}/api/devices/{device_id}",
+                            timeout=10,
+                        )
+                        print(f"[Docker E2E] Cleaned up existing device {device_id}: {resp.status_code}")
         except Exception as e:
-            print(f"[Docker E2E] No existing device to clean: {e}")
+            print(f"[Docker E2E] Failed to cleanup devices: {e}")
 
         resp = httpx.post(
             f"{access_url}/api/devices/add_remote",
