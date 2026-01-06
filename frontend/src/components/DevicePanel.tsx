@@ -66,15 +66,6 @@ interface Message {
   currentThinking?: string; // Current thinking text being streamed
 }
 
-interface GlobalConfig {
-  base_url: string;
-  model_name: string;
-  api_key?: string;
-  thinking_mode?: string;
-  agent_type?: string;
-  agent_config_params?: Record<string, unknown>;
-}
-
 interface DevicePanelProps {
   deviceId: string; // Used for API calls
   deviceSerial: string; // Used for history storage
