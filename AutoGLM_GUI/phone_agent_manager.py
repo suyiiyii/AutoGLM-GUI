@@ -152,7 +152,12 @@ class PhoneAgentManager:
                 from AutoGLM_GUI.device_manager import DeviceManager
 
                 device_manager = DeviceManager.get_instance()
-                device = device_manager.get_device_protocol(device_id)
+                try:
+                    device = device_manager.get_device_protocol(device_id)
+                except ValueError:
+                    # Ensure cold starts refresh device cache before failing.
+                    device_manager.force_refresh()
+                    device = device_manager.get_device_protocol(device_id)
 
                 agent = create_agent(
                     agent_type=agent_type,
