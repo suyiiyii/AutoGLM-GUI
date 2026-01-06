@@ -399,43 +399,56 @@ uv run python scripts/build.py --pack
 
 ## 🐳 Docker 部署
 
-AutoGLM-GUI 支持 Docker 容器化部署，适合服务器端远程控制 Android 设备的场景。
+AutoGLM-GUI 提供预构建的 Docker 镜像，支持 `linux/amd64` 和 `linux/arm64` 架构，适合服务器端远程控制 Android 设备的场景。
 
-### 快速启动
+### 快速启动（推荐）
 
-```bash
-# 1. 克隆仓库
-git clone https://github.com/suyiiyii/AutoGLM-GUI.git
-cd AutoGLM-GUI
-
-# 2. 创建环境变量文件
-cat > .env << EOF
-AUTOGLM_BASE_URL=https://open.bigmodel.cn/api/paas/v4
-AUTOGLM_MODEL_NAME=autoglm-phone
-AUTOGLM_API_KEY=sk-your-api-key
-EOF
-
-# 3. 启动容器
-docker-compose up -d
-
-# 4. 访问 http://localhost:8000
-```
-
-### 手动构建
+使用 GitHub Container Registry (GHCR) 预构建镜像，无需手动构建：
 
 ```bash
-# 构建镜像
-docker build -t autoglm-gui:latest .
-
-# 运行容器 (Linux 推荐 host 网络)
+# 使用 host 网络模式运行（推荐，便于 ADB 设备发现和二维码配对）
 docker run -d --network host \
   -e AUTOGLM_BASE_URL=https://open.bigmodel.cn/api/paas/v4 \
   -e AUTOGLM_MODEL_NAME=autoglm-phone \
-  -e AUTOGLM_API_KEY=sk-xxx \
+  -e AUTOGLM_API_KEY=sk-your-api-key \
   -v autoglm_config:/root/.config/autoglm \
   -v autoglm_logs:/app/logs \
-  autoglm-gui:latest
+  ghcr.io/suyiiyii/autoglm-gui:main
+
+# 访问 http://localhost:8000
 ```
+
+### 指定监听端口
+
+如果使用 host 网络模式且需要修改默认端口（8000），可以通过 `command` 参数指定：
+
+```bash
+# 监听 9000 端口
+docker run -d --network host \
+  -e AUTOGLM_BASE_URL=https://open.bigmodel.cn/api/paas/v4 \
+  -e AUTOGLM_MODEL_NAME=autoglm-phone \
+  -e AUTOGLM_API_KEY=sk-your-api-key \
+  ghcr.io/suyiiyii/autoglm-gui:main \
+  autoglm-gui --host 0.0.0.0 --port 9000 --no-browser
+```
+
+如果使用 bridge 网络模式，则使用 `-p` 参数映射端口：
+
+```bash
+# 映射主机 9000 端口到容器 8000 端口
+docker run -d -p 9000:8000 \
+  -e AUTOGLM_BASE_URL=https://open.bigmodel.cn/api/paas/v4 \
+  -e AUTOGLM_MODEL_NAME=autoglm-phone \
+  -e AUTOGLM_API_KEY=sk-your-api-key \
+  ghcr.io/suyiiyii/autoglm-gui:main
+```
+
+### 镜像标签
+
+| 标签 | 说明 |
+|------|------|
+| `main` | 跟随 main 分支最新代码，推荐使用 |
+| `<commit-sha>` | 特定 commit 的镜像（如 `abc1234`），用于锁定版本 |
 
 ### 环境变量
 
@@ -453,7 +466,7 @@ Docker 容器中连接 Android 设备推荐使用 **WiFi 调试**：
 2. 记录设备的 IP 地址和端口号
 3. 在 Web 界面点击「添加无线设备」→ 输入 IP:端口 → 连接
 
-> ⚠️ **注意**：二维码配对功能在 Docker bridge 网络中可能受限（依赖 mDNS 多播）。Linux 系统建议使用 `network_mode: host`。
+> ⚠️ **注意**：二维码配对功能依赖 mDNS 多播，在 Docker bridge 网络中可能受限。**强烈建议使用 `--network host` 模式**以获得完整功能支持。
 
 ### 健康检查
 
