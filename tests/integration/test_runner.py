@@ -117,51 +117,34 @@ class TestRunner:
             get_device=lambda _: mock_device,
             default_device_id="mock_device",
         ):
-            with patch(
-                "openai.resources.chat.completions.Completions.create"
-            ) as mock_create:
-                mock_chunk = MagicMock()
-                mock_chunk.choices = [MagicMock()]
-                mock_chunk.choices[
-                    0
-                ].delta.content = 'do(action="Tap", element=[500,500])'
+            try:
+                # Create and run agent
+                agent = GLMAgent(
+                    model_config=model_config,
+                    agent_config=agent_config,
+                    device=mock_device,
+                )
 
-                mock_done_chunk = MagicMock()
-                mock_done_chunk.choices = [MagicMock()]
-                mock_done_chunk.choices[0].delta.content = None
+                result_message = agent.run(instruction)
 
-                mock_create.return_value = [mock_chunk, mock_done_chunk]
-
-                try:
-                    # Create and run agent
-                    agent = GLMAgent(
-                        model_config=model_config,
-                        agent_config=agent_config,
-                        device=mock_device,
+                if result_message == "Max steps reached":
+                    state_machine.failure_reason = (
+                        f"Agent exceeded max steps ({self.max_steps}) without completing task. "
+                        f"Final state: {state_machine.current_state_id}"
                     )
+                    print(f"\n[TestRunner] Test FAILED: {state_machine.failure_reason}")
+                else:
+                    state_machine.handle_finish(result_message)
 
-                    result_message = agent.run(instruction)
+            except TestFailedError as e:
+                print(f"\n[TestRunner] Test failed with error: {e}")
 
-                    if result_message == "Max steps reached":
-                        state_machine.failure_reason = (
-                            f"Agent exceeded max steps ({self.max_steps}) without completing task. "
-                            f"Final state: {state_machine.current_state_id}"
-                        )
-                        print(
-                            f"\n[TestRunner] Test FAILED: {state_machine.failure_reason}"
-                        )
-                    else:
-                        state_machine.handle_finish(result_message)
+            except Exception as e:
+                state_machine.failure_reason = f"Unexpected error: {e}"
+                print(f"\n[TestRunner] Unexpected error: {e}")
+                import traceback
 
-                except TestFailedError as e:
-                    print(f"\n[TestRunner] Test failed with error: {e}")
-
-                except Exception as e:
-                    state_machine.failure_reason = f"Unexpected error: {e}"
-                    print(f"\n[TestRunner] Unexpected error: {e}")
-                    import traceback
-
-                    traceback.print_exc()
+                traceback.print_exc()
 
         result = state_machine.get_result()
         self._print_result(result)
