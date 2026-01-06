@@ -44,19 +44,25 @@ def find_available_port(
     )
 
 
-def open_browser(host: str, port: int, delay: float = 1.5) -> None:
+def open_browser(
+    host: str, port: int, use_ssl: bool = False, delay: float = 1.5
+) -> None:
     """Open browser after a delay to ensure server is ready.
 
     Args:
         host: Server host
         port: Server port
+        use_ssl: Whether to use HTTPS
         delay: Delay in seconds before opening browser
     """
 
     def _open():
         time.sleep(delay)
+        protocol = "https" if use_ssl else "http"
         url = (
-            f"http://127.0.0.1:{port}" if host == "0.0.0.0" else f"http://{host}:{port}"
+            f"{protocol}://127.0.0.1:{port}"
+            if host == "0.0.0.0"
+            else f"{protocol}://{host}:{port}"
         )
         try:
             webbrowser.open(url)
@@ -125,6 +131,16 @@ def main() -> None:
         action="store_true",
         help="Disable file logging",
     )
+    parser.add_argument(
+        "--ssl-keyfile",
+        default=None,
+        help="SSL key file path (for HTTPS)",
+    )
+    parser.add_argument(
+        "--ssl-certfile",
+        default=None,
+        help="SSL certificate file path (for HTTPS)",
+    )
 
     args = parser.parse_args()
 
@@ -172,6 +188,9 @@ def main() -> None:
     # 获取配置来源
     config_source = config_manager.get_config_source()
 
+    # Determine if SSL is enabled
+    use_ssl = args.ssl_keyfile is not None and args.ssl_certfile is not None
+
     # Display startup banner
     print()
     print("=" * 50)
@@ -179,7 +198,8 @@ def main() -> None:
     print("=" * 50)
     print(f"  Version:    {__version__}")
     print()
-    print(f"  Server:     http://{args.host}:{args.port}")
+    protocol = "https" if use_ssl else "http"
+    print(f"  Server:     {protocol}://{args.host}:{args.port}")
     print()
     print("  Model Configuration:")
     print(f"    Source:   {config_source.value}")
@@ -202,13 +222,15 @@ def main() -> None:
 
     # Open browser automatically unless disabled
     if not args.no_browser:
-        open_browser(args.host, args.port)
+        open_browser(args.host, args.port, use_ssl=use_ssl)
 
     uvicorn.run(
         server.app if not args.reload else "AutoGLM_GUI.server:app",
         host=args.host,
         port=args.port,
         reload=args.reload,
+        ssl_keyfile=args.ssl_keyfile,
+        ssl_certfile=args.ssl_certfile,
     )
 
 
