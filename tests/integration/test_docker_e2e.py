@@ -115,7 +115,22 @@ def docker_container(mock_agent_server: str):
         docker_args = ["--network", "host"]
         access_url = "http://127.0.0.1:8000"
     else:
-        remote_url = agent_url.replace("127.0.0.1", "host.docker.internal")
+        # On macOS/Windows, get host IP for more reliable DNS resolution
+        # host.docker.internal sometimes fails with Python's httpx/socket
+        import socket
+
+        try:
+            # Try to get actual host IP by connecting to an external address
+            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+            s.connect(("8.8.8.8", 80))
+            host_ip = s.getsockname()[0]
+            s.close()
+            print(f"[Docker E2E] Detected host IP: {host_ip}")
+            remote_url = agent_url.replace("127.0.0.1", host_ip)
+        except Exception as e:
+            print(f"[Docker E2E] Failed to detect host IP: {e}, falling back to host.docker.internal")
+            remote_url = agent_url.replace("127.0.0.1", "host.docker.internal")
+
         docker_args = [
             "--add-host=host.docker.internal:host-gateway",
             "-p",
@@ -123,8 +138,8 @@ def docker_container(mock_agent_server: str):
         ]
         access_url = f"http://127.0.0.1:{host_port}"
 
+    # No longer use REMOTE_DEVICE_BASE_URL - devices are registered via API instead
     env = {
-        "REMOTE_DEVICE_BASE_URL": remote_url,
         "AUTOGLM_BASE_URL": os.environ.get("AUTOGLM_BASE_URL", ""),
         "AUTOGLM_MODEL_NAME": os.environ.get("AUTOGLM_MODEL_NAME", ""),
         "AUTOGLM_API_KEY": os.environ.get("AUTOGLM_API_KEY", ""),
@@ -190,6 +205,7 @@ class TestDockerE2E:
         test_client.load_scenario(scenario_path)
 
         print(f"[Docker E2E] Registering remote device at {access_url}")
+        print(f"[Docker E2E] Remote URL: {remote_url}")
         resp = httpx.post(
             f"{access_url}/api/devices/add_remote",
             json={
@@ -199,17 +215,48 @@ class TestDockerE2E:
             timeout=10,
         )
         assert resp.status_code == 200, f"Failed to register device: {resp.text}"
-        print(f"[Docker E2E] Device registered: {resp.json()}")
+
+        register_result = resp.json()
+        print(f"[Docker E2E] Device registered: {register_result}")
+
+        if not register_result["success"]:
+            error_msg = register_result.get("message", "Unknown error")
+            print(f"[Docker E2E] ERROR: Remote device registration failed: {error_msg}")
+
+            # Provide troubleshooting hints
+            if "nodename nor servname provided" in error_msg or "Errno 8" in error_msg:
+                print("[Docker E2E] ")
+                print("[Docker E2E] DNS Resolution Error - Troubleshooting:")
+                print(
+                    f"[Docker E2E]   1. Check if mock agent is running: curl {mock_agent_server}/health"
+                )
+                print(
+                    f"[Docker E2E]   2. Test from container: docker exec autoglm-e2e-test curl {remote_url}/health"
+                )
+                print("[Docker E2E]   3. Verify Docker Desktop supports host.docker.internal")
+                print("[Docker E2E]   4. Try: docker run --add-host=host.docker.internal:host-gateway ...")
+                print("[Docker E2E] ")
+
+            pytest.fail(f"Remote device registration failed: {error_msg}")
+
+        registered_serial = register_result["serial"]
+        print(f"[Docker E2E] Registered device serial: {registered_serial}")
 
         print(f"[Docker E2E] Verifying device discovery at {access_url}")
         resp = httpx.get(f"{access_url}/api/devices", timeout=10)
         assert resp.status_code == 200
         devices = resp.json()["devices"]
         print(f"[Docker E2E] Found {len(devices)} device(s): {devices}")
-        assert len(devices) > 0, "No devices discovered after registration"
 
-        registered_device_id = devices[0]["id"]
-        print(f"[Docker E2E] Using device_id: {registered_device_id}")
+        # Find the remote device we just registered
+        remote_devices = [d for d in devices if d["serial"] == registered_serial]
+        assert len(remote_devices) > 0, (
+            f"Registered remote device {registered_serial} not found in device list. "
+            f"Available devices: {[d['serial'] for d in devices]}"
+        )
+
+        registered_device_id = remote_devices[0]["id"]
+        print(f"[Docker E2E] Using remote device_id: {registered_device_id}")
 
         print(f"[Docker E2E] Initializing agent at {access_url}")
         resp = httpx.post(
