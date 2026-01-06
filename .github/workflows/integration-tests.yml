@@ -48,10 +48,6 @@ jobs:
           uv sync --dev --frozen
 
       - name: Run integration tests
-        env:
-          AUTOGLM_BASE_URL: ${{ secrets.AUTOGLM_BASE_URL }}
-          AUTOGLM_MODEL_NAME: ${{ secrets.AUTOGLM_MODEL_NAME }}
-          AUTOGLM_API_KEY: ${{ secrets.AUTOGLM_API_KEY }}
         run: |
           uv run pytest -v
 
