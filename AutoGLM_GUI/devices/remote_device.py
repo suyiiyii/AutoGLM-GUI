@@ -6,10 +6,15 @@ via HTTP, allowing remote control of devices.
 
 import httpx
 
-from AutoGLM_GUI.device_protocol import DeviceInfo, Screenshot
+from AutoGLM_GUI.device_protocol import (
+    DeviceInfo,
+    DeviceManagerProtocol,
+    DeviceProtocol,
+    Screenshot,
+)
 
 
-class RemoteDevice:
+class RemoteDevice(DeviceProtocol):
     """
     Remote device implementation using HTTP.
 
@@ -126,7 +131,7 @@ class RemoteDevice:
         self.close()
 
 
-class RemoteDeviceManager:
+class RemoteDeviceManager(DeviceManagerProtocol):
     """
     Remote device manager using HTTP.
 

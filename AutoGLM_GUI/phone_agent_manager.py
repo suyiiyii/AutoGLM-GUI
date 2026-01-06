@@ -499,49 +499,6 @@ class PhoneAgentManager:
                 )
             return self._agent_configs[device_id]
 
-    def update_config(
-        self,
-        device_id: str,
-        model_config: Optional[ModelConfig] = None,
-        agent_config: Optional[AgentConfig] = None,
-    ) -> None:
-        """
-        Update agent configuration (requires reinitialization).
-
-        Args:
-            device_id: Device identifier
-            model_config: New model config (None = keep existing)
-            agent_config: New agent config (None = keep existing)
-        """
-        with self._manager_lock:
-            if device_id not in self._agent_configs:
-                raise AgentNotInitializedError(
-                    f"No configuration found for device {device_id}"
-                )
-
-            old_model_config, old_agent_config = self._agent_configs[device_id]
-            metadata = self._metadata.get(device_id)
-
-            new_model_config = model_config or old_model_config
-            new_agent_config = agent_config or old_agent_config
-
-            from typing import cast
-
-            from AutoGLM_GUI.types import AgentSpecificConfig
-
-            # Get agent_type from metadata (default to "glm" for backward compatibility)
-            agent_type = metadata.agent_type if metadata else "glm"
-
-            # Reinitialize with factory pattern
-            self.initialize_agent_with_factory(
-                device_id=device_id,
-                agent_type=agent_type,
-                model_config=new_model_config,
-                agent_config=new_agent_config,
-                agent_specific_config=cast(AgentSpecificConfig, {}),
-                force=True,
-            )
-
     # ==================== DeviceManager Integration ====================
 
     def find_agent_by_serial(self, serial: str) -> Optional[str]:

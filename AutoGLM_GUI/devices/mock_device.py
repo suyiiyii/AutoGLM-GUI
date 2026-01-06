@@ -8,6 +8,8 @@ from typing import TYPE_CHECKING
 
 from AutoGLM_GUI.device_protocol import (
     DeviceInfo,
+    DeviceManagerProtocol,
+    DeviceProtocol,
     Screenshot,
 )
 
@@ -15,7 +17,7 @@ if TYPE_CHECKING:
     from tests.integration.state_machine import StateMachine
 
 
-class MockDevice:
+class MockDevice(DeviceProtocol):
     """
     Mock device implementation driven by a state machine.
 
@@ -125,7 +127,7 @@ class MockDevice:
         pass
 
 
-class MockDeviceManager:
+class MockDeviceManager(DeviceManagerProtocol):
     """
     Mock device manager for testing.
 

@@ -10,7 +10,7 @@ from AutoGLM_GUI.device_protocol import (
 )
 
 
-class ADBDevice:
+class ADBDevice(DeviceProtocol):
     """
     ADB device implementation using local subprocess calls.
 
@@ -116,7 +116,7 @@ class ADBDevice:
 assert isinstance(ADBDevice("test"), DeviceProtocol)
 
 
-class ADBDeviceManager:
+class ADBDeviceManager(DeviceManagerProtocol):
     """
     ADB device manager implementation.
 
