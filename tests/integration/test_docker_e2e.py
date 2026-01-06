@@ -1,14 +1,12 @@
 """Docker-based end-to-end integration tests.
 
 This test module runs AutoGLM-GUI in a Docker container and communicates
-with a Mock Device Agent running on the host machine.
+with a Mock Device Agent and Mock LLM server running on the host machine.
 
 Prerequisites:
     - Docker is installed and running
-    - AUTOGLM_BASE_URL, AUTOGLM_MODEL_NAME, AUTOGLM_API_KEY are set
 """
 
-import os
 import subprocess
 import time
 from pathlib import Path
@@ -16,6 +14,7 @@ from pathlib import Path
 import httpx
 import pytest
 
+from tests.integration.device_agent.mock_llm_client import MockLLMTestClient
 from tests.integration.device_agent.test_client import MockAgentTestClient
 
 
@@ -57,10 +56,56 @@ def mock_agent_server():
     proc.wait(timeout=5)
 
 
+@pytest.fixture(scope="module")
+def mock_llm_server():
+    """Start mock LLM server on host machine."""
+    port = 18003
+
+    try:
+        subprocess.run(
+            ["fuser", "-k", f"{port}/tcp"],
+            capture_output=True,
+            timeout=5,
+        )
+        time.sleep(0.5)
+    except (FileNotFoundError, subprocess.TimeoutExpired):
+        pass
+
+    proc = subprocess.Popen(
+        [
+            "uv",
+            "run",
+            "uvicorn",
+            "tests.integration.device_agent.mock_llm_server:app",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+            "--log-level",
+            "warning",
+        ],
+        cwd=Path(__file__).parent.parent.parent,
+    )
+    time.sleep(2)
+
+    yield f"http://127.0.0.1:{port}"
+
+    proc.terminate()
+    proc.wait(timeout=5)
+
+
 @pytest.fixture
 def test_client(mock_agent_server: str) -> MockAgentTestClient:
     """Create test client and reset state."""
     client = MockAgentTestClient(mock_agent_server)
+    client.reset()
+    return client
+
+
+@pytest.fixture
+def mock_llm_client(mock_llm_server: str) -> MockLLMTestClient:
+    """Create mock LLM client and reset state."""
+    client = MockLLMTestClient(mock_llm_server)
     client.reset()
     return client
 
@@ -77,17 +122,8 @@ def scenario_path() -> str:
     )
 
 
-def has_llm_config() -> bool:
-    """Check if LLM config is available."""
-    return bool(
-        os.environ.get("AUTOGLM_BASE_URL")
-        and os.environ.get("AUTOGLM_API_KEY")
-        and os.environ.get("AUTOGLM_MODEL_NAME")
-    )
-
-
 @pytest.fixture(scope="module")
-def docker_container(mock_agent_server: str):
+def docker_container(mock_agent_server: str, mock_llm_server: str):
     """Build and run Docker container for testing."""
     image_name = "autoglm-gui:e2e-test"
     container_name = "autoglm-e2e-test"
@@ -107,25 +143,26 @@ def docker_container(mock_agent_server: str):
 
     # Use host network mode for simplicity (works on Linux and macOS with Docker Desktop)
     remote_url = mock_agent_server
+    llm_url = mock_llm_server
     docker_args = ["--network", "host"]
     access_url = "http://127.0.0.1:8000"
 
     print("[Docker E2E] Using host network mode")
     print(f"[Docker E2E] Remote URL: {remote_url}")
+    print(f"[Docker E2E] LLM URL: {llm_url}")
     print(f"[Docker E2E] Access URL: {access_url}")
 
-    # No longer use REMOTE_DEVICE_BASE_URL - devices are registered via API instead
+    # Use Mock LLM URL instead of environment variables
     env = {
-        "AUTOGLM_BASE_URL": os.environ.get("AUTOGLM_BASE_URL", ""),
-        "AUTOGLM_MODEL_NAME": os.environ.get("AUTOGLM_MODEL_NAME", ""),
-        "AUTOGLM_API_KEY": os.environ.get("AUTOGLM_API_KEY", ""),
+        "AUTOGLM_BASE_URL": llm_url,
+        "AUTOGLM_MODEL_NAME": "mock-glm-model",
+        "AUTOGLM_API_KEY": "mock-key",
         "AUTOGLM_CORS_ORIGINS": "*",
     }
 
     env_list = []
     for k, v in env.items():
-        if v:
-            env_list.extend(["-e", f"{k}={v}"])
+        env_list.extend(["-e", f"{k}={v}"])
 
     print(f"[Docker E2E] Starting container: {container_name}")
     subprocess.run(
@@ -155,28 +192,27 @@ def docker_container(mock_agent_server: str):
     else:
         raise RuntimeError("Container failed to become ready")
 
-    yield {"access_url": access_url, "remote_url": remote_url}
+    yield {"access_url": access_url, "remote_url": remote_url, "llm_url": llm_url}
 
     print(f"[Docker E2E] Stopping container: {container_name}")
     subprocess.run(["docker", "stop", container_name], capture_output=True)
     subprocess.run(["docker", "rm", container_name], capture_output=True)
 
 
-@pytest.mark.skipif(
-    not has_llm_config(), reason="LLM config not available (set AUTOGLM_* env vars)"
-)
 class TestDockerE2E:
     """End-to-end tests with AutoGLM-GUI running in Docker."""
 
     def test_meituan_message_scenario(
         self,
         docker_container: dict,
+        mock_llm_client: MockLLMTestClient,
         test_client: MockAgentTestClient,
         scenario_path: str,
     ):
-        """Test complete flow: Docker container -> LLM -> RemoteDevice -> Mock Agent."""
+        """Test complete flow: Docker container -> Mock LLM -> RemoteDevice -> Mock Agent."""
         access_url = docker_container["access_url"]
         remote_url = docker_container["remote_url"]
+        llm_url = docker_container["llm_url"]
 
         test_client.load_scenario(scenario_path)
 
@@ -204,13 +240,17 @@ class TestDockerE2E:
                 print("[Docker E2E] ")
                 print("[Docker E2E] DNS Resolution Error - Troubleshooting:")
                 print(
-                    f"[Docker E2E]   1. Check if mock agent is running: curl {mock_agent_server}/health"
+                    f"[Docker E2E]   1. Check if mock agent is running: curl {remote_url}/health"
                 )
                 print(
                     f"[Docker E2E]   2. Test from container: docker exec autoglm-e2e-test curl {remote_url}/health"
                 )
-                print("[Docker E2E]   3. Verify Docker Desktop supports host.docker.internal")
-                print("[Docker E2E]   4. Try: docker run --add-host=host.docker.internal:host-gateway ...")
+                print(
+                    "[Docker E2E]   3. Verify Docker Desktop supports host.docker.internal"
+                )
+                print(
+                    "[Docker E2E]   4. Try: docker run --add-host=host.docker.internal:host-gateway ..."
+                )
                 print("[Docker E2E] ")
 
             pytest.fail(f"Remote device registration failed: {error_msg}")
@@ -235,15 +275,16 @@ class TestDockerE2E:
         print(f"[Docker E2E] Using remote device_id: {registered_device_id}")
 
         print(f"[Docker E2E] Initializing agent at {access_url}")
+        print(f"[Docker E2E] Using Mock LLM at: {llm_url}")
         resp = httpx.post(
             f"{access_url}/api/init",
             json={
                 "agent_type": "glm",
                 "device_id": registered_device_id,
                 "model_config": {
-                    "base_url": os.environ["AUTOGLM_BASE_URL"],
-                    "api_key": os.environ["AUTOGLM_API_KEY"],
-                    "model_name": os.environ["AUTOGLM_MODEL_NAME"],
+                    "base_url": llm_url + "/v1",
+                    "api_key": "mock-key",
+                    "model_name": "mock-glm-model",
                 },
                 "agent_config": {
                     "device_id": registered_device_id,
@@ -273,6 +314,14 @@ class TestDockerE2E:
 
         result = resp.json()
         print(f"[Docker E2E] Chat result: {result}")
+
+        # Verify Mock LLM was called
+        print("[Docker E2E] Verifying Mock LLM calls...")
+        mock_llm_stats = mock_llm_client.get_stats()
+        print(f"[Docker E2E] Mock LLM request count: {mock_llm_stats['request_count']}")
+        assert mock_llm_stats["request_count"] == 2, (
+            f"Expected 2 LLM requests, got {mock_llm_stats['request_count']}"
+        )
 
         print("[Docker E2E] Checking mock agent for recorded commands...")
         commands = test_client.get_commands()

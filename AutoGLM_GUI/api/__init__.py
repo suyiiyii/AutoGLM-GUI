@@ -13,7 +13,6 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 
 from AutoGLM_GUI.adb_plus.qr_pair import qr_pairing_manager
-from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.version import APP_VERSION
 
 from . import (

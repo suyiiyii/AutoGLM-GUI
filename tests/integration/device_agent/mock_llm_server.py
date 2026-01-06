@@ -44,7 +44,7 @@ do(action="Tap", element=[499,966])""",
 底部还有一个通知提示"开启通知，获取外卖订单进度"。
 
 任务已经完成，我成功点击了屏幕下方的消息按钮，现在进入了消息页面。
-finish(message="已成功点击消息按钮！现在进入了消息页面，可以看到各类消息通知，包括订单动态、服务提醒（有2条未读）、美团会员、美团客服以及2周前的历史消息。")"""
+finish(message="已成功点击消息按钮！现在进入了消息页面，可以看到各类消息通知，包括订单动态、服务提醒（有2条未读）、美团会员、美团客服以及2周前的历史消息。")""",
 ]
 
 
@@ -130,7 +130,8 @@ async def stream_response(content: str) -> AsyncGenerator[str, None]:
 def create_app() -> FastAPI:
     """Create the FastAPI app."""
     app = FastAPI(
-        title="Mock OpenAI LLM Server", description="Mock LLM server for integration testing"
+        title="Mock OpenAI LLM Server",
+        description="Mock LLM server for integration testing",
     )
 
     # Register routes
@@ -147,7 +148,9 @@ def _register_routes(app: FastAPI) -> None:
 
         # Validate streaming requirement
         if not req.stream:
-            raise HTTPException(status_code=400, detail="Only streaming mode is supported")
+            raise HTTPException(
+                status_code=400, detail="Only streaming mode is supported"
+            )
 
         # Validate messages array
         if not req.messages:
@@ -168,7 +171,10 @@ def _register_routes(app: FastAPI) -> None:
     @app.get("/test/stats")
     async def get_stats():
         """Get request statistics."""
-        return {"request_count": state.request_count, "total_responses": len(state.responses)}
+        return {
+            "request_count": state.request_count,
+            "total_responses": len(state.responses),
+        }
 
     @app.post("/test/reset")
     async def reset():
