@@ -198,7 +198,9 @@ class TestDockerE2E:
                             f"{access_url}/api/devices/{device_id}",
                             timeout=10,
                         )
-                        print(f"[Docker E2E] Cleaned up existing device {device_id}: {resp.status_code}")
+                        print(
+                            f"[Docker E2E] Cleaned up existing device {device_id}: {resp.status_code}"
+                        )
         except Exception as e:
             print(f"[Docker E2E] Failed to cleanup devices: {e}")
 
