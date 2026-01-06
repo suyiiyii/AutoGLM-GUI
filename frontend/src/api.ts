@@ -1107,3 +1107,143 @@ export async function abortLayeredAgentChat(sessionId: string): Promise<{
   });
   return res.data;
 }
+
+// ==================== Scheduled Tasks API ====================
+
+export type ExecutionMode = 'classic' | 'dual_model' | 'layered_agent';
+export type ThinkingMode = 'fast' | 'deep' | 'turbo';
+
+export interface ScheduledTask {
+  uuid: string;
+  name: string;
+  device_id: string;
+  message: string;
+  cron_expression: string;
+  execution_mode: ExecutionMode;
+  thinking_mode: ThinkingMode;
+  status: 'enabled' | 'disabled' | 'running';
+  created_at: string;
+  last_run: string | null;
+  next_run: string | null;
+}
+
+export interface ScheduledTaskListResponse {
+  tasks: ScheduledTask[];
+}
+
+export interface ScheduledTaskCreateRequest {
+  name: string;
+  device_id: string;
+  message: string;
+  cron_expression: string;
+  execution_mode?: ExecutionMode;
+  thinking_mode?: ThinkingMode;
+  enabled?: boolean;
+}
+
+export interface ScheduledTaskUpdateRequest {
+  name?: string;
+  device_id?: string;
+  message?: string;
+  cron_expression?: string;
+  execution_mode?: ExecutionMode;
+  thinking_mode?: ThinkingMode;
+}
+
+export interface TaskHistory {
+  uuid: string;
+  task_uuid: string;
+  task_name: string;
+  device_id: string;
+  message: string;
+  execution_mode: ExecutionMode;
+  started_at: string;
+  finished_at: string | null;
+  status: 'success' | 'failed' | 'aborted';
+  result: string | null;
+  error: string | null;
+}
+
+export interface TaskHistoryListResponse {
+  history: TaskHistory[];
+}
+
+export async function listScheduledTasks(): Promise<ScheduledTaskListResponse> {
+  const res = await axios.get<ScheduledTaskListResponse>(
+    '/api/scheduled-tasks'
+  );
+  return res.data;
+}
+
+export async function getScheduledTask(uuid: string): Promise<ScheduledTask> {
+  const res = await axios.get<ScheduledTask>(`/api/scheduled-tasks/${uuid}`);
+  return res.data;
+}
+
+export async function createScheduledTask(
+  request: ScheduledTaskCreateRequest
+): Promise<ScheduledTask> {
+  const res = await axios.post<ScheduledTask>('/api/scheduled-tasks', request);
+  return res.data;
+}
+
+export async function updateScheduledTask(
+  uuid: string,
+  request: ScheduledTaskUpdateRequest
+): Promise<ScheduledTask> {
+  const res = await axios.put<ScheduledTask>(
+    `/api/scheduled-tasks/${uuid}`,
+    request
+  );
+  return res.data;
+}
+
+export async function deleteScheduledTask(uuid: string): Promise<void> {
+  await axios.delete(`/api/scheduled-tasks/${uuid}`);
+}
+
+export async function enableScheduledTask(
+  uuid: string
+): Promise<ScheduledTask> {
+  const res = await axios.post<ScheduledTask>(
+    `/api/scheduled-tasks/${uuid}/enable`
+  );
+  return res.data;
+}
+
+export async function disableScheduledTask(
+  uuid: string
+): Promise<ScheduledTask> {
+  const res = await axios.post<ScheduledTask>(
+    `/api/scheduled-tasks/${uuid}/disable`
+  );
+  return res.data;
+}
+
+export async function runScheduledTaskNow(uuid: string): Promise<{
+  success: boolean;
+  message: string;
+}> {
+  const res = await axios.post(`/api/scheduled-tasks/${uuid}/run`);
+  return res.data;
+}
+
+export async function getTaskHistory(
+  taskUuid: string,
+  limit: number = 50
+): Promise<TaskHistoryListResponse> {
+  const res = await axios.get<TaskHistoryListResponse>(
+    `/api/scheduled-tasks/${taskUuid}/history`,
+    { params: { limit } }
+  );
+  return res.data;
+}
+
+export async function getAllTaskHistory(
+  limit: number = 50
+): Promise<TaskHistoryListResponse> {
+  const res = await axios.get<TaskHistoryListResponse>('/api/task-history', {
+    params: { limit },
+  });
+  return res.data;
+}

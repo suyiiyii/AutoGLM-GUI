@@ -26,6 +26,7 @@ from . import (
     mcp,
     media,
     metrics,
+    scheduled_tasks,
     version,
     workflows,
 )
@@ -121,11 +122,173 @@ def create_app() -> FastAPI:
         device_manager = DeviceManager.get_instance()
         device_manager.start_polling()
 
+        # Start scheduled task scheduler
+        from AutoGLM_GUI.scheduled_task_manager import scheduled_task_manager
+
+        scheduled_task_manager.start_scheduler()
+
+        # Set task executor
+        def task_executor(
+            task_uuid: str, device_id: str, message: str, execution_mode: str
+        ) -> str:
+            """Execute scheduled task with different execution modes.
+            
+            Returns:
+                str: Detailed execution result
+            """
+            from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
+            from AutoGLM_GUI.scheduled_task_manager import scheduled_task_manager
+
+            logger.info(
+                f"Executing scheduled task {task_uuid} with mode: {execution_mode}"
+            )
+
+            if execution_mode == "dual_model":
+                # 双模型协作模式
+                return _execute_dual_model_task(task_uuid, device_id, message)
+            elif execution_mode == "layered_agent":
+                # 分层代理模式
+                return _execute_layered_agent_task(task_uuid, device_id, message)
+            else:
+                # 经典模式（默认）
+                manager = PhoneAgentManager.get_instance()
+                if not manager.is_initialized(device_id):
+                    raise RuntimeError(f"Device {device_id} not initialized")
+
+                with manager.use_agent(device_id, timeout=None) as agent:
+                    result = agent.run(message)
+                    steps = agent.step_count
+                    agent.reset()
+                    return f"任务完成 (经典模式)\n执行步数: {steps}\n结果: {result}"
+
+        def _execute_dual_model_task(
+            task_uuid: str, device_id: str, message: str
+        ) -> str:
+            """Execute task using dual model mode.
+            
+            Returns:
+                str: Detailed execution result
+            """
+            from AutoGLM_GUI.config import ModelConfig
+            from AutoGLM_GUI.config_manager import config_manager
+            from AutoGLM_GUI.dual_model import (
+                DecisionModelConfig,
+                DualModelAgent,
+                DualModelEventType,
+            )
+            from AutoGLM_GUI.dual_model.protocols import ThinkingMode
+            from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
+            from AutoGLM_GUI.scheduled_task_manager import scheduled_task_manager
+
+            # 检查设备是否已初始化
+            manager = PhoneAgentManager.get_instance()
+            if not manager.is_initialized(device_id):
+                raise RuntimeError(f"Device {device_id} not initialized")
+
+            # 获取任务配置
+            task = scheduled_task_manager.get_task(task_uuid)
+            thinking_mode_str = task.get("thinking_mode", "deep") if task else "deep"
+            thinking_mode_map = {
+                "fast": ThinkingMode.FAST,
+                "deep": ThinkingMode.DEEP,
+                "turbo": ThinkingMode.TURBO,
+            }
+            thinking_mode = thinking_mode_map.get(thinking_mode_str, ThinkingMode.DEEP)
+
+            # 获取配置
+            effective_config = config_manager.get_effective_config()
+
+            if not effective_config.dual_model_enabled:
+                raise RuntimeError("Dual model not enabled in config")
+
+            # 创建决策模型配置
+            decision_config = DecisionModelConfig(
+                base_url=effective_config.decision_base_url,
+                api_key=effective_config.decision_api_key,
+                model_name=effective_config.decision_model_name,
+                thinking_mode=thinking_mode,
+            )
+
+            # 创建视觉模型配置
+            vision_config = ModelConfig(
+                base_url=effective_config.base_url,
+                api_key=effective_config.api_key,
+                model_name=effective_config.model_name,
+            )
+
+            # 创建双模型Agent
+            agent = DualModelAgent(
+                decision_config=decision_config,
+                vision_config=vision_config,
+                device_id=device_id,
+                max_steps=effective_config.default_max_steps,
+                thinking_mode=thinking_mode,
+            )
+
+            try:
+                result = agent.run(message)
+                steps = getattr(agent, "step_count", 0)
+                success = result.get("success", False) if isinstance(result, dict) else True
+                result_msg = result.get("message", str(result)) if isinstance(result, dict) else str(result)
+                
+                logger.info(f"Dual model task completed: {result}")
+                return f"任务完成 (双模型协作 - {thinking_mode.value}模式)\n执行步数: {steps}\n成功: {'是' if success else '否'}\n结果: {result_msg}"
+            finally:
+                agent.reset()
+
+        def _execute_layered_agent_task(
+            task_uuid: str, device_id: str, message: str
+        ) -> str:
+            """Execute task using layered agent mode.
+            
+            Returns:
+                str: Detailed execution result
+            """
+            import asyncio
+
+            from agents import Runner
+            from AutoGLM_GUI.api.layered_agent import (
+                _ensure_agent,
+                _get_or_create_session,
+            )
+            from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
+
+            # 检查设备是否已初始化
+            manager = PhoneAgentManager.get_instance()
+            if not manager.is_initialized(device_id):
+                raise RuntimeError(f"Device {device_id} not initialized")
+
+            # 使用完整的 layered agent runner
+            agent = _ensure_agent()
+            session_id = f"scheduled_task_{task_uuid}"
+            session = _get_or_create_session(session_id)
+
+            # 在新的事件循环中运行异步任务
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            try:
+                result = loop.run_until_complete(
+                    Runner.run(
+                        agent,
+                        message,
+                        max_turns=50,
+                        session=session,
+                    )
+                )
+                final_output = result.final_output if hasattr(result, "final_output") else str(result)
+                logger.info(f"Layered agent task completed: {final_output}")
+                return f"任务完成 (分层代理模式)\n结果: {final_output}"
+            finally:
+                loop.close()
+
+        scheduled_task_manager.set_task_executor(task_executor)
+
         # Run MCP lifespan
         async with mcp_app.lifespan(app):
             yield
 
-        # App shutdown (if needed in the future)
+        # App shutdown
+        scheduled_task_manager.stop_scheduler()
 
     # Create FastAPI app with combined lifespan
     app = FastAPI(
@@ -150,6 +313,7 @@ def create_app() -> FastAPI:
     app.include_router(version.router)
     app.include_router(workflows.router)
     app.include_router(dual_model.router)
+    app.include_router(scheduled_tasks.router)
 
     # Mount static files BEFORE MCP to ensure they have priority
     # This is critical: FastAPI processes mounts in order, so static files
