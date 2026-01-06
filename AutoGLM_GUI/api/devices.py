@@ -42,12 +42,20 @@ from AutoGLM_GUI.schemas import (
 def _build_device_response_with_agent(
     device: "ManagedDevice", agent_manager: "PhoneAgentManager"
 ) -> DeviceResponse:
-    response = device.to_dict()
-    agent_device_id = agent_manager.find_agent_by_serial(device.serial)
+    """聚合设备信息和 Agent 状态（API 层职责）.
 
-    if agent_device_id:
-        metadata = agent_manager.get_metadata(agent_device_id)
+    API 层负责协调 DeviceManager 和 PhoneAgentManager，
+    通过遍历设备的所有连接来查找已初始化的 Agent。
+    """
+    response = device.to_dict()
+
+    # 遍历设备的所有连接，查找已初始化的 Agent
+    # 使用 device.connections 公开属性（ManagedDevice 提供）
+    for conn in device.connections:
+        # 只调用 PhoneAgentManager 的公开方法
+        metadata = agent_manager.get_metadata(conn.device_id)
         if metadata:
+            # 找到了已初始化的 Agent
             response["agent"] = {
                 "state": metadata.state,  # AgentState is str, Enum, already a string
                 "created_at": metadata.created_at,
@@ -55,9 +63,9 @@ def _build_device_response_with_agent(
                 "error_message": metadata.error_message,
                 "model_name": metadata.model_config.model_name,
             }
-        else:
-            response["agent"] = None
+            break  # 找到第一个 Agent 即可退出
     else:
+        # 没有找到任何已初始化的 Agent
         response["agent"] = None
 
     return DeviceResponse.model_validate(response)

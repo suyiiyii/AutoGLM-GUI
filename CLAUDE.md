@@ -360,9 +360,10 @@ DeviceManager aggregates both connections:
 **Important for API Integration**:
 - When calling `/api/init`, `/api/chat`, etc., use the current `device_id`
 - `device_id` may change during connection switches
-- PhoneAgent instances are indexed by `device_id` in `state.agents`
+- PhoneAgent instances are indexed by `device_id` in PhoneAgentManager
 - Connection switches may require agent reinitialization (future improvement: automatic migration)
-- DeviceManager provides `get_agent_by_serial()` to find agents across connection changes
+- API layer coordinates device and agent information by iterating through device.connections
+- PhoneAgentManager does not expose serial-based queries (maintains domain boundary)
 
 ### Frontend Architecture (`frontend/src/`)
 
@@ -650,6 +651,10 @@ scrcpy-server-v3.3.3   # Scrcpy server binary (bundled)
 9. **Device ID vs Serial**: Remember `device_id` changes with connection type, `serial` is stable
 10. **Concurrent Execution**: PhoneAgentManager prevents concurrent tasks on same device - respect the locks
 11. **Legacy Code**: `phone_agent` and `mai_agent` directories are third-party legacy code kept for reference only - use internal agents in `AutoGLM_GUI/agents/`
+12. **Respecting Domain Boundaries**:
+    - PhoneAgentManager should only deal with device_id (not serial)
+    - DeviceManager should only deal with device connections (not agents)
+    - API layer coordinates between domains using public interfaces only
 
 ### Electron Desktop Application
 1. **Resources Not Prepared**: Electron build requires `resources/backend/` and `resources/adb/` - use `build_electron.py`

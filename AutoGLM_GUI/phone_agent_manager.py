@@ -499,35 +499,6 @@ class PhoneAgentManager:
                 )
             return self._agent_configs[device_id]
 
-    # ==================== DeviceManager Integration ====================
-
-    def find_agent_by_serial(self, serial: str) -> Optional[str]:
-        """
-        Find agent device_id by hardware serial (connection switching support).
-
-        Args:
-            serial: Hardware serial number
-
-        Returns:
-            Optional[str]: device_id of initialized agent, or None
-        """
-        from AutoGLM_GUI.device_manager import DeviceManager
-
-        with self._manager_lock:
-            # Get device by serial from DeviceManager
-            device_manager = DeviceManager.get_instance()
-            device = device_manager._devices.get(serial)
-
-            if not device:
-                return None
-
-            # Check all connections for initialized agents
-            for conn in device.connections:
-                if conn.device_id in self._agents:
-                    return conn.device_id
-
-            return None
-
     # ==================== Introspection ====================
 
     def list_agents(self) -> list[str]:
