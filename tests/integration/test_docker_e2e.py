@@ -56,42 +56,8 @@ def mock_agent_server():
     proc.wait(timeout=5)
 
 
-@pytest.fixture(scope="module")
-def mock_llm_server():
-    """Start mock LLM server on host machine."""
-    port = 18003
-
-    try:
-        subprocess.run(
-            ["fuser", "-k", f"{port}/tcp"],
-            capture_output=True,
-            timeout=5,
-        )
-        time.sleep(0.5)
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
-
-    proc = subprocess.Popen(
-        [
-            "uv",
-            "run",
-            "uvicorn",
-            "tests.integration.device_agent.mock_llm_server:app",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(port),
-            "--log-level",
-            "warning",
-        ],
-        cwd=Path(__file__).parent.parent.parent,
-    )
-    time.sleep(2)
-
-    yield f"http://127.0.0.1:{port}"
-
-    proc.terminate()
-    proc.wait(timeout=5)
+# Note: mock_llm_server is provided by conftest.py (session scope)
+# Docker E2E test doesn't need to start its own mock LLM server
 
 
 @pytest.fixture
@@ -123,7 +89,7 @@ def scenario_path() -> str:
 
 
 @pytest.fixture(scope="module")
-def docker_container(mock_agent_server: str, mock_llm_server: str):
+def docker_container(mock_agent_server: str):
     """Build and run Docker container for testing."""
     image_name = "autoglm-gui:e2e-test"
     container_name = "autoglm-e2e-test"
@@ -143,7 +109,7 @@ def docker_container(mock_agent_server: str, mock_llm_server: str):
 
     # Use host network mode for simplicity (works on Linux and macOS with Docker Desktop)
     remote_url = mock_agent_server
-    llm_url = mock_llm_server
+    llm_url = "http://127.0.0.1:18003"  # Use session-scoped mock_llm_server
     docker_args = ["--network", "host"]
     access_url = "http://127.0.0.1:8000"
 
