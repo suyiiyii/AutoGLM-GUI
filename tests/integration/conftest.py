@@ -26,13 +26,17 @@ def run_llm_server(port: int):
     run_llm(port=port, log_level="warning")
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture(scope="session")
 def mock_llm_server():
     """Start mock LLM server for testing."""
     port = 18003
     proc = multiprocessing.Process(target=run_llm_server, args=(port,), daemon=True)
     proc.start()
-    time.sleep(1)  # Wait for server startup
+    time.sleep(2)  # Wait for server startup
+
+    # Check if process is still alive
+    if not proc.is_alive():
+        raise RuntimeError(f"Mock LLM server failed to start on port {port}")
 
     yield f"http://127.0.0.1:{port}"
 

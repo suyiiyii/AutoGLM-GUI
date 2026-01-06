@@ -158,6 +158,7 @@ def docker_container(mock_agent_server: str, mock_llm_server: str):
         "AUTOGLM_MODEL_NAME": "mock-glm-model",
         "AUTOGLM_API_KEY": "mock-key",
         "AUTOGLM_CORS_ORIGINS": "*",
+        "HOME": "/tmp",  # Override HOME to avoid loading user config
     }
 
     env_list = []
@@ -218,6 +219,17 @@ class TestDockerE2E:
 
         print(f"[Docker E2E] Registering remote device at {access_url}")
         print(f"[Docker E2E] Remote URL: {remote_url}")
+
+        # Try to remove existing device first (if any)
+        try:
+            resp = httpx.delete(
+                f"{access_url}/api/devices/mock_device_001",
+                timeout=10,
+            )
+            print(f"[Docker E2E] Cleaned up existing device: {resp.status_code}")
+        except Exception as e:
+            print(f"[Docker E2E] No existing device to clean: {e}")
+
         resp = httpx.post(
             f"{access_url}/api/devices/add_remote",
             json={
@@ -276,6 +288,27 @@ class TestDockerE2E:
 
         print(f"[Docker E2E] Initializing agent at {access_url}")
         print(f"[Docker E2E] Using Mock LLM at: {llm_url}")
+
+        # Delete existing config file to use environment variables
+        try:
+            resp = httpx.delete(f"{access_url}/api/config", timeout=10)
+            print(f"[Docker E2E] Deleted existing config: {resp.status_code}")
+        except Exception as e:
+            print(f"[Docker E2E] No config to delete: {e}")
+
+        # Create new config via API
+        resp = httpx.post(
+            f"{access_url}/api/config",
+            json={
+                "base_url": llm_url + "/v1",
+                "model_name": "mock-glm-model",
+                "api_key": "mock-key",
+            },
+            timeout=10,
+        )
+        assert resp.status_code == 200, f"Failed to save config: {resp.text}"
+        print(f"[Docker E2E] Saved new config: {resp.json()}")
+
         resp = httpx.post(
             f"{access_url}/api/init",
             json={
