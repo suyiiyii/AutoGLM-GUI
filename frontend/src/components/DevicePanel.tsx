@@ -19,14 +19,7 @@ import type {
   ErrorEvent,
   Workflow,
 } from '../api';
-import {
-  abortChat,
-  initAgent,
-  resetChat,
-  sendMessageStream,
-  listWorkflows,
-  getErrorMessage,
-} from '../api';
+import { abortChat, resetChat, sendMessageStream, listWorkflows } from '../api';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -87,7 +80,8 @@ export function DevicePanel({
   const [loading, setLoading] = useState(false);
   const [aborting, setAborting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [initialized, setInitialized] = useState(false);
+  // ✅ 移除 initialized 状态，依赖后端自动初始化
+  // const [initialized, setInitialized] = useState(false);
   const [showHistoryPopover, setShowHistoryPopover] = useState(false);
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
@@ -96,7 +90,8 @@ export function DevicePanel({
   const chatStreamRef = useRef<{ close: () => void } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const hasAutoInited = useRef(false);
+  // ✅ 移除 hasAutoInited，不再需要自动初始化逻辑
+  // const hasAutoInited = useRef(false);
   const prevMessageCountRef = useRef(0);
   const prevMessageSigRef = useRef<string | null>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -131,35 +126,10 @@ export function DevicePanel({
     };
   }, []);
 
-  const handleInit = useCallback(
-    async (force: boolean = false) => {
-      try {
-        await initAgent({
-          device_id: deviceId,
-          force,
-        });
-        setInitialized(true);
-        setError(null);
-      } catch (err) {
-        const errorMessage = getErrorMessage(err);
-        setError(errorMessage);
-        // 如果是强制重新初始化失败，后端已回滚删除了原有 agent，
-        // 需要将 initialized 设为 false 保持状态一致
-        if (force) {
-          setInitialized(false);
-        }
-      }
-    },
-    [deviceId]
-  );
+  // ✅ 移除 handleInit 函数，不再需要显式初始化
+  // Agent 会在首次发送消息时自动初始化
 
-  // Auto-initialize on mount if configured
-  useEffect(() => {
-    if (isConfigured && !initialized && !hasAutoInited.current) {
-      hasAutoInited.current = true;
-      handleInit();
-    }
-  }, [isConfigured, initialized, handleInit]);
+  // ✅ 移除自动初始化 useEffect，不再需要
 
   // Load history items when popover opens
   useEffect(() => {
@@ -227,9 +197,8 @@ export function DevicePanel({
     const inputValue = input.trim();
     if (!inputValue || loading) return;
 
-    if (!initialized) {
-      await handleInit();
-    }
+    // ✅ 移除初始化检查，后端会自动初始化
+    // Agent 会在首次使用时自动创建
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -429,11 +398,11 @@ export function DevicePanel({
   }, [
     input,
     loading,
-    initialized,
+    // initialized, // ✅ 移除依赖
     deviceId,
     deviceSerial,
     deviceName,
-    handleInit,
+    // handleInit, // ✅ 移除依赖
   ]);
 
   const handleReset = useCallback(async () => {
@@ -673,24 +642,10 @@ export function DevicePanel({
               </PopoverContent>
             </Popover>
 
-            {!isConfigured ? (
+            {!isConfigured && (
               <Badge variant="warning">
                 <AlertCircle className="w-3 h-3 mr-1" />
                 {t.devicePanel.noConfig}
-              </Badge>
-            ) : !initialized ? (
-              <Button
-                onClick={() => handleInit()}
-                disabled={!isConfigured}
-                size="sm"
-                variant="twitter"
-              >
-                {t.devicePanel.initializing}
-              </Button>
-            ) : (
-              <Badge variant="success">
-                <CheckCircle2 className="w-3 h-3 mr-1" />
-                {t.devicePanel.ready}
               </Badge>
             )}
 
@@ -871,9 +826,7 @@ export function DevicePanel({
               placeholder={
                 !isConfigured
                   ? t.devicePanel.configureFirst
-                  : !initialized
-                    ? t.devicePanel.initDeviceFirst
-                    : t.devicePanel.whatToDo
+                  : t.devicePanel.whatToDo
               }
               disabled={loading}
               className="flex-1 min-h-[40px] max-h-[120px] resize-none"
