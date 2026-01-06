@@ -19,6 +19,7 @@ import uvicorn
 
 from AutoGLM_GUI.device_adapter import DeviceProtocolContext, DeviceProtocolAdapter
 from AutoGLM_GUI.devices.remote_device import RemoteDevice
+from tests.integration.device_agent.mock_llm_client import MockLLMTestClient
 from tests.integration.device_agent.test_client import MockAgentTestClient
 
 
@@ -65,35 +66,32 @@ def scenario_path() -> str:
 
 class TestE2EWithAgent:
     """
-    End-to-end tests with real GLMAgent.
+    End-to-end tests with GLMAgent using Mock LLM.
 
-    These tests require LLM API credentials in environment:
-    - AUTOGLM_BASE_URL
-    - AUTOGLM_API_KEY
-    - AUTOGLM_MODEL_NAME
+    These tests use the mock LLM server and don't require real API credentials.
     """
 
     def test_agent_tap_recorded_by_mock(
         self,
-        mock_agent_server: str,
-        test_client: MockAgentTestClient,
+        mock_llm_server: str,  # Mock LLM server
+        mock_agent_server: str,  # Mock device server
+        mock_llm_client: MockLLMTestClient,  # Mock LLM client
+        test_client: MockAgentTestClient,  # Mock device client
         scenario_path: str,
     ):
         """Test that agent's tap commands are recorded by mock agent."""
         from AutoGLM_GUI.agents.glm.agent import GLMAgent
         from AutoGLM_GUI.config import AgentConfig, ModelConfig
-        from AutoGLM_GUI.config_manager import config_manager
+        from AutoGLM_GUI.devices.remote_device import RemoteDevice
+        from AutoGLM_GUI.device_adapter import DeviceProtocolContext
 
         test_client.load_scenario(scenario_path)
 
-        config_manager.load_env_config()
-        config_manager.load_file_config()
-        effective_config = config_manager.get_effective_config()
-
+        # Configure mock LLM (no real credentials needed!)
         model_config = ModelConfig(
-            base_url=effective_config.base_url,
-            api_key=effective_config.api_key,
-            model_name=effective_config.model_name,
+            base_url=mock_llm_server + "/v1",
+            api_key="mock-key",
+            model_name="mock-glm-model",
         )
 
         agent_config = AgentConfig(
@@ -115,6 +113,9 @@ class TestE2EWithAgent:
             )
 
             agent.run("点击屏幕下方的消息按钮")
+
+        # Verify mock LLM was called twice (tap + finish)
+        mock_llm_client.assert_request_count(2)
 
         commands = test_client.get_actions()
         tap_commands = [c for c in commands if c["action"] == "tap"]
@@ -187,6 +188,79 @@ class TestE2EWithoutLLM:
 
         assert len(device_1_taps) == 1
         assert len(device_2_taps) == 1
+
+
+class TestE2EWithMockLLM:
+    """
+    E2E tests with Mock LLM server (no credentials needed).
+
+    These tests use both Mock LLM and Mock Device servers,
+    enabling complete testing without any external dependencies.
+    """
+
+    def test_agent_tap_with_mock_llm(
+        self,
+        mock_llm_server: str,  # Mock LLM server
+        mock_agent_server: str,  # Mock device server
+        mock_llm_client: MockLLMTestClient,  # Mock LLM client
+        test_client: MockAgentTestClient,  # Mock device client
+        scenario_path: str,
+    ):
+        """Test agent with mock LLM and mock device - no credentials required."""
+        from AutoGLM_GUI.agents.glm.agent import GLMAgent
+        from AutoGLM_GUI.config import AgentConfig, ModelConfig
+        from AutoGLM_GUI.devices.remote_device import RemoteDevice
+        from AutoGLM_GUI.device_adapter import DeviceProtocolContext
+
+        # Load test scenario
+        test_client.load_scenario(scenario_path)
+
+        # Configure mock LLM (no real credentials needed!)
+        model_config = ModelConfig(
+            base_url=mock_llm_server + "/v1",  # Mock LLM endpoint
+            api_key="mock-key",  # Any value works
+            model_name="mock-glm-model",
+        )
+
+        agent_config = AgentConfig(
+            max_steps=5,
+            device_id="mock_device_001",
+            verbose=True,
+        )
+
+        # Create remote device
+        remote_device = RemoteDevice("mock_device_001", mock_agent_server)
+
+        # Run agent with mock LLM and mock device
+        with DeviceProtocolContext(
+            get_device=lambda _: remote_device,
+            default_device_id="mock_device_001",
+        ):
+            agent = GLMAgent(
+                model_config=model_config,
+                agent_config=agent_config,
+                device=remote_device,
+            )
+
+            # Execute task
+            agent.run("点击屏幕下方的消息按钮")
+
+        # Verify mock LLM was called twice (tap + finish)
+        mock_llm_client.assert_request_count(2)
+
+        # Verify device received tap command
+        commands = test_client.get_actions()
+        tap_commands = [c for c in commands if c["action"] == "tap"]
+
+        assert len(tap_commands) >= 1, (
+            f"Expected at least 1 tap, got {len(tap_commands)}"
+        )
+
+        # Verify tap was in correct region
+        test_client.assert_tap_in_region(487, 2516, 721, 2667)
+
+        # Verify final state
+        test_client.assert_state("message")
 
 
 if __name__ == "__main__":
