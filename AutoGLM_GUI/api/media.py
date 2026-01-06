@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter
 
 from AutoGLM_GUI.adb_plus import capture_screenshot
+from AutoGLM_GUI.exceptions import DeviceNotAvailableError
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.schemas import ScreenshotRequest, ScreenshotResponse
 from AutoGLM_GUI.socketio_server import stop_streamers
@@ -47,6 +48,16 @@ def take_screenshot(request: ScreenshotRequest) -> ScreenshotResponse:
         device_manager = DeviceManager.get_instance()
         serial = device_manager.get_serial_by_device_id(device_id)
 
+        if not serial:
+            return ScreenshotResponse(
+                success=False,
+                image="",
+                width=0,
+                height=0,
+                is_sensitive=False,
+                error=f"Device {device_id} not found",
+            )
+
         if serial:
             managed = device_manager._devices.get(serial)
             if managed and managed.connection_type.value == "remote":
@@ -78,6 +89,16 @@ def take_screenshot(request: ScreenshotRequest) -> ScreenshotResponse:
             width=screenshot.width,
             height=screenshot.height,
             is_sensitive=screenshot.is_sensitive,
+        )
+    except DeviceNotAvailableError as e:
+        logger.warning("Screenshot failed - device not available: %s", e)
+        return ScreenshotResponse(
+            success=False,
+            image="",
+            width=0,
+            height=0,
+            is_sensitive=False,
+            error=str(e),
         )
     except Exception as e:
         logger.exception("Screenshot failed for device %s", request.device_id)
