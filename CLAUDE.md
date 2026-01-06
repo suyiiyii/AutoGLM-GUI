@@ -226,11 +226,11 @@ See: `AutoGLM_GUI/resources/apks/ADBKeyBoard.LICENSE.txt`
 
 ### Request Flow
 
-**Basic PhoneAgent Flow**:
+**Basic Agent Flow**:
 1. **User Chat Request** → Frontend (`ChatKitPanel.tsx`) → API (`/api/chat`) → Backend (`api/agents.py`)
 2. **PhoneAgentManager** → `run_chat()` acquires device lock, gets or creates agent
-3. **PhoneAgent.run()** → Orchestrates multi-step task execution
-4. **Each Step**: Screenshot → `ModelClient` → LLM API (with vision) → `ActionHandler` → ADB execution
+3. **Agent.run()** → Orchestrates multi-step task execution
+4. **Each Step**: Screenshot → LLM API (with vision) → `ActionHandler` → ADB execution
 5. **Streaming Updates** → SSE (Server-Sent Events) → Frontend updates in real-time
 
 **Layered Agent Flow** (NEW):
@@ -315,31 +315,21 @@ See: `AutoGLM_GUI/resources/apks/ADBKeyBoard.LICENSE.txt`
   - `mdns.py` - mDNS device discovery
   - `touch.py` - Touch/swipe primitives
 
-### Phone Agent (`phone_agent/`)
+### Internal Agents (`AutoGLM_GUI/agents/`)
 
-Core automation engine from Open-AutoGLM:
+Internal implementations of automation agents:
 
-- **`agent.py`**: `PhoneAgent` class - main orchestrator
-  - `run(task)` - Execute a natural language task
-  - `_execute_step()` - Single step: screenshot → LLM call → action execution
-  - Manages conversation context and step counting
-- **`actions/handler.py`**: `ActionHandler` - executes actions from LLM output
-  - `do()` - Generic actions: tap, swipe, type, launch app, etc.
-  - `finish()` - Task completion
-  - `takeover()` - Human intervention request (login, CAPTCHA)
-  - Coordinate normalization (0-1000 range → actual device pixels)
-- **`adb/`**: Low-level ADB operations
-  - `connection.py` - Device connection management
-  - `device.py` - Device info (screen size, current app)
-  - `input.py` - Touch/keyboard input
-  - `screenshot.py` - Screenshot capture with Pillow
-- **`model/client.py`**: `ModelClient` - OpenAI-compatible API client
-  - Handles vision messages (text + base64 images)
-  - Streaming support
-- **`config/`**: Prompts and app definitions
-  - `prompts.py` - System prompts (Chinese/English)
-  - `apps.py` - Common Chinese app package names and aliases
-  - `i18n.py` - Internationalization utilities
+- **`factory.py`**: Agent factory using registry pattern for creating different agent types.
+- **`protocols.py`**: Base interfaces for all agents.
+- **`glm/`**: GLM-based agent implementation.
+- **`mai/`**: Internalized MAI Agent (Mobile Agent) with multi-image support.
+- **`stream_runner.py`**: SSE streamer for agent execution steps.
+
+### Action System (`AutoGLM_GUI/actions/`)
+
+Executes actions parsed from LLM outputs:
+- **`handler.py`**: Maps high-level actions (Tap, Swipe, Type) to ADB commands.
+- **`types.py`**: Data models for action results.
 
 ### Device Identification (Two-Layer System)
 
@@ -624,16 +614,13 @@ AutoGLM_GUI/           # Backend FastAPI app (entry point)
     dual_agent.py
     decision_model.py
     vision_model.py
+  agents/              # Internal agent implementations
+    glm/
+    mai/
+    factory.py
   static/              # Built frontend (copied from frontend/dist)
   resources/           # Bundled resources
     apks/              # ADB Keyboard APK (GPL-2.0)
-
-phone_agent/           # Core automation engine (third-party, DO NOT MODIFY)
-  agent.py             # PhoneAgent orchestrator
-  actions/handler.py   # Action execution
-  adb/                 # Low-level ADB operations
-  model/client.py      # LLM API client
-  config/              # Prompts and app definitions
 
 frontend/              # React frontend
   src/
@@ -689,7 +676,7 @@ scrcpy-server-v3.3.3   # Scrcpy server binary (bundled)
 8. **ADB Command Execution**: Always use `platform_utils.py` functions instead of direct subprocess calls
 9. **Device ID vs Serial**: Remember `device_id` changes with connection type, `serial` is stable
 10. **Concurrent Execution**: PhoneAgentManager prevents concurrent tasks on same device - respect the locks
-11. **phone_agent**: Legacy third-party code kept for reference only - use internal agents in `AutoGLM_GUI/agents/`
+11. **Legacy Code**: `phone_agent` and `mai_agent` directories are third-party legacy code kept for reference only - use internal agents in `AutoGLM_GUI/agents/`
 
 ### Electron Desktop Application
 1. **Resources Not Prepared**: Electron build requires `resources/backend/` and `resources/adb/` - use `build_electron.py`
@@ -746,11 +733,8 @@ scrcpy-server-v3.3.3   # Scrcpy server binary (bundled)
    - Downloads artifacts from Actions tab
 
 ### Important Notes
-- **phone_agent**: Third-party code, do NOT modify for compatibility
+- **Legacy Directories**: `phone_agent` and `mai_agent` are third-party code, do NOT modify
 - **Encoding**: Use PyInstaller runtime hook for Windows UTF-8, not application code
 - **Resources**: Always check `sys._MEIPASS` exists in PyInstaller environment
-
-
-- phone_agent 下面是第三方的代码，目前通过直接拷贝代码的情况下进行引用，为了保持兼容性，任何时候不能修改里面的代码
-- 运行 adb 命令的时候，尽量使用AutoGLM_GUI/platform_utils.py 下面的代码执行命令，为了更好的兼容性
-- phone_agent 已经被弃用，请在本项目下的代码寻找替代
+- **ADB**: Use `AutoGLM_GUI/platform_utils.py` for executing commands
+- **Refactoring**: Prefer internal agent implementations in `AutoGLM_GUI/agents/`
