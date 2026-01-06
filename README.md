@@ -401,21 +401,35 @@ uv run python scripts/build.py --pack
 
 AutoGLM-GUI 提供预构建的 Docker 镜像，支持 `linux/amd64` 和 `linux/arm64` 架构，适合服务器端远程控制 Android 设备的场景。
 
-### 快速启动（推荐）
-
-使用 GitHub Container Registry (GHCR) 预构建镜像，无需手动构建：
+### 方式一：使用 docker-compose（推荐）
 
 ```bash
-# 使用 host 网络模式运行（推荐，便于 ADB 设备发现和二维码配对）
+# 1. 下载 docker-compose.yml
+curl -O https://raw.githubusercontent.com/suyiiyii/AutoGLM-GUI/main/docker-compose.yml
+
+# 2. 启动服务
+docker-compose up -d
+
+# 3. 访问 http://localhost:8000，在 Web 界面中配置模型 API
+```
+
+**配置说明**：
+- 默认使用 host 网络模式（推荐，便于 ADB 设备发现和二维码配对）
+- 模型 API 配置可以在 Web 界面的设置页面中完成，无需提前配置环境变量
+- 如果需要在启动时预配置，可以编辑 `docker-compose.yml` 取消注释 `environment` 部分
+
+### 方式二：直接使用 docker run
+
+使用 GitHub Container Registry (GHCR) 预构建镜像：
+
+```bash
+# 使用 host 网络模式运行（推荐）
 docker run -d --network host \
-  -e AUTOGLM_BASE_URL=https://open.bigmodel.cn/api/paas/v4 \
-  -e AUTOGLM_MODEL_NAME=autoglm-phone \
-  -e AUTOGLM_API_KEY=sk-your-api-key \
   -v autoglm_config:/root/.config/autoglm \
   -v autoglm_logs:/app/logs \
   ghcr.io/suyiiyii/autoglm-gui:main
 
-# 访问 http://localhost:8000
+# 访问 http://localhost:8000，在 Web 界面中配置模型 API
 ```
 
 ### 指定监听端口
@@ -425,9 +439,8 @@ docker run -d --network host \
 ```bash
 # 监听 9000 端口
 docker run -d --network host \
-  -e AUTOGLM_BASE_URL=https://open.bigmodel.cn/api/paas/v4 \
-  -e AUTOGLM_MODEL_NAME=autoglm-phone \
-  -e AUTOGLM_API_KEY=sk-your-api-key \
+  -v autoglm_config:/root/.config/autoglm \
+  -v autoglm_logs:/app/logs \
   ghcr.io/suyiiyii/autoglm-gui:main \
   autoglm-gui --host 0.0.0.0 --port 9000 --no-browser
 ```
@@ -437,9 +450,8 @@ docker run -d --network host \
 ```bash
 # 映射主机 9000 端口到容器 8000 端口
 docker run -d -p 9000:8000 \
-  -e AUTOGLM_BASE_URL=https://open.bigmodel.cn/api/paas/v4 \
-  -e AUTOGLM_MODEL_NAME=autoglm-phone \
-  -e AUTOGLM_API_KEY=sk-your-api-key \
+  -v autoglm_config:/root/.config/autoglm \
+  -v autoglm_logs:/app/logs \
   ghcr.io/suyiiyii/autoglm-gui:main
 ```
 

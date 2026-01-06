@@ -1,10 +1,10 @@
 services:
   autoglm-gui:
-    build: .
-    image: autoglm-gui:latest
+    # 使用 GHCR 预构建镜像
+    image: ghcr.io/suyiiyii/autoglm-gui:main
     container_name: autoglm-gui
 
-    # Linux: use host network for mDNS/USB support
+    # Linux: use host network for mDNS/USB support (推荐)
     # macOS/Windows: use port mapping instead (comment out network_mode, uncomment ports)
     network_mode: host
 
@@ -12,11 +12,11 @@ services:
     # ports:
     #   - "8000:8000"
 
-    environment:
-      - AUTOGLM_BASE_URL=${AUTOGLM_BASE_URL:-}
-      - AUTOGLM_MODEL_NAME=${AUTOGLM_MODEL_NAME:-autoglm-phone}
-      - AUTOGLM_API_KEY=${AUTOGLM_API_KEY:-}
-      - AUTOGLM_CORS_ORIGINS=${AUTOGLM_CORS_ORIGINS:-*}
+    # 环境变量可选，也可以在 Web 界面中配置
+    # environment:
+    #   - AUTOGLM_BASE_URL=https://open.bigmodel.cn/api/paas/v4
+    #   - AUTOGLM_MODEL_NAME=autoglm-phone
+    #   - AUTOGLM_API_KEY=sk-your-api-key
 
     volumes:
       - autoglm_config:/root/.config/autoglm
