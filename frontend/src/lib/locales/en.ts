@@ -45,6 +45,14 @@ export const en = {
     history_n_hint: 'Number of historical screenshots (1-10)',
     maxSteps: 'Max Execution Steps',
     maxStepsHint: 'Maximum steps per task (1-1000)',
+    visionModelTab: 'Vision Model',
+    decisionModelTab: 'Decision Model',
+    selectDecisionPreset: 'Select Decision Model Preset',
+    decisionBaseUrl: 'Decision Model Base URL',
+    decisionApiKey: 'Decision Model API Key',
+    decisionModelName: 'Decision Model Name',
+    decisionModelHint:
+      'Decision model is used for planning in layered agent mode. You must configure the decision model when using layered agent mode.',
   },
   deviceSidebar: {
     devices: 'Devices',

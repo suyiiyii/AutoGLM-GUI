@@ -54,7 +54,19 @@ def _clear_session(session_id: str) -> bool:
 
 def get_planner_model() -> str:
     """获取规划层使用的模型名称."""
-    return "glm-4.7"
+    config_manager.load_file_config()
+    effective_config = config_manager.get_effective_config()
+
+    model_name = effective_config.decision_model_name
+
+    if not model_name:
+        raise ValueError(
+            "决策模型未配置。使用分层代理模式需要配置决策模型。\n"
+            "请在全局配置中设置决策模型的 Base URL、模型名称和 API Key。"
+        )
+
+    logger.info(f"[LayeredAgent] Using decision model: {model_name}")
+    return model_name
 
 
 PLANNER_INSTRUCTIONS = """## 核心目标
@@ -281,20 +293,31 @@ async def chat(device_id: str, message: str) -> str:
 
 
 def _setup_openai_client() -> AsyncOpenAI:
-    """设置 OpenAI 客户端，使用 AutoGLM 的配置"""
+    """设置 OpenAI 客户端，使用决策模型配置"""
     config_manager.load_file_config()
     effective_config = config_manager.get_effective_config()
 
-    if not effective_config.base_url:
-        raise ValueError("base_url not configured")
+    # 检查决策模型配置
+    decision_base_url = effective_config.decision_base_url
+    decision_api_key = effective_config.decision_api_key
 
-    planner_model = get_planner_model()
-    logger.info(f"[LayeredAgent] API Base URL: {effective_config.base_url}")
-    logger.info(f"[LayeredAgent] Planner Model: {planner_model}")
+    if not decision_base_url:
+        raise ValueError(
+            "决策模型 Base URL 未配置。使用分层代理模式需要配置决策模型。\n"
+            "请在全局配置中设置决策模型的 Base URL、模型名称和 API Key。"
+        )
+
+    # decision_api_key 可以为 None（某些本地模型不需要）
+    planner_model = get_planner_model()  # 这里会再次检查 model_name
+
+    logger.info("[LayeredAgent] Decision model config:")
+    logger.info(f"  - Base URL: {decision_base_url}")
+    logger.info(f"  - Model: {planner_model}")
+    logger.info(f"  - API Key: {'***' if decision_api_key else 'None'}")
 
     return AsyncOpenAI(
-        base_url=effective_config.base_url,
-        api_key=effective_config.api_key,
+        base_url=decision_base_url,
+        api_key=decision_api_key or "EMPTY",  # 某些本地模型需要非空字符串
     )
 
 

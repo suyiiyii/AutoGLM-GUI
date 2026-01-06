@@ -632,6 +632,10 @@ export interface ConfigResponse {
   agent_config_params?: Record<string, unknown>;
   // Agent 执行配置
   default_max_steps: number;
+  // 决策模型配置
+  decision_base_url?: string;
+  decision_model_name?: string;
+  decision_api_key?: string;
 }
 
 export interface ConfigSaveRequest {
@@ -643,6 +647,10 @@ export interface ConfigSaveRequest {
   agent_config_params?: Record<string, unknown>;
   // Agent 执行配置
   default_max_steps?: number;
+  // 决策模型配置
+  decision_base_url?: string;
+  decision_model_name?: string;
+  decision_api_key?: string;
 }
 
 export async function getConfig(): Promise<ConfigResponse> {

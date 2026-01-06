@@ -45,6 +45,14 @@ export const zh = {
     history_n_hint: '包含的历史截图数量（1-10）',
     maxSteps: '最大执行步数',
     maxStepsHint: '单次任务最大执行步数（1-1000）',
+    visionModelTab: '视觉模型',
+    decisionModelTab: '决策模型',
+    selectDecisionPreset: '选择决策模型预设',
+    decisionBaseUrl: '决策模型 Base URL',
+    decisionApiKey: '决策模型 API Key',
+    decisionModelName: '决策模型名称',
+    decisionModelHint:
+      '决策模型用于分层代理的规划层。使用分层代理模式时必须配置决策模型。',
   },
   deviceSidebar: {
     devices: '设备',

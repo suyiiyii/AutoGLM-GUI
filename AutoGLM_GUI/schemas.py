@@ -2,7 +2,7 @@
 
 import re
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, field_validator
 
 
 class InitRequest(BaseModel):
@@ -296,6 +296,11 @@ class ConfigResponse(BaseModel):
     # Agent 执行配置
     default_max_steps: int = 100  # 单次任务最大执行步数
 
+    # 决策模型配置（用于分层代理）
+    decision_base_url: str | None = None
+    decision_model_name: str | None = None
+    decision_api_key: str | None = None
+
     conflicts: list[dict] | None = None  # 配置冲突信息（可选）
 
 
@@ -312,6 +317,11 @@ class ConfigSaveRequest(BaseModel):
 
     # Agent 执行配置
     default_max_steps: int | None = None  # 单次任务最大执行步数
+
+    # 决策模型配置（用于分层代理）
+    decision_base_url: str | None = None
+    decision_model_name: str | None = None
+    decision_api_key: str | None = None
 
     @field_validator("default_max_steps")
     @classmethod
@@ -343,6 +353,26 @@ class ConfigSaveRequest(BaseModel):
         if not v or not v.strip():
             raise ValueError("model_name cannot be empty")
         return v.strip()
+
+    @field_validator("decision_base_url")
+    @classmethod
+    def validate_decision_base_url(cls, v: str | None) -> str | None:
+        """验证 decision_base_url 格式."""
+        if v is not None and v.strip():
+            if not re.match(r"^https?://", v):
+                raise ValueError(
+                    "decision_base_url must start with http:// or https://"
+                )
+            return v.rstrip("/")
+        return None
+
+    @field_validator("decision_model_name")
+    @classmethod
+    def validate_decision_model_name(cls, v: str | None) -> str | None:
+        """验证 decision_model_name 非空."""
+        if v is not None and v.strip():
+            return v.strip()
+        return None
 
 
 class WiFiConnectRequest(BaseModel):
