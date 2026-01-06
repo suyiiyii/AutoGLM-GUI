@@ -89,13 +89,8 @@ def has_llm_config() -> bool:
 @pytest.fixture(scope="module")
 def docker_container(mock_agent_server: str):
     """Build and run Docker container for testing."""
-    import platform
-
     image_name = "autoglm-gui:e2e-test"
     container_name = "autoglm-e2e-test"
-    agent_url = mock_agent_server
-    host_port = 8000
-    is_linux = platform.system() == "Linux"
 
     subprocess.run(
         ["docker", "rm", "-f", container_name],
@@ -110,33 +105,14 @@ def docker_container(mock_agent_server: str):
         cwd=Path(__file__).parent.parent.parent,
     )
 
-    if is_linux:
-        remote_url = agent_url
-        docker_args = ["--network", "host"]
-        access_url = "http://127.0.0.1:8000"
-    else:
-        # On macOS/Windows, get host IP for more reliable DNS resolution
-        # host.docker.internal sometimes fails with Python's httpx/socket
-        import socket
+    # Use host network mode for simplicity (works on Linux and macOS with Docker Desktop)
+    remote_url = mock_agent_server
+    docker_args = ["--network", "host"]
+    access_url = "http://127.0.0.1:8000"
 
-        try:
-            # Try to get actual host IP by connecting to an external address
-            s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-            s.connect(("8.8.8.8", 80))
-            host_ip = s.getsockname()[0]
-            s.close()
-            print(f"[Docker E2E] Detected host IP: {host_ip}")
-            remote_url = agent_url.replace("127.0.0.1", host_ip)
-        except Exception as e:
-            print(f"[Docker E2E] Failed to detect host IP: {e}, falling back to host.docker.internal")
-            remote_url = agent_url.replace("127.0.0.1", "host.docker.internal")
-
-        docker_args = [
-            "--add-host=host.docker.internal:host-gateway",
-            "-p",
-            f"{host_port}:8000",
-        ]
-        access_url = f"http://127.0.0.1:{host_port}"
+    print("[Docker E2E] Using host network mode")
+    print(f"[Docker E2E] Remote URL: {remote_url}")
+    print(f"[Docker E2E] Access URL: {access_url}")
 
     # No longer use REMOTE_DEVICE_BASE_URL - devices are registered via API instead
     env = {
