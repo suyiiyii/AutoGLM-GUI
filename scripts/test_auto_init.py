@@ -42,24 +42,6 @@ def test_auto_initialize_parameter():
     )
     print(f"✓ use_agent auto_initialize 参数默认值: {default_value}")
 
-    # 检查 use_streaming_agent 方法签名
-    sig = inspect.signature(manager.use_streaming_agent)
-    params = list(sig.parameters.keys())
-
-    print("\n✓ use_streaming_agent 参数:")
-    for param in params:
-        print(f"  - {param}")
-
-    # 验证 auto_initialize 参数存在
-    assert "auto_initialize" in params, (
-        "use_streaming_agent 的 auto_initialize 参数不存在"
-    )
-    default_value = sig.parameters["auto_initialize"].default
-    assert default_value is True, (
-        f"use_streaming_agent auto_initialize 默认值应该是 True，实际是 {default_value}"
-    )
-    print(f"✓ use_streaming_agent auto_initialize 参数默认值: {default_value}")
-
     print("\n" + "=" * 60)
     print("✅ 所有测试通过！自动初始化参数已正确添加")
     print("=" * 60)

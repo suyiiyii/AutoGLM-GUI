@@ -1,14 +1,12 @@
 """Agent lifecycle and chat routes."""
 
 import json
-import queue
-import threading
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
-from AutoGLM_GUI.config import AgentConfig, ModelConfig, StepResult
+from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.schemas import (
     AbortRequest,
@@ -193,6 +191,7 @@ def chat(request: ChatRequest) -> ChatResponse:
 @router.post("/api/chat/stream")
 def chat_stream(request: ChatRequest):
     """发送任务给 Agent 并实时推送执行进度（SSE，多设备支持）。"""
+    from AutoGLM_GUI.agents.stream_runner import AgentStepStreamer
     from AutoGLM_GUI.exceptions import DeviceBusyError
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
@@ -207,140 +206,28 @@ def chat_stream(request: ChatRequest):
         )
 
     def event_generator():
-        threads: list[threading.Thread] = []
-        stop_event: threading.Event | None = None
-
         try:
-            # 创建事件队列用于 agent → SSE 通信
-            event_queue: queue.Queue[tuple[str, SSEPayload | None]] = queue.Queue()
+            acquired = manager.acquire_device(
+                device_id, timeout=0, raise_on_timeout=True
+            )
 
-            # 思考块回调
-            def on_thinking_chunk(chunk: str):
-                chunk_data = _create_sse_event("thinking_chunk", {"chunk": chunk})
-                event_queue.put(("thinking_chunk", chunk_data))
+            try:
+                agent = manager.get_agent(device_id)
+                streamer = AgentStepStreamer(agent=agent, task=request.message)
 
-            # 使用 streaming agent context manager（自动处理所有管理逻辑！）
-            with manager.use_streaming_agent(
-                device_id, on_thinking_chunk, timeout=0
-            ) as (streaming_agent, stop_event):
-                # 早期 abort 检查
-                if stop_event.is_set():
-                    logger.info(f"[Abort] Chat aborted before starting for {device_id}")
-                    yield "event: aborted\n"
-                    yield 'data: {"type": "aborted", "role": "assistant", "message": "Chat aborted by user"}\n\n'
-                    return
+                with streamer.stream_context() as abort_fn:
+                    manager.register_abort_handler(device_id, abort_fn)
 
-                # 在线程中运行 agent 步骤
-                step_result: list[StepResult | None] = [None]
-                error_result: list[Exception | None] = [None]
+                    for event in streamer:
+                        event_type = event["type"]
+                        event_data = _create_sse_event(event_type, event["data"])
 
-                def run_step(is_first: bool = True, task: str | None = None):
-                    try:
-                        if stop_event.is_set():
-                            return
-
-                        result = (
-                            streaming_agent.step(task)
-                            if is_first
-                            else streaming_agent.step()
-                        )
-
-                        if stop_event.is_set():
-                            return
-
-                        step_result[0] = result
-                    except Exception as e:
-                        error_result[0] = e
-                    finally:
-                        event_queue.put(("step_done", None))
-
-                # 启动第一步
-                thread = threading.Thread(
-                    target=run_step, args=(True, request.message), daemon=True
-                )
-                thread.start()
-                threads.append(thread)
-
-                # 事件循环
-                while not stop_event.is_set():
-                    try:
-                        event_type, event_data = event_queue.get(timeout=0.1)
-                    except queue.Empty:
-                        continue
-
-                    if event_type == "thinking_chunk":
-                        yield "event: thinking_chunk\n"
+                        yield f"event: {event_type}\n"
                         yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
 
-                    elif event_type == "step_done":
-                        if error_result[0]:
-                            raise error_result[0]
-
-                        result = step_result[0]
-                        if result is None:
-                            raise RuntimeError("step_result is None after step_done")
-
-                        event_data = _create_sse_event(
-                            "step",
-                            {
-                                "step": streaming_agent.step_count,
-                                "thinking": result.thinking,
-                                "action": result.action,
-                                "success": result.success,
-                                "finished": result.finished,
-                            },
-                        )
-
-                        yield "event: step\n"
-                        yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
-
-                        if result.finished:
-                            done_data = _create_sse_event(
-                                "done",
-                                {
-                                    "message": result.message,
-                                    "steps": streaming_agent.step_count,
-                                    "success": result.success,
-                                },
-                            )
-                            yield "event: done\n"
-                            yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
-                            break
-
-                        if (
-                            streaming_agent.step_count
-                            >= streaming_agent.agent_config.max_steps  # type: ignore[attr-defined]
-                        ):
-                            done_data = _create_sse_event(
-                                "done",
-                                {
-                                    "message": "Max steps reached",
-                                    "steps": streaming_agent.step_count,
-                                    "success": result.success,
-                                },
-                            )
-                            yield "event: done\n"
-                            yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
-                            break
-
-                        # 启动下一步
-                        step_result[0] = None
-                        error_result[0] = None
-                        thread = threading.Thread(
-                            target=run_step, args=(False, None), daemon=True
-                        )
-                        thread.start()
-                        threads.append(thread)
-
-                # 检查是否被中止
-                if stop_event.is_set():
-                    logger.info(f"[Abort] Streaming chat terminated for {device_id}")
-                    yield "event: aborted\n"
-                    yield 'data: {"type": "aborted", "role": "assistant", "message": "Chat aborted by user"}\n\n'
-
-                # 重置原始 agent（context 已由 use_streaming_agent 同步）
-                original_agent = manager.get_agent(device_id)
-                original_agent.reset()
+            finally:
+                if acquired:
+                    manager.release_device(device_id)
 
         except DeviceBusyError:
             error_data = _create_sse_event("error", {"message": "Device is busy"})
@@ -352,13 +239,7 @@ def chat_stream(request: ChatRequest):
             yield "event: error\n"
             yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
         finally:
-            if stop_event is not None:
-                stop_event.set()
-
-            # 等待线程完成（带超时）
-            for thread in threads:
-                if thread.is_alive():
-                    thread.join(timeout=5.0)
+            manager.unregister_abort_handler(device_id)
 
     return StreamingResponse(
         event_generator(),

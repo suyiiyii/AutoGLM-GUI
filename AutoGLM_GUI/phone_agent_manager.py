@@ -96,8 +96,7 @@ class PhoneAgentManager:
         self._streaming_contexts: dict[str, StreamingAgentContext] = {}
         self._streaming_contexts_lock = threading.Lock()
 
-        # Abort events (device_id -> threading.Event)
-        self._abort_events: dict[str, threading.Event] = {}
+        self._abort_events: dict[str, threading.Event | Callable[[], None]] = {}
 
         # Agent storage (transition from global state to instance state)
         self._agents: dict[str, BaseAgent] = {}
@@ -126,49 +125,19 @@ class PhoneAgentManager:
         confirmation_callback: Optional[Callable] = None,
         force: bool = False,
     ) -> "BaseAgent":
-        """
-        Initialize agent using factory pattern (thread-safe, idempotent).
-
-        This method uses the agent factory to create agents dynamically based on agent_type.
-        New agent types can be added without modifying this method by registering them.
-
-        Args:
-            device_id: Device identifier (USB serial / IP:port)
-            agent_type: Type of agent to create (e.g., "phone", "mai")
-            model_config: Model configuration
-            agent_config: Agent configuration
-            agent_specific_config: Agent-specific configuration dict
-            takeover_callback: Optional takeover callback
-            confirmation_callback: Optional confirmation callback
-            force: Force re-initialization even if agent exists
-
-        Returns:
-            BaseAgent: Initialized agent instance
-
-        Raises:
-            AgentInitializationError: If initialization fails
-            DeviceBusyError: If device is currently processing
-
-        Transactional Guarantee:
-            - On failure, state is rolled back
-            - state.agents and state.agent_configs remain consistent
-        """
         from AutoGLM_GUI.agents import create_agent
 
         with self._manager_lock:
-            # Check if already initialized
             if device_id in self._agents and not force:
                 logger.debug(f"Agent already initialized for {device_id}")
                 return self._agents[device_id]
 
-            # Check device availability (non-blocking check)
             device_lock = self._get_device_lock(device_id)
             if device_lock.locked():
                 raise DeviceBusyError(
                     f"Device {device_id} is currently processing a request"
                 )
 
-            # Create metadata first with INITIALIZING state
             self._metadata[device_id] = AgentMetadata(
                 device_id=device_id,
                 state=AgentState.INITIALIZING,
@@ -215,176 +184,6 @@ class PhoneAgentManager:
                 raise AgentInitializationError(
                     f"Failed to initialize agent: {str(e)}"
                 ) from e
-
-    # TODO 毫无必要的函数，应该要移除掉
-    def _create_streaming_agent(
-        self,
-        device_id: str,
-        original_agent: "BaseAgent",
-        on_thinking_chunk: Callable[[str], None],
-    ) -> "BaseAgent":
-        """
-        创建支持流式输出的 agent（复制原始 agent）.
-
-        Args:
-            device_id: 设备标识符
-            original_agent: 原始 agent 实例
-            on_thinking_chunk: 思考块回调函数
-
-        Returns:
-            已 patch 的 agent 实例
-        """
-        from AutoGLM_GUI.agents.glm.agent import GLMAgent
-        from AutoGLM_GUI.agents.mai.agent import InternalMAIAgent
-        from AutoGLM_GUI.device_manager import DeviceManager
-
-        model_config, agent_config = self.get_config(device_id)
-        device_manager = DeviceManager.get_instance()
-        device = device_manager.get_device_protocol(device_id)
-
-        streaming_agent: BaseAgent
-        if isinstance(original_agent, GLMAgent):
-            streaming_agent = GLMAgent(
-                model_config=model_config,
-                agent_config=agent_config,
-                device=device,
-                thinking_callback=on_thinking_chunk,
-            )
-            streaming_agent._context = original_agent._context.copy()
-            streaming_agent._step_count = original_agent._step_count
-        elif isinstance(original_agent, InternalMAIAgent):
-            streaming_agent = InternalMAIAgent(
-                model_config=model_config,
-                agent_config=agent_config,
-                device=device,
-                history_n=original_agent.history_n,
-                confirmation_callback=original_agent.action_handler.confirmation_callback,
-                takeover_callback=original_agent.action_handler.takeover_callback,
-                thinking_callback=on_thinking_chunk,
-            )
-            streaming_agent.traj_memory = original_agent.traj_memory
-            streaming_agent._step_count = original_agent._step_count
-            streaming_agent._is_running = original_agent._is_running
-            streaming_agent._total_llm_time = original_agent._total_llm_time
-            streaming_agent._total_action_time = original_agent._total_action_time
-            streaming_agent._total_tokens = original_agent._total_tokens
-        else:
-            raise ValueError(f"Unknown agent type: {type(original_agent)}")
-
-        return streaming_agent
-
-    @contextmanager
-    def use_streaming_agent(
-        self,
-        device_id: str,
-        on_thinking_chunk: Callable[[str], None],
-        timeout: Optional[float] = None,
-        auto_initialize: bool = True,
-    ):
-        """
-        Context manager for streaming-enabled agent with automatic:
-        - 设备锁获取/释放
-        - Streaming agent 创建（带 monkey-patch）
-        - 上下文隔离和同步
-        - Abort 事件注册/清理
-
-        By default, automatically initializes the agent using global configuration
-        if not already initialized. Set auto_initialize=False to require explicit
-        initialization via initialize_agent_with_factory().
-
-        Args:
-            device_id: 设备标识符
-            on_thinking_chunk: 流式思考块回调函数
-            timeout: 锁获取超时时间（None=阻塞，0=非阻塞）
-            auto_initialize: 自动初始化（默认: True）
-
-        Yields:
-            tuple[BaseAgent, threading.Event]: (streaming_agent, stop_event)
-
-        Raises:
-            DeviceBusyError: 设备忙
-            AgentNotInitializedError: Agent 未初始化且 auto_initialize=False
-            AgentInitializationError: auto_initialize=True 且初始化失败
-
-        Example:
-            >>> def on_chunk(chunk: str):
-            >>>     print(chunk, end='', flush=True)
-            >>>
-            >>> with manager.use_streaming_agent("device_123", on_chunk) as (agent, stop_event):
-            >>>     result = agent.step("Open WeChat")
-        """
-        acquired = False
-        streaming_agent = None
-        stop_event = threading.Event()
-
-        try:
-            # 获取设备锁（默认非阻塞）
-            acquired = self.acquire_device(
-                device_id,
-                timeout=timeout if timeout is not None else 0,
-                raise_on_timeout=True,
-                auto_initialize=auto_initialize,
-            )
-
-            # 获取原始 agent
-            original_agent = self.get_agent(device_id)
-
-            # 创建 streaming agent（自动检测类型）
-            streaming_agent = self._create_streaming_agent(
-                device_id=device_id,
-                original_agent=original_agent,
-                on_thinking_chunk=on_thinking_chunk,
-            )
-
-            # 注册 abort 事件
-            with self._streaming_contexts_lock:
-                self._abort_events[device_id] = stop_event
-                self._streaming_contexts[device_id] = StreamingAgentContext(
-                    streaming_agent=streaming_agent,
-                    original_agent=original_agent,
-                    stop_event=stop_event,
-                )
-
-            logger.debug(f"Streaming agent created for {device_id}")
-
-            yield streaming_agent, stop_event
-
-        finally:
-            if streaming_agent and not stop_event.is_set():
-                original_agent = self.get_agent_safe(device_id)
-                if original_agent:
-                    from AutoGLM_GUI.agents.glm.agent import GLMAgent
-                    from AutoGLM_GUI.agents.mai.agent import InternalMAIAgent
-
-                    if isinstance(original_agent, GLMAgent) and isinstance(
-                        streaming_agent, GLMAgent
-                    ):
-                        original_agent._context = streaming_agent._context
-                        original_agent._step_count = streaming_agent._step_count
-                    elif isinstance(original_agent, InternalMAIAgent) and isinstance(
-                        streaming_agent, InternalMAIAgent
-                    ):
-                        original_agent.traj_memory = streaming_agent.traj_memory
-                        original_agent._step_count = streaming_agent._step_count
-                        original_agent._is_running = streaming_agent._is_running
-                        original_agent._total_llm_time = streaming_agent._total_llm_time
-                        original_agent._total_action_time = (
-                            streaming_agent._total_action_time
-                        )
-                        original_agent._total_tokens = streaming_agent._total_tokens
-
-                    logger.debug(
-                        f"Synchronized context back to original agent for {device_id}"
-                    )
-
-            # 清理 abort 事件注册
-            with self._streaming_contexts_lock:
-                self._abort_events.pop(device_id, None)
-                self._streaming_contexts.pop(device_id, None)
-
-            # 释放设备锁
-            if acquired:
-                self.release_device(device_id)
 
     def _auto_initialize_agent(self, device_id: str) -> None:
         """
@@ -779,6 +578,16 @@ class PhoneAgentManager:
         with self._manager_lock:
             return self._metadata.get(device_id)
 
+    def register_abort_handler(
+        self, device_id: str, abort_handler: threading.Event | Callable[[], None]
+    ) -> None:
+        with self._streaming_contexts_lock:
+            self._abort_events[device_id] = abort_handler
+
+    def unregister_abort_handler(self, device_id: str) -> None:
+        with self._streaming_contexts_lock:
+            self._abort_events.pop(device_id, None)
+
     def abort_streaming_chat(self, device_id: str) -> bool:
         """
         中止正在进行的流式对话.
@@ -792,7 +601,11 @@ class PhoneAgentManager:
         with self._streaming_contexts_lock:
             if device_id in self._abort_events:
                 logger.info(f"Aborting streaming chat for device {device_id}")
-                self._abort_events[device_id].set()
+                handler = self._abort_events[device_id]
+                if isinstance(handler, threading.Event):
+                    handler.set()
+                elif callable(handler):
+                    handler()
                 return True
             else:
                 logger.warning(f"No active streaming chat for device {device_id}")
