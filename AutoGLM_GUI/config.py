@@ -80,12 +80,6 @@ class AgentConfig:
     system_prompt: str | None = None
     verbose: bool = True
 
-    def __post_init__(self):
-        if self.system_prompt is None:
-            from AutoGLM_GUI.prompt_config import get_system_prompt
-
-            self.system_prompt = get_system_prompt(self.lang)
-
 
 @dataclass
 class StepResult:

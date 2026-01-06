@@ -177,9 +177,10 @@ class GLMAgent:
         current_app = self.device.get_current_app()
 
         if is_first:
-            system_prompt = self.agent_config.system_prompt or get_system_prompt(
-                self.agent_config.lang
-            )
+            system_prompt = self.agent_config.system_prompt
+            if system_prompt is None:
+                system_prompt = get_system_prompt(self.agent_config.lang)
+
             self._context.append(MessageBuilder.create_system_message(system_prompt))
 
             screen_info = MessageBuilder.build_screen_info(current_app)

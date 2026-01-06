@@ -343,8 +343,10 @@ class InternalMAIAgent:
     def _build_messages(
         self, instruction: str, screen_info: str, current_screenshot_base64: str
     ) -> list[dict[str, Any]]:
+        system_prompt = self.agent_config.system_prompt or MAI_MOBILE_SYSTEM_PROMPT
+
         messages: list[dict[str, Any]] = [
-            MessageBuilder.create_system_message(MAI_MOBILE_SYSTEM_PROMPT),
+            MessageBuilder.create_system_message(system_prompt),
             MessageBuilder.create_user_message(f"{instruction}\n\n{screen_info}"),
         ]
 
