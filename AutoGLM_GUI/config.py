@@ -40,25 +40,6 @@ class ModelConfig:
     extra_body: dict[str, Any] = field(default_factory=dict)
     lang: str = "cn"
 
-    def to_vision_model_config(self):
-        """转换为 AutoGLM_GUI.model.VisionModelConfig
-
-        Returns:
-            VisionModelConfig 实例
-        """
-        from AutoGLM_GUI.model.types import VisionModelConfig
-
-        return VisionModelConfig(
-            base_url=self.base_url,
-            api_key=self.api_key,
-            model_name=self.model_name,
-            max_tokens=self.max_tokens,
-            temperature=self.temperature,
-            top_p=self.top_p,
-            frequency_penalty=self.frequency_penalty,
-            extra_body=self.extra_body,
-        )
-
 
 @dataclass
 class AgentConfig:

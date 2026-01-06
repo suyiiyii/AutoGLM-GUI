@@ -1,37 +1,6 @@
 """Type definitions for model interactions."""
 
-from dataclasses import dataclass, field
-from typing import Any
-
-
-@dataclass
-class VisionModelConfig:
-    """Configuration for the vision-language model.
-
-    This follows OpenAI-compatible API standards, supporting any endpoint
-    that implements the OpenAI chat completions format.
-
-    Attributes:
-        base_url: API endpoint URL (e.g., "http://localhost:8000/v1")
-        model_name: Model identifier (e.g., "autoglm-phone")
-        api_key: API authentication key (optional for local deployments)
-        max_tokens: Maximum tokens in response (default: 2048)
-        temperature: Sampling temperature 0-1 (default: 0.01)
-        top_p: Nucleus sampling threshold (default: 0.9)
-        frequency_penalty: Frequency penalty -2 to 2 (default: 0.0)
-        extra_body: Additional parameters for specific backends
-        timeout: Request timeout in seconds (default: 120)
-    """
-
-    base_url: str
-    model_name: str = "autoglm-phone"
-    api_key: str = "EMPTY"
-    max_tokens: int = 2048
-    temperature: float = 0.01
-    top_p: float = 0.9
-    frequency_penalty: float = 0.0
-    extra_body: dict[str, Any] = field(default_factory=dict)
-    timeout: int = 120
+from dataclasses import dataclass
 
 
 @dataclass
