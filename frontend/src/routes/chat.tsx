@@ -800,10 +800,6 @@ function ChatComponent() {
                     deviceSerial={device.serial}
                     deviceName={device.model}
                     deviceConnectionType={device.connection_type}
-                    config={config}
-                    isVisible={
-                      device.id === currentDeviceId && chatMode !== 'chatkit'
-                    }
                     isConfigured={!!config?.base_url}
                   />
                 </div>

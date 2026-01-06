@@ -80,8 +80,6 @@ interface DevicePanelProps {
   deviceSerial: string; // Used for history storage
   deviceName: string;
   deviceConnectionType?: string; // Device connection type (usb/wifi/remote)
-  config: GlobalConfig | null;
-  isVisible: boolean;
   isConfigured: boolean;
 }
 
@@ -90,7 +88,6 @@ export function DevicePanel({
   deviceSerial,
   deviceName,
   deviceConnectionType,
-  config,
   isConfigured,
 }: DevicePanelProps) {
   const t = useTranslation();
@@ -109,7 +106,6 @@ export function DevicePanel({
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const hasAutoInited = useRef(false);
-  const prevConfigRef = useRef<GlobalConfig | null>(null);
   const prevMessageCountRef = useRef(0);
   const prevMessageSigRef = useRef<string | null>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -146,20 +142,9 @@ export function DevicePanel({
 
   const handleInit = useCallback(
     async (force: boolean = false) => {
-      if (!config) return;
-
       try {
         await initAgent({
-          model_config: {
-            base_url: config.base_url || undefined,
-            api_key: config.api_key || undefined,
-            model_name: config.model_name || undefined,
-          },
-          agent_config: {
-            device_id: deviceId,
-          },
-          agent_type: config.agent_type,
-          agent_config_params: config.agent_config_params,
+          device_id: deviceId,
           force,
         });
         setInitialized(true);
@@ -174,16 +159,16 @@ export function DevicePanel({
         }
       }
     },
-    [deviceId, config]
+    [deviceId]
   );
 
   // Auto-initialize on mount if configured
   useEffect(() => {
-    if (isConfigured && config && !initialized && !hasAutoInited.current) {
+    if (isConfigured && !initialized && !hasAutoInited.current) {
       hasAutoInited.current = true;
       handleInit();
     }
-  }, [isConfigured, config, initialized, handleInit]);
+  }, [isConfigured, initialized, handleInit]);
 
   // Load history items when popover opens
   useEffect(() => {
@@ -244,30 +229,8 @@ export function DevicePanel({
     setHistoryItems(prev => prev.filter(item => item.id !== itemId));
   };
 
-  // Re-initialize when config changes (for already initialized devices)
-  useEffect(() => {
-    // Skip if not initialized yet or no config
-    if (!initialized || !config) return;
-
-    // Check if config actually changed
-    const prevConfig = prevConfigRef.current;
-    if (
-      prevConfig &&
-      (prevConfig.base_url !== config.base_url ||
-        prevConfig.model_name !== config.model_name ||
-        prevConfig.api_key !== config.api_key ||
-        prevConfig.agent_type !== config.agent_type)
-    ) {
-      // Config changed, force re-initialize to apply new settings
-      console.log(
-        `[DevicePanel] Config changed for device ${deviceId}, force re-initializing...`
-      );
-      handleInit(true);
-    }
-
-    // Update previous config
-    prevConfigRef.current = config;
-  }, [config, initialized, deviceId, handleInit]);
+  // Note: Configuration is now managed entirely by backend ConfigManager.
+  // If user updates config via Settings, they need to manually re-initialize agents.
 
   const handleSend = useCallback(async () => {
     const inputValue = input.trim();
@@ -727,7 +690,7 @@ export function DevicePanel({
             ) : !initialized ? (
               <Button
                 onClick={() => handleInit()}
-                disabled={!isConfigured || !config}
+                disabled={!isConfigured}
                 size="sm"
                 variant="twitter"
               >

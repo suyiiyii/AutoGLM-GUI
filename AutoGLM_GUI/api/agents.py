@@ -11,8 +11,6 @@ from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.schemas import (
     AbortRequest,
-    APIAgentConfig,
-    APIModelConfig,
     ChatRequest,
     ChatResponse,
     ConfigResponse,
@@ -65,55 +63,42 @@ def _create_sse_event(
 
 @router.post("/api/init")
 def init_agent(request: InitRequest) -> dict:
-    """初始化 PhoneAgent（多设备支持）。"""
+    """初始化 PhoneAgent（多设备支持）。
+
+    配置完全由 ConfigManager 提供（CLI > ENV > FILE > DEFAULT），
+    不接受运行时覆盖。
+    """
     from AutoGLM_GUI.config_manager import config_manager
 
-    req_model_config = request.model or APIModelConfig()
-    req_agent_config = request.agent or APIAgentConfig()
-
-    device_id = req_agent_config.device_id
+    device_id = request.device_id
     if not device_id:
-        raise HTTPException(
-            status_code=400, detail="device_id is required in agent_config"
-        )
+        raise HTTPException(status_code=400, detail="device_id is required")
 
     # 热重载配置文件（支持运行时手动修改）
     config_manager.load_file_config()
     config_manager.sync_to_env()
 
-    # 获取有效配置（已合并 CLI > ENV > FILE > DEFAULT）
+    # 获取有效配置（CLI > ENV > FILE > DEFAULT）
     effective_config = config_manager.get_effective_config()
 
-    # 优先级：请求参数 > 有效配置
-    base_url = req_model_config.base_url or effective_config.base_url
-    api_key = req_model_config.api_key or effective_config.api_key
-    model_name = req_model_config.model_name or effective_config.model_name
-
-    # 获取配置的默认最大步数
-    max_steps = effective_config.default_max_steps
-
-    if not base_url:
+    if not effective_config.base_url:
         raise HTTPException(
             status_code=400,
             detail="base_url is required. Please configure via Settings or start with --base-url",
         )
 
+    # 直接使用有效配置构造 ModelConfig 和 AgentConfig
     model_config = ModelConfig(
-        base_url=base_url,
-        api_key=api_key,
-        model_name=model_name,
-        max_tokens=req_model_config.max_tokens,
-        temperature=req_model_config.temperature,
-        top_p=req_model_config.top_p,
-        frequency_penalty=req_model_config.frequency_penalty,
+        base_url=effective_config.base_url,
+        api_key=effective_config.api_key,
+        model_name=effective_config.model_name,
+        # max_tokens, temperature, top_p, frequency_penalty 使用 ModelConfig 默认值
     )
 
     agent_config = AgentConfig(
-        max_steps=max_steps,
+        max_steps=effective_config.default_max_steps,
         device_id=device_id,
-        lang=req_agent_config.lang,
-        system_prompt=req_agent_config.system_prompt,
-        verbose=req_agent_config.verbose,
+        # lang, system_prompt, verbose 使用 AgentConfig 默认值
     )
 
     # Initialize agent (includes ADB Keyboard setup)

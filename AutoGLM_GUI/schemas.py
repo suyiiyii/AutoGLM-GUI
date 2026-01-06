@@ -5,70 +5,8 @@ import re
 from pydantic import BaseModel, Field, field_validator
 
 
-class APIModelConfig(BaseModel):
-    """API layer model configuration (Pydantic).
-
-    This will be converted to AutoGLM_GUI.config.ModelConfig internally.
-    """
-
-    base_url: str | None = None
-    api_key: str | None = None
-    model_name: str | None = None
-    max_tokens: int = 3000
-    temperature: float = 0.0
-    top_p: float = 0.85
-    frequency_penalty: float = 0.2
-
-    @field_validator("base_url")
-    @classmethod
-    def validate_base_url(cls, v: str | None) -> str | None:
-        """验证 base_url 格式."""
-        if v is None:
-            return v
-        v = v.strip()
-        if not v:
-            return None
-        # 检查是否是有效的 HTTP/HTTPS URL
-        if not re.match(r"^https?://", v):
-            raise ValueError("base_url must start with http:// or https://")
-        return v
-
-
-class APIAgentConfig(BaseModel):
-    """API layer agent configuration (Pydantic).
-
-    This will be converted to AutoGLM_GUI.config.AgentConfig internally.
-    """
-
-    max_steps: int = 100
-    device_id: str | None = None
-    lang: str = "cn"
-    system_prompt: str | None = None
-    verbose: bool = True
-
-    @field_validator("max_steps")
-    @classmethod
-    def validate_max_steps(cls, v: int) -> int:
-        """验证 max_steps 范围."""
-        if v <= 0:
-            raise ValueError("max_steps must be positive")
-        if v > 1000:
-            raise ValueError("max_steps must be <= 1000")
-        return v
-
-    @field_validator("lang")
-    @classmethod
-    def validate_lang(cls, v: str) -> str:
-        """验证 lang 有效性."""
-        allowed_langs = ["cn", "en"]
-        if v not in allowed_langs:
-            raise ValueError(f"lang must be one of {allowed_langs}")
-        return v
-
-
 class InitRequest(BaseModel):
-    model: APIModelConfig | None = Field(default=None, alias="model_config")
-    agent: APIAgentConfig | None = Field(default=None, alias="agent_config")
+    device_id: str  # Device ID (required)
 
     # Agent configuration (factory pattern)
     agent_type: str = "glm"  # Agent type to use (e.g., "glm", "mai")

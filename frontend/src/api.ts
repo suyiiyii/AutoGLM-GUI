@@ -71,30 +71,11 @@ export interface StatusResponse {
   step_count: number;
 }
 
-export interface APIModelConfig {
-  base_url?: string;
-  api_key?: string;
-  model_name?: string;
-  max_tokens?: number;
-  temperature?: number;
-  top_p?: number;
-  frequency_penalty?: number;
-}
-
-export interface APIAgentConfig {
-  max_steps?: number;
-  device_id?: string | null;
-  verbose?: boolean;
-}
-
 export interface InitRequest {
-  model_config?: APIModelConfig;
-  agent_config?: APIAgentConfig;
-  // Agent 类型配置
-  agent_type?: string;
-  agent_config_params?: Record<string, unknown>;
-  // Hot-reload support
-  force?: boolean;
+  device_id: string; // Device ID (required)
+  agent_type?: string; // Agent type (default: "glm")
+  agent_config_params?: Record<string, unknown>; // Agent-specific configuration
+  force?: boolean; // Force re-initialization
 }
 
 export interface ScreenshotRequest {
