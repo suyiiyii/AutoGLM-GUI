@@ -53,9 +53,8 @@ def _clear_session(session_id: str) -> bool:
 
 
 def get_planner_model() -> str:
-    """获取规划层使用的模型名称，从配置读取."""
-    config = config_manager.get_effective_config()
-    return config.decision_model_name or "glm-4.7"
+    """获取规划层使用的模型名称."""
+    return "glm-4.7"
 
 
 PLANNER_INSTRUCTIONS = """## 核心目标

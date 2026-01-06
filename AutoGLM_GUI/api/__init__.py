@@ -20,7 +20,6 @@ from . import (
     agents,
     control,
     devices,
-    dual_model,
     health,
     layered_agent,
     mcp,
@@ -149,7 +148,6 @@ def create_app() -> FastAPI:
     app.include_router(metrics.router)
     app.include_router(version.router)
     app.include_router(workflows.router)
-    app.include_router(dual_model.router)
 
     # Mount static files BEFORE MCP to ensure they have priority
     # This is critical: FastAPI processes mounts in order, so static files

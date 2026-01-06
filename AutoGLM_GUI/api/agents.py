@@ -346,12 +346,6 @@ def get_config_endpoint() -> ConfigResponse:
         model_name=effective_config.model_name,
         api_key=effective_config.api_key if effective_config.api_key != "EMPTY" else "",
         source=source.value,
-        dual_model_enabled=effective_config.dual_model_enabled,
-        decision_base_url=effective_config.decision_base_url,
-        decision_model_name=effective_config.decision_model_name,
-        decision_api_key=effective_config.decision_api_key
-        if effective_config.decision_api_key
-        else "",
         agent_type=effective_config.agent_type,
         agent_config_params=effective_config.agent_config_params,
         default_max_steps=effective_config.default_max_steps,
@@ -387,10 +381,6 @@ def save_config_endpoint(request: ConfigSaveRequest) -> dict:
             base_url=request.base_url,
             model_name=request.model_name,
             api_key=request.api_key,
-            dual_model_enabled=request.dual_model_enabled,
-            decision_base_url=request.decision_base_url,
-            decision_model_name=request.decision_model_name,
-            decision_api_key=request.decision_api_key,
             agent_type=request.agent_type,
             agent_config_params=request.agent_config_params,
             default_max_steps=request.default_max_steps,

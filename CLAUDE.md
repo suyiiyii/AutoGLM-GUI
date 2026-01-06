@@ -241,14 +241,6 @@ See: `AutoGLM_GUI/resources/apks/ADBKeyBoard.LICENSE.txt`
 5. **Session Persistence** → SQLiteSession stores conversation history
 6. **Streaming** → SSE streams both decision thinking and execution updates
 
-**Dual Model Flow** (NEW):
-1. **User Request** → Frontend → API (`/api/dual-model/chat`) → Backend (`api/dual_model.py`)
-2. **Decision Model** → Analyzes task, decides strategy (text-only model)
-3. **DualModelCoordinator** → Mediates between decision and vision models
-4. **Vision Model** → PhoneAgent executes actions based on decision model guidance
-5. **Anomaly Detection** → Monitors for stuck states, triggers recovery
-6. **Streaming** → Separate callbacks for decision and vision model updates
-
 **Video Streaming Flow**:
 1. **Frontend** → Socket.IO `connect-device` event → Backend (`socketio_server.py`)
 2. **ScrcpyStreamer** → Starts scrcpy server on device, connects TCP socket (port 27183)
@@ -262,11 +254,10 @@ See: `AutoGLM_GUI/resources/apks/ADBKeyBoard.LICENSE.txt`
 - **`server.py`**: Wrapper that imports the FastAPI app from `api/__init__.py`
 - **`api/__init__.py`**: App factory pattern with modular routers:
   - `agents.py` - Agent lifecycle (init, chat, reset, abort, status)
-  - `layered_agent.py` - Hierarchical execution (decision model + vision model)
+  - `layered_agent.py` - Hierarchical execution with planning and execution layers
   - `devices.py` - Device discovery/management (list, WiFi, mDNS, QR pairing)
   - `control.py` - Direct device control (tap, swipe, screenshot)
   - `media.py` - Screenshot/video endpoints
-  - `dual_model.py` - Dual model coordination (decision + vision)
   - `metrics.py` - Prometheus metrics
   - `version.py` - Version information
   - `workflows.py` - Workflow execution
@@ -398,7 +389,6 @@ DeviceManager aggregates both connections:
   - Ripple animation on tap
 - **`ChatKitPanel.tsx`**: Multi-mode chat interface
   - Basic mode: Direct PhoneAgent execution
-  - Dual model mode: Decision model + vision model
   - Layered mode: Hierarchical task execution
 - **`DevicePanel.tsx`**: Device info and initialization UI
   - Agent configuration (model, base URL, API key)
@@ -409,10 +399,6 @@ DeviceManager aggregates both connections:
   - WiFi pairing controls
   - QR code pairing (wireless debugging)
   - mDNS device discovery
-- **`DualModelPanel.tsx`**: Dual model configuration
-  - Decision model settings
-  - Vision model settings
-  - Model coordination options
 - **`api.ts`**: API client functions (uses `redaxios` - lightweight axios alternative)
 
 ### Electron Desktop Application (`electron/`)
@@ -464,15 +450,8 @@ AutoGLM-GUI can be packaged as a standalone desktop application using Electron, 
 - **Response Format**: LLM returns JSON with `thinking` and `action` fields
 - **Action Schema**: `{type: "do"|"finish"|"takeover", ...params}` parsed by `ActionHandler`
 
-**Dual Model Mode** (NEW):
-- **Architecture**: Decision model (large, text-only) coordinates Vision model (small, vision-capable)
-- **Decision Model**: Plans high-level strategy, decides when to use vision model
-- **Vision Model**: Executes device actions based on screenshots
-- **Coordination**: `DualModelCoordinator` manages model communication
-- **Anomaly Detection**: Detects stuck states (repeated screenshots, consecutive failures)
-
 **Layered Agent Mode** (NEW):
-- **Architecture**: Hierarchical execution with decision model + vision model
+- **Architecture**: Hierarchical execution with planning and execution layers
 - **Decision Layer**: Uses `openai-agents` library for session management and planning
 - **Execution Layer**: PhoneAgent executes planned actions on device
 - **Function Tools**: `do()` for device actions, `chat()` for information extraction
@@ -590,7 +569,6 @@ AutoGLM_GUI/           # Backend FastAPI app (entry point)
     devices.py         # Device management
     control.py         # Direct device control
     media.py           # Screenshot/video
-    dual_model.py      # Dual model coordination
     metrics.py         # Prometheus metrics
     version.py         # Version info
     workflows.py       # Workflow execution
@@ -610,10 +588,6 @@ AutoGLM_GUI/           # Backend FastAPI app (entry point)
     ip.py
     mdns.py
     touch.py
-  dual_model/          # Decision + vision coordination
-    dual_agent.py
-    decision_model.py
-    vision_model.py
   agents/              # Internal agent implementations
     glm/
     mai/
@@ -633,7 +607,6 @@ frontend/              # React frontend
       ChatKitPanel.tsx # Multi-mode chat
       DevicePanel.tsx  # Device UI
       DeviceSidebar.tsx # Device list
-      DualModelPanel.tsx # Dual model config
     api.ts             # API client
   dist/                # Build output (not in git)
 

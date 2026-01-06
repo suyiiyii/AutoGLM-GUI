@@ -39,12 +39,6 @@ export const en = {
     fastModeDesc: 'Quick response, suitable for simple tasks',
     deepMode: 'Deep',
     deepModeDesc: 'Deep thinking, suitable for complex tasks',
-    advancedSettings: 'Decision Model Settings (Advanced)',
-    decisionBaseUrl: 'Decision Model Base URL',
-    decisionModelName: 'Decision Model Name',
-    decisionApiKey: 'Decision Model API Key',
-    visionModel: 'Vision Model',
-    decisionModel: 'Decision Model',
     agentType: 'Agent Type',
     selectAgentType: 'Select Agent Type',
     history_n: 'History Count',
@@ -162,27 +156,9 @@ export const en = {
     swiped: 'Swiped',
     swipeError: 'Swipe error: {error}',
     newMessages: 'New messages. Click to view latest',
-    enableDualModel: 'Enable Dual Model Collaboration',
-    disableDualModel: 'Disable dual model',
-    fastMode: 'Fast mode - Quick & Simple',
-    deepMode: 'Deep mode - Deep thinking',
     tooltips: {
       workflowButton: 'Quick Workflow',
       workflowButtonDesc: 'Select and execute preset workflow tasks',
-      enableDualModel: 'Enable Dual Model',
-      enableDualModelDesc:
-        'Large model for planning + small model for execution',
-      disableDualModel: 'Disable Dual Model',
-      disableDualModelDesc:
-        'Switch back to single model mode using vision model only',
-      fastMode: 'Fast Thinking Mode',
-      fastModeDesc: 'Quick response for simple tasks (tapping, swiping, etc.)',
-      deepMode: 'Deep Thinking Mode',
-      deepModeDesc:
-        'Deep analysis for complex tasks (multi-step operations, app switching)',
-      turboMode: 'Turbo Mode',
-      turboModeDesc:
-        'Batch generate action sequences, call decision model only on errors, fastest speed',
     },
   },
   deviceCard: {
@@ -251,8 +227,6 @@ export const en = {
     wifiManualConnectError: 'Failed to connect to WiFi device',
     wifiPaired: 'WiFi device paired and connected',
     wifiPairError: 'WiFi pairing failed',
-    decisionModelNotConfigured:
-      'Decision model not configured. Please set up the API Key in settings.',
     remoteDeviceAddError: 'Failed to add remote device',
   },
   history: {
@@ -313,10 +287,8 @@ export const en = {
       'Planner decomposes tasks into subtasks, executor handles each independently. You can see detailed tool calls.',
     modeLabel: 'Mode:',
     classicMode: 'Classic',
-    dualMode: 'Dual Model',
     layeredMode: 'Layered Agent',
     classicModeDesc: 'Vision model executes tasks directly',
-    dualModeDesc: 'Decision model guides step-by-step, vision model executes',
     layeredModeDesc:
       'Planner decomposes tasks, executor handles subtasks independently',
     maiUIModeDesc:

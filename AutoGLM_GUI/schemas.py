@@ -351,12 +351,6 @@ class ConfigResponse(BaseModel):
     api_key: str  # 返回实际值（明文）
     source: str  # "CLI arguments" | "environment variables" | "config file (...)" | "default"
 
-    # 双模型配置
-    dual_model_enabled: bool = False
-    decision_base_url: str = ""
-    decision_model_name: str = ""
-    decision_api_key: str = ""
-
     # Agent 类型配置
     agent_type: str = "glm"  # Agent type (e.g., "glm", "mai")
     agent_config_params: dict | None = None  # Agent-specific configuration
@@ -373,12 +367,6 @@ class ConfigSaveRequest(BaseModel):
     base_url: str
     model_name: str = "autoglm-phone-9b"
     api_key: str | None = None
-
-    # 双模型配置
-    dual_model_enabled: bool | None = None
-    decision_base_url: str | None = None
-    decision_model_name: str | None = None
-    decision_api_key: str | None = None
 
     # Agent 类型配置
     agent_type: str = "glm"  # Agent type to use (e.g., "glm", "mai")
@@ -417,17 +405,6 @@ class ConfigSaveRequest(BaseModel):
         if not v or not v.strip():
             raise ValueError("model_name cannot be empty")
         return v.strip()
-
-    @field_validator("decision_base_url")
-    @classmethod
-    def validate_decision_base_url(cls, v: str | None) -> str | None:
-        """验证 decision_base_url 格式."""
-        if v is None or not v.strip():
-            return None
-        v = v.strip()
-        if not re.match(r"^https?://", v):
-            raise ValueError("decision_base_url must start with http:// or https://")
-        return v
 
 
 class WiFiConnectRequest(BaseModel):

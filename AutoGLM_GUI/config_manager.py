@@ -52,12 +52,6 @@ class ConfigModel(BaseModel):
     model_name: str = "autoglm-phone-9b"
     api_key: str = "EMPTY"
 
-    # 双模型配置
-    dual_model_enabled: bool = False
-    decision_base_url: str = ""
-    decision_model_name: str = ""
-    decision_api_key: str = ""
-
     # Agent 类型配置
     agent_type: str = "glm"  # Agent type (e.g., "glm", "mai")
     agent_config_params: dict | None = None  # Agent-specific configuration
@@ -91,14 +85,6 @@ class ConfigModel(BaseModel):
             raise ValueError("model_name cannot be empty")
         return v.strip()
 
-    @field_validator("decision_base_url")
-    @classmethod
-    def validate_decision_base_url(cls, v: str) -> str:
-        """验证 decision_base_url 格式."""
-        if v and not v.startswith(("http://", "https://")):
-            raise ValueError("decision_base_url must start with http:// or https://")
-        return v.rstrip("/")  # 去除尾部斜杠
-
 
 # ==================== 配置层数据类 ====================
 
@@ -110,11 +96,6 @@ class ConfigLayer:
     base_url: Optional[str] = None
     model_name: Optional[str] = None
     api_key: Optional[str] = None
-    # 双模型配置
-    dual_model_enabled: Optional[bool] = None
-    decision_base_url: Optional[str] = None
-    decision_model_name: Optional[str] = None
-    decision_api_key: Optional[str] = None
     # Agent 类型配置
     agent_type: Optional[str] = None
     agent_config_params: Optional[dict] = None
@@ -147,10 +128,6 @@ class ConfigLayer:
                 "base_url": self.base_url,
                 "model_name": self.model_name,
                 "api_key": self.api_key,
-                "dual_model_enabled": self.dual_model_enabled,
-                "decision_base_url": self.decision_base_url,
-                "decision_model_name": self.decision_model_name,
-                "decision_api_key": self.decision_api_key,
                 "agent_type": self.agent_type,
                 "agent_config_params": self.agent_config_params,
                 "default_max_steps": self.default_max_steps,
@@ -324,10 +301,6 @@ class UnifiedConfigManager:
                 base_url=config_data.get("base_url"),
                 model_name=config_data.get("model_name"),
                 api_key=config_data.get("api_key"),
-                dual_model_enabled=config_data.get("dual_model_enabled"),
-                decision_base_url=config_data.get("decision_base_url"),
-                decision_model_name=config_data.get("decision_model_name"),
-                decision_api_key=config_data.get("decision_api_key"),
                 agent_type=config_data.get(
                     "agent_type", "glm"
                 ),  # 默认 'glm'，兼容旧配置
@@ -360,10 +333,6 @@ class UnifiedConfigManager:
         base_url: str,
         model_name: str,
         api_key: Optional[str] = None,
-        dual_model_enabled: Optional[bool] = None,
-        decision_base_url: Optional[str] = None,
-        decision_model_name: Optional[str] = None,
-        decision_api_key: Optional[str] = None,
         agent_type: Optional[str] = None,
         agent_config_params: Optional[dict] = None,
         default_max_steps: Optional[int] = None,
@@ -376,10 +345,6 @@ class UnifiedConfigManager:
             base_url: Base URL
             model_name: 模型名称
             api_key: API key（可选）
-            dual_model_enabled: 是否启用双模型
-            decision_base_url: 决策模型 Base URL
-            decision_model_name: 决策模型名称
-            decision_api_key: 决策模型 API key
             agent_type: Agent 类型（可选，如 "glm", "mai"）
             agent_config_params: Agent 特定配置参数（可选）
             default_max_steps: 默认最大执行步数（可选）
@@ -400,14 +365,6 @@ class UnifiedConfigManager:
 
             if api_key:
                 new_config["api_key"] = api_key
-            if dual_model_enabled is not None:
-                new_config["dual_model_enabled"] = dual_model_enabled
-            if decision_base_url:
-                new_config["decision_base_url"] = decision_base_url
-            if decision_model_name:
-                new_config["decision_model_name"] = decision_model_name
-            if decision_api_key:
-                new_config["decision_api_key"] = decision_api_key
             if agent_type is not None:
                 new_config["agent_type"] = agent_type
             if agent_config_params is not None:
@@ -424,10 +381,6 @@ class UnifiedConfigManager:
                     # 保留未提供的字段
                     preserve_keys = [
                         "api_key",
-                        "dual_model_enabled",
-                        "decision_base_url",
-                        "decision_model_name",
-                        "decision_api_key",
                         "agent_type",
                         "agent_config_params",
                         "default_max_steps",
@@ -515,10 +468,6 @@ class UnifiedConfigManager:
             "base_url",
             "model_name",
             "api_key",
-            "dual_model_enabled",
-            "decision_base_url",
-            "decision_model_name",
-            "decision_api_key",
             "agent_type",
             "agent_config_params",
             "default_max_steps",
@@ -684,10 +633,6 @@ class UnifiedConfigManager:
             "base_url": config.base_url,
             "model_name": config.model_name,
             "api_key": config.api_key,
-            "dual_model_enabled": config.dual_model_enabled,
-            "decision_base_url": config.decision_base_url,
-            "decision_model_name": config.decision_model_name,
-            "decision_api_key": config.decision_api_key,
             "agent_type": config.agent_type,
             "agent_config_params": config.agent_config_params,
             "default_max_steps": config.default_max_steps,
