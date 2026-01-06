@@ -40,22 +40,31 @@ class AgentStepStreamer:
     def __next__(self) -> AgentEvent:
         """从队列获取下一个事件."""
         try:
-            # 启动 worker（第一次调用时）
             if self._worker_thread is None:
                 self._start_worker()
 
             item = self._event_queue.get(timeout=0.1)
 
             if item is None:
-                # Worker 完成
                 raise StopIteration
 
             event_type, event_data = item
             return AgentEvent(type=event_type, data=event_data)
 
         except queue.Empty:
-            # 无事件：继续等待（由调用者继续迭代）
-            raise StopIteration
+            if self._worker_thread and self._worker_thread.is_alive():
+                return AgentEvent(
+                    type=AgentEventType.STEP.value,
+                    data={
+                        "step": -1,
+                        "thinking": "",
+                        "action": None,
+                        "success": True,
+                        "finished": False,
+                    },
+                )
+            else:
+                raise StopIteration
 
         except StopIteration:
             raise

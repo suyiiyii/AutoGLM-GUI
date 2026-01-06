@@ -6,6 +6,7 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
+from AutoGLM_GUI.agents.events import AgentEventType
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.schemas import (
@@ -220,7 +221,15 @@ def chat_stream(request: ChatRequest):
 
                     for event in streamer:
                         event_type = event["type"]
-                        event_data = _create_sse_event(event_type, event["data"])
+                        event_data_dict = event["data"]
+
+                        if (
+                            event_type == AgentEventType.STEP.value
+                            and event_data_dict.get("step") == -1
+                        ):
+                            continue
+
+                        event_data = _create_sse_event(event_type, event_data_dict)
 
                         yield f"event: {event_type}\n"
                         yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
