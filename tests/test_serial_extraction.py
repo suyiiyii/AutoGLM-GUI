@@ -115,25 +115,26 @@ class TestGetDeviceSerialIntegration:
         # Should return extracted serial without calling adb
         assert serial == "TESTSER"
 
-    def test_usb_device_id_returns_none(self):
-        """Test that non-mDNS USB device IDs return None (no adb available in test)."""
+    def test_usb_device_id_uses_fallback(self):
+        """Test that non-mDNS USB device IDs use device_id as fallback."""
         # USB device ID (no extraction, will try getprop which will fail in test env)
+        # Now uses device_id as fallback for emulators/restricted devices
         device_id = "ABC123DEF456"
         serial = get_device_serial(device_id)
-        # Without real adb, this should return None
-        assert serial is None
+        # Without real adb, this should return device_id as fallback
+        assert serial == device_id
 
-    def test_wifi_ip_returns_none(self):
-        """Test that WiFi IP addresses return None (no extraction, getprop fails)."""
+    def test_wifi_ip_uses_fallback(self):
+        """Test that WiFi IP addresses use device_id as fallback when getprop fails."""
         device_id = "192.168.1.100:5555"
         serial = get_device_serial(device_id)
-        # Without real adb, this should return None
-        assert serial is None
+        # Without real adb, this should return device_id as fallback
+        assert serial == device_id
 
-    def test_invalid_mdns_falls_back(self):
-        """Test that invalid mDNS formats fall back to getprop."""
+    def test_invalid_mdns_uses_fallback(self):
+        """Test that invalid mDNS formats use device_id as fallback."""
         # Invalid mDNS format (too short serial)
         device_id = "adb-12._adb._tcp"
         serial = get_device_serial(device_id)
-        # Extraction fails, getprop attempted (fails in test env)
-        assert serial is None
+        # Extraction fails, getprop attempted (fails in test env), uses fallback
+        assert serial == device_id

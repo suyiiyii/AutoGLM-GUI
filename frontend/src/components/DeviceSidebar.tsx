@@ -41,6 +41,27 @@ import {
 import { useTranslation } from '../lib/i18n-context';
 import { useDebouncedState } from '@/hooks/useDebouncedState';
 
+  // Emulator presets for quick connection
+interface EmulatorPreset {
+  id: string;
+  nameKey: string; // i18n key
+  ip: string;
+  port: number;
+}
+
+const EMULATOR_PRESETS: EmulatorPreset[] = [
+  { id: 'mumu', nameKey: 'emulatorMumu', ip: '127.0.0.1', port: 7555 },
+  { id: 'nox', nameKey: 'emulatorNox', ip: '127.0.0.1', port: 62001 },
+  { id: 'ldplayer', nameKey: 'emulatorLdplayer', ip: '127.0.0.1', port: 5555 },
+  {
+    id: 'bluestacks',
+    nameKey: 'emulatorBluestacks',
+    ip: '127.0.0.1',
+    port: 5555,
+  },
+  { id: 'custom', nameKey: 'emulatorCustom', ip: '', port: 5555 },
+];
+
 const getInitialCollapsedState = (): boolean => {
   try {
     const saved = localStorage.getItem('sidebar-collapsed');
@@ -77,6 +98,9 @@ export function DeviceSidebar({
   const [manualConnectPort, setManualConnectPort] = useState('5555');
   const [ipError, setIpError] = useState('');
   const [portError, setPortError] = useState('');
+
+  // Emulator preset selection
+  const [selectedEmulator, setSelectedEmulator] = useState('custom');
 
   // WiFi pairing (Android 11+)
   const [activeTab, setActiveTab] = useState('direct');
@@ -776,18 +800,56 @@ export function DeviceSidebar({
 
                 {/* Manual Connect Form */}
                 <div className="space-y-3">
-                  <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 p-3 text-sm">
-                    <p className="text-amber-800 dark:text-amber-200">
-                      {t.deviceSidebar.directConnectNote}
+                  {/* Emulator Presets */}
+                  <div className="space-y-2">
+                    <Label>{t.deviceSidebar.emulatorPreset}</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {EMULATOR_PRESETS.map(preset => (
+                        <button
+                          key={preset.id}
+                          onClick={() => {
+                            setSelectedEmulator(preset.id);
+                            if (preset.id !== 'custom') {
+                              setManualConnectIp(preset.ip);
+                              setManualConnectPort(String(preset.port));
+                            }
+                            setIpError('');
+                            setPortError('');
+                          }}
+                          className={`rounded-lg border p-2 text-xs text-center transition-colors ${
+                            selectedEmulator === preset.id
+                              ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300'
+                              : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          {t.deviceSidebar[
+                            preset.nameKey as keyof typeof t.deviceSidebar
+                          ] || preset.nameKey}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Emulator Note */}
+                  <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 p-3 text-sm">
+                    <p className="text-blue-800 dark:text-blue-200">
+                      {t.deviceSidebar.emulatorNote}
                     </p>
                   </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="ip">{t.deviceSidebar.ipAddress}</Label>
                     <Input
                       id="ip"
                       placeholder="192.168.1.100"
                       value={manualConnectIp}
-                      onChange={e => setManualConnectIp(e.target.value)}
+                      onChange={e => {
+                        setManualConnectIp(e.target.value);
+                        // Switch to custom if user manually edits
+                        if (selectedEmulator !== 'custom') {
+                          setSelectedEmulator('custom');
+                        }
+                      }}
                       onKeyDown={e =>
                         e.key === 'Enter' && handleManualConnect()
                       }
@@ -800,7 +862,13 @@ export function DeviceSidebar({
                       id="port"
                       type="number"
                       value={manualConnectPort}
-                      onChange={e => setManualConnectPort(e.target.value)}
+                      onChange={e => {
+                        setManualConnectPort(e.target.value);
+                        // Switch to custom if user manually edits
+                        if (selectedEmulator !== 'custom') {
+                          setSelectedEmulator('custom');
+                        }
+                      }}
                       onKeyDown={e =>
                         e.key === 'Enter' && handleManualConnect()
                       }

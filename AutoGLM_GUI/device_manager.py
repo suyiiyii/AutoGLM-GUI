@@ -397,16 +397,8 @@ class DeviceManager:
         device_with_serials: list[tuple[DeviceInfo, str]] = []
 
         for device_info in adb_devices:
+            # get_device_serial always returns a value (uses device_id as fallback)
             serial = get_device_serial(device_info.device_id, self._adb_path)
-
-            if not serial:
-                # CRITICAL: Log error and skip this device
-                logger.error(
-                    f"Failed to get serial for device {device_info.device_id}. "
-                    f"Skipping this device. Check ADB access."
-                )
-                continue
-
             device_with_serials.append((device_info, serial))
 
         # Step 2: Group devices by serial
