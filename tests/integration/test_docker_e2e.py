@@ -35,7 +35,7 @@ def docker_container(mock_agent_server: str, mock_llm_server: str):
     # Clean up any existing container with same name (shouldn't exist, but be safe)
     subprocess.run(
         ["docker", "rm", "-f", container_name],
-        capture_output=True,
+        stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
     time.sleep(0.5)
@@ -111,12 +111,12 @@ def docker_container(mock_agent_server: str, mock_llm_server: str):
     print(f"[Docker E2E] Stopping container: {container_name}")
     subprocess.run(
         ["docker", "stop", container_name],
-        capture_output=True,
+        stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
     subprocess.run(
         ["docker", "rm", container_name],
-        capture_output=True,
+        stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
 
@@ -124,7 +124,7 @@ def docker_container(mock_agent_server: str, mock_llm_server: str):
     print(f"[Docker E2E] Removing image: {image_name}")
     subprocess.run(
         ["docker", "rmi", image_name],
-        capture_output=True,
+        stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
 
