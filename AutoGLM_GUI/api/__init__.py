@@ -89,6 +89,7 @@ def _get_static_dir() -> Path | None:
     # but not included in the Python package itself (e.g., Docker builds)
     try:
         from AutoGLM_GUI import __file__ as package_file
+
         package_dir = Path(package_file).parent
         filesystem_static = package_dir / "static"
         if filesystem_static.exists() and filesystem_static.is_dir():
