@@ -15,19 +15,32 @@ import httpx
 import pytest
 
 
-@pytest.fixture(scope="module")
+@pytest.fixture
 def docker_container(mock_agent_server: str, mock_llm_server: str):
-    """Build and run Docker container for testing."""
-    image_name = "autoglm-gui:e2e-test"
-    container_name = "autoglm-e2e-test"
+    """Build and run Docker container for testing (function-scoped for isolation).
 
+    Each test gets a fresh container with unique name/tag to ensure reproducibility.
+    """
+    import uuid
+
+    # Generate unique identifiers for this test run
+    test_id = uuid.uuid4().hex[:8]
+    image_name = f"autoglm-gui:e2e-test-{test_id}"
+    container_name = f"autoglm-e2e-test-{test_id}"
+
+    print(f"\n[Docker E2E] Test ID: {test_id}")
+    print(f"[Docker E2E] Image: {image_name}")
+    print(f"[Docker E2E] Container: {container_name}")
+
+    # Clean up any existing container with same name (shouldn't exist, but be safe)
     subprocess.run(
         ["docker", "rm", "-f", container_name],
         capture_output=True,
+        stderr=subprocess.DEVNULL,
     )
     time.sleep(0.5)
 
-    print(f"\n[Docker E2E] Building Docker image: {image_name}")
+    print(f"[Docker E2E] Building Docker image: {image_name}")
     subprocess.run(
         ["docker", "build", "-t", image_name, "."],
         check=True,
@@ -86,11 +99,34 @@ def docker_container(mock_agent_server: str, mock_llm_server: str):
     else:
         raise RuntimeError("Container failed to become ready")
 
-    yield {"access_url": access_url, "remote_url": remote_url, "llm_url": llm_url}
+    yield {
+        "access_url": access_url,
+        "remote_url": remote_url,
+        "llm_url": llm_url,
+        "image_name": image_name,
+        "container_name": container_name,
+    }
 
+    # Cleanup: Stop and remove container
     print(f"[Docker E2E] Stopping container: {container_name}")
-    subprocess.run(["docker", "stop", container_name], capture_output=True)
-    subprocess.run(["docker", "rm", container_name], capture_output=True)
+    subprocess.run(
+        ["docker", "stop", container_name],
+        capture_output=True,
+        stderr=subprocess.DEVNULL,
+    )
+    subprocess.run(
+        ["docker", "rm", container_name],
+        capture_output=True,
+        stderr=subprocess.DEVNULL,
+    )
+
+    # Cleanup: Remove image
+    print(f"[Docker E2E] Removing image: {image_name}")
+    subprocess.run(
+        ["docker", "rmi", image_name],
+        capture_output=True,
+        stderr=subprocess.DEVNULL,
+    )
 
 
 class TestDockerE2E:
