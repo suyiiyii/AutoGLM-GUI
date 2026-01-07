@@ -60,7 +60,7 @@ def docker_container(mock_agent_server: str, mock_llm_server: str):
 
     # Use Mock LLM URL instead of environment variables
     env = {
-        "AUTOGLM_BASE_URL": llm_url,
+        "AUTOGLM_BASE_URL": llm_url + "/v1",  # Must include /v1 for OpenAI compatibility
         "AUTOGLM_MODEL_NAME": "mock-glm-model",
         "AUTOGLM_API_KEY": "mock-key",
         "AUTOGLM_CORS_ORIGINS": "*",
