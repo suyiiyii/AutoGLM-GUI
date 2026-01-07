@@ -167,6 +167,16 @@ export const zh = {
       workflowButtonDesc: '选择并快速执行预设的工作流任务',
     },
   },
+  deviceMonitor: {
+    compact: '紧凑',
+    standard: '标准',
+    wide: '宽屏',
+    auto: '自动',
+    decreaseWidth: '减小宽度',
+    increaseWidth: '增大宽度',
+    showWidthControls: '显示宽度控制',
+    hideWidthControls: '隐藏宽度控制',
+  },
   deviceCard: {
     unknownDevice: '未知设备',
     connectViaWifi: '连接 WiFi',

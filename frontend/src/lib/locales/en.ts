@@ -169,6 +169,16 @@ export const en = {
       workflowButtonDesc: 'Select and execute preset workflow tasks',
     },
   },
+  deviceMonitor: {
+    compact: 'Compact',
+    standard: 'Standard',
+    wide: 'Wide',
+    auto: 'Auto',
+    decreaseWidth: 'Decrease width',
+    increaseWidth: 'Increase width',
+    showWidthControls: 'Show width controls',
+    hideWidthControls: 'Hide width controls',
+  },
   deviceCard: {
     unknownDevice: 'Unknown Device',
     connectViaWifi: 'Connect via WiFi',

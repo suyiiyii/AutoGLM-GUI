@@ -1,5 +1,8 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { ScrcpyPlayer } from './ScrcpyPlayer';
+import { WidthControl } from './WidthControl';
+import { ResizableHandle } from './ResizableHandle';
+import { useLocalStorage } from '../hooks/useLocalStorage';
 import type { ScreenshotResponse } from '../api';
 import { getScreenshot } from '../api';
 import { Button } from '@/components/ui/button';
@@ -17,6 +20,7 @@ import {
   AlertCircle,
   CheckCircle2,
   Loader2,
+  Settings2,
 } from 'lucide-react';
 
 interface DeviceMonitorProps {
@@ -49,6 +53,11 @@ export function DeviceMonitor({
   >('success');
   const [showControlArea, setShowControlArea] = useState(false);
   const [showControls, setShowControls] = useState(false);
+  const [showWidthControls, setShowWidthControls] = useState(false);
+  const [panelWidth, setPanelWidth] = useLocalStorage<number | 'auto'>(
+    'device-monitor-width',
+    320
+  );
 
   const videoStreamRef = useRef<{ close: () => void } | null>(null);
   const screenshotFetchingRef = useRef(false);
@@ -85,6 +94,20 @@ export function DeviceMonitor({
 
   const toggleControls = () => {
     setShowControls(prev => !prev);
+  };
+
+  const toggleWidthControls = () => {
+    setShowWidthControls(prev => !prev);
+  };
+
+  const handleWidthChange = (width: number | 'auto') => {
+    setPanelWidth(width);
+  };
+
+  const handleResize = (deltaX: number) => {
+    if (typeof panelWidth !== 'number') return;
+    const newWidth = Math.min(640, Math.max(240, panelWidth + deltaX));
+    setPanelWidth(newWidth);
   };
 
   const handleVideoStreamReady = useCallback(
@@ -150,12 +173,29 @@ export function DeviceMonitor({
     return () => clearInterval(interval);
   }, [deviceId, videoStreamFailed, displayMode, isVisible]);
 
+  const widthStyle =
+    typeof panelWidth === 'number' ? `${panelWidth}px` : 'auto';
+
   return (
     <Card
-      className={`w-[320px] flex-shrink-0 relative min-h-0 overflow-hidden bg-background ${className}`}
+      className={`flex-shrink-0 relative min-h-0 overflow-hidden bg-background ${className}`}
+      style={{
+        width: widthStyle,
+        minWidth: typeof panelWidth === 'number' ? undefined : '240px',
+        maxWidth: typeof panelWidth === 'number' ? undefined : '640px',
+      }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
+      {/* Resizable handle - left edge */}
+      {typeof panelWidth === 'number' && (
+        <ResizableHandle
+          onResize={handleResize}
+          minWidth={240}
+          maxWidth={640}
+          className="z-20"
+        />
+      )}
       {/* Toggle and controls - shown on hover */}
       <div
         className={`absolute top-4 right-4 z-10 transition-opacity duration-200 ${
@@ -163,7 +203,7 @@ export function DeviceMonitor({
         }`}
       >
         <div className="flex items-center gap-2">
-          {/* Control buttons - slide in/out */}
+          {/* Display mode controls - slide in/out */}
           <div
             className={`flex items-center gap-1 bg-popover/90 backdrop-blur rounded-xl p-1 shadow-lg border border-border transition-all duration-300 ${
               showControls
@@ -215,20 +255,49 @@ export function DeviceMonitor({
             </Button>
           </div>
 
-          {/* Toggle button - visible when control area is shown */}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={toggleControls}
-            className="h-8 w-8 rounded-full bg-popover/90 backdrop-blur border border-border shadow-lg hover:bg-accent"
-            title={showControls ? 'Hide controls' : 'Show controls'}
+          {/* Width controls - slide in/out */}
+          <div
+            className={`flex items-center gap-1 bg-popover/90 backdrop-blur rounded-xl p-1 shadow-lg border border-border transition-all duration-300 ${
+              showWidthControls
+                ? 'opacity-100 translate-x-0'
+                : 'opacity-0 translate-x-4 pointer-events-none'
+            }`}
           >
-            {showControls ? (
-              <ChevronRight className="w-4 h-4" />
-            ) : (
-              <ChevronLeft className="w-4 h-4" />
-            )}
-          </Button>
+            <WidthControl
+              currentWidth={panelWidth}
+              onWidthChange={handleWidthChange}
+            />
+          </div>
+
+          {/* Toggle buttons - visible when control area is shown */}
+          <div className="flex items-center gap-1">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleWidthControls}
+              className="h-8 w-8 rounded-full bg-popover/90 backdrop-blur border border-border shadow-lg hover:bg-accent"
+              title={
+                showWidthControls
+                  ? t.deviceMonitor?.hideWidthControls || 'Hide width controls'
+                  : t.deviceMonitor?.showWidthControls || 'Show width controls'
+              }
+            >
+              <Settings2 className="w-4 h-4" />
+            </Button>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleControls}
+              className="h-8 w-8 rounded-full bg-popover/90 backdrop-blur border border-border shadow-lg hover:bg-accent"
+              title={showControls ? 'Hide controls' : 'Show controls'}
+            >
+              {showControls ? (
+                <ChevronRight className="w-4 h-4" />
+              ) : (
+                <ChevronLeft className="w-4 h-4" />
+              )}
+            </Button>
+          </div>
         </div>
       </div>
 
