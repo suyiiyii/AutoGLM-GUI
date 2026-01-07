@@ -17,6 +17,8 @@ import {
   AlertCircle,
   CheckCircle2,
   Loader2,
+  Minus,
+  Plus,
 } from 'lucide-react';
 
 interface DeviceMonitorProps {
@@ -49,11 +51,26 @@ export function DeviceMonitor({
   >('success');
   const [showControlArea, setShowControlArea] = useState(false);
   const [showControls, setShowControls] = useState(false);
+  const [screenAspectRatio, setScreenAspectRatio] = useState<number | null>(
+    null
+  );
+  const [monitorScale, setMonitorScale] = useState(1);
 
   const videoStreamRef = useRef<{ close: () => void } | null>(null);
   const screenshotFetchingRef = useRef(false);
   const feedbackTimeoutRef = useRef<number | null>(null);
   const controlsTimeoutRef = useRef<number | null>(null);
+  const monitorBaseWidth = 320;
+  const monitorMinScale = 0.8;
+  const monitorMaxScale = 1.4;
+  const monitorWidth = Math.round(monitorBaseWidth * monitorScale);
+  const aspectRatio = screenAspectRatio ?? 9 / 16;
+
+  const updateAspectRatio = useCallback((width: number, height: number) => {
+    if (width > 0 && height > 0) {
+      setScreenAspectRatio(width / height);
+    }
+  }, []);
 
   const showFeedback = (
     message: string,
@@ -85,6 +102,16 @@ export function DeviceMonitor({
 
   const toggleControls = () => {
     setShowControls(prev => !prev);
+  };
+
+  const adjustMonitorScale = (delta: number) => {
+    setMonitorScale(prev => {
+      const next = Math.min(
+        monitorMaxScale,
+        Math.max(monitorMinScale, prev + delta)
+      );
+      return Number(next.toFixed(2));
+    });
   };
 
   const handleVideoStreamReady = useCallback(
@@ -136,6 +163,7 @@ export function DeviceMonitor({
         const data = await getScreenshot(deviceId);
         if (data.success) {
           setScreenshot(data);
+          updateAspectRatio(data.width, data.height);
         }
       } catch (e) {
         console.error('Failed to fetch screenshot:', e);
@@ -152,7 +180,8 @@ export function DeviceMonitor({
 
   return (
     <Card
-      className={`w-[320px] flex-shrink-0 relative min-h-0 overflow-hidden bg-background ${className}`}
+      className={`flex-shrink-0 relative min-h-0 overflow-hidden bg-background self-start ${className}`}
+      style={{ width: `${monitorWidth}px` }}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
     >
@@ -213,6 +242,33 @@ export function DeviceMonitor({
               <ImageIcon className="w-3 h-3 mr-1" />
               {t.devicePanel?.image || 'Image'}
             </Button>
+            <div className="flex items-center gap-1 ml-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => adjustMonitorScale(-0.1)}
+                disabled={monitorScale <= monitorMinScale}
+                className="h-7 w-7 rounded-lg"
+                title={
+                  t.devicePanel?.monitorScaleDown ||
+                  'Decrease monitor size'
+                }
+              >
+                <Minus className="w-3 h-3" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => adjustMonitorScale(0.1)}
+                disabled={monitorScale >= monitorMaxScale}
+                className="h-7 w-7 rounded-lg"
+                title={
+                  t.devicePanel?.monitorScaleUp || 'Increase monitor size'
+                }
+              >
+                <Plus className="w-3 h-3" />
+              </Button>
+            </div>
           </div>
 
           {/* Toggle button - visible when control area is shown */}
@@ -268,44 +324,54 @@ export function DeviceMonitor({
       {/* Video stream */}
       {displayMode === 'video' ||
       (displayMode === 'auto' && useVideoStream && !videoStreamFailed) ? (
-        <ScrcpyPlayer
-          deviceId={deviceId}
-          className="w-full h-full"
-          enableControl={true}
-          onFallback={handleFallback}
-          onTapSuccess={() =>
-            showFeedback(t.devicePanel?.tapped || 'Tapped', 2000, 'tap')
-          }
-          onTapError={error =>
-            showFeedback(
-              (t.devicePanel?.tapError || 'Tap error: {error}').replace(
-                '{error}',
-                error
-              ),
-              3000,
-              'error'
-            )
-          }
-          onSwipeSuccess={() =>
-            showFeedback(t.devicePanel?.swiped || 'Swiped', 2000, 'swipe')
-          }
-          onSwipeError={error =>
-            showFeedback(
-              (t.devicePanel?.swipeError || 'Swipe error: {error}').replace(
-                '{error}',
-                error
-              ),
-              3000,
-              'error'
-            )
-          }
-          onStreamReady={handleVideoStreamReady}
-          fallbackTimeout={10000}
-        />
+        <div className="w-full" style={{ aspectRatio }}>
+          <ScrcpyPlayer
+            deviceId={deviceId}
+            className="w-full h-full"
+            enableControl={true}
+            onFallback={handleFallback}
+            onTapSuccess={() =>
+              showFeedback(t.devicePanel?.tapped || 'Tapped', 2000, 'tap')
+            }
+            onTapError={error =>
+              showFeedback(
+                (t.devicePanel?.tapError || 'Tap error: {error}').replace(
+                  '{error}',
+                  error
+                ),
+                3000,
+                'error'
+              )
+            }
+            onSwipeSuccess={() =>
+              showFeedback(t.devicePanel?.swiped || 'Swiped', 2000, 'swipe')
+            }
+            onSwipeError={error =>
+              showFeedback(
+                (t.devicePanel?.swipeError || 'Swipe error: {error}').replace(
+                  '{error}',
+                  error
+                ),
+                3000,
+                'error'
+              )
+            }
+            onStreamReady={handleVideoStreamReady}
+            onScreenInfo={info => {
+              if (info) {
+                updateAspectRatio(info.width, info.height);
+              }
+            }}
+            fallbackTimeout={10000}
+          />
+        </div>
       ) : (
-        <div className="w-full h-full flex items-center justify-center bg-muted/30 min-h-0">
+        <div className="w-full flex items-center justify-center bg-muted/30 min-h-0">
           {screenshot && screenshot.success ? (
-            <div className="relative w-full h-full flex items-center justify-center min-h-0">
+            <div
+              className="relative w-full flex items-center justify-center min-h-0"
+              style={{ aspectRatio }}
+            >
               <img
                 src={`data:image/png;base64,${screenshot.image}`}
                 alt="Device Screenshot"

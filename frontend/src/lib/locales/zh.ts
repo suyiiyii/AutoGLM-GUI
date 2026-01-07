@@ -157,6 +157,8 @@ export const zh = {
     video: '视频',
     image: '图像',
     imageRefresh: '图像 (0.5秒刷新)',
+    monitorScaleDown: '缩小监控面板',
+    monitorScaleUp: '放大监控面板',
     tapped: '已点击',
     tapError: '错误: {error}',
     swiped: '已滑动',

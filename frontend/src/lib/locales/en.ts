@@ -159,6 +159,8 @@ export const en = {
     video: 'Video',
     image: 'Image',
     imageRefresh: 'Image (0.5s refresh)',
+    monitorScaleDown: 'Decrease monitor size',
+    monitorScaleUp: 'Increase monitor size',
     tapped: 'Tapped',
     tapError: 'Error: {error}',
     swiped: 'Swiped',

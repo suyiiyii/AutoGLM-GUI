@@ -30,6 +30,7 @@ interface ScrcpyPlayerProps {
   onSwipeSuccess?: () => void;
   onSwipeError?: (error: string) => void;
   onStreamReady?: (stream: { close: () => void } | null) => void;
+  onScreenInfo?: (info: { width: number; height: number } | null) => void;
 }
 
 interface VideoMetadata {
@@ -70,6 +71,7 @@ export function ScrcpyPlayer({
   const onFallbackRef = useRef(onFallback);
   const fallbackTimeoutRef = useRef(fallbackTimeout);
   const onStreamReadyRef = useRef(onStreamReady);
+  const onScreenInfoRef = useRef(onScreenInfo);
 
   const [status, setStatus] = useState<
     'connecting' | 'connected' | 'error' | 'disconnected'
@@ -97,7 +99,8 @@ export function ScrcpyPlayer({
     onFallbackRef.current = onFallback;
     fallbackTimeoutRef.current = fallbackTimeout;
     onStreamReadyRef.current = onStreamReady;
-  }, [onFallback, fallbackTimeout, onStreamReady]);
+    onScreenInfoRef.current = onScreenInfo;
+  }, [onFallback, fallbackTimeout, onStreamReady, onScreenInfo]);
 
   useEffect(() => {
     const fetchDeviceResolution = async () => {
@@ -325,6 +328,7 @@ export function ScrcpyPlayer({
     setStatus('disconnected');
     setScreenInfo(null);
     setErrorMessage(null);
+    onScreenInfoRef.current?.(null);
   }, []);
 
   const connectDevice = useCallback(() => {
@@ -372,6 +376,7 @@ export function ScrcpyPlayer({
         decoderRef.current = await createDecoder(codecId);
         decoderRef.current.sizeChanged(({ width, height }) => {
           setScreenInfo({ width, height });
+          onScreenInfoRef.current?.({ width, height });
         });
 
         const videoStream = setupVideoStream(metadata);
