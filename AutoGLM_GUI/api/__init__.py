@@ -84,7 +84,19 @@ def _get_static_dir() -> Path | None:
         if bundled_static.exists():
             return bundled_static
 
-    # Priority 2: importlib.resources (for installed package)
+    # Priority 2: Check filesystem directly (for Docker deployments)
+    # This handles the case where static files are copied to the package directory
+    # but not included in the Python package itself (e.g., Docker builds)
+    try:
+        from AutoGLM_GUI import __file__ as package_file
+        package_dir = Path(package_file).parent
+        filesystem_static = package_dir / "static"
+        if filesystem_static.exists() and filesystem_static.is_dir():
+            return filesystem_static
+    except (ImportError, AttributeError):
+        pass
+
+    # Priority 3: importlib.resources (for installed package)
     try:
         static_dir = files("AutoGLM_GUI").joinpath("static")
         if hasattr(static_dir, "_path"):
