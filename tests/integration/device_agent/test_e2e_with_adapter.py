@@ -9,59 +9,12 @@ This test shows how to:
 This is completely non-invasive - no modifications to AutoGLM-GUI code.
 """
 
-import multiprocessing
-import time
-from pathlib import Path
 from typing import cast
 
 import pytest
-import uvicorn
 
-from AutoGLM_GUI.device_adapter import DeviceProtocolContext, DeviceProtocolAdapter
+from AutoGLM_GUI.device_adapter import DeviceProtocolAdapter, DeviceProtocolContext
 from AutoGLM_GUI.devices.remote_device import RemoteDevice
-from tests.integration.device_agent.mock_llm_client import MockLLMTestClient
-from tests.integration.device_agent.test_client import MockAgentTestClient
-
-
-def run_server(port: int):
-    """Run the mock agent server in a subprocess."""
-    from tests.integration.device_agent.mock_agent_server import app
-
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
-
-
-@pytest.fixture(scope="module")
-def mock_agent_server():
-    """Start mock agent server for testing."""
-    port = 18002
-    proc = multiprocessing.Process(target=run_server, args=(port,), daemon=True)
-    proc.start()
-    time.sleep(1)
-
-    yield f"http://127.0.0.1:{port}"
-
-    proc.terminate()
-    proc.join(timeout=2)
-
-
-@pytest.fixture
-def test_client(mock_agent_server: str) -> MockAgentTestClient:
-    """Create test client and reset state."""
-    client = MockAgentTestClient(mock_agent_server)
-    client.reset()
-    return client
-
-
-@pytest.fixture
-def scenario_path() -> str:
-    """Get path to test scenario."""
-    return str(
-        Path(__file__).parent.parent
-        / "fixtures"
-        / "scenarios"
-        / "meituan_message"
-        / "scenario.yaml"
-    )
 
 
 class TestE2EWithAgent:
@@ -75,17 +28,15 @@ class TestE2EWithAgent:
         self,
         mock_llm_server: str,  # Mock LLM server
         mock_agent_server: str,  # Mock device server
-        mock_llm_client: MockLLMTestClient,  # Mock LLM client
-        test_client: MockAgentTestClient,  # Mock device client
-        scenario_path: str,
+        mock_llm_client,  # Mock LLM client
+        test_client,  # Mock device client
+        sample_test_case,
     ):
         """Test that agent's tap commands are recorded by mock agent."""
         from AutoGLM_GUI.agents.glm.agent import GLMAgent
         from AutoGLM_GUI.config import AgentConfig, ModelConfig
-        from AutoGLM_GUI.devices.remote_device import RemoteDevice
-        from AutoGLM_GUI.device_adapter import DeviceProtocolContext
 
-        test_client.load_scenario(scenario_path)
+        test_client.load_scenario(str(sample_test_case))
 
         # Configure mock LLM (no real credentials needed!)
         model_config = ModelConfig(
@@ -135,13 +86,10 @@ class TestE2EWithoutLLM:
     """
 
     def test_remote_device_injection_works(
-        self,
-        mock_agent_server: str,
-        test_client: MockAgentTestClient,
-        scenario_path: str,
+        self, mock_agent_server: str, test_client, sample_test_case
     ):
         """Test that RemoteDevice can be injected via adapter."""
-        test_client.load_scenario(scenario_path)
+        test_client.load_scenario(str(sample_test_case))
         remote_device = RemoteDevice("mock_device_001", mock_agent_server)
 
         with DeviceProtocolContext(
@@ -161,11 +109,7 @@ class TestE2EWithoutLLM:
 
         test_client.assert_state("message")
 
-    def test_multiple_devices(
-        self,
-        mock_agent_server: str,
-        test_client: MockAgentTestClient,
-    ):
+    def test_multiple_devices(self, mock_agent_server: str, test_client):
         """Test that multiple remote devices can be managed."""
         devices = {
             "device_1": RemoteDevice("device_1", mock_agent_server),
@@ -202,18 +146,16 @@ class TestE2EWithMockLLM:
         self,
         mock_llm_server: str,  # Mock LLM server
         mock_agent_server: str,  # Mock device server
-        mock_llm_client: MockLLMTestClient,  # Mock LLM client
-        test_client: MockAgentTestClient,  # Mock device client
-        scenario_path: str,
+        mock_llm_client,  # Mock LLM client
+        test_client,  # Mock device client
+        sample_test_case,
     ):
         """Test agent with mock LLM and mock device - no credentials required."""
         from AutoGLM_GUI.agents.glm.agent import GLMAgent
         from AutoGLM_GUI.config import AgentConfig, ModelConfig
-        from AutoGLM_GUI.devices.remote_device import RemoteDevice
-        from AutoGLM_GUI.device_adapter import DeviceProtocolContext
 
         # Load test scenario
-        test_client.load_scenario(scenario_path)
+        test_client.load_scenario(str(sample_test_case))
 
         # Configure mock LLM (no real credentials needed!)
         model_config = ModelConfig(

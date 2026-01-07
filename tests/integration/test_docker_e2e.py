@@ -14,82 +14,9 @@ from pathlib import Path
 import httpx
 import pytest
 
-from tests.integration.device_agent.mock_llm_client import MockLLMTestClient
-from tests.integration.device_agent.test_client import MockAgentTestClient
-
 
 @pytest.fixture(scope="module")
-def mock_agent_server():
-    """Start mock agent server on host machine."""
-    port = 18001
-
-    try:
-        subprocess.run(
-            ["fuser", "-k", f"{port}/tcp"],
-            capture_output=True,
-            timeout=5,
-        )
-        time.sleep(0.5)
-    except (FileNotFoundError, subprocess.TimeoutExpired):
-        pass
-
-    proc = subprocess.Popen(
-        [
-            "uv",
-            "run",
-            "uvicorn",
-            "tests.integration.device_agent.mock_agent_server:app",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(port),
-            "--log-level",
-            "warning",
-        ],
-        cwd=Path(__file__).parent.parent.parent,
-    )
-    time.sleep(2)
-
-    yield f"http://127.0.0.1:{port}"
-
-    proc.terminate()
-    proc.wait(timeout=5)
-
-
-# Note: mock_llm_server is provided by conftest.py (session scope)
-# Docker E2E test doesn't need to start its own mock LLM server
-
-
-@pytest.fixture
-def test_client(mock_agent_server: str) -> MockAgentTestClient:
-    """Create test client and reset state."""
-    client = MockAgentTestClient(mock_agent_server)
-    client.reset()
-    return client
-
-
-@pytest.fixture
-def mock_llm_client(mock_llm_server: str) -> MockLLMTestClient:
-    """Create mock LLM client and reset state."""
-    client = MockLLMTestClient(mock_llm_server)
-    client.reset()
-    return client
-
-
-@pytest.fixture
-def scenario_path() -> str:
-    """Get path to test scenario."""
-    return str(
-        Path(__file__).parent
-        / "fixtures"
-        / "scenarios"
-        / "meituan_message"
-        / "scenario.yaml"
-    )
-
-
-@pytest.fixture(scope="module")
-def docker_container(mock_agent_server: str):
+def docker_container(mock_agent_server: str, mock_llm_server: str):
     """Build and run Docker container for testing."""
     image_name = "autoglm-gui:e2e-test"
     container_name = "autoglm-e2e-test"
@@ -109,7 +36,7 @@ def docker_container(mock_agent_server: str):
 
     # Use host network mode for simplicity (works on Linux and macOS with Docker Desktop)
     remote_url = mock_agent_server
-    llm_url = "http://127.0.0.1:18003"  # Use session-scoped mock_llm_server
+    llm_url = mock_llm_server
     docker_args = ["--network", "host"]
     access_url = "http://127.0.0.1:8000"
 
@@ -172,16 +99,16 @@ class TestDockerE2E:
     def test_meituan_message_scenario(
         self,
         docker_container: dict,
-        mock_llm_client: MockLLMTestClient,
-        test_client: MockAgentTestClient,
-        scenario_path: str,
+        mock_llm_client,
+        test_client,
+        sample_test_case,
     ):
         """Test complete flow: Docker container -> Mock LLM -> RemoteDevice -> Mock Agent."""
         access_url = docker_container["access_url"]
         remote_url = docker_container["remote_url"]
         llm_url = docker_container["llm_url"]
 
-        test_client.load_scenario(scenario_path)
+        test_client.load_scenario(str(sample_test_case))
 
         print(f"[Docker E2E] Registering remote device at {access_url}")
         print(f"[Docker E2E] Remote URL: {remote_url}")
