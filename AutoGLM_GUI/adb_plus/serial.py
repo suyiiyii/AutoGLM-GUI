@@ -55,6 +55,7 @@ def get_device_serial(device_id: str, adb_path: str = "adb") -> str | None:
 
     For mDNS devices, attempts to extract serial from service name first.
     Falls back to getprop for USB/WiFi devices or if extraction fails.
+    For emulators and special devices, uses device_id as fallback.
 
     This works for both USB and WiFi connected devices,
     returning the actual hardware serial number (ro.serialno).
@@ -74,21 +75,91 @@ def get_device_serial(device_id: str, adb_path: str = "adb") -> str | None:
         logger.debug(f"Extracted serial from mDNS name: {device_id} → {mdns_serial}")
         return mdns_serial
 
-    # Fallback: Use getprop (original behavior)
+    # Try multiple methods to get serial
+    serial = None
+
+    # Method 1: Use getprop ro.serialno
     try:
-        # Use getprop to get the actual hardware serial number
-        # This works for both USB and WiFi connections
         result = run_cmd_silently_sync(
             [adb_path, "-s", device_id, "shell", "getprop", "ro.serialno"],
-            timeout=3,
+            timeout=5,
         )
         if result.returncode == 0:
             serial = result.stdout.strip()
-            # Filter out error messages and empty values
-            if serial and not serial.startswith("error:") and serial != "unknown":
-                logger.debug(f"Got serial via getprop: {device_id} → {serial}")
+            if serial and not serial.startswith("error:") and serial != "unknown" and serial != "":
+                logger.debug(f"Got serial via ro.serialno: {device_id} → {serial}")
                 return serial
     except Exception as e:
-        logger.debug(f"Failed to get serial via getprop for {device_id}: {e}")
+        logger.debug(f"Failed to get serial via ro.serialno for {device_id}: {e}")
 
+    # Method 2: Try ro.boot.serialno (some devices use this)
+    try:
+        result = run_cmd_silently_sync(
+            [adb_path, "-s", device_id, "shell", "getprop", "ro.boot.serialno"],
+            timeout=5,
+        )
+        if result.returncode == 0:
+            serial = result.stdout.strip()
+            if serial and not serial.startswith("error:") and serial != "unknown" and serial != "":
+                logger.debug(f"Got serial via ro.boot.serialno: {device_id} → {serial}")
+                return serial
+    except Exception as e:
+        logger.debug(f"Failed to get serial via ro.boot.serialno for {device_id}: {e}")
+
+    # Method 3: Try emu.uuid for emulators
+    try:
+        result = run_cmd_silently_sync(
+            [adb_path, "-s", device_id, "shell", "getprop", "emu.uuid"],
+            timeout=5,
+        )
+        if result.returncode == 0:
+            serial = result.stdout.strip()
+            if serial and not serial.startswith("error:") and serial != "":
+                logger.debug(f"Got serial via emu.uuid: {device_id} → {serial}")
+                return serial
+    except Exception as e:
+        logger.debug(f"Failed to get serial via emu.uuid for {device_id}: {e}")
+
+    # Method 4: For emulators and localhost connections, use device_id as serial
+    # This handles cases like 127.0.0.1:16384, emulator-5554, etc.
+    if _is_emulator_or_localhost(device_id):
+        # Use a sanitized version of device_id as serial
+        sanitized_serial = device_id.replace(":", "_").replace(".", "_")
+        logger.debug(f"Using device_id as serial for emulator/localhost: {device_id} → {sanitized_serial}")
+        return sanitized_serial
+
+    # Method 5: Last resort - try to get any unique identifier
+    try:
+        result = run_cmd_silently_sync(
+            [adb_path, "-s", device_id, "shell", "settings", "get", "secure", "android_id"],
+            timeout=5,
+        )
+        if result.returncode == 0:
+            serial = result.stdout.strip()
+            if serial and not serial.startswith("error:") and serial != "null" and serial != "":
+                logger.debug(f"Got serial via android_id: {device_id} → {serial}")
+                return serial
+    except Exception as e:
+        logger.debug(f"Failed to get serial via android_id for {device_id}: {e}")
+
+    logger.warning(f"Could not get serial for device {device_id}, all methods failed")
     return None
+
+
+def _is_emulator_or_localhost(device_id: str) -> bool:
+    """
+    Check if the device_id represents an emulator or localhost connection.
+    
+    Args:
+        device_id: The device ID to check
+        
+    Returns:
+        True if it's an emulator or localhost connection
+    """
+    emulator_patterns = [
+        "emulator-",
+        "127.0.0.1:",
+        "localhost:",
+        "10.0.2.2:",  # Android emulator host
+    ]
+    return any(device_id.startswith(pattern) for pattern in emulator_patterns)

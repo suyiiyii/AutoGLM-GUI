@@ -152,10 +152,8 @@ def create_app() -> FastAPI:
             else:
                 # 经典模式（默认）
                 manager = PhoneAgentManager.get_instance()
-                if not manager.is_initialized(device_id):
-                    raise RuntimeError(f"Device {device_id} not initialized")
-
-                with manager.use_agent(device_id, timeout=None) as agent:
+                # 使用 auto_initialize=True 自动初始化设备
+                with manager.use_agent(device_id, timeout=None, auto_initialize=True) as agent:
                     result = agent.run(message)
                     steps = agent.step_count
                     agent.reset()
@@ -180,10 +178,25 @@ def create_app() -> FastAPI:
             from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
             from AutoGLM_GUI.scheduled_task_manager import scheduled_task_manager
 
-            # 检查设备是否已初始化
+            # 确保设备已初始化（自动初始化）
             manager = PhoneAgentManager.get_instance()
             if not manager.is_initialized(device_id):
-                raise RuntimeError(f"Device {device_id} not initialized")
+                # 自动初始化设备
+                from AutoGLM_GUI.config_manager import config_manager
+                effective_config = config_manager.get_effective_config()
+                from AutoGLM_GUI.config import ModelConfig, AgentConfig
+                
+                model_config = ModelConfig(
+                    base_url=effective_config.base_url,
+                    api_key=effective_config.api_key,
+                    model_name=effective_config.model_name,
+                )
+                agent_config = AgentConfig(
+                    device_id=device_id,
+                    max_steps=effective_config.default_max_steps,
+                )
+                manager.initialize_agent(device_id, model_config, agent_config)
+                logger.info(f"Auto-initialized device {device_id} for dual model task")
 
             # 获取任务配置
             task = scheduled_task_manager.get_task(task_uuid)
@@ -253,10 +266,25 @@ def create_app() -> FastAPI:
             )
             from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
-            # 检查设备是否已初始化
+            # 确保设备已初始化（自动初始化）
             manager = PhoneAgentManager.get_instance()
             if not manager.is_initialized(device_id):
-                raise RuntimeError(f"Device {device_id} not initialized")
+                # 自动初始化设备
+                from AutoGLM_GUI.config_manager import config_manager
+                effective_config = config_manager.get_effective_config()
+                from AutoGLM_GUI.config import ModelConfig, AgentConfig
+                
+                model_config = ModelConfig(
+                    base_url=effective_config.base_url,
+                    api_key=effective_config.api_key,
+                    model_name=effective_config.model_name,
+                )
+                agent_config = AgentConfig(
+                    device_id=device_id,
+                    max_steps=effective_config.default_max_steps,
+                )
+                manager.initialize_agent(device_id, model_config, agent_config)
+                logger.info(f"Auto-initialized device {device_id} for layered agent task")
 
             # 使用完整的 layered agent runner
             agent = _ensure_agent()

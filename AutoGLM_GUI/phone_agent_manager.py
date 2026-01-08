@@ -495,9 +495,8 @@ class PhoneAgentManager:
         Raises:
             AgentInitializationError: 如果配置不完整或初始化失败
         """
+        from AutoGLM_GUI.config import AgentConfig, ModelConfig
         from AutoGLM_GUI.config_manager import config_manager
-        from phone_agent.agent import AgentConfig
-        from phone_agent.model import ModelConfig
 
         logger.info(f"Auto-initializing agent for device {device_id}...")
 
@@ -519,7 +518,10 @@ class PhoneAgentManager:
             model_name=effective_config.model_name,
         )
 
-        agent_config = AgentConfig(device_id=device_id)
+        agent_config = AgentConfig(
+            device_id=device_id,
+            max_steps=effective_config.default_max_steps,
+        )
 
         # 调用 initialize_agent（RLock 支持重入，不会死锁）
         self.initialize_agent(device_id, model_config, agent_config)

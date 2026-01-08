@@ -173,9 +173,49 @@ class GLMAgent:
         try:
             action = parse_action(response.action)
         except ValueError as e:
-            if self.agent_config.verbose:
-                logger.warning(f"Failed to parse action: {e}, treating as finish")
-            action = {"_metadata": "finish", "message": response.action}
+            # Try to fix common formatting issues before giving up
+            import re
+            try:
+                cleaned_action = response.action.strip()
+                
+                # Attempt 1: Extract do() or finish() from anywhere in the string
+                # Model sometimes outputs: "思考内容...do(action="Wait", duration="3")"
+                do_match = re.search(r'do\s*\([^)]+\)\s*$', cleaned_action)
+                finish_match = re.search(r'finish\s*\([^)]*\)\s*$', cleaned_action)
+                
+                if do_match:
+                    extracted_action = do_match.group(0).strip()
+                    # Fix spaces in quoted values: duration="3 seconds" -> duration="3_seconds"
+                    extracted_action = re.sub(
+                        r'(\w+)="([^"]*\s[^"]*)"',
+                        lambda m: f'{m.group(1)}="{m.group(2).replace(" ", "_")}"',
+                        extracted_action
+                    )
+                    action = parse_action(extracted_action)
+                    if self.agent_config.verbose:
+                        logger.info(f"Extracted and parsed action: {action}")
+                elif finish_match:
+                    extracted_action = finish_match.group(0).strip()
+                    action = parse_action(extracted_action)
+                    if self.agent_config.verbose:
+                        logger.info(f"Extracted and parsed finish: {action}")
+                elif cleaned_action.startswith("do("):
+                    # Attempt 2: Clean up do() at start
+                    cleaned_action = re.sub(
+                        r'(\w+)="([^"]*\s[^"]*)"',
+                        lambda m: f'{m.group(1)}="{m.group(2).replace(" ", "_")}"',
+                        cleaned_action
+                    )
+                    action = parse_action(cleaned_action)
+                    if self.agent_config.verbose:
+                        logger.info(f"Parsed action after cleanup: {action}")
+                else:
+                    raise ValueError("No valid action found in response")
+            except Exception as parse_err:
+                # If all attempts fail, treat as finish
+                if self.agent_config.verbose:
+                    logger.warning(f"Failed to parse action: {e} -> {parse_err}, treating as finish")
+                action = {"_metadata": "finish", "message": response.action}
 
         if self.agent_config.verbose:
             print()
