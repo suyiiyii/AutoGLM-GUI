@@ -20,7 +20,6 @@ import {
   AlertCircle,
   CheckCircle2,
   Loader2,
-  Settings2,
 } from 'lucide-react';
 
 interface DeviceMonitorProps {
@@ -53,7 +52,6 @@ export function DeviceMonitor({
   >('success');
   const [showControlArea, setShowControlArea] = useState(false);
   const [showControls, setShowControls] = useState(false);
-  const [showWidthControls, setShowWidthControls] = useState(false);
   const [panelWidth, setPanelWidth] = useLocalStorage<number | 'auto'>(
     'device-monitor-width',
     320
@@ -94,10 +92,6 @@ export function DeviceMonitor({
 
   const toggleControls = () => {
     setShowControls(prev => !prev);
-  };
-
-  const toggleWidthControls = () => {
-    setShowWidthControls(prev => !prev);
   };
 
   const handleWidthChange = (width: number | 'auto') => {
@@ -202,102 +196,82 @@ export function DeviceMonitor({
           showControlArea ? 'opacity-100' : 'opacity-0 pointer-events-none'
         }`}
       >
-        <div className="flex items-center gap-2">
-          {/* Display mode controls - slide in/out */}
+        <div className="flex items-start gap-2">
+          {/* Combined controls container - both controls slide together */}
           <div
-            className={`flex items-center gap-1 bg-popover/90 backdrop-blur rounded-xl p-1 shadow-lg border border-border transition-all duration-300 ${
+            className={`flex flex-col items-end gap-2 transition-all duration-300 ${
               showControls
                 ? 'opacity-100 translate-x-0'
                 : 'opacity-0 translate-x-4 pointer-events-none'
             }`}
           >
-            {!isRemoteDevice && (
+            {/* Display mode controls */}
+            <div className="flex items-center gap-1 bg-popover/90 backdrop-blur rounded-xl p-1 shadow-lg border border-border">
+              {!isRemoteDevice && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => toggleDisplayMode('auto')}
+                  className={`h-7 px-3 text-xs rounded-lg transition-colors ${
+                    displayMode === 'auto'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-foreground hover:bg-accent hover:text-accent-foreground'
+                  }`}
+                >
+                  {t.devicePanel?.auto || 'Auto'}
+                </Button>
+              )}
+              {!isRemoteDevice && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => toggleDisplayMode('video')}
+                  className={`h-7 px-3 text-xs rounded-lg transition-colors ${
+                    displayMode === 'video'
+                      ? 'bg-primary text-primary-foreground'
+                      : 'text-foreground hover:bg-accent hover:text-accent-foreground'
+                  }`}
+                >
+                  <Video className="w-3 h-3 mr-1" />
+                  {t.devicePanel?.video || 'Video'}
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={() => toggleDisplayMode('auto')}
+                onClick={() => toggleDisplayMode('screenshot')}
                 className={`h-7 px-3 text-xs rounded-lg transition-colors ${
-                  displayMode === 'auto'
+                  displayMode === 'screenshot'
                     ? 'bg-primary text-primary-foreground'
                     : 'text-foreground hover:bg-accent hover:text-accent-foreground'
                 }`}
               >
-                {t.devicePanel?.auto || 'Auto'}
+                <ImageIcon className="w-3 h-3 mr-1" />
+                {t.devicePanel?.image || 'Image'}
               </Button>
-            )}
-            {!isRemoteDevice && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => toggleDisplayMode('video')}
-                className={`h-7 px-3 text-xs rounded-lg transition-colors ${
-                  displayMode === 'video'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-foreground hover:bg-accent hover:text-accent-foreground'
-                }`}
-              >
-                <Video className="w-3 h-3 mr-1" />
-                {t.devicePanel?.video || 'Video'}
-              </Button>
-            )}
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => toggleDisplayMode('screenshot')}
-              className={`h-7 px-3 text-xs rounded-lg transition-colors ${
-                displayMode === 'screenshot'
-                  ? 'bg-primary text-primary-foreground'
-                  : 'text-foreground hover:bg-accent hover:text-accent-foreground'
-              }`}
-            >
-              <ImageIcon className="w-3 h-3 mr-1" />
-              {t.devicePanel?.image || 'Image'}
-            </Button>
-          </div>
+            </div>
 
-          {/* Width controls - slide in/out */}
-          <div
-            className={`flex items-center gap-1 bg-popover/90 backdrop-blur rounded-xl p-1 shadow-lg border border-border transition-all duration-300 ${
-              showWidthControls
-                ? 'opacity-100 translate-x-0'
-                : 'opacity-0 translate-x-4 pointer-events-none'
-            }`}
-          >
+            {/* Width controls - aligned with display mode controls */}
             <WidthControl
               currentWidth={panelWidth}
               onWidthChange={handleWidthChange}
             />
           </div>
 
-          {/* Toggle buttons - visible when control area is shown */}
-          <div className="flex items-center gap-1">
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleWidthControls}
-              className="h-8 w-8 rounded-full bg-popover/90 backdrop-blur border border-border shadow-lg hover:bg-accent"
-              title={
-                showWidthControls
-                  ? t.deviceMonitor?.hideWidthControls || 'Hide width controls'
-                  : t.deviceMonitor?.showWidthControls || 'Show width controls'
-              }
-            >
-              <Settings2 className="w-4 h-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleControls}
-              className="h-8 w-8 rounded-full bg-popover/90 backdrop-blur border border-border shadow-lg hover:bg-accent"
-              title={showControls ? 'Hide controls' : 'Show controls'}
-            >
-              {showControls ? (
-                <ChevronRight className="w-4 h-4" />
-              ) : (
-                <ChevronLeft className="w-4 h-4" />
-              )}
-            </Button>
-          </div>
+          {/* Toggle button - always visible in top-right */}
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={toggleControls}
+            className="h-8 w-8 rounded-full bg-popover/90 backdrop-blur border border-border shadow-lg hover:bg-accent"
+            title={showControls ? 'Hide controls' : 'Show controls'}
+          >
+            {showControls ? (
+              <ChevronRight className="w-4 h-4" />
+            ) : (
+              <ChevronLeft className="w-4 h-4" />
+            )}
+          </Button>
         </div>
       </div>
 
