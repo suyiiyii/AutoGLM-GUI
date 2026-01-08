@@ -741,9 +741,7 @@ function ChatComponent() {
 
               {/* 分层代理最大轮次配置 */}
               <div className="space-y-2">
-                <Label htmlFor="layered_max_turns">
-                  分层代理最大轮次
-                </Label>
+                <Label htmlFor="layered_max_turns">分层代理最大轮次</Label>
                 <Input
                   id="layered_max_turns"
                   type="number"
