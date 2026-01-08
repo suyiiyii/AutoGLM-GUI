@@ -99,9 +99,14 @@ class AgentStepStreamer:
 
                 try:
                     # 执行 step 循环
+                    # 使用会话级别的标记，而不是 agent.step_count
+                    # 这样每次新对话开始时，第一步都会传递 task
+                    is_first_in_session = True
                     while not self._stop_event.is_set():
-                        is_first = self._agent.step_count == 0
-                        result = self._agent.step(self._task if is_first else None)
+                        result = self._agent.step(
+                            self._task if is_first_in_session else None
+                        )
+                        is_first_in_session = False
 
                         # 发射 step 事件
                         self._event_queue.put(

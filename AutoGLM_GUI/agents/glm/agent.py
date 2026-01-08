@@ -193,7 +193,12 @@ class GLMAgent:
             )
         else:
             screen_info = MessageBuilder.build_screen_info(current_app)
-            text_content = f"** Screen Info **\n\n{screen_info}"
+            # 如果有新的用户消息（多轮对话场景），把它加入消息中
+            if user_prompt:
+                text_content = f"{user_prompt}\n\n** Screen Info **\n\n{screen_info}"
+            else:
+                # 继续执行当前任务，只需要屏幕信息
+                text_content = f"** Screen Info **\n\n{screen_info}"
 
             self._context.append(
                 MessageBuilder.create_user_message(

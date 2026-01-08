@@ -96,6 +96,9 @@ class InternalMAIAgent:
 
         if is_first:
             self.traj_memory.task_goal = task or ""
+        elif task:
+            # 多轮对话：有新的用户消息，更新 task_goal
+            self.traj_memory.task_goal = task
 
         return self._execute_step(task, is_first)
 
