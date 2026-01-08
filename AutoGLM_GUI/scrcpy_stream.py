@@ -5,6 +5,7 @@ import os
 import socket
 import subprocess
 import sys
+import time
 from dataclasses import dataclass
 from pathlib import Path
 from asyncio.subprocess import Process as AsyncProcess
@@ -21,6 +22,74 @@ from AutoGLM_GUI.scrcpy_protocol import (
     ScrcpyVideoStreamMetadata,
     ScrcpyVideoStreamOptions,
 )
+
+
+async def is_port_available(port: int, host: str = "127.0.0.1") -> bool:
+    """Test if TCP port is available for binding.
+
+    Args:
+        port: TCP port number
+        host: Host address to test
+
+    Returns:
+        True if port can be bound (available), False otherwise
+    """
+    sock = None
+    try:
+        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+        sock.setblocking(False)
+        sock.bind((host, port))
+        logger.debug(f"Port {port} is available for binding")
+        return True
+    except OSError as e:
+        # Handle cross-platform errno for "Address already in use"
+        # macOS: 48, Linux: 98, Windows: 10048
+        logger.debug(f"Port {port} is occupied: {e}")
+        return False
+    finally:
+        if sock:
+            sock.close()
+
+
+async def wait_for_port_release(
+    port: int,
+    timeout: float = 5.0,
+    poll_interval: float = 0.2,
+    host: str = "127.0.0.1",
+) -> bool:
+    """Wait for TCP port to become available with polling.
+
+    Args:
+        port: TCP port to wait for
+        timeout: Maximum wait time in seconds (default: 5.0)
+        poll_interval: Check interval in seconds (default: 0.2)
+        host: Host address
+
+    Returns:
+        True if port became available, False if timeout
+    """
+    start_time = time.time()
+    attempt = 0
+
+    while time.time() - start_time < timeout:
+        attempt += 1
+        if await is_port_available(port, host):
+            elapsed = time.time() - start_time
+            logger.info(
+                f"Port {port} became available after {elapsed:.2f}s ({attempt} checks)"
+            )
+            return True
+
+        # Log progress every second for debugging
+        if attempt % 5 == 0:  # Every 1 second (5 * 0.2s)
+            elapsed = time.time() - start_time
+            logger.debug(f"Still waiting for port {port}... ({elapsed:.1f}s elapsed)")
+
+        await asyncio.sleep(poll_interval)
+
+    logger.warning(f"Port {port} did not release within {timeout}s timeout")
+    return False
 
 
 @dataclass
@@ -159,29 +228,44 @@ class ScrcpyStreamer:
             raise RuntimeError(f"Failed to start scrcpy server: {e}") from e
 
     async def _cleanup_existing_server(self) -> None:
-        """Kill existing scrcpy server processes on device."""
+        """Kill existing scrcpy server processes and wait for port release."""
         cmd_base = ["adb"]
         if self.device_id:
             cmd_base.extend(["-s", self.device_id])
 
         # Method 1: Try pkill
+        logger.debug("Killing scrcpy processes via pkill...")
         cmd = cmd_base + ["shell", "pkill", "-9", "-f", "app_process.*scrcpy"]
         await run_cmd_silently(cmd)
 
         # Method 2: Find and kill by PID (more reliable)
+        logger.debug("Killing scrcpy processes via PID...")
         cmd = cmd_base + [
             "shell",
             "ps -ef | grep 'app_process.*scrcpy' | grep -v grep | awk '{print $2}' | xargs kill -9",
         ]
         await run_cmd_silently(cmd)
 
-        # Method 3: Remove port forward if exists
+        # Method 3: Remove port forward
+        logger.debug(f"Removing ADB port forward on port {self.port}...")
         cmd_remove_forward = cmd_base + ["forward", "--remove", f"tcp:{self.port}"]
         await run_cmd_silently(cmd_remove_forward)
 
-        # Wait for resources to be released
-        logger.debug("Waiting for cleanup to complete...")
-        await asyncio.sleep(2)
+        # Wait for port to be truly available (instead of fixed sleep)
+        logger.info(f"Waiting for port {self.port} to be released...")
+        port_released = await wait_for_port_release(
+            self.port,
+            timeout=5.0,  # Max 5 seconds (vs old fixed 2s)
+            poll_interval=0.2,  # Check every 200ms
+        )
+
+        if not port_released:
+            logger.warning(
+                f"Port {self.port} still occupied after cleanup. "
+                "Will attempt to start anyway (may fail)."
+            )
+        else:
+            logger.info(f"Port {self.port} successfully released and ready")
 
     async def _push_server(self) -> None:
         """Push scrcpy-server to device."""
@@ -221,9 +305,9 @@ class ScrcpyStreamer:
         )
 
     async def _start_server(self) -> None:
-        """Start scrcpy server on device with retry on address conflict."""
+        """Start scrcpy server on device with intelligent retry."""
         max_retries = 3
-        retry_delay = 2
+        retry_delay = 1.0  # Reduced from 2s (cleanup handles waiting now)
 
         options = self._build_server_options()
 
@@ -275,43 +359,77 @@ class ScrcpyStreamer:
                         error_msg = stderr.decode() if stderr else stdout.decode()
 
             if error_msg is not None:
+                # Detailed error classification
                 if "Address already in use" in error_msg:
+                    logger.error(
+                        f"Port {self.port} conflict detected (attempt {attempt + 1}/{max_retries}). "
+                        f"Error: {error_msg[:200]}"
+                    )
                     if attempt < max_retries - 1:
                         logger.warning(
-                            f"Address in use, retrying in {retry_delay}s (attempt {attempt + 1}/{max_retries})..."
+                            f"Retrying with aggressive cleanup in {retry_delay}s..."
                         )
                         await self._cleanup_existing_server()
                         await asyncio.sleep(retry_delay)
                         continue
+                    # Specific error for port conflicts
                     raise RuntimeError(
-                        f"scrcpy server failed after {max_retries} attempts: {error_msg}"
+                        f"Port {self.port} persistently occupied after {max_retries} attempts. "
+                        "Please check if another scrcpy instance is running."
                     )
-                raise RuntimeError(f"scrcpy server exited immediately: {error_msg}")
+                else:
+                    # Non-port errors fail immediately (no retry)
+                    logger.error(f"Scrcpy server startup failed: {error_msg[:200]}")
+                    raise RuntimeError(f"Scrcpy server failed to start: {error_msg}")
 
+            logger.info("Scrcpy server started successfully")
             return
 
         raise RuntimeError("Failed to start scrcpy server after maximum retries")
 
     async def _connect_socket(self) -> None:
         """Connect to scrcpy TCP socket."""
-        self.tcp_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.tcp_socket.settimeout(5)
+        # Retry connection with exponential backoff (max ~6 seconds total)
+        max_attempts = 10
+        retry_delay = 0.3
 
-        try:
-            self.tcp_socket.setsockopt(
-                socket.SOL_SOCKET, socket.SO_RCVBUF, 2 * 1024 * 1024
-            )
-            logger.debug("Set socket receive buffer to 2MB")
-        except OSError as e:
-            logger.warning(f"Failed to set socket buffer size: {e}")
+        for attempt in range(max_attempts):
+            # Create a fresh socket for each attempt to avoid "Invalid argument" error
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(5)
 
-        for _ in range(5):
             try:
-                self.tcp_socket.connect(("localhost", self.port))
-                self.tcp_socket.settimeout(None)
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_RCVBUF, 2 * 1024 * 1024)
+            except OSError as e:
+                logger.debug(f"Failed to set socket buffer size: {e}")
+
+            try:
+                sock.connect(("localhost", self.port))
+                sock.settimeout(None)
+                self.tcp_socket = sock  # Only assign on success
+                logger.debug(f"Connected to scrcpy server on attempt {attempt + 1}")
                 return
-            except (ConnectionRefusedError, OSError):
-                await asyncio.sleep(0.5)
+            except (ConnectionRefusedError, OSError) as e:
+                # Close the failed socket
+                try:
+                    sock.close()
+                except Exception:
+                    pass
+
+                if attempt < max_attempts - 1:
+                    logger.debug(
+                        f"Connection attempt {attempt + 1}/{max_attempts} failed: {e}. "
+                        f"Retrying in {retry_delay}s..."
+                    )
+                    await asyncio.sleep(retry_delay)
+                    # Gradually increase delay for later attempts
+                    if attempt >= 3:
+                        retry_delay = 0.5
+                else:
+                    logger.error(
+                        f"Failed to connect after {max_attempts} attempts. "
+                        f"Last error: {e}"
+                    )
 
         raise ConnectionError("Failed to connect to scrcpy server")
 

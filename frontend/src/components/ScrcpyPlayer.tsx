@@ -50,7 +50,7 @@ export function ScrcpyPlayer({
   deviceId,
   className,
   onFallback,
-  fallbackTimeout = 5000,
+  fallbackTimeout = 20000,
   enableControl = false,
   onTapSuccess,
   onTapError,

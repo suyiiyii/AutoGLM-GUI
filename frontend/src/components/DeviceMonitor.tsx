@@ -300,7 +300,7 @@ export function DeviceMonitor({
             )
           }
           onStreamReady={handleVideoStreamReady}
-          fallbackTimeout={10000}
+          fallbackTimeout={20000}
         />
       ) : (
         <div className="w-full h-full flex items-center justify-center bg-muted/30 min-h-0">

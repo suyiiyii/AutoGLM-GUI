@@ -1032,34 +1032,27 @@ function ChatComponent() {
                   device.id === currentDeviceId ? '' : 'hidden'
                 }`}
               >
-                <div
-                  className={`w-full flex items-stretch justify-center ${
-                    chatMode === 'chatkit' ? '' : 'hidden'
-                  }`}
-                >
-                  <ChatKitPanel
-                    deviceId={device.id}
-                    deviceSerial={device.serial}
-                    deviceName={device.model}
-                    deviceConnectionType={device.connection_type}
-                    isVisible={
-                      device.id === currentDeviceId && chatMode === 'chatkit'
-                    }
-                  />
-                </div>
-                <div
-                  className={`w-full flex items-stretch justify-center ${
-                    chatMode === 'chatkit' ? 'hidden' : ''
-                  }`}
-                >
-                  <DevicePanel
-                    deviceId={device.id}
-                    deviceSerial={device.serial}
-                    deviceName={device.model}
-                    deviceConnectionType={device.connection_type}
-                    isConfigured={!!config?.base_url}
-                  />
-                </div>
+                {chatMode === 'chatkit' ? (
+                  <div className="w-full flex items-stretch justify-center">
+                    <ChatKitPanel
+                      deviceId={device.id}
+                      deviceSerial={device.serial}
+                      deviceName={device.model}
+                      deviceConnectionType={device.connection_type}
+                      isVisible={device.id === currentDeviceId}
+                    />
+                  </div>
+                ) : (
+                  <div className="w-full flex items-stretch justify-center">
+                    <DevicePanel
+                      deviceId={device.id}
+                      deviceSerial={device.serial}
+                      deviceName={device.model}
+                      deviceConnectionType={device.connection_type}
+                      isConfigured={!!config?.base_url}
+                    />
+                  </div>
+                )}
               </div>
             ))
           )}
