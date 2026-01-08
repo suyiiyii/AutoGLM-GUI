@@ -250,36 +250,48 @@ export function DeviceCard({
           {/* Action buttons */}
           <div className="flex items-center gap-1 flex-shrink-0">
             {onConnectWifi && isUsb && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleWifiClick}
-                disabled={loading}
-                className="h-7 w-7 text-slate-400 hover:text-[#1d9bf0]"
-                title={t.deviceCard.connectViaWifi}
-              >
-                {loading ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Wifi className="w-3.5 h-3.5" />
-                )}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleWifiClick}
+                    disabled={loading}
+                    className="h-7 w-7 text-slate-400 hover:text-[#1d9bf0]"
+                  >
+                    {loading ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Wifi className="w-3.5 h-3.5" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{t.deviceCard.connectViaWifi}</p>
+                </TooltipContent>
+              </Tooltip>
             )}
             {onDisconnectWifi && isWifi && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleDisconnectClick}
-                disabled={loading}
-                className="h-7 w-7 text-slate-400 hover:text-orange-500"
-                title={t.deviceCard.disconnectWifi}
-              >
-                {loading ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <WifiOff className="w-3.5 h-3.5" />
-                )}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleDisconnectClick}
+                    disabled={loading}
+                    className="h-7 w-7 text-slate-400 hover:text-orange-500"
+                  >
+                    {loading ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <WifiOff className="w-3.5 h-3.5" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{t.deviceCard.disconnectWifi}</p>
+                </TooltipContent>
+              </Tooltip>
             )}
             {isRemote && (
               <Button
