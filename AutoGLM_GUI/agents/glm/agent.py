@@ -72,12 +72,16 @@ class GLMAgent:
             self._is_running = False
 
     def step(self, task: str | None = None) -> StepResult:
-        is_first = len(self._context) == 0
+        self._is_running = True
+        try:
+            is_first = len(self._context) == 0
 
-        if is_first and not task:
-            raise ValueError("Task is required for the first step")
+            if is_first and not task:
+                raise ValueError("Task is required for the first step")
 
-        return self._execute_step(task, is_first)
+            return self._execute_step(task, is_first)
+        finally:
+            self._is_running = False
 
     def reset(self) -> None:
         self._context = []
