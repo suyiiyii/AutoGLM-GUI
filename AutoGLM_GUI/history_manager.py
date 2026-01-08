@@ -1,12 +1,20 @@
 """Conversation history manager with JSON file persistence."""
 
+import hashlib
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.models.history import ConversationRecord, DeviceHistory
+
+# ADB serialno 合法字符：字母数字、下划线、破折号、冒号、点
+# USB: ABC123DEF456
+# WiFi: 192.168.1.100:5555
+# mDNS: adb-243a09b7._adb-tls-connect._tcp
+_SERIALNO_PATTERN = re.compile(r"^[a-zA-Z0-9_\-:\.]+$")
 
 
 class HistoryManager:
@@ -27,8 +35,40 @@ class HistoryManager:
         self._file_cache: dict[str, DeviceHistory] = {}
         self._file_mtime: dict[str, float] = {}
 
+    def _sanitize_serialno(self, serialno: str) -> str:
+        """将 serialno 转换为安全的文件名.
+
+        如果 serialno 包含合法字符，直接使用；否则使用 SHA1 哈希作为文件名。
+        这样可以防止路径遍历攻击，同时保证功能正常。
+        """
+        if not serialno:
+            return hashlib.sha1(b"empty").hexdigest()
+
+        # 检查是否包含路径遍历字符或不合法字符
+        if ".." in serialno or not _SERIALNO_PATTERN.match(serialno):
+            # 使用 SHA1 哈希作为安全的文件名
+            hashed = hashlib.sha1(serialno.encode("utf-8")).hexdigest()
+            logger.warning(
+                f"Unsafe serialno detected, using hash: {serialno!r} -> {hashed}"
+            )
+            return hashed
+
+        return serialno
+
     def _get_history_path(self, serialno: str) -> Path:
-        return self._history_dir / f"{serialno}.json"
+        """获取历史记录文件路径（带路径遍历防护）."""
+        safe_name = self._sanitize_serialno(serialno)
+        path = (self._history_dir / f"{safe_name}.json").resolve()
+
+        # 防御深度：确保解析后的路径仍在 history_dir 内
+        history_dir_resolved = self._history_dir.resolve()
+        if not path.is_relative_to(history_dir_resolved):
+            # 理论上不应该到这里，但作为最后防线
+            hashed = hashlib.sha1(serialno.encode("utf-8")).hexdigest()
+            logger.error(f"Path escape detected for {serialno!r}, using hash: {hashed}")
+            path = history_dir_resolved / f"{hashed}.json"
+
+        return path
 
     def _load_history(self, serialno: str) -> DeviceHistory:
         path = self._get_history_path(serialno)
