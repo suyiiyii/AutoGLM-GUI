@@ -56,9 +56,6 @@ RUN pip install --no-cache-dir .
 RUN mkdir -p /root/.config/autoglm /app/logs
 
 # Environment variables (can be overridden at runtime)
-ENV AUTOGLM_BASE_URL=""
-ENV AUTOGLM_MODEL_NAME="autoglm-phone"
-ENV AUTOGLM_API_KEY=""
 ENV AUTOGLM_CORS_ORIGINS="*"
 
 # Expose the default port
