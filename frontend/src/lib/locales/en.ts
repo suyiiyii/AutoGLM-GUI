@@ -81,7 +81,7 @@ export const en = {
     emulatorBluestacks: 'BlueStacks',
     emulatorCustom: 'Custom',
     emulatorNote:
-      'Emulators: Select preset above to auto-fill IP and port. Make sure ADB debugging is enabled in emulator settings.',
+      'Select preset above to auto-fill IP and port (for emulators), or manually enter IP and port for physical devices. Make sure ADB debugging is enabled in device settings.',
     pairTab: 'Pair Device',
     pairingCode: 'Pairing Code',
     pairingPort: 'Pairing Port',

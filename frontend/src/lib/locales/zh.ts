@@ -80,7 +80,7 @@ export const zh = {
     emulatorBluestacks: 'BlueStacks',
     emulatorCustom: '自定义',
     emulatorNote:
-      '模拟器用户：选择上方预设可自动填充 IP 和端口。请确保在模拟器设置中开启了 ADB 调试。',
+      '选择上方预设可自动填充 IP 和端口（模拟器），或手动输入真机的 IP 和端口。请确保在设备设置中开启了 ADB 调试。',
     pairTab: '配对设备',
     pairingCode: '配对码',
     pairingPort: '配对端口',

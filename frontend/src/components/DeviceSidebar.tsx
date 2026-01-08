@@ -41,7 +41,7 @@ import {
 import { useTranslation } from '../lib/i18n-context';
 import { useDebouncedState } from '@/hooks/useDebouncedState';
 
-  // Emulator presets for quick connection
+// Emulator presets for quick connection
 interface EmulatorPreset {
   id: string;
   nameKey: string; // i18n key
