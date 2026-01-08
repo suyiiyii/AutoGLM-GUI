@@ -174,6 +174,7 @@ function ChatComponent() {
     agent_type: 'glm',
     agent_config_params: {} as Record<string, unknown>,
     default_max_steps: 100,
+    layered_max_turns: 50,
     decision_base_url: '',
     decision_model_name: '',
     decision_api_key: '',
@@ -190,6 +191,7 @@ function ChatComponent() {
           agent_type: data.agent_type || 'glm',
           agent_config_params: data.agent_config_params || undefined,
           default_max_steps: data.default_max_steps || 100,
+          layered_max_turns: data.layered_max_turns || 50,
           decision_base_url: data.decision_base_url || undefined,
           decision_model_name: data.decision_model_name || undefined,
           decision_api_key: data.decision_api_key || undefined,
@@ -207,6 +209,7 @@ function ChatComponent() {
           agent_type: data.agent_type || 'glm',
           agent_config_params: data.agent_config_params || {},
           default_max_steps: data.default_max_steps || 100,
+          layered_max_turns: data.layered_max_turns || 50,
           decision_base_url: data.decision_base_url || '',
           decision_model_name: data.decision_model_name || 'glm-4.7',
           decision_api_key: data.decision_api_key || '',
@@ -353,6 +356,7 @@ function ChatComponent() {
             ? tempConfig.agent_config_params
             : undefined,
         default_max_steps: tempConfig.default_max_steps,
+        layered_max_turns: tempConfig.layered_max_turns,
         decision_base_url: tempConfig.decision_base_url || undefined,
         decision_model_name: tempConfig.decision_model_name || undefined,
         decision_api_key: tempConfig.decision_api_key || undefined,
@@ -368,6 +372,7 @@ function ChatComponent() {
             ? tempConfig.agent_config_params
             : undefined,
         default_max_steps: tempConfig.default_max_steps,
+        layered_max_turns: tempConfig.layered_max_turns,
         decision_base_url: tempConfig.decision_base_url || undefined,
         decision_model_name: tempConfig.decision_model_name || undefined,
         decision_api_key: tempConfig.decision_api_key || undefined,
@@ -733,6 +738,30 @@ function ChatComponent() {
                   {t.chat.maxStepsHint || '单次任务最大执行步数（1-1000）'}
                 </p>
               </div>
+
+              {/* 分层代理最大轮次配置 */}
+              <div className="space-y-2">
+                <Label htmlFor="layered_max_turns">
+                  分层代理最大轮次
+                </Label>
+                <Input
+                  id="layered_max_turns"
+                  type="number"
+                  min={1}
+                  value={tempConfig.layered_max_turns}
+                  onChange={e => {
+                    const value = parseInt(e.target.value) || 50;
+                    setTempConfig(prev => ({
+                      ...prev,
+                      layered_max_turns: Math.max(1, value),
+                    }));
+                  }}
+                  className="w-full"
+                />
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  分层代理模式的最大轮次（最小值为1）
+                </p>
+              </div>
             </TabsContent>
 
             {/* 决策模型 Tab */}
@@ -907,6 +936,7 @@ function ChatComponent() {
                     agent_type: config.agent_type || 'glm',
                     agent_config_params: config.agent_config_params || {},
                     default_max_steps: config.default_max_steps || 100,
+                    layered_max_turns: config.layered_max_turns || 50,
                     decision_base_url: config.decision_base_url || '',
                     decision_model_name:
                       config.decision_model_name || 'glm-4.7',

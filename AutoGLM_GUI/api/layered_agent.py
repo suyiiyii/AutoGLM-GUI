@@ -418,11 +418,12 @@ async def layered_agent_chat(request: LayeredAgentRequest):
             session_id = request.session_id or request.device_id or "default"
             session = _get_or_create_session(session_id)
 
-            # Run the agent with streaming and session for memory
+            effective_config = config_manager.get_effective_config()
+
             result = Runner.run_streamed(
                 agent,
                 request.message,
-                max_turns=50,
+                max_turns=effective_config.layered_max_turns,
                 session=session,
             )
 

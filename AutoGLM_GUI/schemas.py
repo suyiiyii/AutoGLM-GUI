@@ -296,6 +296,9 @@ class ConfigResponse(BaseModel):
     # Agent 执行配置
     default_max_steps: int = 100  # 单次任务最大执行步数
 
+    # 分层代理配置
+    layered_max_turns: int = 50  # 分层代理模式的最大轮次
+
     # 决策模型配置（用于分层代理）
     decision_base_url: str | None = None
     decision_model_name: str | None = None
@@ -318,6 +321,9 @@ class ConfigSaveRequest(BaseModel):
     # Agent 执行配置
     default_max_steps: int | None = None  # 单次任务最大执行步数
 
+    # 分层代理配置
+    layered_max_turns: int | None = None  # 分层代理模式的最大轮次
+
     # 决策模型配置（用于分层代理）
     decision_base_url: str | None = None
     decision_model_name: str | None = None
@@ -333,6 +339,16 @@ class ConfigSaveRequest(BaseModel):
             raise ValueError("default_max_steps must be positive")
         if v > 1000:
             raise ValueError("default_max_steps must be <= 1000")
+        return v
+
+    @field_validator("layered_max_turns")
+    @classmethod
+    def validate_layered_max_turns(cls, v: int | None) -> int | None:
+        """验证 layered_max_turns 范围."""
+        if v is None:
+            return v
+        if v <= 0:
+            raise ValueError("layered_max_turns must be positive")
         return v
 
     @field_validator("base_url")
