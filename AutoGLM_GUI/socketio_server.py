@@ -30,7 +30,9 @@ sio = socketio.AsyncServer(
 
 _socket_streamers: dict[str, ScrcpyStreamer] = {}
 _stream_tasks: dict[str, asyncio.Task] = {}
-_device_locks: dict[str, asyncio.Lock] = {}  # Lock per device to prevent concurrent connections
+_device_locks: dict[
+    str, asyncio.Lock
+] = {}  # Lock per device to prevent concurrent connections
 
 
 async def _stop_stream_for_sid(sid: str) -> None:
@@ -41,6 +43,46 @@ async def _stop_stream_for_sid(sid: str) -> None:
     streamer = _socket_streamers.pop(sid, None)
     if streamer:
         streamer.stop()
+
+
+def _classify_error(exc: Exception) -> dict:
+    """Classify error and return user-friendly message."""
+    error_str = str(exc)
+
+    if "Address already in use" in error_str or (
+        "Port" in error_str and "occupied" in error_str
+    ):
+        return {
+            "message": "端口冲突，视频流端口仍被占用。通常会自动解决，如果持续出现请重启应用。",
+            "type": "port_conflict",
+            "technical_details": error_str,
+        }
+    elif "Device" in error_str and (
+        "not available" in error_str or "not found" in error_str
+    ):
+        return {
+            "message": "设备无响应，请检查 USB/WiFi 连接。",
+            "type": "device_offline",
+            "technical_details": error_str,
+        }
+    elif "timeout" in error_str.lower() or "timed out" in error_str.lower():
+        return {
+            "message": "连接超时，请检查设备连接后重试。",
+            "type": "timeout",
+            "technical_details": error_str,
+        }
+    elif "Failed to connect" in error_str:
+        return {
+            "message": "无法连接到 scrcpy 服务器，请检查设备连接。",
+            "type": "connection_failed",
+            "technical_details": error_str,
+        }
+    else:
+        return {
+            "message": error_str,
+            "type": "unknown",
+            "technical_details": error_str,
+        }
 
 
 def stop_streamers(device_id: str | None = None) -> None:
@@ -103,6 +145,14 @@ async def disconnect(sid: str) -> None:
 async def connect_device(sid: str, data: dict | None) -> None:
     payload = data or {}
     device_id = payload.get("device_id") or payload.get("deviceId")
+    if not device_id:
+        await sio.emit(
+            "error",
+            {"message": "Device ID is required", "type": "invalid_request"},
+            to=sid,
+        )
+        return
+
     max_size = int(payload.get("maxSize") or 1280)
     bit_rate = int(payload.get("bitRate") or 4_000_000)
 
@@ -129,84 +179,32 @@ async def connect_device(sid: str, data: dict | None) -> None:
             logger.info(f"Stopping existing stream for device {device_id} from sid {s}")
             await _stop_stream_for_sid(s)
 
-        max_retries = 3
-        retry_delay = 2.0
+        streamer = ScrcpyStreamer(
+            device_id=device_id,
+            max_size=max_size,
+            bit_rate=bit_rate,
+        )
 
-        last_error: Exception | None = None
-        for attempt in range(max_retries):
-            streamer = ScrcpyStreamer(
-                device_id=device_id,
-                max_size=max_size,
-                bit_rate=bit_rate,
-            )
-
-            try:
-                await streamer.start()
-                metadata = await streamer.read_video_metadata()
-                await sio.emit(
-                    "video-metadata",
-                    {
-                        "deviceName": metadata.device_name,
-                        "width": metadata.width,
-                        "height": metadata.height,
-                        "codec": metadata.codec,
-                    },
-                    to=sid,
-                )
-
-                _socket_streamers[sid] = streamer
-                _stream_tasks[sid] = asyncio.create_task(_stream_packets(sid, streamer))
-                return
-
-            except Exception as exc:
-                last_error = exc
-                streamer.stop()
-
-                # Enhanced error reporting - classify error types
-                error_type = "unknown"
-                user_message = str(exc)
-
-                if "Address already in use" in str(exc) or "Port" in str(exc) and "occupied" in str(exc):
-                    error_type = "port_conflict"
-                    user_message = (
-                        "Port conflict detected. The video stream port is still occupied. "
-                        "This usually resolves automatically. If it persists, please restart the app."
-                    )
-                elif "Device" in str(exc) and ("not available" in str(exc) or "not found" in str(exc)):
-                    error_type = "device_offline"
-                    user_message = "Device is not responding. Please check USB/WiFi connection."
-                elif "timeout" in str(exc).lower() or "timed out" in str(exc).lower():
-                    error_type = "timeout"
-                    user_message = "Connection timed out. Please check device connection and try again."
-                elif "Failed to connect" in str(exc):
-                    error_type = "connection_failed"
-                    user_message = "Failed to connect to scrcpy server. Please check device connection."
-
-                if attempt < max_retries - 1:
-                    logger.warning(
-                        "Failed to connect scrcpy (attempt %d/%d, type=%s): %s. Retrying in %ss...",
-                        attempt + 1,
-                        max_retries,
-                        error_type,
-                        exc,
-                        retry_delay,
-                    )
-                    await asyncio.sleep(retry_delay)
-                else:
-                    logger.exception(
-                        "Failed to start scrcpy stream after %d attempts (type=%s)",
-                        max_retries,
-                        error_type,
-                    )
-
-        if last_error:
-            # Structured error with type and user-friendly message
+        try:
+            await streamer.start()  # ScrcpyStreamer has built-in retry logic
+            metadata = await streamer.read_video_metadata()
             await sio.emit(
-                "error",
+                "video-metadata",
                 {
-                    "message": user_message,
-                    "type": error_type,
-                    "technical_details": str(last_error),
+                    "deviceName": metadata.device_name,
+                    "width": metadata.width,
+                    "height": metadata.height,
+                    "codec": metadata.codec,
                 },
                 to=sid,
             )
+
+            _socket_streamers[sid] = streamer
+            _stream_tasks[sid] = asyncio.create_task(_stream_packets(sid, streamer))
+
+        except Exception as exc:
+            streamer.stop()
+            logger.exception("Failed to start scrcpy stream: %s", exc)
+            # Use unified error classification
+            error_info = _classify_error(exc)
+            await sio.emit("error", error_info, to=sid)
