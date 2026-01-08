@@ -17,7 +17,7 @@ import {
 import { ConfirmDialog } from './ConfirmDialog';
 import { useTranslation } from '../lib/i18n-context';
 import { removeRemoteDevice } from '../api';
-import type { AgentStatus } from '../api';
+import type { AgentStatus, CurrentTask } from '../api';
 
 interface DeviceCardProps {
   id: string;
@@ -26,6 +26,7 @@ interface DeviceCardProps {
   status: string;
   connectionType?: string;
   agent?: AgentStatus | null;
+  currentTask?: CurrentTask | null;
   isActive: boolean;
   onClick: () => void;
   onConnectWifi?: () => Promise<void>;
@@ -39,6 +40,7 @@ export function DeviceCard({
   status,
   connectionType,
   agent,
+  currentTask,
   isActive,
   onClick,
   onConnectWifi,
@@ -209,8 +211,19 @@ export function DeviceCard({
             </span>
           </div>
 
-          {/* Right column: Connection type badges */}
+          {/* Right column: Connection type badges and task source */}
           <div className="flex-shrink-0 flex flex-col items-end gap-1">
+            {/* Task source badge (when busy) */}
+            {agent?.state === 'busy' && currentTask && (
+              <Badge
+                variant="secondary"
+                className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900 dark:text-amber-300"
+              >
+                {currentTask.source === 'scheduled'
+                  ? `⏰ ${currentTask.name || '定时任务'}`
+                  : '💬 手动'}
+              </Badge>
+            )}
             {/* Connection type badge */}
             {(() => {
               if (isRemote) {

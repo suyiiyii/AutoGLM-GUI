@@ -397,18 +397,24 @@ async def layered_agent_chat(request: LayeredAgentRequest):
     - done: Final response
     - error: Error occurred
     """
+    from datetime import datetime
+
     from agents.stream_events import (
         RawResponsesStreamEvent,
         RunItemStreamEvent,
     )
 
+    from AutoGLM_GUI.history_manager import history_manager
+    from AutoGLM_GUI.models.history import ConversationRecord
+
     async def event_generator():
+        start_time = datetime.now()
+        final_output = ""
+        final_success = False
+
         try:
-            # Ensure agent is initialized
             agent = _ensure_agent()
 
-            # 获取或创建 session 以保持对话上下文
-            # 优先使用 session_id，其次使用 device_id，最后使用默认值
             session_id = request.session_id or request.device_id or "default"
             session = _get_or_create_session(session_id)
 
@@ -596,10 +602,10 @@ async def layered_agent_chat(request: LayeredAgentRequest):
                 with _active_runs_lock:
                     _active_runs.pop(session_id, None)
 
-            # Final result
             final_output = (
                 result.final_output if hasattr(result, "final_output") else ""
             )
+            final_success = True
             event_data = {
                 "type": "done",
                 "content": final_output,
@@ -609,11 +615,35 @@ async def layered_agent_chat(request: LayeredAgentRequest):
 
         except Exception as e:
             logger.exception(f"[LayeredAgent] Error: {e}")
+            final_output = str(e)
+            final_success = False
             event_data = {
                 "type": "error",
                 "message": str(e),
             }
             yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+
+        finally:
+            if request.device_id and final_output:
+                from AutoGLM_GUI.device_manager import DeviceManager
+
+                device_manager = DeviceManager.get_instance()
+                serialno = device_manager.get_serial_by_device_id(request.device_id)
+                if serialno:
+                    end_time = datetime.now()
+                    record = ConversationRecord(
+                        task_text=request.message,
+                        final_message=final_output,
+                        success=final_success,
+                        steps=0,
+                        start_time=start_time,
+                        end_time=end_time,
+                        duration_ms=int((end_time - start_time).total_seconds() * 1000),
+                        source="layered",
+                        source_detail=request.session_id or "",
+                        error_message=None if final_success else final_output,
+                    )
+                    history_manager.add_record(serialno, record)
 
     return StreamingResponse(
         event_generator(),

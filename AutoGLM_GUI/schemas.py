@@ -264,6 +264,13 @@ class AgentStatusResponse(BaseModel):
     model_name: str  # 来自 ModelConfig
 
 
+class CurrentTaskResponse(BaseModel):
+    """当前执行任务信息."""
+
+    source: str  # "manual" | "scheduled"
+    name: str | None = None  # 定时任务名称
+
+
 class DeviceResponse(BaseModel):
     """设备信息及可选的 Agent 状态."""
 
@@ -275,6 +282,7 @@ class DeviceResponse(BaseModel):
     state: str
     is_available_only: bool
     agent: AgentStatusResponse | None = None
+    current_task: CurrentTaskResponse | None = None
 
 
 class DeviceListResponse(BaseModel):
@@ -697,3 +705,110 @@ class ReinitAllAgentsResponse(BaseModel):
     succeeded: list[str]
     failed: dict[str, str]
     message: str
+
+
+# History Models
+
+
+class HistoryRecordResponse(BaseModel):
+    """历史记录条目响应."""
+
+    id: str
+    task_text: str
+    final_message: str
+    success: bool
+    steps: int
+    start_time: str
+    end_time: str | None
+    duration_ms: int
+    source: str
+    source_detail: str
+    error_message: str | None
+
+
+class HistoryListResponse(BaseModel):
+    """历史记录列表响应."""
+
+    records: list[HistoryRecordResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+# Scheduled Task Models
+
+
+class ScheduledTaskCreate(BaseModel):
+    """创建定时任务请求."""
+
+    name: str
+    workflow_uuid: str
+    device_serialno: str
+    cron_expression: str
+    enabled: bool = True
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("name cannot be empty")
+        return v.strip()
+
+    @field_validator("cron_expression")
+    @classmethod
+    def validate_cron(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("cron_expression cannot be empty")
+        parts = v.strip().split()
+        if len(parts) != 5:
+            raise ValueError(
+                "cron_expression must have 5 fields (minute hour day month weekday)"
+            )
+        return v.strip()
+
+
+class ScheduledTaskUpdate(BaseModel):
+    """更新定时任务请求."""
+
+    name: str | None = None
+    workflow_uuid: str | None = None
+    device_serialno: str | None = None
+    cron_expression: str | None = None
+    enabled: bool | None = None
+
+    @field_validator("cron_expression")
+    @classmethod
+    def validate_cron(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        if not v.strip():
+            raise ValueError("cron_expression cannot be empty")
+        parts = v.strip().split()
+        if len(parts) != 5:
+            raise ValueError(
+                "cron_expression must have 5 fields (minute hour day month weekday)"
+            )
+        return v.strip()
+
+
+class ScheduledTaskResponse(BaseModel):
+    """定时任务响应."""
+
+    id: str
+    name: str
+    workflow_uuid: str
+    device_serialno: str
+    cron_expression: str
+    enabled: bool
+    created_at: str
+    updated_at: str
+    last_run_time: str | None
+    last_run_success: bool | None
+    last_run_message: str | None
+    next_run_time: str | None = None
+
+
+class ScheduledTaskListResponse(BaseModel):
+    """定时任务列表响应."""
+
+    tasks: list[ScheduledTaskResponse]

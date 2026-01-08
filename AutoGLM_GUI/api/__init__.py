@@ -20,10 +20,12 @@ from . import (
     control,
     devices,
     health,
+    history,
     layered_agent,
     mcp,
     media,
     metrics,
+    scheduled_tasks,
     version,
     workflows,
 )
@@ -86,15 +88,20 @@ def create_app() -> FastAPI:
         asyncio.create_task(qr_pairing_manager.cleanup_expired_sessions())
 
         from AutoGLM_GUI.device_manager import DeviceManager
+        from AutoGLM_GUI.scheduler_manager import scheduler_manager
 
         device_manager = DeviceManager.get_instance()
         device_manager.start_polling()
+
+        # Start scheduled task scheduler
+        scheduler_manager.start()
 
         # Run MCP lifespan
         async with mcp_app.lifespan(app):
             yield
 
-        # App shutdown (if needed in the future)
+        # App shutdown
+        scheduler_manager.shutdown()
 
     # Create FastAPI app with combined lifespan
     app = FastAPI(
@@ -111,11 +118,13 @@ def create_app() -> FastAPI:
 
     app.include_router(agents.router)
     app.include_router(health.router)
+    app.include_router(history.router)
     app.include_router(layered_agent.router)
     app.include_router(devices.router)
     app.include_router(control.router)
     app.include_router(media.router)
     app.include_router(metrics.router)
+    app.include_router(scheduled_tasks.router)
     app.include_router(version.router)
     app.include_router(workflows.router)
 

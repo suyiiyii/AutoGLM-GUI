@@ -194,8 +194,13 @@ def chat_stream(request: ChatRequest):
 
     Agent 会在首次使用时自动初始化，无需手动调用 /api/init。
     """
+    from datetime import datetime
+
     from AutoGLM_GUI.agents.stream_runner import AgentStepStreamer
+    from AutoGLM_GUI.device_manager import DeviceManager
     from AutoGLM_GUI.exceptions import AgentInitializationError, DeviceBusyError
+    from AutoGLM_GUI.history_manager import history_manager
+    from AutoGLM_GUI.models.history import ConversationRecord
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
     device_id = request.device_id
@@ -203,8 +208,12 @@ def chat_stream(request: ChatRequest):
 
     def event_generator():
         acquired = False
+        start_time = datetime.now()
+        final_message = ""
+        final_success = False
+        final_steps = 0
+
         try:
-            # 使用 auto_initialize=True 自动初始化 Agent
             acquired = manager.acquire_device(
                 device_id, timeout=0, raise_on_timeout=True, auto_initialize=True
             )
@@ -226,6 +235,11 @@ def chat_stream(request: ChatRequest):
                         ):
                             continue
 
+                        if event_type == AgentEventType.DONE.value:
+                            final_message = event_data_dict.get("message", "")
+                            final_success = event_data_dict.get("success", False)
+                            final_steps = event_data_dict.get("steps", 0)
+
                         event_data = _create_sse_event(event_type, event_data_dict)
 
                         yield f"event: {event_type}\n"
@@ -235,8 +249,24 @@ def chat_stream(request: ChatRequest):
                 if acquired:
                     manager.release_device(device_id)
 
+                device_manager = DeviceManager.get_instance()
+                serialno = device_manager.get_serial_by_device_id(device_id)
+                if serialno and final_message:
+                    end_time = datetime.now()
+                    record = ConversationRecord(
+                        task_text=request.message,
+                        final_message=final_message,
+                        success=final_success,
+                        steps=final_steps,
+                        start_time=start_time,
+                        end_time=end_time,
+                        duration_ms=int((end_time - start_time).total_seconds() * 1000),
+                        source="chat",
+                        error_message=None if final_success else final_message,
+                    )
+                    history_manager.add_record(serialno, record)
+
         except AgentInitializationError as e:
-            # 初始化失败
             logger.error(f"Failed to initialize agent for {device_id}: {e}")
             error_data = _create_sse_event(
                 "error",

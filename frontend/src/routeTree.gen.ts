@@ -10,7 +10,9 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WorkflowsRouteImport } from './routes/workflows'
+import { Route as ScheduledTasksRouteImport } from './routes/scheduled-tasks'
 import { Route as LogsRouteImport } from './routes/logs'
+import { Route as HistoryRouteImport } from './routes/history'
 import { Route as ChatRouteImport } from './routes/chat'
 import { Route as AboutRouteImport } from './routes/about'
 import { Route as IndexRouteImport } from './routes/index'
@@ -20,9 +22,19 @@ const WorkflowsRoute = WorkflowsRouteImport.update({
   path: '/workflows',
   getParentRoute: () => rootRouteImport,
 } as any)
+const ScheduledTasksRoute = ScheduledTasksRouteImport.update({
+  id: '/scheduled-tasks',
+  path: '/scheduled-tasks',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const LogsRoute = LogsRouteImport.update({
   id: '/logs',
   path: '/logs',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HistoryRoute = HistoryRouteImport.update({
+  id: '/history',
+  path: '/history',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ChatRoute = ChatRouteImport.update({
@@ -45,14 +57,18 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/chat': typeof ChatRoute
+  '/history': typeof HistoryRoute
   '/logs': typeof LogsRoute
+  '/scheduled-tasks': typeof ScheduledTasksRoute
   '/workflows': typeof WorkflowsRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/chat': typeof ChatRoute
+  '/history': typeof HistoryRoute
   '/logs': typeof LogsRoute
+  '/scheduled-tasks': typeof ScheduledTasksRoute
   '/workflows': typeof WorkflowsRoute
 }
 export interface FileRoutesById {
@@ -60,22 +76,48 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/about': typeof AboutRoute
   '/chat': typeof ChatRoute
+  '/history': typeof HistoryRoute
   '/logs': typeof LogsRoute
+  '/scheduled-tasks': typeof ScheduledTasksRoute
   '/workflows': typeof WorkflowsRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/about' | '/chat' | '/logs' | '/workflows'
+  fullPaths:
+    | '/'
+    | '/about'
+    | '/chat'
+    | '/history'
+    | '/logs'
+    | '/scheduled-tasks'
+    | '/workflows'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/about' | '/chat' | '/logs' | '/workflows'
-  id: '__root__' | '/' | '/about' | '/chat' | '/logs' | '/workflows'
+  to:
+    | '/'
+    | '/about'
+    | '/chat'
+    | '/history'
+    | '/logs'
+    | '/scheduled-tasks'
+    | '/workflows'
+  id:
+    | '__root__'
+    | '/'
+    | '/about'
+    | '/chat'
+    | '/history'
+    | '/logs'
+    | '/scheduled-tasks'
+    | '/workflows'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AboutRoute: typeof AboutRoute
   ChatRoute: typeof ChatRoute
+  HistoryRoute: typeof HistoryRoute
   LogsRoute: typeof LogsRoute
+  ScheduledTasksRoute: typeof ScheduledTasksRoute
   WorkflowsRoute: typeof WorkflowsRoute
 }
 
@@ -88,11 +130,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof WorkflowsRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/scheduled-tasks': {
+      id: '/scheduled-tasks'
+      path: '/scheduled-tasks'
+      fullPath: '/scheduled-tasks'
+      preLoaderRoute: typeof ScheduledTasksRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/logs': {
       id: '/logs'
       path: '/logs'
       fullPath: '/logs'
       preLoaderRoute: typeof LogsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/history': {
+      id: '/history'
+      path: '/history'
+      fullPath: '/history'
+      preLoaderRoute: typeof HistoryRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/chat': {
@@ -123,7 +179,9 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AboutRoute: AboutRoute,
   ChatRoute: ChatRoute,
+  HistoryRoute: HistoryRoute,
   LogsRoute: LogsRoute,
+  ScheduledTasksRoute: ScheduledTasksRoute,
   WorkflowsRoute: WorkflowsRoute,
 }
 export const routeTree = rootRouteImport

@@ -4,6 +4,8 @@ import {
   MessageSquare,
   ListChecks,
   FileText,
+  History,
+  Clock,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -41,6 +43,18 @@ export function NavigationSidebar({ className }: NavigationSidebarProps) {
       icon: ListChecks,
       label: t.navigation.workflows,
       path: '/workflows',
+    },
+    {
+      id: 'history',
+      icon: History,
+      label: t.navigation.history || '历史记录',
+      path: '/history',
+    },
+    {
+      id: 'scheduled-tasks',
+      icon: Clock,
+      label: t.navigation.scheduledTasks || '定时任务',
+      path: '/scheduled-tasks',
     },
     {
       id: 'logs',

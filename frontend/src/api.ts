@@ -44,6 +44,11 @@ export interface AgentStatus {
   model_name: string;
 }
 
+export interface CurrentTask {
+  source: 'manual' | 'scheduled';
+  name: string | null;
+}
+
 export interface Device {
   id: string;
   serial: string; // Hardware serial number (always present)
@@ -53,6 +58,7 @@ export interface Device {
   state: string;
   is_available_only: boolean;
   agent: AgentStatus | null; // Agent runtime status (null if not initialized)
+  current_task: CurrentTask | null; // Current task info when agent is busy
 }
 
 export interface DeviceListResponse {
@@ -821,5 +827,156 @@ export async function abortLayeredAgentChat(sessionId: string): Promise<{
   const res = await axios.post('/api/layered-agent/abort', {
     session_id: sessionId,
   });
+  return res.data;
+}
+
+// ==================== History API ====================
+
+export interface HistoryRecordResponse {
+  id: string;
+  task_text: string;
+  final_message: string;
+  success: boolean;
+  steps: number;
+  start_time: string;
+  end_time: string | null;
+  duration_ms: number;
+  source: 'chat' | 'layered' | 'scheduled';
+  source_detail: string;
+  error_message: string | null;
+}
+
+export interface HistoryListResponse {
+  records: HistoryRecordResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export async function listHistory(
+  serialno: string,
+  limit: number = 50,
+  offset: number = 0
+): Promise<HistoryListResponse> {
+  const res = await axios.get<HistoryListResponse>(`/api/history/${serialno}`, {
+    params: { limit, offset },
+  });
+  return res.data;
+}
+
+export async function getHistoryRecord(
+  serialno: string,
+  recordId: string
+): Promise<HistoryRecordResponse> {
+  const res = await axios.get<HistoryRecordResponse>(
+    `/api/history/${serialno}/${recordId}`
+  );
+  return res.data;
+}
+
+export async function deleteHistoryRecord(
+  serialno: string,
+  recordId: string
+): Promise<void> {
+  await axios.delete(`/api/history/${serialno}/${recordId}`);
+}
+
+export async function clearHistory(serialno: string): Promise<void> {
+  await axios.delete(`/api/history/${serialno}`);
+}
+
+// ==================== Scheduled Tasks API ====================
+
+export interface ScheduledTaskResponse {
+  id: string;
+  name: string;
+  workflow_uuid: string;
+  device_serialno: string;
+  cron_expression: string;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+  last_run_time: string | null;
+  last_run_success: boolean | null;
+  last_run_message: string | null;
+  next_run_time: string | null;
+}
+
+export interface ScheduledTaskListResponse {
+  tasks: ScheduledTaskResponse[];
+}
+
+export interface ScheduledTaskCreate {
+  name: string;
+  workflow_uuid: string;
+  device_serialno: string;
+  cron_expression: string;
+  enabled?: boolean;
+}
+
+export interface ScheduledTaskUpdate {
+  name?: string;
+  workflow_uuid?: string;
+  device_serialno?: string;
+  cron_expression?: string;
+  enabled?: boolean;
+}
+
+export async function listScheduledTasks(): Promise<ScheduledTaskListResponse> {
+  const res = await axios.get<ScheduledTaskListResponse>(
+    '/api/scheduled-tasks'
+  );
+  return res.data;
+}
+
+export async function createScheduledTask(
+  data: ScheduledTaskCreate
+): Promise<ScheduledTaskResponse> {
+  const res = await axios.post<ScheduledTaskResponse>(
+    '/api/scheduled-tasks',
+    data
+  );
+  return res.data;
+}
+
+export async function getScheduledTask(
+  taskId: string
+): Promise<ScheduledTaskResponse> {
+  const res = await axios.get<ScheduledTaskResponse>(
+    `/api/scheduled-tasks/${taskId}`
+  );
+  return res.data;
+}
+
+export async function updateScheduledTask(
+  taskId: string,
+  data: ScheduledTaskUpdate
+): Promise<ScheduledTaskResponse> {
+  const res = await axios.put<ScheduledTaskResponse>(
+    `/api/scheduled-tasks/${taskId}`,
+    data
+  );
+  return res.data;
+}
+
+export async function deleteScheduledTask(taskId: string): Promise<void> {
+  await axios.delete(`/api/scheduled-tasks/${taskId}`);
+}
+
+export async function enableScheduledTask(
+  taskId: string
+): Promise<ScheduledTaskResponse> {
+  const res = await axios.post<ScheduledTaskResponse>(
+    `/api/scheduled-tasks/${taskId}/enable`
+  );
+  return res.data;
+}
+
+export async function disableScheduledTask(
+  taskId: string
+): Promise<ScheduledTaskResponse> {
+  const res = await axios.post<ScheduledTaskResponse>(
+    `/api/scheduled-tasks/${taskId}/disable`
+  );
   return res.data;
 }
