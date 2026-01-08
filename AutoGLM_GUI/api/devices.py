@@ -47,7 +47,6 @@ def _build_device_response_with_agent(
     API 层负责协调 DeviceManager 和 PhoneAgentManager，
     通过遍历设备的所有连接来查找已初始化的 Agent。
     """
-    from AutoGLM_GUI.phone_agent_manager import AgentState
 
     response = device.to_dict()
 
@@ -66,20 +65,10 @@ def _build_device_response_with_agent(
                 "model_name": metadata.model_config.model_name,
             }
 
-            # 添加当前任务来源信息（仅当 Agent 繁忙时）
-            if metadata.state == AgentState.BUSY and metadata.current_task_source:
-                response["current_task"] = {
-                    "source": metadata.current_task_source,
-                    "name": metadata.current_task_name,
-                }
-            else:
-                response["current_task"] = None
-
             break  # 找到第一个 Agent 即可退出
     else:
         # 没有找到任何已初始化的 Agent
         response["agent"] = None
-        response["current_task"] = None
 
     return DeviceResponse.model_validate(response)
 

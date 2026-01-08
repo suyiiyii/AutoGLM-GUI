@@ -44,11 +44,6 @@ export interface AgentStatus {
   model_name: string;
 }
 
-export interface CurrentTask {
-  source: 'manual' | 'scheduled';
-  name: string | null;
-}
-
 export interface Device {
   id: string;
   serial: string; // Hardware serial number (always present)
@@ -58,7 +53,6 @@ export interface Device {
   state: string;
   is_available_only: boolean;
   agent: AgentStatus | null; // Agent runtime status (null if not initialized)
-  current_task: CurrentTask | null; // Current task info when agent is busy
 }
 
 export interface DeviceListResponse {

@@ -264,13 +264,6 @@ class AgentStatusResponse(BaseModel):
     model_name: str  # 来自 ModelConfig
 
 
-class CurrentTaskResponse(BaseModel):
-    """当前执行任务信息."""
-
-    source: str  # "manual" | "scheduled"
-    name: str | None = None  # 定时任务名称
-
-
 class DeviceResponse(BaseModel):
     """设备信息及可选的 Agent 状态."""
 
@@ -282,7 +275,6 @@ class DeviceResponse(BaseModel):
     state: str
     is_available_only: bool
     agent: AgentStatusResponse | None = None
-    current_task: CurrentTaskResponse | None = None
 
 
 class DeviceListResponse(BaseModel):

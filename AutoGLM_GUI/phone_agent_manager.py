@@ -41,9 +41,6 @@ class AgentMetadata:
     created_at: float = 0.0
     last_used: float = 0.0
     error_message: Optional[str] = None
-    # Task source tracking (for displaying in device status)
-    current_task_source: Optional[str] = None  # "manual" | "scheduled"
-    current_task_name: Optional[str] = None  # Task name for scheduled tasks
 
 
 @dataclass
