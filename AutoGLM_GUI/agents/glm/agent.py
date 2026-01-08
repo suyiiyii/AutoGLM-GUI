@@ -1,4 +1,5 @@
 import json
+import threading
 import traceback
 from typing import Any, Callable, cast
 
@@ -46,6 +47,9 @@ class GLMAgent:
         self._is_running = False
         self._thinking_callback = thinking_callback
 
+        self._active_stream_lock = threading.Lock()
+        self._active_stream: Any | None = None
+
     def run(self, task: str) -> str:
         self._context = []
         self._step_count = 0
@@ -82,6 +86,19 @@ class GLMAgent:
 
     def abort(self) -> None:
         self._is_running = False
+
+        stream = None
+        with self._active_stream_lock:
+            stream = self._active_stream
+
+        if stream is not None:
+            try:
+                close_fn = getattr(stream, "close", None)
+                if callable(close_fn):
+                    close_fn()
+            except Exception:
+                pass
+
         logger.info("Agent aborted by user")
 
     def _stream_request(
@@ -100,52 +117,69 @@ class GLMAgent:
             stream=True,
         )
 
-        raw_content = ""
-        buffer = ""
-        action_markers = ["finish(message=", "do(action="]
-        in_action_phase = False
+        with self._active_stream_lock:
+            self._active_stream = stream
 
-        for chunk in stream:
-            if len(chunk.choices) == 0:
-                continue
-            if chunk.choices[0].delta.content is not None:
-                content = chunk.choices[0].delta.content
-                raw_content += content
+        try:
+            raw_content = ""
+            buffer = ""
+            action_markers = ["finish(message=", "do(action="]
+            in_action_phase = False
 
-                if in_action_phase:
+            for chunk in stream:
+                if not self._is_running:
+                    raise RuntimeError("Aborted")
+
+                if len(chunk.choices) == 0:
                     continue
+                if chunk.choices[0].delta.content is not None:
+                    content = chunk.choices[0].delta.content
+                    raw_content += content
 
-                buffer += content
+                    if in_action_phase:
+                        continue
 
-                marker_found = False
-                for marker in action_markers:
-                    if marker in buffer:
-                        thinking_part = buffer.split(marker, 1)[0]
-                        if on_thinking_chunk:
-                            on_thinking_chunk(thinking_part)
-                        in_action_phase = True
-                        marker_found = True
-                        break
+                    buffer += content
 
-                if marker_found:
-                    continue
-
-                is_potential_marker = False
-                for marker in action_markers:
-                    for i in range(1, len(marker)):
-                        if buffer.endswith(marker[:i]):
-                            is_potential_marker = True
+                    marker_found = False
+                    for marker in action_markers:
+                        if marker in buffer:
+                            thinking_part = buffer.split(marker, 1)[0]
+                            if on_thinking_chunk:
+                                on_thinking_chunk(thinking_part)
+                            in_action_phase = True
+                            marker_found = True
                             break
-                    if is_potential_marker:
-                        break
 
-                if not is_potential_marker:
-                    if on_thinking_chunk:
-                        on_thinking_chunk(buffer)
-                    buffer = ""
+                    if marker_found:
+                        continue
 
-        thinking, action = self._parse_raw_response(raw_content)
-        return thinking, action, raw_content
+                    is_potential_marker = False
+                    for marker in action_markers:
+                        for i in range(1, len(marker)):
+                            if buffer.endswith(marker[:i]):
+                                is_potential_marker = True
+                                break
+                        if is_potential_marker:
+                            break
+
+                    if not is_potential_marker:
+                        if on_thinking_chunk:
+                            on_thinking_chunk(buffer)
+                        buffer = ""
+
+            thinking, action = self._parse_raw_response(raw_content)
+            return thinking, action, raw_content
+        finally:
+            with self._active_stream_lock:
+                self._active_stream = None
+
+            try:
+                close_fn = getattr(stream, "close", None)
+                if callable(close_fn):
+                    close_fn()
+            except Exception:
+                pass
 
     def _parse_raw_response(self, content: str) -> tuple[str, str]:
         if "finish(message=" in content:
@@ -186,6 +220,10 @@ class GLMAgent:
             screen_info = MessageBuilder.build_screen_info(current_app)
             text_content = f"{user_prompt}\n\n{screen_info}"
 
+            logger.debug(
+                f"FIRST step: Adding system + user message, user_prompt={user_prompt!r}"
+            )
+
             self._context.append(
                 MessageBuilder.create_user_message(
                     text=text_content, image_base64=screenshot.base64_data
@@ -196,9 +234,15 @@ class GLMAgent:
             # 如果有新的用户消息（多轮对话场景），把它加入消息中
             if user_prompt:
                 text_content = f"{user_prompt}\n\n** Screen Info **\n\n{screen_info}"
+                logger.debug(
+                    f"Adding NEW user message to context: user_prompt={user_prompt!r}"
+                )
             else:
                 # 继续执行当前任务，只需要屏幕信息
                 text_content = f"** Screen Info **\n\n{screen_info}"
+                logger.debug(
+                    "Adding screen-info-only message to context (no new user message)"
+                )
 
             self._context.append(
                 MessageBuilder.create_user_message(
@@ -221,12 +265,41 @@ class GLMAgent:
 
                 callback = print_chunk
 
+            # 打印发送给 LLM 的消息摘要（不含图片）
+            logger.debug(f"Sending {len(self._context)} messages to LLM:")
+            for i, msg in enumerate(self._context):
+                role = msg.get("role", "unknown")
+                content = msg.get("content", "")
+                if isinstance(content, list):
+                    # 多部分消息，提取文本
+                    text_parts = [
+                        p.get("text", "") for p in content if p.get("type") == "text"
+                    ]
+                    text_preview = " ".join(text_parts)[:100]
+                    has_image = any(p.get("type") == "image_url" for p in content)
+                    logger.debug(
+                        f"  [{i}] {role}: {text_preview!r}... (has_image={has_image})"
+                    )
+                else:
+                    text_preview = str(content)[:100]
+                    logger.debug(f"  [{i}] {role}: {text_preview!r}...")
+
             thinking, action_str, raw_content = self._stream_request(
                 self._context, on_thinking_chunk=callback
             )
         except Exception as e:
             if self.agent_config.verbose:
                 traceback.print_exc()
+
+            if isinstance(e, RuntimeError) and str(e) == "Aborted":
+                return StepResult(
+                    success=False,
+                    finished=True,
+                    action=None,
+                    thinking="",
+                    message="Aborted by user",
+                )
+
             return StepResult(
                 success=False,
                 finished=True,
