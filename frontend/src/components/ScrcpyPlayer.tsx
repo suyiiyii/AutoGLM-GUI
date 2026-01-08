@@ -58,6 +58,7 @@ export function ScrcpyPlayer({
   onSwipeSuccess,
   onSwipeError,
   onStreamReady,
+  onScreenInfo,
 }: ScrcpyPlayerProps) {
   const socketRef = useRef<Socket | null>(null);
   const decoderRef = useRef<WebCodecsVideoDecoder | null>(null);

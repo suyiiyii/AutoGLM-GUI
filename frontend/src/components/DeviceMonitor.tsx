@@ -176,7 +176,7 @@ export function DeviceMonitor({
     const interval = setInterval(fetchScreenshot, 500);
 
     return () => clearInterval(interval);
-  }, [deviceId, videoStreamFailed, displayMode, isVisible]);
+  }, [deviceId, videoStreamFailed, displayMode, isVisible, updateAspectRatio]);
 
   return (
     <Card
@@ -250,8 +250,7 @@ export function DeviceMonitor({
                 disabled={monitorScale <= monitorMinScale}
                 className="h-7 w-7 rounded-lg"
                 title={
-                  t.devicePanel?.monitorScaleDown ||
-                  'Decrease monitor size'
+                  t.devicePanel?.monitorScaleDown || 'Decrease monitor size'
                 }
               >
                 <Minus className="w-3 h-3" />
@@ -262,9 +261,7 @@ export function DeviceMonitor({
                 onClick={() => adjustMonitorScale(0.1)}
                 disabled={monitorScale >= monitorMaxScale}
                 className="h-7 w-7 rounded-lg"
-                title={
-                  t.devicePanel?.monitorScaleUp || 'Increase monitor size'
-                }
+                title={t.devicePanel?.monitorScaleUp || 'Increase monitor size'}
               >
                 <Plus className="w-3 h-3" />
               </Button>
