@@ -119,9 +119,8 @@ class ConfigModel(BaseModel):
     @field_validator("layered_max_turns")
     @classmethod
     def validate_layered_max_turns(cls, v: int) -> int:
-        """验证 layered_max_turns 范围."""
         if v < LAYERED_MAX_TURNS_MIN:
-            raise ValueError(f"layered_max_turns must be > {LAYERED_MAX_TURNS_MIN}")
+            raise ValueError(f"layered_max_turns must be >= {LAYERED_MAX_TURNS_MIN}")
         return v
 
 
@@ -265,6 +264,7 @@ class UnifiedConfigManager:
         base_url: Optional[str] = None,
         model_name: Optional[str] = None,
         api_key: Optional[str] = None,
+        layered_max_turns: Optional[int] = None,
     ) -> None:
         """
         设置 CLI 参数配置（最高优先级）.
@@ -273,11 +273,13 @@ class UnifiedConfigManager:
             base_url: 从 --base-url 获取的值
             model_name: 从 --model 获取的值
             api_key: 从 --apikey 获取的值
+            layered_max_turns: 从 --layered-max-turns 获取的值
         """
         self._cli_layer = ConfigLayer(
             base_url=base_url,
             model_name=model_name,
             api_key=api_key,
+            layered_max_turns=layered_max_turns,
             source=ConfigSource.CLI,
         )
         self._effective_config = None  # 清除缓存

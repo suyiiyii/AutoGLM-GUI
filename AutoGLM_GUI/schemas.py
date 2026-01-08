@@ -344,11 +344,10 @@ class ConfigSaveRequest(BaseModel):
     @field_validator("layered_max_turns")
     @classmethod
     def validate_layered_max_turns(cls, v: int | None) -> int | None:
-        """验证 layered_max_turns 范围."""
         if v is None:
             return v
-        if v <= 0:
-            raise ValueError("layered_max_turns must be positive")
+        if v < 1:
+            raise ValueError("layered_max_turns must be >= 1")
         return v
 
     @field_validator("base_url")
