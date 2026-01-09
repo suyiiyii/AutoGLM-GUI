@@ -21,8 +21,14 @@ import {
   ListChecks,
   Square,
 } from 'lucide-react';
-import type { Workflow } from '../api';
-import { listWorkflows, getErrorMessage } from '../api';
+import type { Workflow, HistoryRecordResponse } from '../api';
+import {
+  listWorkflows,
+  getErrorMessage,
+  listHistory,
+  clearHistory as clearHistoryApi,
+  deleteHistoryRecord,
+} from '../api';
 import {
   Popover,
   PopoverContent,
@@ -33,14 +39,6 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import {
-  createHistoryItem,
-  saveHistoryItem,
-  loadHistoryItems,
-  clearHistory,
-  deleteHistoryItem,
-} from '../utils/history';
-import type { HistoryItem } from '../types/history';
 import { HistoryItemCard } from './HistoryItemCard';
 
 interface ChatKitPanelProps {
@@ -98,7 +96,9 @@ export function ChatKitPanel({
   const [showWorkflowPopover, setShowWorkflowPopover] = React.useState(false);
 
   // History state
-  const [historyItems, setHistoryItems] = React.useState<HistoryItem[]>([]);
+  const [historyItems, setHistoryItems] = React.useState<
+    HistoryRecordResponse[]
+  >([]);
   const [showHistoryPopover, setShowHistoryPopover] = React.useState(false);
 
   React.useEffect(() => {
@@ -129,8 +129,16 @@ export function ChatKitPanel({
   // Load history items when popover opens
   React.useEffect(() => {
     if (showHistoryPopover) {
-      const items = loadHistoryItems(deviceSerial);
-      setHistoryItems(items);
+      const loadItems = async () => {
+        try {
+          const data = await listHistory(deviceSerial, 20, 0);
+          setHistoryItems(data.records);
+        } catch (error) {
+          console.error('Failed to load history:', error);
+          setHistoryItems([]);
+        }
+      };
+      loadItems();
     }
   }, [showHistoryPopover, deviceSerial]);
 
@@ -139,36 +147,46 @@ export function ChatKitPanel({
     setShowWorkflowPopover(false);
   };
 
-  const handleSelectHistory = (item: HistoryItem) => {
+  const handleSelectHistory = (record: HistoryRecordResponse) => {
     const userMessage: Message = {
-      id: `${item.id}-user`,
+      id: `${record.id}-user`,
       role: 'user',
-      content: item.taskText,
-      timestamp: item.startTime,
+      content: record.task_text,
+      timestamp: new Date(record.start_time),
     };
     const agentMessage: Message = {
-      id: `${item.id}-agent`,
+      id: `${record.id}-agent`,
       role: 'assistant',
-      content: item.finalMessage,
-      timestamp: item.endTime,
+      content: record.final_message,
+      timestamp: record.end_time
+        ? new Date(record.end_time)
+        : new Date(record.start_time),
       steps: [],
-      success: item.success,
+      success: record.success,
       isStreaming: false,
     };
     setMessages([userMessage, agentMessage]);
     setShowHistoryPopover(false);
   };
 
-  const handleClearHistory = () => {
+  const handleClearHistory = async () => {
     if (confirm(t.history?.clearAllConfirm || 'Clear all history?')) {
-      clearHistory(deviceSerial);
-      setHistoryItems([]);
+      try {
+        await clearHistoryApi(deviceSerial);
+        setHistoryItems([]);
+      } catch (error) {
+        console.error('Failed to clear history:', error);
+      }
     }
   };
 
-  const handleDeleteHistoryItem = (itemId: string) => {
-    deleteHistoryItem(deviceSerial, itemId);
-    setHistoryItems(prev => prev.filter(item => item.id !== itemId));
+  const handleDeleteHistoryItem = async (itemId: string) => {
+    try {
+      await deleteHistoryRecord(deviceSerial, itemId);
+      setHistoryItems(prev => prev.filter(item => item.id !== itemId));
+    } catch (error) {
+      console.error('Failed to delete history item:', error);
+    }
   };
 
   // Toggle step expansion
@@ -342,19 +360,7 @@ export function ChatKitPanel({
                     msg.id === agentMessageId ? updatedAgentMessage : msg
                   )
                 );
-                // Save to history
-                const historyItem = createHistoryItem(
-                  deviceSerial,
-                  deviceName,
-                  userMessage,
-                  {
-                    content: data.content || '',
-                    timestamp: new Date(),
-                    success: data.success,
-                    steps: steps.length,
-                  }
-                );
-                saveHistoryItem(deviceSerial, historyItem);
+                // 历史记录已由后端自动保存，无需前端保存
               } else if (data.type === 'error') {
                 // Error
                 const updatedAgentMessage = {
@@ -371,19 +377,7 @@ export function ChatKitPanel({
                   )
                 );
                 setError(data.message);
-                // Save failed task to history
-                const historyItem = createHistoryItem(
-                  deviceSerial,
-                  deviceName,
-                  userMessage,
-                  {
-                    content: `错误: ${data.message}`,
-                    timestamp: new Date(),
-                    success: false,
-                    steps: steps.length,
-                  }
-                );
-                saveHistoryItem(deviceSerial, historyItem);
+                // 历史记录已由后端自动保存，无需前端保存
               }
             } catch (e) {
               console.error('Failed to parse SSE data:', e, line);
@@ -422,24 +416,12 @@ export function ChatKitPanel({
             : msg
         )
       );
-      // Save failed task to history
-      const historyItem = createHistoryItem(
-        deviceSerial,
-        deviceName,
-        userMessage,
-        {
-          content: `错误: ${errorMessage}`,
-          timestamp: new Date(),
-          success: false,
-          steps: 0,
-        }
-      );
-      saveHistoryItem(deviceSerial, historyItem);
+      // 历史记录已由后端自动保存，无需前端保存
     } finally {
       setLoading(false);
       abortControllerRef.current = null;
     }
-  }, [input, loading, deviceId, deviceSerial, deviceName]);
+  }, [input, loading, deviceId]);
 
   // Abort chat function
   const handleAbort = React.useCallback(() => {

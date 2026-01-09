@@ -28,7 +28,24 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Loader2, Trash2, CheckCircle, XCircle, Clock } from 'lucide-react';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import {
+  Loader2,
+  Trash2,
+  CheckCircle,
+  XCircle,
+  Clock,
+  User,
+  Bot,
+  ChevronDown,
+  ChevronRight,
+  Eye,
+} from 'lucide-react';
 import { useTranslation } from '../lib/i18n-context';
 
 export const Route = createFileRoute('/history')({
@@ -47,6 +64,10 @@ function HistoryComponent() {
   const [clearDialogOpen, setClearDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [recordToDelete, setRecordToDelete] = useState<string | null>(null);
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
+  const [selectedRecord, setSelectedRecord] =
+    useState<HistoryRecordResponse | null>(null);
+  const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
   const limit = 20;
 
   // Load devices
@@ -135,6 +156,31 @@ function HistoryComponent() {
     }
     setDeleteDialogOpen(false);
     setRecordToDelete(null);
+  };
+
+  const handleViewDetail = (record: HistoryRecordResponse) => {
+    setSelectedRecord(record);
+    // 默认展开所有步骤
+    const allSteps = new Set<number>();
+    record.messages.forEach(msg => {
+      if (msg.step !== null && msg.step !== undefined) {
+        allSteps.add(msg.step);
+      }
+    });
+    setExpandedSteps(allSteps);
+    setDetailDialogOpen(true);
+  };
+
+  const toggleStepExpanded = (step: number) => {
+    setExpandedSteps(prev => {
+      const next = new Set(prev);
+      if (next.has(step)) {
+        next.delete(step);
+      } else {
+        next.add(step);
+      }
+      return next;
+    });
   };
 
   const formatDuration = (ms: number): string => {
@@ -246,7 +292,11 @@ function HistoryComponent() {
       ) : (
         <div className="space-y-4">
           {records.map(record => (
-            <Card key={record.id} className="hover:shadow-md transition-shadow">
+            <Card
+              key={record.id}
+              className="hover:shadow-md transition-shadow cursor-pointer"
+              onClick={() => handleViewDetail(record)}
+            >
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1 min-w-0">
@@ -310,18 +360,32 @@ function HistoryComponent() {
                     </div>
                   </div>
 
-                  {/* Delete button */}
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="text-slate-400 hover:text-red-500"
-                    onClick={() => {
-                      setRecordToDelete(record.id);
-                      setDeleteDialogOpen(true);
-                    }}
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </Button>
+                  {/* Action buttons */}
+                  <div className="flex items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-slate-400 hover:text-blue-500"
+                      onClick={e => {
+                        e.stopPropagation();
+                        handleViewDetail(record);
+                      }}
+                    >
+                      <Eye className="w-4 h-4" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-slate-400 hover:text-red-500"
+                      onClick={e => {
+                        e.stopPropagation();
+                        setRecordToDelete(record.id);
+                        setDeleteDialogOpen(true);
+                      }}
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>
@@ -384,6 +448,160 @@ function HistoryComponent() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Detail Dialog */}
+      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
+        <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
+          <DialogHeader className="flex-shrink-0">
+            <DialogTitle className="flex items-center gap-2">
+              {selectedRecord?.success ? (
+                <CheckCircle className="w-5 h-5 text-green-500" />
+              ) : (
+                <XCircle className="w-5 h-5 text-red-500" />
+              )}
+              {t.historyPage.detailTitle || '对话详情'}
+            </DialogTitle>
+          </DialogHeader>
+
+          {selectedRecord && (
+            <div className="overflow-y-auto max-h-[calc(80vh-120px)] pr-4">
+              <div className="space-y-4">
+                {/* Task summary */}
+                <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                  <p className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                    {t.historyPage.taskLabel || '任务'}
+                  </p>
+                  <p className="text-sm text-slate-900 dark:text-slate-100">
+                    {selectedRecord.task_text}
+                  </p>
+                </div>
+
+                {/* Messages */}
+                <div className="space-y-3">
+                  {selectedRecord.messages.length > 0 ? (
+                    selectedRecord.messages.map((msg, idx) => (
+                      <div key={idx} className="space-y-2">
+                        {msg.role === 'user' ? (
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center flex-shrink-0">
+                              <User className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+                            </div>
+                            <div className="flex-1 p-3 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
+                              <p className="text-sm text-slate-900 dark:text-slate-100">
+                                {msg.content}
+                              </p>
+                            </div>
+                          </div>
+                        ) : (
+                          <div className="flex items-start gap-3">
+                            <div className="w-8 h-8 rounded-full bg-emerald-100 dark:bg-emerald-900 flex items-center justify-center flex-shrink-0">
+                              <Bot className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                            </div>
+                            <div className="flex-1 space-y-2">
+                              {/* Step header */}
+                              {msg.step !== null && msg.step !== undefined && (
+                                <button
+                                  className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                                  onClick={() =>
+                                    toggleStepExpanded(msg.step as number)
+                                  }
+                                >
+                                  {expandedSteps.has(msg.step) ? (
+                                    <ChevronDown className="w-3 h-3" />
+                                  ) : (
+                                    <ChevronRight className="w-3 h-3" />
+                                  )}
+                                  {t.historyPage.stepLabel?.replace(
+                                    '{step}',
+                                    String(msg.step)
+                                  ) || `步骤 ${msg.step}`}
+                                </button>
+                              )}
+
+                              {/* Thinking */}
+                              {msg.thinking &&
+                                (msg.step === null ||
+                                  msg.step === undefined ||
+                                  expandedSteps.has(msg.step)) && (
+                                  <div className="p-3 bg-slate-100 dark:bg-slate-800 rounded-lg">
+                                    <p className="text-xs font-medium text-slate-500 dark:text-slate-400 mb-1">
+                                      {t.historyPage.thinkingLabel || '思考'}
+                                    </p>
+                                    <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                                      {msg.thinking}
+                                    </p>
+                                  </div>
+                                )}
+
+                              {/* Action */}
+                              {msg.action &&
+                                (msg.step === null ||
+                                  msg.step === undefined ||
+                                  expandedSteps.has(msg.step)) && (
+                                  <div className="p-3 bg-amber-50 dark:bg-amber-900/20 rounded-lg">
+                                    <p className="text-xs font-medium text-amber-600 dark:text-amber-400 mb-1">
+                                      {t.historyPage.actionLabel || '动作'}
+                                    </p>
+                                    <pre className="text-xs text-slate-700 dark:text-slate-300 overflow-x-auto">
+                                      {JSON.stringify(msg.action, null, 2)}
+                                    </pre>
+                                  </div>
+                                )}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    ))
+                  ) : (
+                    <p className="text-sm text-slate-500 dark:text-slate-400 text-center py-4">
+                      {t.historyPage.noMessages || '暂无详细消息记录'}
+                    </p>
+                  )}
+                </div>
+
+                {/* Final result */}
+                <div
+                  className={`p-3 rounded-lg ${
+                    selectedRecord.success
+                      ? 'bg-green-50 dark:bg-green-900/20'
+                      : 'bg-red-50 dark:bg-red-900/20'
+                  }`}
+                >
+                  <p
+                    className={`text-xs font-medium mb-1 ${
+                      selectedRecord.success
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-red-600 dark:text-red-400'
+                    }`}
+                  >
+                    {t.historyPage.resultLabel || '结果'}
+                  </p>
+                  <p className="text-sm text-slate-900 dark:text-slate-100">
+                    {selectedRecord.final_message}
+                  </p>
+                </div>
+
+                {/* Metadata */}
+                <div className="flex flex-wrap gap-3 text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-700">
+                  <span>
+                    {t.historyPage.steps.replace(
+                      '{count}',
+                      String(selectedRecord.steps)
+                    )}
+                  </span>
+                  <span className="flex items-center">
+                    <Clock className="w-3 h-3 mr-1" />
+                    {formatDuration(selectedRecord.duration_ms)}
+                  </span>
+                  <Badge className={getSourceColor(selectedRecord.source)}>
+                    {getSourceLabel(selectedRecord.source)}
+                  </Badge>
+                </div>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

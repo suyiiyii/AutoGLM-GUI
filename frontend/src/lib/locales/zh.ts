@@ -336,6 +336,13 @@ export const zh = {
     loadMore: '加载更多',
     loading: '加载中...',
     deleteConfirm: '确定删除这条记录？',
+    detailTitle: '对话详情',
+    taskLabel: '任务',
+    stepLabel: '步骤 {step}',
+    thinkingLabel: '思考',
+    actionLabel: '动作',
+    noMessages: '暂无详细消息记录',
+    resultLabel: '结果',
   },
   scheduledTasks: {
     title: '定时任务',

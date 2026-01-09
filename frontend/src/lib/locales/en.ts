@@ -342,6 +342,13 @@ export const en = {
     loadMore: 'Load More',
     loading: 'Loading...',
     deleteConfirm: 'Delete this record?',
+    detailTitle: 'Conversation Detail',
+    taskLabel: 'Task',
+    stepLabel: 'Step {step}',
+    thinkingLabel: 'Thinking',
+    actionLabel: 'Action',
+    noMessages: 'No detailed message records',
+    resultLabel: 'Result',
   },
   scheduledTasks: {
     title: 'Scheduled Tasks',

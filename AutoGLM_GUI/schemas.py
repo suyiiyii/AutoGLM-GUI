@@ -702,6 +702,17 @@ class ReinitAllAgentsResponse(BaseModel):
 # History Models
 
 
+class MessageRecordResponse(BaseModel):
+    """对话消息响应."""
+
+    role: str  # "user" | "assistant"
+    content: str
+    timestamp: str
+    thinking: str | None = None
+    action: dict | None = None
+    step: int | None = None
+
+
 class HistoryRecordResponse(BaseModel):
     """历史记录条目响应."""
 
@@ -716,6 +727,7 @@ class HistoryRecordResponse(BaseModel):
     source: str
     source_detail: str
     error_message: str | None
+    messages: list[MessageRecordResponse] = []
 
 
 class HistoryListResponse(BaseModel):

@@ -18,8 +18,17 @@ import type {
   DoneEvent,
   ErrorEvent,
   Workflow,
+  HistoryRecordResponse,
 } from '../api';
-import { abortChat, resetChat, sendMessageStream, listWorkflows } from '../api';
+import {
+  abortChat,
+  resetChat,
+  sendMessageStream,
+  listWorkflows,
+  listHistory,
+  clearHistory as clearHistoryApi,
+  deleteHistoryRecord,
+} from '../api';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
@@ -31,14 +40,6 @@ import {
 } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useTranslation } from '../lib/i18n-context';
-import {
-  createHistoryItem,
-  saveHistoryItem,
-  loadHistoryItems,
-  clearHistory,
-  deleteHistoryItem,
-} from '../utils/history';
-import type { HistoryItem } from '../types/history';
 import { HistoryItemCard } from './HistoryItemCard';
 import {
   Tooltip,
@@ -83,7 +84,7 @@ export function DevicePanel({
   // ✅ 移除 initialized 状态，依赖后端自动初始化
   // const [initialized, setInitialized] = useState(false);
   const [showHistoryPopover, setShowHistoryPopover] = useState(false);
-  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+  const [historyItems, setHistoryItems] = useState<HistoryRecordResponse[]>([]);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [showWorkflowPopover, setShowWorkflowPopover] = useState(false);
 
@@ -134,34 +135,71 @@ export function DevicePanel({
   // Load history items when popover opens
   useEffect(() => {
     if (showHistoryPopover) {
-      const items = loadHistoryItems(deviceSerial);
-      setHistoryItems(items);
+      const loadItems = async () => {
+        try {
+          const data = await listHistory(deviceSerial, 20, 0);
+          setHistoryItems(data.records);
+        } catch (error) {
+          console.error('Failed to load history:', error);
+          setHistoryItems([]);
+        }
+      };
+      loadItems();
     }
   }, [showHistoryPopover, deviceSerial]);
 
-  const handleSelectHistory = (item: HistoryItem) => {
-    const userMessage: Message = {
-      id: `${item.id}-user`,
-      role: 'user',
-      content: item.taskText,
-      timestamp: item.startTime,
-    };
+  const handleSelectHistory = (record: HistoryRecordResponse) => {
+    // Convert backend messages to frontend Message format
+    const newMessages: Message[] = [];
+
+    // Find user message from record
+    const userMsg = record.messages.find(m => m.role === 'user');
+    if (userMsg) {
+      newMessages.push({
+        id: `${record.id}-user`,
+        role: 'user',
+        content: userMsg.content || record.task_text,
+        timestamp: new Date(userMsg.timestamp),
+      });
+    } else {
+      // Fallback to task_text if no user message
+      newMessages.push({
+        id: `${record.id}-user`,
+        role: 'user',
+        content: record.task_text,
+        timestamp: new Date(record.start_time),
+      });
+    }
+
+    // Collect thinking and actions from assistant messages
+    const thinkingList: string[] = [];
+    const actionsList: Record<string, unknown>[] = [];
+    record.messages
+      .filter(m => m.role === 'assistant')
+      .forEach(m => {
+        if (m.thinking) thinkingList.push(m.thinking);
+        if (m.action) actionsList.push(m.action);
+      });
+
+    // Create agent message
     const agentMessage: Message = {
-      id: `${item.id}-agent`,
+      id: `${record.id}-agent`,
       role: 'assistant',
-      content: item.finalMessage,
-      timestamp: item.endTime,
-      steps: item.steps,
-      success: item.success,
-      thinking: item.thinking,
-      actions: item.actions,
+      content: record.final_message,
+      timestamp: record.end_time
+        ? new Date(record.end_time)
+        : new Date(record.start_time),
+      steps: record.steps,
+      success: record.success,
+      thinking: thinkingList,
+      actions: actionsList,
       isStreaming: false,
     };
-    const newMessages = [userMessage, agentMessage];
+    newMessages.push(agentMessage);
+
     setMessages(newMessages);
 
     // Reset previous message tracking refs to match the loaded history
-    // so that the next effect run does not treat this as a new message.
     prevMessageCountRef.current = newMessages.length;
     prevMessageSigRef.current = [
       agentMessage.id,
@@ -177,17 +215,25 @@ export function DevicePanel({
     setShowHistoryPopover(false);
   };
 
-  const handleClearHistory = () => {
+  const handleClearHistory = async () => {
     if (confirm(t.history.clearAllConfirm)) {
-      clearHistory(deviceSerial);
-      setHistoryItems([]);
+      try {
+        await clearHistoryApi(deviceSerial);
+        setHistoryItems([]);
+      } catch (error) {
+        console.error('Failed to clear history:', error);
+      }
     }
   };
 
-  const handleDeleteItem = (itemId: string) => {
-    deleteHistoryItem(deviceSerial, itemId);
-    // 从列表中移除已删除的项
-    setHistoryItems(prev => prev.filter(item => item.id !== itemId));
+  const handleDeleteItem = async (itemId: string) => {
+    try {
+      await deleteHistoryRecord(deviceSerial, itemId);
+      // 从列表中移除已删除的项
+      setHistoryItems(prev => prev.filter(item => item.id !== itemId));
+    } catch (error) {
+      console.error('Failed to delete history item:', error);
+    }
   };
 
   // Note: Configuration is now managed entirely by backend ConfigManager.
@@ -322,15 +368,7 @@ export function DevicePanel({
         );
         setLoading(false);
         chatStreamRef.current = null;
-
-        // 保存到历史记录
-        const historyItem = createHistoryItem(
-          deviceSerial,
-          deviceName,
-          userMessage,
-          updatedAgentMessage
-        );
-        saveHistoryItem(deviceSerial, historyItem);
+        // 历史记录已由后端自动保存，无需前端保存
       },
       (event: ErrorEvent) => {
         // Clear any pending updates
@@ -357,15 +395,7 @@ export function DevicePanel({
         setLoading(false);
         setError(event.message);
         chatStreamRef.current = null;
-
-        // 保存失败的任务到历史记录
-        const historyItem = createHistoryItem(
-          deviceSerial,
-          deviceName,
-          userMessage,
-          updatedAgentMessage
-        );
-        saveHistoryItem(deviceSerial, historyItem);
+        // 历史记录已由后端自动保存，无需前端保存
       },
       (event: { type: 'aborted'; message: string }) => {
         // Clear any pending updates
@@ -395,15 +425,7 @@ export function DevicePanel({
     );
 
     chatStreamRef.current = stream;
-  }, [
-    input,
-    loading,
-    // initialized, // ✅ 移除依赖
-    deviceId,
-    deviceSerial,
-    deviceName,
-    // handleInit, // ✅ 移除依赖
-  ]);
+  }, [input, loading, deviceId]);
 
   const handleReset = useCallback(async () => {
     if (chatStreamRef.current) {

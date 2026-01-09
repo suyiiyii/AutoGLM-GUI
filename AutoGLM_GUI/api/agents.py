@@ -200,7 +200,7 @@ def chat_stream(request: ChatRequest):
     from AutoGLM_GUI.device_manager import DeviceManager
     from AutoGLM_GUI.exceptions import AgentInitializationError, DeviceBusyError
     from AutoGLM_GUI.history_manager import history_manager
-    from AutoGLM_GUI.models.history import ConversationRecord
+    from AutoGLM_GUI.models.history import ConversationRecord, MessageRecord
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
     device_id = request.device_id
@@ -212,6 +212,17 @@ def chat_stream(request: ChatRequest):
         final_message = ""
         final_success = False
         final_steps = 0
+
+        # 收集完整对话消息
+        messages: list[MessageRecord] = []
+        # 添加用户消息
+        messages.append(
+            MessageRecord(
+                role="user",
+                content=request.message,
+                timestamp=start_time,
+            )
+        )
 
         try:
             acquired = manager.acquire_device(
@@ -234,6 +245,19 @@ def chat_stream(request: ChatRequest):
                             and event_data_dict.get("step") == -1
                         ):
                             continue
+
+                        # 收集每个 step 的消息
+                        if event_type == AgentEventType.STEP.value:
+                            messages.append(
+                                MessageRecord(
+                                    role="assistant",
+                                    content="",
+                                    timestamp=datetime.now(),
+                                    thinking=event_data_dict.get("thinking"),
+                                    action=event_data_dict.get("action"),
+                                    step=event_data_dict.get("step"),
+                                )
+                            )
 
                         if event_type == AgentEventType.DONE.value:
                             final_message = event_data_dict.get("message", "")
@@ -263,6 +287,7 @@ def chat_stream(request: ChatRequest):
                         duration_ms=int((end_time - start_time).total_seconds() * 1000),
                         source="chat",
                         error_message=None if final_success else final_message,
+                        messages=messages,
                     )
                     history_manager.add_record(serialno, record)
 

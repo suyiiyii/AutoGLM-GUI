@@ -177,7 +177,7 @@ class SchedulerManager:
 
         from AutoGLM_GUI.device_manager import DeviceManager
         from AutoGLM_GUI.history_manager import history_manager
-        from AutoGLM_GUI.models.history import ConversationRecord
+        from AutoGLM_GUI.models.history import ConversationRecord, MessageRecord
         from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
         from AutoGLM_GUI.workflow_manager import workflow_manager
 
@@ -210,27 +210,72 @@ class SchedulerManager:
             return
 
         start_time = datetime.now()
+
+        # 收集完整对话消息
+        messages: list[MessageRecord] = []
+        messages.append(
+            MessageRecord(
+                role="user",
+                content=workflow["text"],
+                timestamp=start_time,
+            )
+        )
+
         try:
             agent = manager.get_agent(device.primary_device_id)
             agent.reset()
-            result = agent.run(workflow["text"])
-            steps = agent.step_count
 
+            # 使用 step 循环执行，收集每步信息
+            is_first = True
+            result_message = ""
+            task_success = False
+
+            while agent.step_count < agent.agent_config.max_steps:
+                step_result = agent.step(workflow["text"] if is_first else None)
+                is_first = False
+
+                # 收集每个 step 的消息
+                messages.append(
+                    MessageRecord(
+                        role="assistant",
+                        content="",
+                        timestamp=datetime.now(),
+                        thinking=step_result.thinking,
+                        action=step_result.action,
+                        step=agent.step_count,
+                    )
+                )
+
+                if step_result.finished:
+                    result_message = step_result.message or "Task completed"
+                    task_success = step_result.success
+                    break
+            else:
+                result_message = "Max steps reached"
+                task_success = False
+
+            steps = agent.step_count
             end_time = datetime.now()
+
             record = ConversationRecord(
                 task_text=workflow["text"],
-                final_message=result,
-                success=True,
+                final_message=result_message,
+                success=task_success,
                 steps=steps,
                 start_time=start_time,
                 end_time=end_time,
                 duration_ms=int((end_time - start_time).total_seconds() * 1000),
                 source="scheduled",
                 source_detail=task.name,
+                error_message=None if task_success else result_message,
+                messages=messages,
             )
             history_manager.add_record(task.device_serialno, record)
 
-            self._record_success(task, result)
+            if task_success:
+                self._record_success(task, result_message)
+            else:
+                self._record_failure(task, result_message)
 
         except Exception as e:
             end_time = datetime.now()
@@ -248,6 +293,7 @@ class SchedulerManager:
                 source="scheduled",
                 source_detail=task.name,
                 error_message=error_msg,
+                messages=messages,
             )
             history_manager.add_record(task.device_serialno, record)
 

@@ -3,7 +3,11 @@
 from fastapi import APIRouter, HTTPException
 
 from AutoGLM_GUI.history_manager import history_manager
-from AutoGLM_GUI.schemas import HistoryListResponse, HistoryRecordResponse
+from AutoGLM_GUI.schemas import (
+    HistoryListResponse,
+    HistoryRecordResponse,
+    MessageRecordResponse,
+)
 
 router = APIRouter()
 
@@ -34,6 +38,17 @@ def list_history(
                 source=r.source,
                 source_detail=r.source_detail,
                 error_message=r.error_message,
+                messages=[
+                    MessageRecordResponse(
+                        role=m.role,
+                        content=m.content,
+                        timestamp=m.timestamp.isoformat(),
+                        thinking=m.thinking,
+                        action=m.action,
+                        step=m.step,
+                    )
+                    for m in r.messages
+                ],
             )
             for r in records
         ],
@@ -61,6 +76,17 @@ def get_history_record(serialno: str, record_id: str) -> HistoryRecordResponse:
         source=record.source,
         source_detail=record.source_detail,
         error_message=record.error_message,
+        messages=[
+            MessageRecordResponse(
+                role=m.role,
+                content=m.content,
+                timestamp=m.timestamp.isoformat(),
+                thinking=m.thinking,
+                action=m.action,
+                step=m.step,
+            )
+            for m in record.messages
+        ],
     )
 
 

@@ -826,6 +826,15 @@ export async function abortLayeredAgentChat(sessionId: string): Promise<{
 
 // ==================== History API ====================
 
+export interface MessageRecordResponse {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  thinking?: string | null;
+  action?: Record<string, unknown> | null;
+  step?: number | null;
+}
+
 export interface HistoryRecordResponse {
   id: string;
   task_text: string;
@@ -838,6 +847,7 @@ export interface HistoryRecordResponse {
   source: 'chat' | 'layered' | 'scheduled';
   source_detail: string;
   error_message: string | null;
+  messages: MessageRecordResponse[];
 }
 
 export interface HistoryListResponse {

@@ -2,8 +2,47 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Literal
+from typing import Any, Literal
 from uuid import uuid4
+
+
+@dataclass
+class MessageRecord:
+    """对话中的单条消息记录."""
+
+    role: Literal["user", "assistant"]
+    content: str
+    timestamp: datetime = field(default_factory=datetime.now)
+
+    # assistant 消息特有字段
+    thinking: str | None = None
+    action: dict[str, Any] | None = None
+    step: int | None = None
+
+    def to_dict(self) -> dict:
+        """转换为可序列化的字典."""
+        return {
+            "role": self.role,
+            "content": self.content,
+            "timestamp": self.timestamp.isoformat(),
+            "thinking": self.thinking,
+            "action": self.action,
+            "step": self.step,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict) -> "MessageRecord":
+        """从字典创建实例."""
+        return cls(
+            role=data.get("role", "user"),
+            content=data.get("content", ""),
+            timestamp=datetime.fromisoformat(data["timestamp"])
+            if data.get("timestamp")
+            else datetime.now(),
+            thinking=data.get("thinking"),
+            action=data.get("action"),
+            step=data.get("step"),
+        )
 
 
 @dataclass
@@ -30,6 +69,9 @@ class ConversationRecord:
     # 错误信息
     error_message: str | None = None
 
+    # 完整对话消息列表
+    messages: list[MessageRecord] = field(default_factory=list)
+
     def to_dict(self) -> dict:
         """转换为可序列化的字典."""
         return {
@@ -44,6 +86,7 @@ class ConversationRecord:
             "source": self.source,
             "source_detail": self.source_detail,
             "error_message": self.error_message,
+            "messages": [m.to_dict() for m in self.messages],
         }
 
     @classmethod
@@ -65,6 +108,7 @@ class ConversationRecord:
             source=data.get("source", "chat"),
             source_detail=data.get("source_detail", ""),
             error_message=data.get("error_message"),
+            messages=[MessageRecord.from_dict(m) for m in data.get("messages", [])],
         )
 
 
