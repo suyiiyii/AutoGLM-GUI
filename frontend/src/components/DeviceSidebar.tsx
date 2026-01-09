@@ -40,6 +40,7 @@ import {
 } from '../api';
 import { useTranslation } from '../lib/i18n-context';
 import { useDebouncedState } from '@/hooks/useDebouncedState';
+import type { ToastType } from './Toast';
 
 // Emulator presets for quick connection
 interface EmulatorPreset {
@@ -79,6 +80,8 @@ interface DeviceSidebarProps {
   onOpenConfig: () => void;
   onConnectWifi: (deviceId: string) => void;
   onDisconnectWifi: (deviceId: string) => void;
+  onRefreshDevices?: () => void;
+  showToast?: (message: string, type: ToastType) => void;
 }
 
 export function DeviceSidebar({
@@ -88,6 +91,8 @@ export function DeviceSidebar({
   onOpenConfig,
   onConnectWifi,
   onDisconnectWifi,
+  onRefreshDevices,
+  showToast,
 }: DeviceSidebarProps) {
   const t = useTranslation();
   const [isCollapsed, setIsCollapsed] = useState(getInitialCollapsedState);
@@ -636,6 +641,7 @@ export function DeviceSidebar({
                 id={device.id}
                 serial={device.serial}
                 model={device.model}
+                displayName={device.display_name}
                 status={device.status}
                 connectionType={device.connection_type}
                 agent={device.agent}
@@ -647,6 +653,12 @@ export function DeviceSidebar({
                 onDisconnectWifi={async () => {
                   await onDisconnectWifi(device.id);
                 }}
+                onNameUpdated={() => {
+                  if (onRefreshDevices) {
+                    onRefreshDevices();
+                  }
+                }}
+                showToast={showToast}
               />
             ))
           )}

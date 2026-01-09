@@ -52,6 +52,7 @@ export interface Device {
   connection_type: string;
   state: string;
   is_available_only: boolean;
+  display_name: string | null; // Custom display name (null if not set)
   agent: AgentStatus | null; // Agent runtime status (null if not initialized)
 }
 
@@ -981,6 +982,33 @@ export async function disableScheduledTask(
 ): Promise<ScheduledTaskResponse> {
   const res = await axios.post<ScheduledTaskResponse>(
     `/api/scheduled-tasks/${taskId}/disable`
+  );
+  return res.data;
+}
+
+export interface DeviceNameResponse {
+  success: boolean;
+  serial: string;
+  display_name: string | null;
+  error?: string;
+}
+
+export async function updateDeviceName(
+  serial: string,
+  displayName: string | null
+): Promise<DeviceNameResponse> {
+  const res = await axios.put<DeviceNameResponse>(
+    `/api/devices/${serial}/name`,
+    { display_name: displayName }
+  );
+  return res.data;
+}
+
+export async function getDeviceName(
+  serial: string
+): Promise<DeviceNameResponse> {
+  const res = await axios.get<DeviceNameResponse>(
+    `/api/devices/${serial}/name`
   );
   return res.data;
 }

@@ -212,6 +212,14 @@ export const en = {
     deleteDeviceTitle: 'Delete Device',
     deleteDeviceContent:
       'Are you sure you want to delete this device? This will disconnect the device.',
+    editName: 'Edit device name',
+    editNameDialogTitle: 'Edit Device Name',
+    editNameDialogDescription: 'Set a custom name for this device',
+    deviceNameLabel: 'Device Name',
+    deviceNamePlaceholder: 'Enter custom name (leave empty to use default)',
+    deviceSerialLabel: 'Serial Number',
+    saveNameSuccess: 'Device name updated successfully',
+    saveNameError: 'Failed to update device name',
     statusTooltip: {
       title: 'Current status: ',
       idle: 'Idle',

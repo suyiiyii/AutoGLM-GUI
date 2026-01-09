@@ -15,6 +15,8 @@ from AutoGLM_GUI.logger import logger
 
 from AutoGLM_GUI.schemas import (
     DeviceListResponse,
+    DeviceNameResponse,
+    DeviceNameUpdateRequest,
     DeviceResponse,
     MdnsDeviceResponse,
     MdnsDiscoverResponse,
@@ -454,3 +456,73 @@ def remove_remote_device(
         message=message,
         error=None if success else "remove_failed",
     )
+
+
+@router.put("/api/devices/{serial}/name", response_model=DeviceNameResponse)
+def update_device_name(
+    serial: str, request: DeviceNameUpdateRequest
+) -> DeviceNameResponse:
+    """Update or clear device display name.
+
+    Args:
+        serial: Device hardware serial number
+        request: Contains display_name (str or None to clear)
+
+    Returns:
+        DeviceNameResponse with updated name or error
+    """
+    from AutoGLM_GUI.device_manager import DeviceManager
+
+    try:
+        device_manager = DeviceManager.get_instance()
+        device_manager.set_device_display_name(serial, request.display_name)
+
+        return DeviceNameResponse(
+            success=True,
+            serial=serial,
+            display_name=request.display_name,
+        )
+    except ValueError as e:
+        logger.warning(f"Failed to update device name for {serial}: {e}")
+        return DeviceNameResponse(
+            success=False,
+            serial=serial,
+            error=str(e),
+        )
+    except Exception as e:
+        logger.exception(f"Unexpected error updating device name for {serial}")
+        return DeviceNameResponse(
+            success=False,
+            serial=serial,
+            error=f"Internal error: {str(e)}",
+        )
+
+
+@router.get("/api/devices/{serial}/name", response_model=DeviceNameResponse)
+def get_device_name(serial: str) -> DeviceNameResponse:
+    """Get device display name.
+
+    Args:
+        serial: Device hardware serial number
+
+    Returns:
+        DeviceNameResponse with current display name or None if not set
+    """
+    from AutoGLM_GUI.device_manager import DeviceManager
+
+    try:
+        device_manager = DeviceManager.get_instance()
+        display_name = device_manager.get_device_display_name(serial)
+
+        return DeviceNameResponse(
+            success=True,
+            serial=serial,
+            display_name=display_name,
+        )
+    except Exception as e:
+        logger.exception(f"Unexpected error getting device name for {serial}")
+        return DeviceNameResponse(
+            success=False,
+            serial=serial,
+            error=f"Internal error: {str(e)}",
+        )

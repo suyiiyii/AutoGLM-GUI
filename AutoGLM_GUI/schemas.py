@@ -4,6 +4,8 @@ import re
 
 from pydantic import BaseModel, field_validator
 
+from AutoGLM_GUI.device_metadata_manager import DISPLAY_NAME_MAX_LENGTH
+
 
 class InitRequest(BaseModel):
     device_id: str  # Device ID (required)
@@ -274,6 +276,7 @@ class DeviceResponse(BaseModel):
     connection_type: str
     state: str
     is_available_only: bool
+    display_name: str | None = None
     agent: AgentStatusResponse | None = None
 
 
@@ -816,3 +819,36 @@ class ScheduledTaskListResponse(BaseModel):
     """定时任务列表响应."""
 
     tasks: list[ScheduledTaskResponse]
+
+
+# Device Name Models
+
+
+class DeviceNameUpdateRequest(BaseModel):
+    """更新设备显示名称请求."""
+
+    display_name: str | None
+
+    @field_validator("display_name")
+    @classmethod
+    def validate_display_name(cls, v: str | None) -> str | None:
+        """验证 display_name."""
+        if v is None:
+            return v
+        v = v.strip()
+        if not v:
+            return None
+        if len(v) > DISPLAY_NAME_MAX_LENGTH:
+            raise ValueError(
+                f"display_name too long (max {DISPLAY_NAME_MAX_LENGTH} characters)"
+            )
+        return v
+
+
+class DeviceNameResponse(BaseModel):
+    """设备显示名称响应."""
+
+    success: bool
+    serial: str
+    display_name: str | None = None
+    error: str | None = None
