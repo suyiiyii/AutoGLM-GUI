@@ -157,3 +157,29 @@ def test_set_device_name_update_existing(client):
     response = client.get(f"/api/devices/{serial}/name")
     assert response.status_code == 200
     assert response.json()["display_name"] == "New Name"
+
+
+def test_all_responses_include_success_field(client):
+    """Test that all device name responses include success field."""
+    serial = "test_device_009"
+
+    response = client.put(
+        f"/api/devices/{serial}/name", json={"display_name": "Test Name"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "success" in data
+    assert data["success"] is True
+    assert data["serial"] == serial
+
+    response = client.get(f"/api/devices/{serial}/name")
+    assert response.status_code == 200
+    data = response.json()
+    assert "success" in data
+    assert data["success"] is True
+
+    response = client.get("/api/devices/nonexistent_device/name")
+    assert response.status_code == 200
+    data = response.json()
+    assert "success" in data
+    assert data["success"] is True

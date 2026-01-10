@@ -157,7 +157,15 @@ export function DeviceCard({
     try {
       setSaving(true);
       const trimmedName = editingName.trim();
-      await updateDeviceName(serial, trimmedName || null);
+      const response = await updateDeviceName(serial, trimmedName || null);
+
+      if (!response.success) {
+        if (showToast) {
+          showToast(response.error || t.deviceCard.saveNameError, 'error');
+        }
+        return;
+      }
+
       setShowEditDialog(false);
       if (onNameUpdated) {
         onNameUpdated();
