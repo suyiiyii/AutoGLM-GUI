@@ -1,0 +1,65 @@
+name: Backend E2E Tests
+
+on:
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'tests/integration/**'
+      - 'AutoGLM_GUI/**'
+      - 'pyproject.toml'
+      - '.github/workflows/backend-e2e.yml'
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+jobs:
+  e2e-tests:
+    name: Backend E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.12']
+        test-category:
+          - 'test_device_lifecycle'
+          - 'test_sse_streaming'
+          - 'test_config_management'
+          - 'test_workflows'
+          - 'test_device_control'
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Install dependencies
+        run: |
+          uv sync --dev --frozen
+
+      - name: Run E2E tests
+        run: |
+          uv run pytest tests/integration/${{ matrix.test-category }}.py -v
+
+      - name: Generate test report
+        if: always()
+        run: |
+          echo "## Backend E2E Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Test Category: \`${{ matrix.test-category }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "Python Version: \`${{ matrix.python-version }}\`" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ All tests passed!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Tests failed. Check logs above." >> $GITHUB_STEP_SUMMARY
+          fi
