@@ -89,6 +89,7 @@ class ManagedDevice:
 
     # Device metadata
     model: Optional[str] = None
+    display_name: Optional[str] = None  # User-defined custom name
 
     # Device-level state
     state: DeviceState = DeviceState.ONLINE
@@ -144,6 +145,7 @@ class ManagedDevice:
             "id": self.primary_device_id,
             "serial": self.serial,
             "model": self.model or "Unknown",
+            "display_name": self.display_name,
             "status": self.status,
             "connection_type": self.connection_type.value,
             "state": self.state.value,
@@ -178,24 +180,20 @@ def _create_managed_device(
         for d in device_infos
     ]
 
-    # Extract model (prefer device with model info)
     model = None
     for device_info in device_infos:
         if device_info.model:
             model = device_info.model
             break
 
-    # Create managed device
     managed = ManagedDevice(
         serial=serial,
         connections=connections,
         model=model,
     )
 
-    # Select primary connection
     managed.select_primary_connection()
 
-    # Set state
     managed.state = (
         DeviceState.ONLINE if managed.status == "device" else DeviceState.OFFLINE
     )
@@ -248,6 +246,10 @@ class DeviceManager:
 
         self._remote_devices: dict[str, "DeviceProtocol"] = {}
         self._remote_device_configs: dict[str, dict] = {}
+
+        from AutoGLM_GUI.device_metadata_manager import DeviceMetadataManager
+
+        self._metadata_manager = DeviceMetadataManager.get_instance()
 
     @classmethod
     def get_instance(cls, adb_path: str = "adb") -> DeviceManager:
@@ -449,6 +451,11 @@ class DeviceManager:
             for serial in added_serials:
                 device_infos = grouped_by_serial[serial]
                 managed = _create_managed_device(serial, device_infos)
+
+                display_name = self._metadata_manager.get_display_name(serial)
+                if display_name:
+                    managed.display_name = display_name
+
                 self._devices[serial] = managed
 
                 # Update reverse mapping
@@ -977,3 +984,20 @@ class DeviceManager:
                 from AutoGLM_GUI.devices.adb_device import ADBDevice
 
                 return ADBDevice(managed.primary_device_id)
+
+    def set_device_display_name(self, serial: str, display_name: Optional[str]) -> None:
+        """Set custom display name for device."""
+        self._metadata_manager.set_display_name(serial, display_name)
+
+        with self._devices_lock:
+            if serial in self._devices:
+                self._devices[serial].display_name = display_name
+                logger.debug(f"Updated display name in memory for {serial}")
+
+    def get_device_display_name(self, serial: str) -> Optional[str]:
+        """Get custom display name for device."""
+        with self._devices_lock:
+            if serial in self._devices and self._devices[serial].display_name:
+                return self._devices[serial].display_name
+
+        return self._metadata_manager.get_display_name(serial)

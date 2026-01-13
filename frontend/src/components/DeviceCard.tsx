@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Edit,
   Loader2,
   Server,
   Smartphone,
@@ -14,10 +15,21 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { ConfirmDialog } from './ConfirmDialog';
 import { useTranslation } from '../lib/i18n-context';
-import { removeRemoteDevice } from '../api';
+import { removeRemoteDevice, updateDeviceName } from '../api';
 import type { AgentStatus } from '../api';
+import type { ToastType } from './Toast';
 
 interface DeviceCardProps {
   id: string;
@@ -25,24 +37,30 @@ interface DeviceCardProps {
   model: string;
   status: string;
   connectionType?: string;
+  displayName?: string | null;
   agent?: AgentStatus | null;
   isActive: boolean;
   onClick: () => void;
   onConnectWifi?: () => Promise<void>;
   onDisconnectWifi?: () => Promise<void>;
+  onNameUpdated?: () => void;
+  showToast?: (message: string, type: ToastType) => void;
 }
 
 export function DeviceCard({
-  id,
+  id: _id,
   serial,
   model,
   status,
   connectionType,
+  displayName,
   agent,
   isActive,
   onClick,
   onConnectWifi,
   onDisconnectWifi,
+  onNameUpdated,
+  showToast,
 }: DeviceCardProps) {
   const t = useTranslation();
   const isOnline = status === 'device';
@@ -52,8 +70,11 @@ export function DeviceCard({
   const [loading, setLoading] = useState(false);
   const [showWifiConfirm, setShowWifiConfirm] = useState(false);
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingName, setEditingName] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const displayName = model || t.deviceCard.unknownDevice;
+  const actualDisplayName = displayName || model || t.deviceCard.unknownDevice;
 
   // Determine agent status indicator class and tooltip
   const getAgentStatusClass = () => {
@@ -126,6 +147,42 @@ export function DeviceCard({
     }
   };
 
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingName(displayName || model || '');
+    setShowEditDialog(true);
+  };
+
+  const handleSaveName = async () => {
+    try {
+      setSaving(true);
+      const trimmedName = editingName.trim();
+      const response = await updateDeviceName(serial, trimmedName || null);
+
+      if (!response.success) {
+        if (showToast) {
+          showToast(response.error || t.deviceCard.saveNameError, 'error');
+        }
+        return;
+      }
+
+      setShowEditDialog(false);
+      if (onNameUpdated) {
+        onNameUpdated();
+      }
+      if (showToast) {
+        showToast(t.deviceCard.saveNameSuccess, 'success');
+      }
+    } catch (error) {
+      console.error('Failed to update device name:', error);
+      if (showToast) {
+        showToast(t.deviceCard.saveNameError, 'error');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <>
       <div
@@ -195,8 +252,23 @@ export function DeviceCard({
                     : 'text-slate-700 dark:text-slate-300'
                 }`}
               >
-                {displayName}
+                {actualDisplayName}
               </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleEditClick}
+                    className="h-5 w-5 text-slate-400 hover:text-[#1d9bf0] opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Edit className="w-3 h-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{t.deviceCard.editName}</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
             <span
               className={`text-xs font-mono truncate ${
@@ -205,7 +277,7 @@ export function DeviceCard({
                   : 'text-slate-400 dark:text-slate-500'
               }`}
             >
-              {model || id}
+              {serial}
             </span>
           </div>
 
@@ -341,6 +413,59 @@ export function DeviceCard({
         onConfirm={handleConfirmDisconnect}
         onCancel={() => setShowDisconnectConfirm(false)}
       />
+
+      {/* Device Name Edit Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t.deviceCard.editNameDialogTitle}</DialogTitle>
+            <DialogDescription>
+              {t.deviceCard.editNameDialogDescription}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="device-name">
+                {t.deviceCard.deviceNameLabel}
+              </Label>
+              <Input
+                id="device-name"
+                value={editingName}
+                onChange={e => setEditingName(e.target.value)}
+                placeholder={t.deviceCard.deviceNamePlaceholder}
+                maxLength={100}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !saving) {
+                    handleSaveName();
+                  }
+                }}
+              />
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {t.deviceCard.deviceSerialLabel}: {serial}
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowEditDialog(false)}
+              disabled={saving}
+            >
+              {t.common.cancel}
+            </Button>
+            <Button onClick={handleSaveName} disabled={saving}>
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  {t.common.loading}
+                </>
+              ) : (
+                t.common.save
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

@@ -141,6 +141,12 @@ def main() -> None:
         default=None,
         help="SSL certificate file path (for HTTPS)",
     )
+    parser.add_argument(
+        "--layered-max-turns",
+        type=int,
+        default=None,
+        help="Maximum turns for layered agent mode (default: 50, minimum: 1)",
+    )
 
     args = parser.parse_args()
 
@@ -170,7 +176,10 @@ def main() -> None:
 
     # 1. 设置 CLI 参数配置（最高优先级）
     config_manager.set_cli_config(
-        base_url=args.base_url, model_name=args.model, api_key=args.apikey
+        base_url=args.base_url,
+        model_name=args.model,
+        api_key=args.apikey,
+        layered_max_turns=args.layered_max_turns,
     )
 
     # 2. 加载环境变量配置
