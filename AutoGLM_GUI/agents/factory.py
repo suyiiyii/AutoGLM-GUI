@@ -52,7 +52,7 @@ def create_agent(
     device,
     takeover_callback: Callable | None = None,
     confirmation_callback: Callable | None = None,
-) -> BaseAgent:
+) -> AsyncAgent | BaseAgent:
     """
     Create an agent instance using the factory pattern.
 
@@ -66,7 +66,8 @@ def create_agent(
         confirmation_callback: Confirmation callback
 
     Returns:
-        Agent instance implementing BaseAgent interface
+        Agent instance implementing AsyncAgent or BaseAgent interface.
+        Use runtime type detection (e.g., inspect.iscoroutinefunction) to determine which.
 
     Raises:
         ValueError: If agent_type is not registered
@@ -123,6 +124,9 @@ def _create_glm_agent_v2(
     """
     from .glm.async_agent import AsyncGLMAgent
 
+    # Note: AsyncGLMAgent implements AsyncAgent Protocol, but pyright cannot verify
+    # async generator function compatibility with Protocol. This is a known limitation
+    # of Python's type system. The implementation is correct at runtime.
     return AsyncGLMAgent(  # type: ignore[return-value]
         model_config=model_config,
         agent_config=agent_config,
@@ -195,6 +199,9 @@ def _create_async_glm_agent(
     """
     from .glm.async_agent import AsyncGLMAgent
 
+    # Note: AsyncGLMAgent implements AsyncAgent Protocol, but pyright cannot verify
+    # async generator function compatibility with Protocol. This is a known limitation
+    # of Python's type system. The implementation is correct at runtime.
     return AsyncGLMAgent(  # type: ignore[return-value]
         model_config=model_config,
         agent_config=agent_config,

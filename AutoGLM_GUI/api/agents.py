@@ -179,7 +179,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
         # 检查是否是 AsyncAgent
         is_async = inspect.iscoroutinefunction(agent.run)
 
-        # 根据 agent 类型选择调用方式
+        # Runtime type detection ensures result is always str
         if is_async:
             result = await agent.run(request.message)  # type: ignore[misc]
         else:
@@ -187,7 +187,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
         steps = agent.step_count
         agent.reset()
-        return ChatResponse(result=result, steps=steps, success=True)
+        return ChatResponse(result=result, steps=steps, success=True)  # type: ignore[arg-type]
 
     except AgentInitializationError as e:
         # 配置错误或初始化失败
@@ -327,7 +327,8 @@ async def chat_stream(request: ChatRequest):
                         f"Using BaseAgent with AgentStepStreamer for device {device_id}"
                     )
 
-                    streamer = AgentStepStreamer(agent=agent, task=request.message)
+                    # Note: is_async_agent is False, so agent must be BaseAgent at runtime
+                    streamer = AgentStepStreamer(agent=agent, task=request.message)  # type: ignore[arg-type]
 
                     with streamer.stream_context() as abort_fn:
                         manager.register_abort_handler(device_id, abort_fn)

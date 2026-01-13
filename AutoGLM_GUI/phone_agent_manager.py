@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from enum import Enum
 from typing import Awaitable, Callable, Optional
 
-from AutoGLM_GUI.agents.protocols import BaseAgent
+from AutoGLM_GUI.agents.protocols import AsyncAgent, BaseAgent
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.exceptions import (
     AgentInitializationError,
@@ -102,7 +102,8 @@ class PhoneAgentManager:
         ] = {}
 
         # Agent storage (transition from global state to instance state)
-        self._agents: dict[str, BaseAgent] = {}
+        # Agents can be either AsyncAgent or BaseAgent depending on agent_type
+        self._agents: dict[str, AsyncAgent | BaseAgent] = {}
         self._agent_configs: dict[str, tuple[ModelConfig, AgentConfig]] = {}
 
     @classmethod
@@ -127,7 +128,7 @@ class PhoneAgentManager:
         takeover_callback: Optional[Callable] = None,
         confirmation_callback: Optional[Callable] = None,
         force: bool = False,
-    ) -> "BaseAgent":
+    ) -> AsyncAgent | BaseAgent:
         from AutoGLM_GUI.agents import create_agent
 
         with self._manager_lock:
@@ -247,13 +248,13 @@ class PhoneAgentManager:
         )
         logger.info(f"Agent auto-initialized for device {device_id}")
 
-    def get_agent(self, device_id: str) -> BaseAgent:
+    def get_agent(self, device_id: str) -> AsyncAgent | BaseAgent:
         with self._manager_lock:
             if device_id not in self._agents:
                 self._auto_initialize_agent(device_id)
             return self._agents[device_id]
 
-    def get_agent_safe(self, device_id: str) -> Optional[BaseAgent]:
+    def get_agent_safe(self, device_id: str) -> AsyncAgent | BaseAgent | None:
         with self._manager_lock:
             return self._agents.get(device_id)
 

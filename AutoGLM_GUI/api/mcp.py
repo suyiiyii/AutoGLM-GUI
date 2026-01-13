@@ -87,7 +87,8 @@ def chat(device_id: str, message: str) -> ChatResult:
                         result = run_async()
                 else:
                     # BaseAgent: 同步调用
-                    result = agent.run(message)
+                    # Runtime: is_async is False, so agent.run() returns str
+                    result = agent.run(message)  # type: ignore[assignment]
 
                 steps = agent.step_count
 
