@@ -212,15 +212,15 @@ class InternalMAIAgent:
                     retry_info = (
                         f" (尝试 {attempt + 1}/{max_retries})" if attempt > 0 else ""
                     )
-                    print("\n" + "=" * 50)
-                    print(f"💭 步骤 {self._step_count}{retry_info} - 思考中...")
-                    print("-" * 50)
+                    logger.info("\n" + "=" * 50)
+                    logger.info(f"💭 步骤 {self._step_count}{retry_info} - 思考中...")
+                    logger.info("-" * 50)
 
                 callback = self._thinking_callback
                 if callback is None and self.agent_config.verbose:
 
                     def print_chunk(chunk: str) -> None:
-                        print(chunk, end="", flush=True)
+                        logger.info(chunk, end="", flush=True)
 
                     callback = print_chunk
 
@@ -230,7 +230,7 @@ class InternalMAIAgent:
                 self._total_llm_time += llm_time
 
                 if self.agent_config.verbose:
-                    print(f"\n⏱️  LLM 耗时: {llm_time:.2f}s")
+                    logger.info(f"\n⏱️  LLM 耗时: {llm_time:.2f}s")
 
                 parsed = self.parser.parse_with_thinking(raw_content)
                 thinking = parsed["thinking"]
@@ -279,12 +279,12 @@ class InternalMAIAgent:
             )
 
         if self.agent_config.verbose:
-            print()
-            print("-" * 50)
-            print("🎯 动作:")
-            print(f"  原始: {raw_action}")
-            print(f"  转换: {converted_action}")
-            print("=" * 50 + "\n")
+            logger.info("")
+            logger.info("-" * 50)
+            logger.info("🎯 动作:")
+            logger.info(f"  原始: {raw_action}")
+            logger.info(f"  转换: {converted_action}")
+            logger.info("=" * 50 + "\n")
 
         traj_step = TrajStep(
             screenshot=pil_image,
@@ -310,30 +310,30 @@ class InternalMAIAgent:
             self._total_action_time += action_time
 
             if self.agent_config.verbose:
-                print(f"⚡ 动作执行耗时: {action_time:.2f}s")
+                logger.info(f"⚡ 动作执行耗时: {action_time:.2f}s")
         except Exception as e:
             if self.agent_config.verbose:
-                traceback.print_exc()
+                logger.exception(f"Action execution error: {e}")
             result = ActionResult(success=False, should_finish=True, message=str(e))
 
         finished = converted_action.get("_metadata") == "finish" or result.should_finish
 
         if finished and self.agent_config.verbose:
-            print("\n" + "🎉 " + "=" * 48)
-            print(
+            logger.info("\n" + "🎉 " + "=" * 48)
+            logger.info(
                 f"✅ 任务完成: {result.message or converted_action.get('message', '完成')}"
             )
-            print("=" * 50)
-            print("\n📊 性能统计:")
-            print(f"  总步数: {self._step_count}")
-            print(f"  总 LLM 耗时: {self._total_llm_time:.2f}s")
-            print(f"  总动作耗时: {self._total_action_time:.2f}s")
-            print(
+            logger.info("=" * 50)
+            logger.info("\n📊 性能统计:")
+            logger.info(f"  总步数: {self._step_count}")
+            logger.info(f"  总 LLM 耗时: {self._total_llm_time:.2f}s")
+            logger.info(f"  总动作耗时: {self._total_action_time:.2f}s")
+            logger.info(
                 f"  平均每步耗时: {(self._total_llm_time + self._total_action_time) / self._step_count:.2f}s"
             )
             if self._total_tokens > 0:
-                print(f"  总 Token 使用: {self._total_tokens}")
-            print("=" * 50 + "\n")
+                logger.info(f"  总 Token 使用: {self._total_tokens}")
+            logger.info("=" * 50 + "\n")
 
         return StepResult(
             success=result.success,

@@ -209,15 +209,15 @@ class GLMAgent:
         try:
             msgs = get_messages(self.agent_config.lang)
             if self.agent_config.verbose:
-                print("\n" + "=" * 50)
-                print(f"💭 {msgs['thinking']}:")
-                print("-" * 50)
+                logger.info("\n" + "=" * 50)
+                logger.info(f"💭 {msgs['thinking']}:")
+                logger.info("-" * 50)
 
             callback = self._thinking_callback
             if callback is None and self.agent_config.verbose:
 
                 def print_chunk(chunk: str) -> None:
-                    print(chunk, end="", flush=True)
+                    logger.info(chunk, end="", flush=True)
 
                 callback = print_chunk
 
@@ -243,11 +243,11 @@ class GLMAgent:
             action = {"_metadata": "finish", "message": action_str}
 
         if self.agent_config.verbose:
-            print()
-            print("-" * 50)
-            print(f"🎯 {msgs['action']}:")
-            print(json.dumps(action, ensure_ascii=False, indent=2))
-            print("=" * 50 + "\n")
+            logger.info("")
+            logger.info("-" * 50)
+            logger.info(f"🎯 {msgs['action']}:")
+            logger.info(json.dumps(action, ensure_ascii=False, indent=2))
+            logger.info("=" * 50 + "\n")
 
         self._context[-1] = MessageBuilder.remove_images_from_message(self._context[-1])
 
@@ -270,11 +270,11 @@ class GLMAgent:
 
         if finished and self.agent_config.verbose:
             msgs = get_messages(self.agent_config.lang)
-            print("\n" + "🎉 " + "=" * 48)
-            print(
+            logger.info("\n" + "🎉 " + "=" * 48)
+            logger.info(
                 f"✅ {msgs['task_completed']}: {result.message or action.get('message', msgs['done'])}"
             )
-            print("=" * 50 + "\n")
+            logger.info("=" * 50 + "\n")
 
         return StepResult(
             success=result.success,
