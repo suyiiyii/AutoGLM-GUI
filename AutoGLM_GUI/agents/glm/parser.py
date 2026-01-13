@@ -98,13 +98,15 @@ class GLMParser:
 
         return params
 
-    def _parse_value(self, value_str: str) -> Any:
+    def _parse_value(
+        self, value_str: str
+    ) -> str | int | float | bool | list | dict | None:
         value_str = value_str.strip()
 
         if not value_str:
             return ""
 
         try:
-            return ast.literal_eval(value_str)
+            return ast.literal_eval(value_str)  # type: ignore[no-any-return]
         except (ValueError, SyntaxError):
             return value_str

@@ -9,6 +9,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from asyncio.subprocess import Process as AsyncProcess
+from typing import AsyncGenerator
 
 from AutoGLM_GUI.adb_plus import check_device_available
 from AutoGLM_GUI.logger import logger
@@ -535,7 +536,7 @@ class ScrcpyStreamer:
             pts=pts,
         )
 
-    async def iter_packets(self):
+    async def iter_packets(self) -> AsyncGenerator[ScrcpyMediaStreamPacket, None]:
         """Yield packets continuously from the scrcpy stream."""
         while True:
             yield await self.read_media_packet()

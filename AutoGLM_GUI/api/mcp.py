@@ -1,5 +1,7 @@
 """MCP (Model Context Protocol) tools for AutoGLM-GUI."""
 
+from typing import Any
+
 from typing_extensions import TypedDict
 
 from fastmcp import FastMCP
@@ -123,7 +125,7 @@ def list_devices() -> list[DeviceResponse]:
     return devices_with_agents
 
 
-def get_mcp_asgi_app():
+def get_mcp_asgi_app() -> Any:
     """
     Get the MCP server's ASGI app for mounting in FastAPI.
 

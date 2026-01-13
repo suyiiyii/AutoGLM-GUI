@@ -1,6 +1,6 @@
 import json
 import traceback
-from typing import Any, Callable, cast
+from typing import Any, Callable
 
 from openai import OpenAI
 
@@ -90,7 +90,7 @@ class GLMAgent:
         on_thinking_chunk: Callable[[str], None] | None = None,
     ) -> tuple[str, str, str]:
         stream = self.openai_client.chat.completions.create(
-            messages=cast(Any, messages),
+            messages=messages,  # type: ignore[arg-type]
             model=self.model_config.model_name,
             max_tokens=self.model_config.max_tokens,
             temperature=self.model_config.temperature,

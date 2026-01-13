@@ -7,7 +7,7 @@ a decision model for planning and autoglm-phone for execution.
 import asyncio
 import json
 import threading
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING, Any, AsyncGenerator
 
 from agents import Agent, Runner, SQLiteSession, function_tool
 
@@ -384,7 +384,7 @@ class LayeredAgentRequest(BaseModel):
 
 
 @router.post("/api/layered-agent/chat")
-async def layered_agent_chat(request: LayeredAgentRequest):
+async def layered_agent_chat(request: LayeredAgentRequest) -> StreamingResponse:
     """
     Layered agent chat API with streaming execution steps.
 
@@ -407,7 +407,7 @@ async def layered_agent_chat(request: LayeredAgentRequest):
     from AutoGLM_GUI.history_manager import history_manager
     from AutoGLM_GUI.models.history import ConversationRecord
 
-    async def event_generator():
+    async def event_generator() -> AsyncGenerator[str, None]:
         start_time = datetime.now()
         final_output = ""
         final_success = False
@@ -663,7 +663,7 @@ class AbortSessionRequest(BaseModel):
 
 
 @router.post("/api/layered-agent/abort")
-def abort_session(request: AbortSessionRequest):
+def abort_session(request: AbortSessionRequest) -> dict[str, Any]:
     """
     Abort a running layered agent session.
 
@@ -697,7 +697,7 @@ class ResetSessionRequest(BaseModel):
 
 
 @router.post("/api/layered-agent/reset")
-def reset_session(request: ResetSessionRequest):
+def reset_session(request: ResetSessionRequest) -> dict[str, Any]:
     """
     Reset/clear a session to forget conversation history.
 

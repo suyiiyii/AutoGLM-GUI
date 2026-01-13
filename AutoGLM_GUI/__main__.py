@@ -56,7 +56,7 @@ def open_browser(
         delay: Delay in seconds before opening browser
     """
 
-    def _open():
+    def _open() -> None:
         time.sleep(delay)
         protocol = "https" if use_ssl else "http"
         url = (

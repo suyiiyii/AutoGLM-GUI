@@ -238,10 +238,10 @@ class QRPairingManager:
 
         return session
 
-    def _start_listener(self, session: PairingSession, adb_path: str):
+    def _start_listener(self, session: PairingSession, adb_path: str) -> None:
         """Start zeroconf listener (runs in thread pool to avoid blocking)."""
 
-        def _listen():
+        def _listen() -> None:
             """Listener thread function."""
             try:
                 zc = Zeroconf()
@@ -350,7 +350,7 @@ class QRPairingManager:
             logger.warning(f"[QR Pair] Session {session_id} not found for cancellation")
             return False
 
-    async def cleanup_expired_sessions(self):
+    async def cleanup_expired_sessions(self) -> None:
         """Background task to cleanup expired sessions.
 
         Runs indefinitely, checking every 60 seconds for expired sessions.

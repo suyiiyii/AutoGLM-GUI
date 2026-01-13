@@ -28,7 +28,7 @@ _original_popen = subprocess.Popen
 
 
 @wraps(_original_run)
-def _patched_run(*args, **kwargs):
+def _patched_run(*args, **kwargs) -> subprocess.CompletedProcess:
     """Patched subprocess.run that defaults to UTF-8 encoding on Windows."""
     if sys.platform == "win32":
         # Add encoding='utf-8' if text=True is set but encoding is not specified

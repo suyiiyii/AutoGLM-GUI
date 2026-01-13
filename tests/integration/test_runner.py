@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from AutoGLM_GUI.devices.mock_device import MockDevice
+from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from tests.integration.state_machine import (
     StateMachine,
     TestFailedError,
@@ -53,8 +54,8 @@ class TestRunner:
 
     def run(
         self,
-        model_config: Any = None,
-        agent_config: Any = None,
+        model_config: ModelConfig | None = None,
+        agent_config: AgentConfig | None = None,
     ) -> dict[str, Any]:
         """
         Run the test.
@@ -78,7 +79,6 @@ class TestRunner:
         instruction = self.instruction
         # Import here to avoid circular imports
         from AutoGLM_GUI.agents.glm.agent import GLMAgent
-        from AutoGLM_GUI.config import AgentConfig, ModelConfig
 
         # Create configs if not provided
         if model_config is None:

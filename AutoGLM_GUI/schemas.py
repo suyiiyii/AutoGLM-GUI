@@ -816,3 +816,41 @@ class ScheduledTaskListResponse(BaseModel):
     """定时任务列表响应."""
 
     tasks: list[ScheduledTaskResponse]
+
+
+class DeleteResponse(BaseModel):
+    success: bool
+    message: str
+
+
+class ResetResponse(BaseModel):
+    success: bool
+    message: str
+    device_id: str
+
+
+class ConfigSaveResponse(BaseModel):
+    success: bool
+    message: str
+    warnings: list[str] | None = None
+    destroyed_agents: int
+
+
+class InitResponse(BaseModel):
+    success: bool
+    message: str
+    device_id: str
+    agent_type: str
+
+
+class StreamResetResponse(BaseModel):
+    success: bool
+    message: str
+    device_id: str | None = None
+
+
+class EnableDisableResponse(BaseModel):
+    success: bool
+    message: str
+    task_id: str
+    enabled: bool

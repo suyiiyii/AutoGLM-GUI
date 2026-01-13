@@ -7,6 +7,8 @@ from contextlib import asynccontextmanager
 from importlib.resources import files
 from pathlib import Path
 
+from typing import AsyncGenerator
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
@@ -82,7 +84,7 @@ def create_app() -> FastAPI:
 
     # Define combined lifespan
     @asynccontextmanager
-    async def combined_lifespan(app: FastAPI):
+    async def combined_lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         """Combine app startup logic with MCP lifespan."""
         # App startup
         asyncio.create_task(qr_pairing_manager.cleanup_expired_sessions())
