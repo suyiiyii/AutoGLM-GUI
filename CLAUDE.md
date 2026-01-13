@@ -311,9 +311,16 @@ Internal implementations of automation agents:
 
 - **`factory.py`**: Agent factory using registry pattern for creating different agent types.
 - **`protocols.py`**: Base interfaces for all agents.
+  - `BaseAgent`: Synchronous agent interface (legacy)
+  - `AsyncAgent`: Asynchronous agent interface (new, supports immediate cancellation)
 - **`glm/`**: GLM-based agent implementation.
+  - `async_agent.py`: **AsyncGLMAgent** - Default async implementation using `AsyncOpenAI`
+    - Native streaming with `async for event in agent.stream()`
+    - Immediate cancellation with `await agent.cancel()` (<1s response)
+    - Uses `asyncio.to_thread()` for sync device operations
+  - `agent.py`: GLMAgent - Legacy sync implementation (use `agent_type: "glm-sync"` to enable)
 - **`mai/`**: Internalized MAI Agent (Mobile Agent) with multi-image support.
-- **`stream_runner.py`**: SSE streamer for agent execution steps.
+- **`stream_runner.py`**: SSE streamer for agent execution steps (legacy, for BaseAgent compatibility).
 
 ### Action System (`AutoGLM_GUI/actions/`)
 

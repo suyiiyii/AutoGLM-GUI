@@ -58,7 +58,32 @@ def chat(device_id: str, message: str) -> ChatResult:
                 # Reset agent before each chat to ensure clean state
                 agent.reset()
 
-                result = agent.run(message)
+                # 检查是否是 AsyncAgent 并相应处理
+                import asyncio
+                import inspect
+
+                is_async = inspect.iscoroutinefunction(agent.run)
+
+                result: str
+                if is_async:
+                    # AsyncAgent: 在同步上下文中运行异步方法
+                    try:
+                        loop = asyncio.get_event_loop()
+                        if loop.is_running():
+                            # 如果已有running loop，创建新的loop
+                            import concurrent.futures
+                            with concurrent.futures.ThreadPoolExecutor() as executor:
+                                future = executor.submit(asyncio.run, agent.run(message))  # type: ignore[misc]
+                                result = future.result()
+                        else:
+                            result = loop.run_until_complete(agent.run(message))  # type: ignore[misc]
+                    except RuntimeError:
+                        # 没有event loop，创建新的
+                        result = asyncio.run(agent.run(message))  # type: ignore[misc]
+                else:
+                    # BaseAgent: 同步调用
+                    result = agent.run(message)
+
                 steps = agent.step_count
 
                 # Check if MCP step limit was reached

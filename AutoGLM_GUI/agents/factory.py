@@ -12,7 +12,7 @@ from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.types import AgentSpecificConfig
 
-from .protocols import BaseAgent
+from .protocols import AsyncAgent, BaseAgent
 
 
 # Agent registry: agent_type -> (creator_function, config_schema)
@@ -111,11 +111,40 @@ def is_agent_type_registered(agent_type: str) -> bool:
 def _create_glm_agent_v2(
     model_config: ModelConfig,
     agent_config: AgentConfig,
-    agent_specific_config: AgentSpecificConfig,
+    agent_specific_config: AgentSpecificConfig,  # noqa: ARG001
+    device,
+    takeover_callback: Callable | None = None,
+    confirmation_callback: Callable | None = None,
+) -> AsyncAgent:
+    """Create AsyncGLMAgent (new default for 'glm').
+
+    Note: 'glm' now creates AsyncGLMAgent by default for better performance.
+    Use 'glm-sync' if you need the old synchronous implementation.
+    """
+    from .glm.async_agent import AsyncGLMAgent
+
+    return AsyncGLMAgent(  # type: ignore[return-value]
+        model_config=model_config,
+        agent_config=agent_config,
+        device=device,
+        confirmation_callback=confirmation_callback,
+        takeover_callback=takeover_callback,
+    )
+
+
+def _create_glm_agent_sync(
+    model_config: ModelConfig,
+    agent_config: AgentConfig,
+    agent_specific_config: AgentSpecificConfig,  # noqa: ARG001
     device,
     takeover_callback: Callable | None = None,
     confirmation_callback: Callable | None = None,
 ) -> BaseAgent:
+    """Create synchronous GLMAgent (legacy, for backward compatibility).
+
+    This is the old synchronous implementation using AgentStepStreamer.
+    Only use this if you have compatibility issues with AsyncGLMAgent.
+    """
     from .glm.agent import GLMAgent
 
     return GLMAgent(
@@ -149,5 +178,33 @@ def _create_internal_mai_agent(
     )
 
 
-register_agent("glm", _create_glm_agent_v2)
+def _create_async_glm_agent(
+    model_config: ModelConfig,
+    agent_config: AgentConfig,
+    agent_specific_config: AgentSpecificConfig,  # noqa: ARG001
+    device,
+    takeover_callback: Callable | None = None,
+    confirmation_callback: Callable | None = None,
+) -> AsyncAgent:
+    """Create AsyncGLMAgent instance.
+
+    This is the async version of GLMAgent that supports:
+    - Native streaming with AsyncIterator
+    - Immediate cancellation with asyncio.CancelledError
+    - No worker threads or queues needed
+    """
+    from .glm.async_agent import AsyncGLMAgent
+
+    return AsyncGLMAgent(  # type: ignore[return-value]
+        model_config=model_config,
+        agent_config=agent_config,
+        device=device,
+        confirmation_callback=confirmation_callback,
+        takeover_callback=takeover_callback,
+    )
+
+
+register_agent("glm", _create_glm_agent_v2)  # 默认使用 AsyncGLMAgent
+register_agent("glm-sync", _create_glm_agent_sync)  # 旧的同步实现 (向后兼容)
 register_agent("mai", _create_internal_mai_agent)
+register_agent("async-glm", _create_async_glm_agent)  # 别名，与 glm 相同

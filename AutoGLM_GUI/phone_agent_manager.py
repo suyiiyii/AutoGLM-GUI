@@ -2,12 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
 import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
-from typing import Callable, Optional
+from typing import Awaitable, Callable, Optional
 
 from AutoGLM_GUI.agents.protocols import BaseAgent
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
@@ -96,7 +97,9 @@ class PhoneAgentManager:
         self._streaming_contexts: dict[str, StreamingAgentContext] = {}
         self._streaming_contexts_lock = threading.Lock()
 
-        self._abort_events: dict[str, threading.Event | Callable[[], None]] = {}
+        self._abort_events: dict[
+            str, threading.Event | Callable[[], None] | Callable[[], Awaitable[None]]
+        ] = {}
 
         # Agent storage (transition from global state to instance state)
         self._agents: dict[str, BaseAgent] = {}
@@ -512,18 +515,32 @@ class PhoneAgentManager:
             return self._metadata.get(device_id)
 
     def register_abort_handler(
-        self, device_id: str, abort_handler: threading.Event | Callable[[], None]
+        self,
+        device_id: str,
+        abort_handler: threading.Event
+        | Callable[[], None]
+        | Callable[[], Awaitable[None]],
     ) -> None:
+        """注册取消处理器 (支持同步和异步处理器)。
+
+        Args:
+            device_id: 设备标识符
+            abort_handler: 取消处理器 (Event / 同步函数 / 异步函数)
+        """
         with self._streaming_contexts_lock:
             self._abort_events[device_id] = abort_handler
 
     def unregister_abort_handler(self, device_id: str) -> None:
+        """注销取消处理器。
+
+        Args:
+            device_id: 设备标识符
+        """
         with self._streaming_contexts_lock:
             self._abort_events.pop(device_id, None)
 
-    def abort_streaming_chat(self, device_id: str) -> bool:
-        """
-        中止正在进行的流式对话.
+    async def abort_streaming_chat_async(self, device_id: str) -> bool:
+        """异步中止流式对话 (支持 AsyncAgent)。
 
         Args:
             device_id: 设备标识符
@@ -532,16 +549,72 @@ class PhoneAgentManager:
             bool: True 表示发送了中止信号，False 表示没有活跃会话
         """
         with self._streaming_contexts_lock:
-            if device_id in self._abort_events:
-                logger.info(f"Aborting streaming chat for device {device_id}")
-                handler = self._abort_events[device_id]
-                if isinstance(handler, threading.Event):
-                    handler.set()
-                elif callable(handler):
-                    handler()
+            if device_id not in self._abort_events:
+                logger.warning(f"No active streaming chat for device {device_id}")
+                return False
+
+            logger.info(f"Aborting async streaming chat for device {device_id}")
+            handler = self._abort_events[device_id]
+
+        # 执行取消 (根据类型选择方式)
+        if isinstance(handler, threading.Event):
+            handler.set()
+        elif asyncio.iscoroutinefunction(handler):
+            await handler()
+        elif callable(handler):
+            handler()
+        else:
+            logger.warning(f"Unknown abort handler type: {type(handler)}")
+            return False
+
+        return True
+
+    def abort_streaming_chat(self, device_id: str) -> bool:
+        """同步中止流式对话 (向后兼容)。
+
+        Args:
+            device_id: 设备标识符
+
+        Returns:
+            bool: True 表示发送了中止信号，False 表示没有活跃会话
+        """
+        with self._streaming_contexts_lock:
+            if device_id not in self._abort_events:
+                logger.warning(f"No active streaming chat for device {device_id}")
+                return False
+
+            logger.info(f"Aborting streaming chat for device {device_id}")
+            handler = self._abort_events[device_id]
+
+            if isinstance(handler, threading.Event):
+                handler.set()
+                return True
+            elif asyncio.iscoroutinefunction(handler):
+                logger.warning(
+                    f"Detected async handler for {device_id}, "
+                    f"but called sync abort. Use abort_streaming_chat_async instead."
+                )
+                # 尝试在当前线程的 event loop 中运行
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # 不能在运行中的 loop 中调用 run_until_complete
+                        # 创建一个 task
+                        asyncio.create_task(self.abort_streaming_chat_async(device_id))
+                        return True
+                    else:
+                        loop.run_until_complete(
+                            self.abort_streaming_chat_async(device_id)
+                        )
+                        return True
+                except RuntimeError:
+                    logger.error("Cannot abort async agent from sync context")
+                    return False
+            elif callable(handler):
+                handler()
                 return True
             else:
-                logger.warning(f"No active streaming chat for device {device_id}")
+                logger.warning(f"Unknown abort handler type: {type(handler)}")
                 return False
 
     def is_streaming_active(self, device_id: str) -> bool:

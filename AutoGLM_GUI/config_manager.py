@@ -57,7 +57,7 @@ class ConfigModel(BaseModel):
     api_key: str = "EMPTY"
 
     # Agent 类型配置
-    agent_type: str = "glm"  # Agent type (e.g., "glm", "mai")
+    agent_type: str = "glm"  # Agent type (e.g., "glm", "mai", "glm-sync")
     agent_config_params: dict | None = None  # Agent-specific configuration
 
     # Agent 执行配置
