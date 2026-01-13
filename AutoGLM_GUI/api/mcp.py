@@ -67,19 +67,24 @@ def chat(device_id: str, message: str) -> ChatResult:
                 result: str
                 if is_async:
                     # AsyncAgent: 在同步上下文中运行异步方法
+                    import concurrent.futures
+
+                    def run_async() -> str:
+                        """在新线程中运行异步代码"""
+                        return asyncio.run(agent.run(message))  # type: ignore[misc]
+
                     try:
                         loop = asyncio.get_event_loop()
                         if loop.is_running():
-                            # 如果已有running loop，创建新的loop
-                            import concurrent.futures
+                            # 如果已有running loop，在新线程中运行
                             with concurrent.futures.ThreadPoolExecutor() as executor:
-                                future = executor.submit(asyncio.run, agent.run(message))  # type: ignore[misc]
+                                future = executor.submit(run_async)
                                 result = future.result()
                         else:
                             result = loop.run_until_complete(agent.run(message))  # type: ignore[misc]
                     except RuntimeError:
-                        # 没有event loop，创建新的
-                        result = asyncio.run(agent.run(message))  # type: ignore[misc]
+                        # 没有event loop，直接运行
+                        result = run_async()
                 else:
                     # BaseAgent: 同步调用
                     result = agent.run(message)

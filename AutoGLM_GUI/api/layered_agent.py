@@ -236,9 +236,7 @@ async def _async_chat(device_id: str, message: str) -> str:
 
             # 检查是否达到步数限制
             if steps >= MCP_MAX_STEPS and result == "Max steps reached":
-                context_json = json.dumps(
-                    agent.context, ensure_ascii=False, indent=2
-                )
+                context_json = json.dumps(agent.context, ensure_ascii=False, indent=2)
                 return json.dumps(
                     {
                         "result": f"⚠️ 已达到最大步数限制（{MCP_MAX_STEPS}步）。视觉模型可能遇到了困难，任务未完成。\n\n执行历史:\n{context_json}\n\n建议: 请重新规划任务或将其拆分为更小的子任务。",
