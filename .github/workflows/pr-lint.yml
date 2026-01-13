@@ -71,7 +71,7 @@ jobs:
       - name: Run ast-grep code quality check
         run: |
           echo "🔍 Running ast-grep code quality check..."
-          uv run python scripts/ast_grep_check.py || echo "⚠️  ast-grep check found issues (non-blocking)"
+          uv run python scripts/ast_grep_check.py
 
       - name: Run unified lint script (check-only mode)
         run: |
