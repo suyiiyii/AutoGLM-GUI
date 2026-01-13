@@ -51,7 +51,7 @@ class AstGrepChecker:
             name="检测 print() 语句",
             description="应使用 logger 而非 print()",
             severity="warning",
-            pattern="print($_)",
+            pattern="print($$$)",  # $$$ 匹配任意数量的参数
         ),
     }
 
@@ -183,7 +183,7 @@ class AstGrepChecker:
                     # 跳过无效匹配
                     continue
 
-                file_path = match.get("path", "unknown")
+                file_path = match.get("file", "unknown")
                 range_info = match.get("range", {})
                 start = range_info.get("start", {})
                 line = start.get("line", "?")
