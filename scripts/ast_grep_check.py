@@ -76,9 +76,14 @@ class AstGrepChecker:
         try:
             # 使用 -p 参数传递模式
             cmd = [
-                "sg", "run", "-p", rule.pattern,
-                "--json", "-l", rule.lang,
-                "AutoGLM_GUI/"
+                "sg",
+                "run",
+                "-p",
+                rule.pattern,
+                "--json",
+                "-l",
+                rule.lang,
+                "AutoGLM_GUI/",
             ]
 
             result = subprocess.run(
@@ -95,7 +100,7 @@ class AstGrepChecker:
                     rule=rule,
                     passed=False,
                     matches=[],
-                    error=f"ast-grep 错误: {result.stderr.strip()}"
+                    error=f"ast-grep 错误: {result.stderr.strip()}",
                 )
 
             # 检查退出码
@@ -104,7 +109,7 @@ class AstGrepChecker:
                     rule=rule,
                     passed=False,
                     matches=[],
-                    error=f"ast-grep 执行失败 (退出码: {result.returncode})"
+                    error=f"ast-grep 执行失败 (退出码: {result.returncode})",
                 )
 
             # 解析 JSON 输出
@@ -121,14 +126,11 @@ class AstGrepChecker:
                                 rule=rule,
                                 passed=False,
                                 matches=[],
-                                error=f"ast-grep 规则错误: {data['errors']}"
+                                error=f"ast-grep 规则错误: {data['errors']}",
                             )
                 except json.JSONDecodeError as e:
                     return RuleResult(
-                        rule=rule,
-                        passed=False,
-                        matches=[],
-                        error=f"JSON 解析失败: {e}"
+                        rule=rule, passed=False, matches=[], error=f"JSON 解析失败: {e}"
                     )
 
             passed = len(matches) == 0
@@ -139,21 +141,18 @@ class AstGrepChecker:
                 rule=rule,
                 passed=False,
                 matches=[],
-                error=f"检查超时（超过 {self.TIMEOUT_SECONDS} 秒）"
+                error=f"检查超时（超过 {self.TIMEOUT_SECONDS} 秒）",
             )
         except FileNotFoundError:
             return RuleResult(
                 rule=rule,
                 passed=False,
                 matches=[],
-                error="未找到 ast-grep (sg) 命令，请运行: npm install -g ast-grep"
+                error="未找到 ast-grep (sg) 命令，请运行: npm install -g ast-grep",
             )
         except Exception:
             return RuleResult(
-                rule=rule,
-                passed=False,
-                matches=[],
-                error="检查过程中发生未知错误"
+                rule=rule, passed=False, matches=[], error="检查过程中发生未知错误"
             )
 
     def format_rule_result(self, result: RuleResult) -> None:
