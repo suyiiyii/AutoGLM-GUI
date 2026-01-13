@@ -8,13 +8,10 @@ Tests complete device lifecycle including:
 - Agent cleanup
 """
 
-import httpx
 import multiprocessing
-import pytest
-import time
 from fastapi.testclient import TestClient
 
-from tests.integration.conftest import api_client, find_free_port, wait_for_server
+from tests.integration.conftest import find_free_port, wait_for_server
 
 
 class TestDeviceConnectionFlow:
@@ -61,7 +58,7 @@ class TestDeviceConnectionFlow:
 
         response = api_client.get("/api/devices")
         assert response.status_code == 200
-        devices = response.json()["devices"]
+        _ = response.json()["devices"]
 
     def test_remove_remote_device(self, api_client: TestClient, mock_agent_server: str):
         """Test removing a remote device."""
@@ -181,7 +178,7 @@ class TestTaskExecutionFlow:
             )
 
             assert response.status_code == 200
-            result = response.json()
+            _ = response.json()
 
         finally:
             llm_proc.terminate()
@@ -194,7 +191,7 @@ class TestCleanupFlow:
     def test_config_save_destroys_agents(self, api_client: TestClient):
         """Test that saving new config destroys existing agents."""
         status_response = api_client.get("/api/status")
-        initial_agents = status_response.json().get("agents", [])
+        _ = status_response.json().get("agents", [])
 
         response = api_client.post(
             "/api/config",
@@ -207,7 +204,7 @@ class TestCleanupFlow:
         assert response.status_code == 200
 
         status_response = api_client.get("/api/status")
-        final_agents = status_response.json().get("agents", [])
+        _ = status_response.json().get("agents", [])
 
     def test_delete_config_clears_settings(self, api_client: TestClient):
         """Test that deleting config clears all settings."""

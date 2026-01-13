@@ -9,10 +9,7 @@ Tests workflow CRUD operations:
 - Execute workflow with agent
 """
 
-import pytest
 from fastapi.testclient import TestClient
-
-from tests.integration.conftest import api_client
 
 
 class TestWorkflowCRUD:

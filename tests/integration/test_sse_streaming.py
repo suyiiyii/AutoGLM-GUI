@@ -7,10 +7,7 @@ Tests streaming functionality for:
 - Error handling in streams
 """
 
-import pytest
 from fastapi.testclient import TestClient
-
-from tests.integration.conftest import api_client, sse_event_parser
 
 
 class TestChatSSEStream:
@@ -41,8 +38,7 @@ class TestChatSSEStream:
         )
 
         events = sse_event_parser.parse_response(response)
-
-        event_types = [e["type"] for e in events]
+        _ = [e["type"] for e in events]
         assert len(events) > 0
 
     def test_sse_stream_termination(

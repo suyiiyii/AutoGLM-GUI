@@ -7,10 +7,7 @@ Tests configuration management including:
 - Config persistence and deletion
 """
 
-import pytest
 from fastapi.testclient import TestClient
-
-from tests.integration.conftest import api_client
 
 
 class TestConfigLoading:
@@ -69,9 +66,6 @@ class TestConfigAutoDestroy:
 
         api_client.post("/api/init", json={"device_id": "mock_device_001"})
 
-        status_before = api_client.get("/api/status").json()
-        agents_before = status_before.get("agents", [])
-
         api_client.post(
             "/api/config",
             json={
@@ -80,9 +74,6 @@ class TestConfigAutoDestroy:
                 "model_name": "model2",
             },
         )
-
-        status_after = api_client.get("/api/status").json()
-        agents_after = status_after.get("agents", [])
 
     def test_multiple_config_changes(self, api_client: TestClient):
         """Test multiple config changes in sequence."""

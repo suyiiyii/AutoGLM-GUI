@@ -8,10 +8,7 @@ Tests device control via:
 - Multi-device control
 """
 
-import pytest
 from fastapi.testclient import TestClient
-
-from tests.integration.conftest import api_client, multi_device_pool, test_client
 
 
 class TestTapOperation:
@@ -144,7 +141,7 @@ class TestTouchEvents:
             json={"device_id": "mock_device_001", "x": 250, "y": 350},
         )
 
-        api_client.post(
+        response = api_client.post(
             "/api/control/touch/up",
             json={"device_id": "mock_device_001"},
         )
