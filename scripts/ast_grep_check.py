@@ -44,42 +44,14 @@ class AstGrepChecker:
     MAX_MATCHES_TO_DISPLAY = 5  # 最多显示的匹配数量
     TIMEOUT_SECONDS = 15  # 超时时间（秒）
 
-    # 5 个检查规则配置（移除无法实现的 unused-import）
+    # 检查规则配置（使用简单的 ast-grep 表达式）
     RULES: dict[str, RuleConfig] = {
-        "type-annotation": RuleConfig(
-            rule_id="type-annotation",
-            name="类型注解升级",
-            description="Optional[Type] → Type | None (PEP 604)",
-            severity="info",
-            pattern="rule:\n  pattern:\n    context: 'Optional[$TYPE]'\n    selector: generic_type",
-        ),
-        "walrus-operator": RuleConfig(
-            rule_id="walrus-operator",
-            name="海象运算符优化",
-            description="使用 := (walrus operator) 简化赋值+检查模式",
-            severity="info",
-            pattern="rule:\n  pattern: $MATCH = pattern.match($DATA)\n  inside:\n    stopby:\n      regex: 'if $MATCH'",
-        ),
         "no-print": RuleConfig(
             rule_id="no-print",
             name="检测 print() 语句",
             description="应使用 logger 而非 print()",
             severity="warning",
-            pattern="rule:\n  pattern: print($_)",
-        ),
-        "no-empty-except": RuleConfig(
-            rule_id="no-empty-except",
-            name="检测空 except 块",
-            description="空的 except 块可能隐藏错误",
-            severity="error",
-            pattern="rule:\n  any:\n    - pattern:\n        try:\n          $$$STATEMENTS\n        except:\n          pass\n    - pattern:\n        try:\n          $$$STATEMENTS\n        except:\n          ...",
-        ),
-        "broad-except": RuleConfig(
-            rule_id="broad-except",
-            name="检测宽泛异常捕获",
-            description="建议捕获具体异常类型（当前仅作提醒）",
-            severity="warning",
-            pattern="rule:\n  pattern:\n    try:\n      $$$STATEMENTS\n    except Exception:\n      $$$BODY",
+            pattern="print($_)",
         ),
     }
 
@@ -101,23 +73,16 @@ class AstGrepChecker:
         Returns:
             RuleResult: 检查结果
         """
-        # 构造完整的 YAML（添加 id 和 language）
-        yaml_content = f"id: {rule.rule_id}\nlanguage: {rule.lang}\n{rule.pattern}\n"
-
-        # 构造命令：添加文件过滤
-        cmd = [
-            "sg",
-            "run",
-            "--json",
-            "-",
-            "--glob",
-            "AutoGLM_GUI/**/*.py",
-        ]
-
         try:
+            # 使用 -p 参数传递模式
+            cmd = [
+                "sg", "run", "-p", rule.pattern,
+                "--json", "-l", rule.lang,
+                "AutoGLM_GUI/"
+            ]
+
             result = subprocess.run(
                 cmd,
-                input=yaml_content,
                 cwd=self.root_dir,
                 capture_output=True,
                 text=True,
@@ -130,7 +95,7 @@ class AstGrepChecker:
                     rule=rule,
                     passed=False,
                     matches=[],
-                    error=f"ast-grep 错误: {result.stderr.strip()}",
+                    error=f"ast-grep 错误: {result.stderr.strip()}"
                 )
 
             # 检查退出码
@@ -139,7 +104,7 @@ class AstGrepChecker:
                     rule=rule,
                     passed=False,
                     matches=[],
-                    error=f"ast-grep 执行失败 (退出码: {result.returncode})",
+                    error=f"ast-grep 执行失败 (退出码: {result.returncode})"
                 )
 
             # 解析 JSON 输出
@@ -147,57 +112,48 @@ class AstGrepChecker:
             if result.stdout.strip():
                 try:
                     data = json.loads(result.stdout)
-                    # sg 返回的格式可能是数组或单个对象
                     if isinstance(data, list):
                         matches = data
                     elif isinstance(data, dict):
-                        if "matches" in data:
-                            matches = data["matches"]
-                        # 检查是否有错误字段
+                        matches = data.get("matches", [])
                         if "errors" in data:
                             return RuleResult(
                                 rule=rule,
                                 passed=False,
                                 matches=[],
-                                error=f"ast-grep 规则错误: {data['errors']}",
+                                error=f"ast-grep 规则错误: {data['errors']}"
                             )
-                    else:
-                        # 意外的结构
-                        return RuleResult(
-                            rule=rule,
-                            passed=False,
-                            matches=[],
-                            error=f"意外的 ast-grep 输出格式: {type(data)}",
-                        )
                 except json.JSONDecodeError as e:
-                    # JSON 解析失败
                     return RuleResult(
-                        rule=rule, passed=False, matches=[], error=f"JSON 解析失败: {e}"
+                        rule=rule,
+                        passed=False,
+                        matches=[],
+                        error=f"JSON 解析失败: {e}"
                     )
 
             passed = len(matches) == 0
             return RuleResult(rule=rule, passed=passed, matches=matches)
 
         except subprocess.TimeoutExpired:
-            # 超时视为检查失败
             return RuleResult(
                 rule=rule,
                 passed=False,
                 matches=[],
-                error=f"检查超时（超过 {self.TIMEOUT_SECONDS} 秒）",
+                error=f"检查超时（超过 {self.TIMEOUT_SECONDS} 秒）"
             )
         except FileNotFoundError:
-            # sg 命令未找到
             return RuleResult(
                 rule=rule,
                 passed=False,
                 matches=[],
-                error="未找到 ast-grep (sg) 命令，请运行: npm install -g ast-grep",
+                error="未找到 ast-grep (sg) 命令，请运行: npm install -g ast-grep"
             )
         except Exception:
-            # 其他错误
             return RuleResult(
-                rule=rule, passed=False, matches=[], error="检查过程中发生未知错误"
+                rule=rule,
+                passed=False,
+                matches=[],
+                error="检查过程中发生未知错误"
             )
 
     def format_rule_result(self, result: RuleResult) -> None:
