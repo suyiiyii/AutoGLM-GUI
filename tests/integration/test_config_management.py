@@ -112,7 +112,7 @@ class TestConfigPersistence:
         assert response.status_code == 200
         config = response.json()
 
-        base_url = config.get("effective", {}).get("base_url")
+        base_url = config.get("base_url")
         assert base_url is None or base_url == ""
 
     def test_config_survives_restart(
@@ -134,8 +134,8 @@ class TestConfigPersistence:
         response2 = api_client.get("/api/config")
         config2 = response2.json()
 
-        assert config1.get("effective", {}).get("api_key") == "persisted-key"
-        assert config2.get("effective", {}).get("api_key") == "persisted-key"
+        assert config1.get("api_key") == "persisted-key"
+        assert config2.get("api_key") == "persisted-key"
 
 
 class TestConfigValidation:
