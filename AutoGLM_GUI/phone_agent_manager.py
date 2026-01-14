@@ -156,12 +156,19 @@ class PhoneAgentManager:
                 from AutoGLM_GUI.device_manager import DeviceManager
 
                 device_manager = DeviceManager.get_instance()
+                # Use agent_config.device_id (actual device ID) instead of device_id (storage key)
+                # to get device protocol, as device_id may be a composite key like "device_id:context"
+                actual_device_id = agent_config.device_id
+                if not actual_device_id:
+                    raise AgentInitializationError(
+                        "agent_config.device_id is required but was None"
+                    )
                 try:
-                    device = device_manager.get_device_protocol(device_id)
+                    device = device_manager.get_device_protocol(actual_device_id)
                 except ValueError:
                     # Ensure cold starts refresh device cache before failing.
                     device_manager.force_refresh()
-                    device = device_manager.get_device_protocol(device_id)
+                    device = device_manager.get_device_protocol(actual_device_id)
 
                 agent = create_agent(
                     agent_type=agent_type,
