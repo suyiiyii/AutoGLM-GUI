@@ -66,18 +66,43 @@ class MockDevice(DeviceProtocol):
 
     # === Input Operations ===
     def tap(self, x: int, y: int, delay: float | None = None) -> None:
-        """Handle tap action through state machine."""
-        self._state_machine.handle_tap(x, y)
+        """Handle tap action through state machine.
+
+        Converts pixel coordinates to normalized (0-1000) for state machine.
+        """
+        # Get actual screenshot dimensions from current state
+        screenshot_info = self._state_machine.get_current_screenshot()
+        screen_width = screenshot_info.width
+        screen_height = screenshot_info.height
+
+        # Convert pixel coordinates to normalized (0-1000)
+        norm_x = int(x / screen_width * 1000)
+        norm_y = int(y / screen_height * 1000)
+        self._state_machine.handle_tap(norm_x, norm_y)
 
     def double_tap(self, x: int, y: int, delay: float | None = None) -> None:
         """Handle double tap (treated as single tap)."""
-        self._state_machine.handle_tap(x, y)
+        # Get actual screenshot dimensions from current state
+        screenshot_info = self._state_machine.get_current_screenshot()
+        screen_width = screenshot_info.width
+        screen_height = screenshot_info.height
+
+        norm_x = int(x / screen_width * 1000)
+        norm_y = int(y / screen_height * 1000)
+        self._state_machine.handle_tap(norm_x, norm_y)
 
     def long_press(
         self, x: int, y: int, duration_ms: int = 3000, delay: float | None = None
     ) -> None:
         """Handle long press (treated as tap for testing)."""
-        self._state_machine.handle_tap(x, y)
+        # Get actual screenshot dimensions from current state
+        screenshot_info = self._state_machine.get_current_screenshot()
+        screen_width = screenshot_info.width
+        screen_height = screenshot_info.height
+
+        norm_x = int(x / screen_width * 1000)
+        norm_y = int(y / screen_height * 1000)
+        self._state_machine.handle_tap(norm_x, norm_y)
 
     def swipe(
         self,

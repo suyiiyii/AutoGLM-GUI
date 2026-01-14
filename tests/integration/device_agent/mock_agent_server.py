@@ -183,9 +183,12 @@ def _register_routes(app: FastAPI):
     async def tap(device_id: str, req: TapRequest):
         state.record("tap", device_id, x=req.x, y=req.y, delay=req.delay)
         if state.state_machine:
-            # Always convert pixel coordinates to normalized (0-1000) for state machine
-            screen_width = 1080
-            screen_height = 2400
+            # Get actual screenshot dimensions from state machine
+            screenshot_info = state.state_machine.get_current_screenshot()
+            screen_width = screenshot_info.width
+            screen_height = screenshot_info.height
+
+            # Convert pixel coordinates to normalized (0-1000) for state machine
             norm_x = int(req.x / screen_width * 1000)
             norm_y = int(req.y / screen_height * 1000)
             state.state_machine.handle_tap(norm_x, norm_y)
@@ -195,9 +198,12 @@ def _register_routes(app: FastAPI):
     async def double_tap(device_id: str, req: TapRequest):
         state.record("double_tap", device_id, x=req.x, y=req.y, delay=req.delay)
         if state.state_machine:
-            # Always convert pixel coordinates to normalized (0-1000)
-            screen_width = 1080
-            screen_height = 2400
+            # Get actual screenshot dimensions from state machine
+            screenshot_info = state.state_machine.get_current_screenshot()
+            screen_width = screenshot_info.width
+            screen_height = screenshot_info.height
+
+            # Convert pixel coordinates to normalized (0-1000)
             norm_x = int(req.x / screen_width * 1000)
             norm_y = int(req.y / screen_height * 1000)
             state.state_machine.handle_tap(norm_x, norm_y)
@@ -214,9 +220,12 @@ def _register_routes(app: FastAPI):
             delay=req.delay,
         )
         if state.state_machine:
-            # Always convert pixel coordinates to normalized (0-1000)
-            screen_width = 1080
-            screen_height = 2400
+            # Get actual screenshot dimensions from state machine
+            screenshot_info = state.state_machine.get_current_screenshot()
+            screen_width = screenshot_info.width
+            screen_height = screenshot_info.height
+
+            # Convert pixel coordinates to normalized (0-1000)
             norm_x = int(req.x / screen_width * 1000)
             norm_y = int(req.y / screen_height * 1000)
             state.state_machine.handle_tap(norm_x, norm_y)

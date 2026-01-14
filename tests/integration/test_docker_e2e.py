@@ -342,8 +342,9 @@ class TestDockerE2E:
 
         tap = tap_commands[0]
         x, y = tap["params"]["x"], tap["params"]["y"]
-        assert 487 <= x <= 721, f"Tap x={x} not in message button region [487, 721]"
-        assert 2516 <= y <= 2667, f"Tap y={y} not in message button region [2516, 2667]"
+        # Expected coordinates for click_region [451, 1048, 667, 1111] on 1200x2670 screen
+        assert 541 <= x <= 800, f"Tap x={x} not in message button region [541, 800]"
+        assert 2798 <= y <= 2966, f"Tap y={y} not in message button region [2798, 2966]"
 
         state = test_client.get_state()
         assert state["current_state"] == "message", (

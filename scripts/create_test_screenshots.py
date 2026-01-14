@@ -13,6 +13,7 @@ try:
 except ImportError:
     print("PIL not found, installing...")
     import subprocess
+
     subprocess.run(["uv", "run", "pip", "install", "pillow"], check=True)
     from PIL import Image
 
@@ -49,7 +50,6 @@ def create_placeholder_image(
         font_small = ImageFont.load_default()
 
     # Calculate center position
-    center_x = size[0] // 2
     center_y = size[1] // 2
 
     # Draw large step number in center
@@ -106,7 +106,7 @@ def main():
     print("=" * 60)
     print()
 
-    print(f"Processing: WeChat Multi-Step Test")
+    print("Processing: WeChat Multi-Step Test")
     print(f"Directory: {wechat_dir}")
     print()
 
