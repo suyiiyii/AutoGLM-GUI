@@ -18,7 +18,7 @@ class TestTapOperation:
         self, api_client: TestClient, mock_agent_server: str, test_client
     ):
         """Test tap operation at coordinates."""
-        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server})
+        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
 
         response = api_client.post(
             "/api/control/tap",
@@ -35,7 +35,7 @@ class TestTapOperation:
 
     def test_tap_boundary_values(self, api_client: TestClient, mock_agent_server: str):
         """Test tap with boundary coordinate values (0 and screen max)."""
-        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server})
+        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
 
         response = api_client.post(
             "/api/control/tap",
@@ -48,7 +48,7 @@ class TestTapOperation:
         self, api_client: TestClient, mock_agent_server: str
     ):
         """Test tap with negative coordinates (should handle or reject)."""
-        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server})
+        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
 
         response = api_client.post(
             "/api/control/tap",
@@ -65,7 +65,7 @@ class TestSwipeOperation:
         self, api_client: TestClient, mock_agent_server: str, test_client
     ):
         """Test swipe gesture from start to end coordinates."""
-        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server})
+        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
 
         response = api_client.post(
             "/api/control/swipe",
@@ -87,7 +87,7 @@ class TestSwipeOperation:
 
     def test_swipe_zero_duration(self, api_client: TestClient, mock_agent_server: str):
         """Test swipe with zero duration (instant swipe)."""
-        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server})
+        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
 
         response = api_client.post(
             "/api/control/swipe",
@@ -106,7 +106,7 @@ class TestSwipeOperation:
 
     def test_swipe_diagonal(self, api_client: TestClient, mock_agent_server: str):
         """Test diagonal swipe (different x and y)."""
-        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server})
+        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
 
         response = api_client.post(
             "/api/control/touch/down",
@@ -123,7 +123,7 @@ class TestTouchEvents:
         self, api_client: TestClient, mock_agent_server: str, test_client
     ):
         """Test complete touch down, move, up sequence."""
-        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server})
+        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
 
         api_client.post(
             "/api/control/touch/down",
@@ -151,7 +151,7 @@ class TestTouchEvents:
         self, api_client: TestClient, mock_agent_server: str
     ):
         """Test touch events without coordinates (missing parameters)."""
-        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server})
+        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
 
         response = api_client.post(
             "/api/control/touch/down",

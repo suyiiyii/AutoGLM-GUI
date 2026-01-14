@@ -23,7 +23,7 @@ class TestDeviceConnectionFlow:
         """Test USB device registration via remote device addition."""
         response = api_client.post(
             "/api/devices/add_remote",
-            json={"url": mock_agent_server},
+            json={"base_url": mock_agent_server, "device_id": "mock_device_001"},
         )
         assert response.status_code == 200
         data = response.json()
@@ -35,7 +35,7 @@ class TestDeviceConnectionFlow:
         devices = response.json()["devices"]
         assert len(devices) > 0
 
-        mock_device = next((d for d in devices if d["serial"].startswith("mock")), None)
+        mock_device = next((d for d in devices if d["serial"].startswith("remote:")), None)
         assert mock_device is not None
         assert mock_device["online"] is True
 
@@ -52,7 +52,7 @@ class TestDeviceConnectionFlow:
         """Test discovering devices from remote server."""
         response = api_client.post(
             "/api/devices/discover_remote",
-            json={"url": mock_agent_server},
+            json={"base_url": mock_agent_server, "device_id": "mock_device_001"},
         )
         assert response.status_code == 200
 
@@ -66,7 +66,7 @@ class TestDeviceConnectionFlow:
 
         response = api_client.get("/api/devices")
         devices = response.json()["devices"]
-        mock_device = next((d for d in devices if d["serial"].startswith("mock")), None)
+        mock_device = next((d for d in devices if d["serial"].startswith("remote:")), None)
         assert mock_device is not None
         device_serial = mock_device["serial"]
 

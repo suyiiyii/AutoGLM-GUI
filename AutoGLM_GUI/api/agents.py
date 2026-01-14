@@ -33,6 +33,17 @@ def _setup_adb_keyboard(device_id: str) -> None:
     Args:
         device_id: 设备 ID
     """
+    from AutoGLM_GUI.device_manager import DeviceManager
+    from AutoGLM_GUI.devices.remote_device import RemoteDevice
+
+    # Skip ADB keyboard setup for remote devices
+    device_manager = DeviceManager.get_instance()
+    device = device_manager.get_device_protocol(device_id)
+
+    if isinstance(device, RemoteDevice):
+        logger.info(f"Device {device_id} is remote, skipping ADB keyboard setup")
+        return
+
     from AutoGLM_GUI.adb_plus import ADBKeyboardInstaller
 
     logger.info(f"Checking ADB Keyboard for device {device_id}...")

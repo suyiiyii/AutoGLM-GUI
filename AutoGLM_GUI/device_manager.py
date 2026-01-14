@@ -316,7 +316,6 @@ class DeviceManager:
             return self._devices.get(device_id)
 
     def get_device_by_device_id(self, device_id: str) -> Optional[ManagedDevice]:
-        logger.info(f"get_device_by_device_id: device_id={device_id}").json()
         """Get device by any of its connection device_ids (backward compatibility).
 
         This method supports looking up devices by either:
