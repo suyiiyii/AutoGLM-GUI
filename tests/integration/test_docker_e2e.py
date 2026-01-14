@@ -5,14 +5,48 @@ with a Mock Device Agent and Mock LLM server running on the host machine.
 
 Prerequisites:
     - Docker is installed and running
+
+Tests will be automatically skipped if Docker is not available.
 """
 
+import shutil
 import subprocess
 import time
 from pathlib import Path
 
 import httpx
 import pytest
+
+
+def _is_docker_available() -> bool:
+    """Check if Docker is installed and running.
+
+    Returns:
+        True if Docker command exists and docker info succeeds
+    """
+    # Check if docker command exists
+    if not shutil.which("docker"):
+        return False
+
+    # Check if docker daemon is running
+    try:
+        result = subprocess.run(
+            ["docker", "info"],
+            capture_output=True,
+            timeout=5,
+        )
+        return result.returncode == 0
+    except (subprocess.TimeoutExpired, FileNotFoundError):
+        return False
+
+
+# Skip all tests in this module if Docker is not available
+pytestmark = [
+    pytest.mark.skipif(
+        not _is_docker_available(),
+        reason="Docker is not installed or not running. Skip Docker E2E tests.",
+    )
+]
 
 
 @pytest.fixture
