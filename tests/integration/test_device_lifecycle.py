@@ -35,9 +35,11 @@ class TestDeviceConnectionFlow:
         devices = response.json()["devices"]
         assert len(devices) > 0
 
-        mock_device = next((d for d in devices if d["serial"].startswith("remote:")), None)
+        mock_device = next(
+            (d for d in devices if d["serial"].startswith("remote:")), None
+        )
         assert mock_device is not None
-        assert mock_device["state"] is True
+        assert mock_device["state"] == "online"
 
     def test_list_devices_empty_initially(self, api_client: TestClient):
         """Test that device list is empty initially (no devices added yet)."""
@@ -62,11 +64,16 @@ class TestDeviceConnectionFlow:
 
     def test_remove_remote_device(self, api_client: TestClient, mock_agent_server: str):
         """Test removing a remote device."""
-        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
+        api_client.post(
+            "/api/devices/add_remote",
+            json={"base_url": mock_agent_server, "device_id": "mock_device_001"},
+        )
 
         response = api_client.get("/api/devices")
         devices = response.json()["devices"]
-        mock_device = next((d for d in devices if d["serial"].startswith("remote:")), None)
+        mock_device = next(
+            (d for d in devices if d["serial"].startswith("remote:")), None
+        )
         assert mock_device is not None
         device_serial = mock_device["serial"]
 
@@ -89,7 +96,10 @@ class TestAgentInitialization:
         self, api_client: TestClient, mock_llm_server: str, mock_agent_server: str
     ):
         """Test successful agent initialization."""
-        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
+        api_client.post(
+            "/api/devices/add_remote",
+            json={"base_url": mock_agent_server, "device_id": "mock_device_001"},
+        )
 
         response = api_client.post(
             "/api/config",
@@ -157,7 +167,10 @@ class TestTaskExecutionFlow:
         wait_for_server(llm_url, timeout=5.0, endpoint="/test/stats")
 
         try:
-            api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
+            api_client.post(
+                "/api/devices/add_remote",
+                json={"base_url": mock_agent_server, "device_id": "mock_device_001"},
+            )
             api_client.post(
                 "/api/config",
                 json={
