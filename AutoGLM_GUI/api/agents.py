@@ -305,9 +305,7 @@ async def chat_stream(request: ChatRequest):
                     raise
 
                 finally:
-                    await asyncio.to_thread(
-                        manager.unregister_abort_handler, device_id
-                    )
+                    await asyncio.to_thread(manager.unregister_abort_handler, device_id)
 
             finally:
                 if acquired:
