@@ -109,7 +109,7 @@ def is_agent_type_registered(agent_type: str) -> bool:
 # ==================== Built-in Agent Creators ====================
 
 
-def _create_glm_agent_v2(
+def _create_async_glm_agent(
     model_config: ModelConfig,
     agent_config: AgentConfig,
     agent_specific_config: AgentSpecificConfig,  # noqa: ARG001
@@ -117,9 +117,14 @@ def _create_glm_agent_v2(
     takeover_callback: Callable | None = None,
     confirmation_callback: Callable | None = None,
 ) -> AsyncAgent:
-    """Create AsyncGLMAgent (new default for 'glm').
+    """Create AsyncGLMAgent instance.
 
-    Note: 'glm' now creates AsyncGLMAgent by default for better performance.
+    This is the default async implementation that supports:
+    - Native streaming with AsyncIterator
+    - Immediate cancellation with asyncio.CancelledError
+    - No worker threads or queues needed
+
+    Note: 'glm' now uses AsyncGLMAgent by default for better performance.
     Use 'glm-sync' if you need the old synchronous implementation.
     """
     from .glm.async_agent import AsyncGLMAgent
@@ -182,36 +187,7 @@ def _create_internal_mai_agent(
     )
 
 
-def _create_async_glm_agent(
-    model_config: ModelConfig,
-    agent_config: AgentConfig,
-    agent_specific_config: AgentSpecificConfig,  # noqa: ARG001
-    device,
-    takeover_callback: Callable | None = None,
-    confirmation_callback: Callable | None = None,
-) -> AsyncAgent:
-    """Create AsyncGLMAgent instance.
-
-    This is the async version of GLMAgent that supports:
-    - Native streaming with AsyncIterator
-    - Immediate cancellation with asyncio.CancelledError
-    - No worker threads or queues needed
-    """
-    from .glm.async_agent import AsyncGLMAgent
-
-    # Note: AsyncGLMAgent implements AsyncAgent Protocol, but pyright cannot verify
-    # async generator function compatibility with Protocol. This is a known limitation
-    # of Python's type system. The implementation is correct at runtime.
-    return AsyncGLMAgent(  # type: ignore[return-value]
-        model_config=model_config,
-        agent_config=agent_config,
-        device=device,
-        confirmation_callback=confirmation_callback,
-        takeover_callback=takeover_callback,
-    )
-
-
-register_agent("glm", _create_glm_agent_v2)  # 默认使用 AsyncGLMAgent
+register_agent("glm", _create_async_glm_agent)  # 默认使用 AsyncGLMAgent
 register_agent("glm-sync", _create_glm_agent_sync)  # 旧的同步实现 (向后兼容)
 register_agent("mai", _create_internal_mai_agent)
 register_agent("async-glm", _create_async_glm_agent)  # 别名，与 glm 相同

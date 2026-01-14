@@ -1,11 +1,13 @@
 """Agent lifecycle and chat routes."""
 
+import asyncio
 import json
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
+from AutoGLM_GUI.agents import is_async_agent
 from AutoGLM_GUI.agents.events import AgentEventType
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.logger import logger
@@ -159,16 +161,12 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
     Agent 会在首次使用时自动初始化，无需手动调用 /api/init。
     """
-    import asyncio
-    import inspect
-
     from AutoGLM_GUI.exceptions import AgentInitializationError, DeviceBusyError
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
     device_id = request.device_id
     manager = PhoneAgentManager.get_instance()
 
-    # 获取设备锁和 agent
     acquired = False
     try:
         acquired = await asyncio.to_thread(
@@ -176,11 +174,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
         )
         agent = await asyncio.to_thread(manager.get_agent, device_id)
 
-        # 检查是否是 AsyncAgent
-        is_async = inspect.iscoroutinefunction(agent.run)
-
-        # Runtime type detection ensures result is always str
-        if is_async:
+        if is_async_agent(agent):
             result = await agent.run(request.message)  # type: ignore[misc]
         else:
             result = await asyncio.to_thread(agent.run, request.message)
@@ -190,7 +184,6 @@ async def chat(request: ChatRequest) -> ChatResponse:
         return ChatResponse(result=result, steps=steps, success=True)  # type: ignore[arg-type]
 
     except AgentInitializationError as e:
-        # 配置错误或初始化失败
         logger.error(f"Failed to initialize agent for {device_id}: {e}")
         raise HTTPException(
             status_code=500,
@@ -218,8 +211,6 @@ async def chat_stream(request: ChatRequest):
     - AsyncAgent: 使用原生 async for，支持立即取消
     - BaseAgent: 使用 AgentStepStreamer (向后兼容)
     """
-    import asyncio
-    import inspect
     from datetime import datetime
 
     from AutoGLM_GUI.agents.stream_runner import AgentStepStreamer
@@ -264,18 +255,13 @@ async def chat_stream(request: ChatRequest):
                 # 获取 agent
                 agent = await asyncio.to_thread(manager.get_agent, device_id)
 
-                # 检查是否是 AsyncAgent（异步生成器函数）
-                is_async_agent = hasattr(
-                    agent, "stream"
-                ) and inspect.isasyncgenfunction(agent.stream)  # type: ignore[attr-defined]
-
-                if is_async_agent:
+                if is_async_agent(agent):
                     # AsyncAgent: 使用原生 async for
                     logger.info(f"Using AsyncAgent for device {device_id}")
 
                     # 注册异步取消处理器
                     async def cancel_handler():
-                        await agent.cancel()  # type: ignore[attr-defined]
+                        await agent.cancel()  # type: ignore[union-attr]
 
                     await asyncio.to_thread(
                         manager.register_abort_handler, device_id, cancel_handler
@@ -283,7 +269,7 @@ async def chat_stream(request: ChatRequest):
 
                     try:
                         # 直接使用 agent.stream()
-                        async for event in agent.stream(request.message):  # type: ignore[attr-defined]
+                        async for event in agent.stream(request.message):  # type: ignore[union-attr]
                             event_type = event["type"]
                             event_data_dict = event["data"]
 
@@ -327,7 +313,7 @@ async def chat_stream(request: ChatRequest):
                         f"Using BaseAgent with AgentStepStreamer for device {device_id}"
                     )
 
-                    # Note: is_async_agent is False, so agent must be BaseAgent at runtime
+                    # Note: is_async_agent returned False, so agent is BaseAgent at runtime
                     streamer = AgentStepStreamer(agent=agent, task=request.message)  # type: ignore[arg-type]
 
                     with streamer.stream_context() as abort_fn:

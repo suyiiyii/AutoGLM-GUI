@@ -1,8 +1,25 @@
 from __future__ import annotations
 
+import inspect
 from typing import Any, AsyncIterator, Protocol
 
 from AutoGLM_GUI.config import AgentConfig, ModelConfig, StepResult
+
+
+def is_async_agent(agent: AsyncAgent | BaseAgent) -> bool:
+    """Check if an agent implements the AsyncAgent interface.
+
+    Uses runtime inspection to detect async capabilities since static
+    type narrowing is not possible with Protocol union types.
+
+    Args:
+        agent: Agent instance to check
+
+    Returns:
+        True if agent has async stream() method, False otherwise
+    """
+    stream_method = getattr(agent, "stream", None)
+    return stream_method is not None and inspect.isasyncgenfunction(stream_method)
 
 
 class BaseAgent(Protocol):
