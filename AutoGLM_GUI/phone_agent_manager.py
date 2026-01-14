@@ -195,7 +195,7 @@ class PhoneAgentManager:
                 ) from e
 
     def _auto_initialize_agent(
-        self, device_id: str, agent_type: str | None = None
+        self, agent_key: str, actual_device_id: str, agent_type: str | None = None
     ) -> None:
         """
         使用全局配置自动初始化 agent（内部方法，需在 manager_lock 内调用）.
@@ -203,7 +203,9 @@ class PhoneAgentManager:
         使用 factory 模式创建 agent，避免直接依赖 phone_agent.PhoneAgent。
 
         Args:
-            device_id: 设备标识符
+            agent_key: Agent 存储键（可能是 device_id 或 device_id:context）
+            actual_device_id: 实际设备标识符（用于设备操作）
+            agent_type: 可选的 agent 类型覆盖
 
         Raises:
             AgentInitializationError: 如果配置不完整或初始化失败
@@ -214,7 +216,9 @@ class PhoneAgentManager:
         from AutoGLM_GUI.config_manager import config_manager
         from AutoGLM_GUI.types import AgentSpecificConfig
 
-        logger.info(f"Auto-initializing agent for device {device_id}...")
+        logger.info(
+            f"Auto-initializing agent for key {agent_key} (device: {actual_device_id})..."
+        )
 
         # 热重载配置
         config_manager.load_file_config()
@@ -224,7 +228,7 @@ class PhoneAgentManager:
 
         if not effective_config.base_url:
             raise AgentInitializationError(
-                f"Cannot auto-initialize agent for {device_id}: base_url not configured. "
+                f"Cannot auto-initialize agent for {agent_key}: base_url not configured. "
                 f"Please configure base_url via /api/config or call /api/init explicitly."
             )
 
@@ -235,7 +239,8 @@ class PhoneAgentManager:
             model_name=effective_config.model_name,
         )
 
-        agent_config = AgentConfig(device_id=device_id)
+        # 使用实际的 device_id 创建 AgentConfig
+        agent_config = AgentConfig(device_id=actual_device_id)
 
         # 调用 factory 方法创建 agent（避免直接依赖 phone_agent）
         agent_specific_config = cast(
@@ -244,13 +249,13 @@ class PhoneAgentManager:
         # 使用提供的 agent_type 或从配置中获取
         effective_agent_type = agent_type or effective_config.agent_type
         self.initialize_agent_with_factory(
-            device_id=device_id,
+            device_id=agent_key,
             agent_type=effective_agent_type,
             model_config=model_config,
             agent_config=agent_config,
             agent_specific_config=agent_specific_config,
         )
-        logger.info(f"Agent auto-initialized for device {device_id}")
+        logger.info(f"Agent auto-initialized for key {agent_key}")
 
     def get_agent(self, device_id: str) -> AsyncAgent | BaseAgent:
         """Get agent using default context (backward compatible)."""
@@ -277,7 +282,7 @@ class PhoneAgentManager:
             agent_key = device_id if context == "default" else f"{device_id}:{context}"
 
             if agent_key not in self._agents:
-                self._auto_initialize_agent(agent_key, agent_type=agent_type)
+                self._auto_initialize_agent(agent_key, device_id, agent_type=agent_type)
 
             return self._agents[agent_key]
 
@@ -394,7 +399,7 @@ class PhoneAgentManager:
                 # Double-check locking pattern for thread safety
                 with self._manager_lock:
                     if not self.is_initialized(device_id):
-                        self._auto_initialize_agent(device_id)
+                        self._auto_initialize_agent(device_id, device_id)
             else:
                 raise AgentNotInitializedError(
                     f"Agent not initialized for device {device_id}. "
