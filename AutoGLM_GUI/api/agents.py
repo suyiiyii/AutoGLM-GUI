@@ -436,9 +436,7 @@ def get_config_endpoint() -> ConfigResponse:
                 "override_source": c.override_source.value,
             }
             for c in conflicts
-        ]
-        if conflicts
-        else None,
+        ],
     )
 
 

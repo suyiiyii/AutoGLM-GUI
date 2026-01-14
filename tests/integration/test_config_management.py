@@ -44,7 +44,7 @@ class TestConfigConflictDetection:
         config = response.json()
 
         assert "conflicts" in config
-        assert isinstance(config["conflicts"], dict)
+        assert isinstance(config["conflicts"], list)
 
 
 class TestConfigAutoDestroy:
@@ -54,7 +54,10 @@ class TestConfigAutoDestroy:
         self, api_client: TestClient, mock_llm_server: str, mock_agent_server: str
     ):
         """Test that saving new config destroys active agents."""
-        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
+        api_client.post(
+            "/api/devices/add_remote",
+            json={"base_url": mock_agent_server, "device_id": "mock_device_001"},
+        )
         api_client.post(
             "/api/config",
             json={
@@ -161,7 +164,10 @@ class TestConfigValidation:
         self, api_client: TestClient, mock_llm_server: str, mock_agent_server: str
     ):
         """Test updating only part of config."""
-        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
+        api_client.post(
+            "/api/devices/add_remote",
+            json={"base_url": mock_agent_server, "device_id": "mock_device_001"},
+        )
         api_client.post(
             "/api/config",
             json={
