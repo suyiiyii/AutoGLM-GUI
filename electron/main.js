@@ -4,6 +4,59 @@ const path = require('path');
 const net = require('net');
 const fs = require('fs');
 
+// ==================== 自动更新模块 ====================
+const { autoUpdater } = require('electron-updater');
+const log = require('electron-log');
+
+// 配置日志
+log.transports.file.level = 'info';
+autoUpdater.logger = log;
+
+// 配置自动更新
+autoUpdater.autoDownload = true;  // 自动下载更新
+autoUpdater.autoInstallOnAppQuit = true;  // 退出时自动安装
+
+// 更新事件监听
+autoUpdater.on('checking-for-update', () => {
+  log.info('[Updater] Checking for updates...');
+});
+
+autoUpdater.on('update-available', (info) => {
+  log.info('[Updater] Update available:', info.version);
+});
+
+autoUpdater.on('update-not-available', () => {
+  log.info('[Updater] No updates available');
+});
+
+autoUpdater.on('download-progress', (progressObj) => {
+  log.info(`[Updater] Downloaded ${Math.round(progressObj.percent)}%`);
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  log.info('[Updater] Update downloaded, will install on quit');
+
+  // 显示系统通知
+  dialog.showMessageBox({
+    type: 'info',
+    title: '更新已下载',
+    message: `新版本 ${info.version} 已下载完成`,
+    detail: '应用将在下次启动时自动更新',
+    buttons: ['立即重启', '稍后'],
+    defaultId: 1,
+    cancelId: 1
+  }).then((result) => {
+    if (result.response === 0) {
+      autoUpdater.quitAndInstall(false, true);
+    }
+  });
+});
+
+autoUpdater.on('error', (err) => {
+  log.error('[Updater] Error:', err);
+  // 静默失败，不干扰用户
+});
+
 // ==================== 全局变量 ====================
 let backendProcess = null;
 let backendPort = null;
@@ -591,6 +644,17 @@ app.whenReady().then(async () => {
 
     // 5. 创建自定义菜单
     createMenu();
+
+    // 6. 检查更新（仅生产环境）
+    if (app.isPackaged) {
+      // 延迟 5 秒检查更新，避免干扰启动性能
+      setTimeout(() => {
+        log.info('[Updater] Starting update check...');
+        autoUpdater.checkForUpdatesAndNotify().catch(err => {
+          log.error('[Updater] Check failed:', err);
+        });
+      }, 5000);
+    }
 
     console.log('✓ AutoGLM GUI 启动流程完成');
   } catch (error) {

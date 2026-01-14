@@ -220,6 +220,13 @@ jobs:
             echo "Uploading blockmap: $(basename "$blockmap_file")"
             gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} "$blockmap_file"
           fi
+
+          # Upload latest-mac.yml (auto-update metadata)
+          latest_yml=$(find electron/dist -type f -name "latest-mac.yml" | head -n 1)
+          if [ -n "$latest_yml" ]; then
+            echo "Uploading latest-mac.yml"
+            gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} "$latest_yml"
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -306,6 +313,13 @@ jobs:
           if [ -n "$blockmap_file" ]; then
             echo "Uploading blockmap: $(basename "$blockmap_file")"
             gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} "$blockmap_file"
+          fi
+
+          # Upload latest-mac.yml (auto-update metadata)
+          latest_yml=$(find electron/dist -type f -name "latest-mac.yml" | head -n 1)
+          if [ -n "$latest_yml" ]; then
+            echo "Uploading latest-mac.yml"
+            gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} "$latest_yml"
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -402,6 +416,13 @@ jobs:
             Write-Host "Uploading blockmap: $($blockmap.Name)"
             gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} $blockmap.FullName
           }
+
+          # Upload latest.yml (auto-update metadata)
+          $latestYml = Get-ChildItem -Path electron\dist -Filter latest.yml -File | Select-Object -First 1
+          if ($latestYml) {
+            Write-Host "Uploading latest.yml"
+            gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} $latestYml.FullName
+          }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -487,6 +508,13 @@ jobs:
           if [ -n "$targz_file" ]; then
             echo "Uploading tar.gz: $(basename "$targz_file")"
             gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} "$targz_file"
+          fi
+
+          # Upload latest-linux.yml (auto-update metadata)
+          latest_yml=$(find electron/dist -type f -name "latest-linux.yml" | head -n 1)
+          if [ -n "$latest_yml" ]; then
+            echo "Uploading latest-linux.yml"
+            gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} "$latest_yml"
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

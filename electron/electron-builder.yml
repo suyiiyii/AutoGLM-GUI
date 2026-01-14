@@ -2,6 +2,16 @@ appId: com.autoglm.gui
 productName: AutoGLM GUI
 copyright: Copyright © 2025
 
+# 配置发布到 GitHub Releases
+publish:
+  provider: github
+  owner: suyiiyii
+  repo: AutoGLM-GUI
+  releaseType: release
+
+# 启用更新元数据生成
+electronUpdaterCompatibility: ">=2.16"
+
 # 使用本地 Electron，避免网络下载
 electronDist: node_modules/electron/dist
 
@@ -47,8 +57,8 @@ mac:
   identity: null
 
 dmg:
-  # 禁用 writeUpdateInfo 避免额外的磁盘操作
-  writeUpdateInfo: false
+  # 启用 writeUpdateInfo 生成 latest-mac.yml（自动更新必需）
+  writeUpdateInfo: true
   format: UDZO
   sign: false
   internetEnabled: false

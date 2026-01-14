@@ -57,6 +57,15 @@ AutoGLM 手机助手的现代化 Web 图形界面 - 让 AI 自动化操作 Andro
 
 > 💡 **提示**: 桌面版已内置所有依赖（Python、ADB 等），无需手动配置环境。首次运行时需配置模型服务 API。
 
+**自动更新：**
+
+AutoGLM GUI 桌面版支持自动更新功能：
+
+- **🪟 Windows 安装版**：启动时自动检测更新，下载完成后退出时自动安装
+- **🍎 macOS DMG**：启动时自动检测更新，下载完成后提示用户重启（未签名应用可能需要手动允许）
+- **🐧 Linux AppImage**：启动时自动检测更新（需配合 [AppImageLauncher](https://github.com/TheAssassin/AppImageLauncher)）
+- **便携版（Windows EXE/Linux tar.gz）**：不支持自动更新，请手动下载新版本
+
 ---
 
 **或者使用 Python 包（需要 Python 环境）：**
