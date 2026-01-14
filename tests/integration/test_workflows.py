@@ -21,7 +21,7 @@ class TestWorkflowCRUD:
             "/api/workflows",
             json={
                 "name": "测试工作流",
-                "task": "点击消息按钮",
+                "text": "点击消息按钮",
             },
         )
 
@@ -29,13 +29,13 @@ class TestWorkflowCRUD:
         data = response.json()
         assert "uuid" in data
         assert data["name"] == "测试工作流"
-        assert data["task"] == "点击消息按钮"
+        assert data["text"] == "点击消息按钮"
 
     def test_create_workflow_empty_name(self, api_client: TestClient):
         """Test creating workflow with empty name."""
         response = api_client.post(
             "/api/workflows",
-            json={"name": "", "task": "test task"},
+            json={"name": "", "text": "test task"},
         )
 
         assert response.status_code in [200, 422]
@@ -70,7 +70,7 @@ class TestWorkflowCRUD:
         """Test getting a single workflow by UUID."""
         create_response = api_client.post(
             "/api/workflows",
-            json={"name": "Test Workflow", "task": "Test task"},
+            json={"name": "Test Workflow", "text": "Test task"},
         )
 
         workflow_uuid = create_response.json()["uuid"]
@@ -92,14 +92,14 @@ class TestWorkflowCRUD:
         """Test updating an existing workflow."""
         create_response = api_client.post(
             "/api/workflows",
-            json={"name": "Original Name", "task": "Original task"},
+            json={"name": "Original Name", "text": "Original task"},
         )
 
         workflow_uuid = create_response.json()["uuid"]
 
         response = api_client.put(
             f"/api/workflows/{workflow_uuid}",
-            json={"name": "Updated Name", "task": "Updated task"},
+            json={"name": "Updated Name", "text": "Updated task"},
         )
 
         assert response.status_code == 200
@@ -107,13 +107,13 @@ class TestWorkflowCRUD:
         response = api_client.get(f"/api/workflows/{workflow_uuid}")
         data = response.json()
         assert data["name"] == "Updated Name"
-        assert data["task"] == "Updated task"
+        assert data["text"] == "Updated task"
 
     def test_delete_workflow(self, api_client: TestClient):
         """Test deleting a workflow."""
         create_response = api_client.post(
             "/api/workflows",
-            json={"name": "To Delete", "task": "Delete me"},
+            json={"name": "To Delete", "text": "Delete me"},
         )
 
         workflow_uuid = create_response.json()["uuid"]
@@ -153,11 +153,11 @@ class TestWorkflowExecution:
             "/api/workflows",
             json={
                 "name": "Execution Test",
-                "task": "打开设置应用",
+                "text": "打开设置应用",
             },
         )
 
-        workflow_task = workflow_response.json()["task"]
+        workflow_task = workflow_response.json()["text"]
 
         api_client.post("/api/init", json={"device_id": "mock_device_001"})
 

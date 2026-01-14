@@ -2,7 +2,6 @@
 
 from fastapi import APIRouter
 
-from AutoGLM_GUI.devices.adb_device import ADBDevice
 from AutoGLM_GUI.schemas import (
     SwipeRequest,
     SwipeResponse,
@@ -23,10 +22,18 @@ router = APIRouter()
 def control_tap(request: TapRequest) -> TapResponse:
     """Execute tap at specified device coordinates."""
     try:
+        from AutoGLM_GUI.logger import logger
+
         if not request.device_id:
             return TapResponse(success=False, error="device_id is required")
 
-        device = ADBDevice(request.device_id)
+        from AutoGLM_GUI.device_manager import DeviceManager
+
+        device_manager = DeviceManager.get_instance()
+        device = device_manager.get_device_protocol(request.device_id)
+        logger.info(
+            f"Control tap: device_id={request.device_id}, device={type(device)}, x={request.x}, y={request.y}"
+        )
         device.tap(
             x=request.x,
             y=request.y,
@@ -35,6 +42,9 @@ def control_tap(request: TapRequest) -> TapResponse:
 
         return TapResponse(success=True)
     except Exception as e:
+        from AutoGLM_GUI.logger import logger
+
+        logger.error(f"Control tap error: {e}")
         return TapResponse(success=False, error=str(e))
 
 
@@ -45,7 +55,10 @@ def control_swipe(request: SwipeRequest) -> SwipeResponse:
         if not request.device_id:
             return SwipeResponse(success=False, error="device_id is required")
 
-        device = ADBDevice(request.device_id)
+        from AutoGLM_GUI.device_manager import DeviceManager
+
+        device_manager = DeviceManager.get_instance()
+        device = device_manager.get_device_protocol(request.device_id)
         device.swipe(
             start_x=request.start_x,
             start_y=request.start_y,
@@ -64,14 +77,31 @@ def control_swipe(request: SwipeRequest) -> SwipeResponse:
 def control_touch_down(request: TouchDownRequest) -> TouchDownResponse:
     """Send touch DOWN event at specified device coordinates."""
     try:
-        from AutoGLM_GUI.adb_plus import touch_down
+        if not request.device_id:
+            return TouchDownResponse(success=False, error="device_id is required")
 
-        touch_down(
-            x=request.x,
-            y=request.y,
-            device_id=request.device_id,
-            delay=request.delay,
-        )
+        from AutoGLM_GUI.device_manager import DeviceManager
+
+        device_manager = DeviceManager.get_instance()
+        device = device_manager.get_device_protocol(request.device_id)
+
+        from AutoGLM_GUI.devices.remote_device import RemoteDevice
+
+        if isinstance(device, RemoteDevice):
+            device.touch_down(
+                x=request.x,
+                y=request.y,
+                delay=request.delay,
+            )
+        else:
+            from AutoGLM_GUI.adb_plus import touch_down
+
+            touch_down(
+                x=request.x,
+                y=request.y,
+                device_id=request.device_id,
+                delay=request.delay,
+            )
 
         return TouchDownResponse(success=True)
     except Exception as e:
@@ -82,14 +112,31 @@ def control_touch_down(request: TouchDownRequest) -> TouchDownResponse:
 def control_touch_move(request: TouchMoveRequest) -> TouchMoveResponse:
     """Send touch MOVE event at specified device coordinates."""
     try:
-        from AutoGLM_GUI.adb_plus import touch_move
+        if not request.device_id:
+            return TouchMoveResponse(success=False, error="device_id is required")
 
-        touch_move(
-            x=request.x,
-            y=request.y,
-            device_id=request.device_id,
-            delay=request.delay,
-        )
+        from AutoGLM_GUI.device_manager import DeviceManager
+
+        device_manager = DeviceManager.get_instance()
+        device = device_manager.get_device_protocol(request.device_id)
+
+        from AutoGLM_GUI.devices.remote_device import RemoteDevice
+
+        if isinstance(device, RemoteDevice):
+            device.touch_move(
+                x=request.x,
+                y=request.y,
+                delay=request.delay,
+            )
+        else:
+            from AutoGLM_GUI.adb_plus import touch_move
+
+            touch_move(
+                x=request.x,
+                y=request.y,
+                device_id=request.device_id,
+                delay=request.delay,
+            )
 
         return TouchMoveResponse(success=True)
     except Exception as e:
@@ -100,14 +147,31 @@ def control_touch_move(request: TouchMoveRequest) -> TouchMoveResponse:
 def control_touch_up(request: TouchUpRequest) -> TouchUpResponse:
     """Send touch UP event at specified device coordinates."""
     try:
-        from AutoGLM_GUI.adb_plus import touch_up
+        if not request.device_id:
+            return TouchUpResponse(success=False, error="device_id is required")
 
-        touch_up(
-            x=request.x,
-            y=request.y,
-            device_id=request.device_id,
-            delay=request.delay,
-        )
+        from AutoGLM_GUI.device_manager import DeviceManager
+
+        device_manager = DeviceManager.get_instance()
+        device = device_manager.get_device_protocol(request.device_id)
+
+        from AutoGLM_GUI.devices.remote_device import RemoteDevice
+
+        if isinstance(device, RemoteDevice):
+            device.touch_up(
+                x=request.x,
+                y=request.y,
+                delay=request.delay,
+            )
+        else:
+            from AutoGLM_GUI.adb_plus import touch_up
+
+            touch_up(
+                x=request.x,
+                y=request.y,
+                device_id=request.device_id,
+                delay=request.delay,
+            )
 
         return TouchUpResponse(success=True)
     except Exception as e:

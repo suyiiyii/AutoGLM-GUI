@@ -316,6 +316,7 @@ class DeviceManager:
             return self._devices.get(device_id)
 
     def get_device_by_device_id(self, device_id: str) -> Optional[ManagedDevice]:
+        logger.info(f"get_device_by_device_id: device_id={device_id}").json()
         """Get device by any of its connection device_ids (backward compatibility).
 
         This method supports looking up devices by either:
@@ -327,10 +328,15 @@ class DeviceManager:
             if device_id in self._devices:
                 return self._devices[device_id]
 
-            # Use reverse mapping
+            # Use reverse mapping (try exact match first)
             serial = self._device_id_to_serial.get(device_id)
             if serial:
                 return self._devices.get(serial)
+
+            # Try partial matching for remote device IDs
+            for key, val in self._device_id_to_serial.items():
+                if key.endswith(f"|{device_id}") or key == device_id:
+                    return self._devices.get(val)
 
             return None
 
@@ -879,6 +885,12 @@ class DeviceManager:
                     "device_id": device_id,
                 }
 
+                # Store both device_id variants for lookup
+                self._device_id_to_serial[managed.primary_device_id] = synthetic_serial
+                self._device_id_to_serial[device_id] = synthetic_serial
+
+                return (True, f"Remote device {device_id} added", synthetic_serial)
+
                 self._device_id_to_serial[managed.primary_device_id] = synthetic_serial
 
                 logger.info(f"Remote device added: {synthetic_serial}")
@@ -941,7 +953,15 @@ class DeviceManager:
         Returns:
             Serial (synthetic or ADB) or None if not found
         """
-        return self._device_id_to_serial.get(device_id)
+        serial = self._device_id_to_serial.get(device_id)
+        if serial:
+            return serial
+
+        for key, val in self._device_id_to_serial.items():
+            if key.endswith(f"|{device_id}") or key == device_id:
+                return val
+
+        return None
 
     def get_device_protocol(self, device_id: str) -> "DeviceProtocol":
         """

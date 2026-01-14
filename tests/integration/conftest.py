@@ -256,7 +256,7 @@ class SSEEventParser:
         """Parse SSE response into list of event dicts.
 
         Args:
-            response: HTTP response object with iter_lines() method
+            response: HTTP response object (TestClient response)
 
         Returns:
             List of event dictionaries with keys: type, data, id (optional)
@@ -264,8 +264,13 @@ class SSEEventParser:
         self.events = []
         self.buffer = ""
 
-        for line in response.iter_lines(decode_unicode=True):
-            if not line:
+        # FastAPI TestClient response doesn't support iter_lines()
+        # Read content and parse lines manually
+        content = response.text
+        lines = content.split("\n")
+
+        for line in lines:
+            if not line or line.strip() == "":
                 self._flush_buffer()
                 continue
 

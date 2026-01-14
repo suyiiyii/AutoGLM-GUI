@@ -132,6 +132,12 @@ class ScreenshotRequest(BaseModel):
     timeout: int = 10
 
 
+class TouchRequest(BaseModel):
+    x: int
+    y: int
+    delay: float | None = None
+
+
 class LoadScenarioRequest(BaseModel):
     scenario_path: str
 
@@ -182,6 +188,27 @@ def _register_routes(app: FastAPI):
     @app.post("/device/{device_id}/tap")
     async def tap(device_id: str, req: TapRequest):
         state.record("tap", device_id, x=req.x, y=req.y, delay=req.delay)
+        if state.state_machine:
+            state.state_machine.handle_tap(req.x, req.y)
+        return {"status": "ok"}
+
+    @app.post("/device/{device_id}/touch_down")
+    async def touch_down(device_id: str, req: TouchRequest):
+        state.record("touch_down", device_id, x=req.x, y=req.y, delay=req.delay)
+        if state.state_machine:
+            state.state_machine.handle_tap(req.x, req.y)
+        return {"status": "ok"}
+
+    @app.post("/device/{device_id}/touch_move")
+    async def touch_move(device_id: str, req: TouchRequest):
+        state.record("touch_move", device_id, x=req.x, y=req.y, delay=req.delay)
+        if state.state_machine:
+            state.state_machine.handle_tap(req.x, req.y)
+        return {"status": "ok"}
+
+    @app.post("/device/{device_id}/touch_up")
+    async def touch_up(device_id: str, req: TouchRequest):
+        state.record("touch_up", device_id, x=req.x, y=req.y, delay=req.delay)
         if state.state_machine:
             state.state_machine.handle_tap(req.x, req.y)
         return {"status": "ok"}

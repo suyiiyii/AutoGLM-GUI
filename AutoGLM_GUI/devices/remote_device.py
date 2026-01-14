@@ -93,6 +93,15 @@ class RemoteDevice(DeviceProtocol):
             },
         )
 
+    def touch_down(self, x: int, y: int, delay: float | None = None) -> None:
+        self._post("/touch_down", {"x": x, "y": y, "delay": delay})
+
+    def touch_move(self, x: int, y: int, delay: float | None = None) -> None:
+        self._post("/touch_move", {"x": x, "y": y, "delay": delay})
+
+    def touch_up(self, x: int, y: int, delay: float | None = None) -> None:
+        self._post("/touch_up", {"x": x, "y": y, "delay": delay})
+
     def type_text(self, text: str) -> None:
         self._post("/type_text", {"text": text})
 

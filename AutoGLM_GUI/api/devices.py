@@ -422,6 +422,9 @@ def add_remote_device(request: RemoteDeviceAddRequest) -> RemoteDeviceAddRespons
     )
 
     if success:
+        logger.info(
+            f"add_remote: base_url={request.base_url}, device_id={request.device_id}"
+        )
         return RemoteDeviceAddResponse(
             success=True,
             message=message,

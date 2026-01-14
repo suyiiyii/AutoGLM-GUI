@@ -18,7 +18,7 @@ class TestTapOperation:
         self, api_client: TestClient, mock_agent_server: str, test_client
     ):
         """Test tap operation at coordinates."""
-        api_client.post("/api/devices/add_remote", json={"url": mock_agent_server})
+        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server})
 
         response = api_client.post(
             "/api/control/tap",
@@ -27,7 +27,7 @@ class TestTapOperation:
 
         assert response.status_code == 200
 
-        commands = test_client.get_commands()
+        commands = api_client.get(f"{mock_agent_server}/test/commands").json().format()
         tap_commands = [c for c in commands if c["action"] == "tap"]
         assert len(tap_commands) > 0
         assert tap_commands[0]["params"]["x"] == 500
@@ -35,7 +35,7 @@ class TestTapOperation:
 
     def test_tap_boundary_values(self, api_client: TestClient, mock_agent_server: str):
         """Test tap with boundary coordinate values (0 and screen max)."""
-        api_client.post("/api/devices/add_remote", json={"url": mock_agent_server})
+        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server})
 
         response = api_client.post(
             "/api/control/tap",
@@ -48,7 +48,7 @@ class TestTapOperation:
         self, api_client: TestClient, mock_agent_server: str
     ):
         """Test tap with negative coordinates (should handle or reject)."""
-        api_client.post("/api/devices/add_remote", json={"url": mock_agent_server})
+        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server})
 
         response = api_client.post(
             "/api/control/tap",
@@ -65,12 +65,13 @@ class TestSwipeOperation:
         self, api_client: TestClient, mock_agent_server: str, test_client
     ):
         """Test swipe gesture from start to end coordinates."""
-        api_client.post("/api/devices/add_remote", json={"url": mock_agent_server})
+        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server})
 
         response = api_client.post(
             "/api/control/swipe",
             json={
                 "device_id": "mock_device_001",
+                "base_url": mock_agent_server,
                 "start_x": 100,
                 "start_y": 500,
                 "end_x": 300,
@@ -81,18 +82,19 @@ class TestSwipeOperation:
 
         assert response.status_code == 200
 
-        commands = test_client.get_commands()
+        commands = api_client.get(f"{mock_agent_server}/test/commands").json().format()
         swipe_commands = [c for c in commands if c["action"] == "swipe"]
         assert len(swipe_commands) > 0
 
     def test_swipe_zero_duration(self, api_client: TestClient, mock_agent_server: str):
         """Test swipe with zero duration (instant swipe)."""
-        api_client.post("/api/devices/add_remote", json={"url": mock_agent_server})
+        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server})
 
         response = api_client.post(
             "/api/control/swipe",
             json={
                 "device_id": "mock_device_001",
+                "base_url": mock_agent_server,
                 "start_x": 100,
                 "start_y": 500,
                 "end_x": 300,
@@ -105,12 +107,13 @@ class TestSwipeOperation:
 
     def test_swipe_diagonal(self, api_client: TestClient, mock_agent_server: str):
         """Test diagonal swipe (different x and y)."""
-        api_client.post("/api/devices/add_remote", json={"url": mock_agent_server})
+        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server})
 
         response = api_client.post(
             "/api/control/swipe",
             json={
                 "device_id": "mock_device_001",
+                "base_url": mock_agent_server,
                 "start_x": 100,
                 "start_y": 100,
                 "end_x": 300,
@@ -129,7 +132,7 @@ class TestTouchEvents:
         self, api_client: TestClient, mock_agent_server: str, test_client
     ):
         """Test complete touch down, move, up sequence."""
-        api_client.post("/api/devices/add_remote", json={"url": mock_agent_server})
+        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server})
 
         api_client.post(
             "/api/control/touch/down",
@@ -143,12 +146,12 @@ class TestTouchEvents:
 
         response = api_client.post(
             "/api/control/touch/up",
-            json={"device_id": "mock_device_001"},
+            json={"device_id": "mock_device_001", "x": 250, "y": 350},
         )
 
         assert response.status_code == 200
 
-        commands = test_client.get_commands()
+        commands = api_client.get(f"{mock_agent_server}/test/commands").json().format()
         assert any(c["action"] == "touch_down" for c in commands)
         assert any(c["action"] == "touch_move" for c in commands)
         assert any(c["action"] == "touch_up" for c in commands)
@@ -157,11 +160,11 @@ class TestTouchEvents:
         self, api_client: TestClient, mock_agent_server: str
     ):
         """Test touch events without coordinates (missing parameters)."""
-        api_client.post("/api/devices/add_remote", json={"url": mock_agent_server})
+        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server})
 
         response = api_client.post(
             "/api/control/touch/down",
-            json={"device_id": "mock_device_001"},
+            json={"device_id": "mock_device_001", "x": 250, "y": 350},
         )
 
         assert response.status_code in [200, 422]
@@ -175,8 +178,8 @@ class TestMultiDeviceControl:
         device_1_id, device_1_url, device_1 = multi_device_pool[0]
         device_2_id, device_2_url, device_2 = multi_device_pool[1]
 
-        api_client.post("/api/devices/add_remote", json={"url": device_1_url})
-        api_client.post("/api/devices/add_remote", json={"url": device_2_url})
+        api_client.post("/api/devices/add_remote", json={"base_url": device_1_url})
+        api_client.post("/api/devices/add_remote", json={"base_url": device_2_url})
 
         response1 = api_client.post(
             "/api/control/tap",
@@ -202,7 +205,7 @@ class TestMultiDeviceControl:
             (device_2_id, device_2_url),
             (device_3_id, device_3_url),
         ]:
-            api_client.post("/api/devices/add_remote", json={"url": device_url})
+            api_client.post("/api/devices/add_remote", json={"base_url": device_url})
 
         response_statuses = []
         for device_id, x, y in [
