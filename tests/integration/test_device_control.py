@@ -27,7 +27,7 @@ class TestTapOperation:
 
         assert response.status_code == 200
 
-        commands = api_client.get(f"{mock_agent_server}/test/commands").json().format()
+        commands = test_client.get_commands()
         tap_commands = [c for c in commands if c["action"] == "tap"]
         assert len(tap_commands) > 0
         assert tap_commands[0]["params"]["x"] == 500
@@ -71,7 +71,6 @@ class TestSwipeOperation:
             "/api/control/swipe",
             json={
                 "device_id": "mock_device_001",
-                "base_url": mock_agent_server,
                 "start_x": 100,
                 "start_y": 500,
                 "end_x": 300,
@@ -82,7 +81,7 @@ class TestSwipeOperation:
 
         assert response.status_code == 200
 
-        commands = api_client.get(f"{mock_agent_server}/test/commands").json().format()
+        commands = test_client.get_commands()
         swipe_commands = [c for c in commands if c["action"] == "swipe"]
         assert len(swipe_commands) > 0
 
@@ -110,16 +109,8 @@ class TestSwipeOperation:
         api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server})
 
         response = api_client.post(
-            "/api/control/swipe",
-            json={
-                "device_id": "mock_device_001",
-                "base_url": mock_agent_server,
-                "start_x": 100,
-                "start_y": 100,
-                "end_x": 300,
-                "end_y": 300,
-                "duration": 300,
-            },
+            "/api/control/touch/down",
+            json={"device_id": "mock_device_001", "x": 200, "y": 300},
         )
 
         assert response.status_code == 200
@@ -151,7 +142,7 @@ class TestTouchEvents:
 
         assert response.status_code == 200
 
-        commands = api_client.get(f"{mock_agent_server}/test/commands").json().format()
+        commands = test_client.get_commands()
         assert any(c["action"] == "touch_down" for c in commands)
         assert any(c["action"] == "touch_move" for c in commands)
         assert any(c["action"] == "touch_up" for c in commands)

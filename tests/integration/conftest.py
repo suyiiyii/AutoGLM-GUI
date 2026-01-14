@@ -408,6 +408,34 @@ def multi_device_pool():
 
 
 @pytest.fixture
+def auto_reset_device_manager():
+    """Clean up DeviceManager before each test.
+
+    This ensures that tests start with a clean DeviceManager state,
+    preventing interference from previous tests.
+    """
+    from AutoGLM_GUI.device_manager import DeviceManager
+
+    dm = DeviceManager.get_instance()
+    dm._devices.clear()
+    dm._remote_devices.clear()
+    dm._device_id_to_serial.clear()
+
+    yield
+
+    # Teardown: clean up after test
+    dm._devices.clear()
+    dm._remote_devices.clear()
+    dm._device_id_to_serial.clear()
+    from AutoGLM_GUI.device_manager import DeviceManager
+
+    dm = DeviceManager.get_instance()
+    dm._devices.clear()
+    dm._remote_devices.clear()
+    dm._device_id_to_serial.clear()
+
+
+@pytest.fixture
 def api_client():
     """Create FastAPI TestClient for backend E2E tests.
 
