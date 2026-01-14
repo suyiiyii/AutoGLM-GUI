@@ -139,7 +139,10 @@ class TestWorkflowExecution:
         self, api_client: TestClient, mock_llm_server: str, mock_agent_server: str
     ):
         """Test that workflow task is executed correctly."""
-        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
+        api_client.post(
+            "/api/devices/add_remote",
+            json={"base_url": mock_agent_server, "device_id": "mock_device_001"},
+        )
         api_client.post(
             "/api/config",
             json={

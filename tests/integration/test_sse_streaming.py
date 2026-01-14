@@ -21,7 +21,10 @@ class TestChatSSEStream:
         mock_agent_server: str,
     ):
         """Test SSE stream emits all expected event types."""
-        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
+        api_client.post(
+            "/api/devices/add_remote",
+            json={"base_url": mock_agent_server, "device_id": "mock_device_001"},
+        )
         api_client.post(
             "/api/config",
             json={
@@ -49,7 +52,10 @@ class TestChatSSEStream:
         mock_agent_server: str,
     ):
         """Test SSE stream terminates with done event."""
-        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
+        api_client.post(
+            "/api/devices/add_remote",
+            json={"base_url": mock_agent_server, "device_id": "mock_device_001"},
+        )
         api_client.post(
             "/api/config",
             json={
@@ -77,7 +83,10 @@ class TestChatSSEStream:
         mock_agent_server: str,
     ):
         """Test SSE stream handles errors gracefully."""
-        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
+        api_client.post(
+            "/api/devices/add_remote",
+            json={"base_url": mock_agent_server, "device_id": "mock_device_001"},
+        )
         api_client.post(
             "/api/config",
             json={
@@ -109,7 +118,10 @@ class TestLayeredAgentSSEStream:
         mock_agent_server: str,
     ):
         """Test layered agent emits tool_call events."""
-        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
+        api_client.post(
+            "/api/devices/add_remote",
+            json={"base_url": mock_agent_server, "device_id": "mock_device_001"},
+        )
         api_client.post(
             "/api/config",
             json={
@@ -136,7 +148,10 @@ class TestLayeredAgentSSEStream:
         mock_agent_server: str,
     ):
         """Test layered agent emits tool_result events."""
-        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
+        api_client.post(
+            "/api/devices/add_remote",
+            json={"base_url": mock_agent_server, "device_id": "mock_device_001"},
+        )
         api_client.post(
             "/api/config",
             json={
@@ -167,7 +182,10 @@ class TestSSEEventSequence:
         mock_agent_server: str,
     ):
         """Test events arrive in sequence."""
-        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
+        api_client.post(
+            "/api/devices/add_remote",
+            json={"base_url": mock_agent_server, "device_id": "mock_device_001"},
+        )
         api_client.post(
             "/api/config",
             json={
