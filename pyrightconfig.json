@@ -11,7 +11,7 @@
     "**/dist",
     "**/build"
   ],
-  "typeCheckingMode": "basic",
+  "typeCheckingMode": "standard",
   "reportMissingImports": true,
   "reportMissingTypeStubs": false
 }

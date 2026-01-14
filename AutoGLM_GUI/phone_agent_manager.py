@@ -194,7 +194,9 @@ class PhoneAgentManager:
                     f"Failed to initialize agent: {str(e)}"
                 ) from e
 
-    def _auto_initialize_agent(self, device_id: str) -> None:
+    def _auto_initialize_agent(
+        self, device_id: str, agent_type: str | None = None
+    ) -> None:
         """
         使用全局配置自动初始化 agent（内部方法，需在 manager_lock 内调用）.
 
@@ -239,9 +241,11 @@ class PhoneAgentManager:
         agent_specific_config = cast(
             AgentSpecificConfig, effective_config.agent_config_params or {}
         )
+        # 使用提供的 agent_type 或从配置中获取
+        effective_agent_type = agent_type or effective_config.agent_type
         self.initialize_agent_with_factory(
             device_id=device_id,
-            agent_type=effective_config.agent_type,
+            agent_type=effective_agent_type,
             model_config=model_config,
             agent_config=agent_config,
             agent_specific_config=agent_specific_config,
@@ -249,10 +253,33 @@ class PhoneAgentManager:
         logger.info(f"Agent auto-initialized for device {device_id}")
 
     def get_agent(self, device_id: str) -> AsyncAgent | BaseAgent:
+        """Get agent using default context (backward compatible)."""
+        return self.get_agent_with_context(device_id, context="default")
+
+    def get_agent_with_context(
+        self,
+        device_id: str,
+        context: str = "default",
+        agent_type: str | None = None,
+    ) -> AsyncAgent | BaseAgent:
+        """Get or create agent for specific context.
+
+        Args:
+            device_id: Device identifier
+            context: Context identifier (e.g., "chat", "default")
+            agent_type: Optional agent type override
+
+        Returns:
+            Agent instance for this device+context combination
+        """
         with self._manager_lock:
-            if device_id not in self._agents:
-                self._auto_initialize_agent(device_id)
-            return self._agents[device_id]
+            # Use composite key for context isolation (except for default)
+            agent_key = device_id if context == "default" else f"{device_id}:{context}"
+
+            if agent_key not in self._agents:
+                self._auto_initialize_agent(agent_key, agent_type=agent_type)
+
+            return self._agents[agent_key]
 
     def get_agent_safe(self, device_id: str) -> AsyncAgent | BaseAgent | None:
         with self._manager_lock:

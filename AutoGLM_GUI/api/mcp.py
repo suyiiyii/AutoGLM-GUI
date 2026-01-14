@@ -1,14 +1,11 @@
 """MCP (Model Context Protocol) tools for AutoGLM-GUI."""
 
-import asyncio
-import concurrent.futures
 from typing import Any
 
 from typing_extensions import TypedDict
 
 from fastmcp import FastMCP
 
-from AutoGLM_GUI.agents import is_async_agent
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.prompts import MCP_SYSTEM_PROMPT_ZH
 from AutoGLM_GUI.schemas import DeviceResponse
@@ -25,32 +22,6 @@ mcp = FastMCP("AutoGLM-GUI MCP Server")
 
 # MCP-specific step limit
 MCP_MAX_STEPS = 5
-
-
-def _run_async_in_sync(coro) -> Any:
-    """Run an async coroutine from a sync context.
-
-    Handles the common cases:
-    1. No event loop exists: create new loop with asyncio.run()
-    2. Event loop exists but not running: use run_until_complete()
-    3. Event loop is running: execute in a separate thread
-
-    Args:
-        coro: Coroutine to execute
-
-    Returns:
-        Result of the coroutine
-    """
-    try:
-        asyncio.get_running_loop()
-    except RuntimeError:
-        # No running loop, safe to use asyncio.run()
-        return asyncio.run(coro)
-
-    # Loop is running, must use thread pool
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        future = executor.submit(asyncio.run, coro)
-        return future.result()
 
 
 @mcp.tool()
@@ -73,6 +44,7 @@ def chat(device_id: str, message: str) -> ChatResult:
 
     manager = PhoneAgentManager.get_instance()
 
+    # 使用上下文管理器获取 agent（自动管理锁，自动初始化）
     try:
         with manager.use_agent(device_id, timeout=None) as agent:
             # Temporarily override config for MCP (thread-safe within device lock)
@@ -83,18 +55,15 @@ def chat(device_id: str, message: str) -> ChatResult:
             agent.agent_config.system_prompt = MCP_SYSTEM_PROMPT_ZH
 
             try:
+                # Reset agent before each chat to ensure clean state
                 agent.reset()
 
-                result: str
-                if is_async_agent(agent):
-                    result = _run_async_in_sync(agent.run(message))  # type: ignore[union-attr]
-                else:
-                    result = agent.run(message)  # type: ignore[misc]
-
+                result = agent.run(message)  # type: ignore[misc]
                 steps = agent.step_count
 
+                # Check if MCP step limit was reached
                 if steps >= MCP_MAX_STEPS and result == "Max steps reached":
-                    return {
+                    return {  # type: ignore[return-value]
                         "result": (
                             f"已达到 MCP 最大步数限制（{MCP_MAX_STEPS}步）。任务可能未完成，"
                             "建议将任务拆分为更小的子任务。"
@@ -103,9 +72,10 @@ def chat(device_id: str, message: str) -> ChatResult:
                         "success": False,
                     }
 
-                return {"result": result, "steps": steps, "success": True}
+                return {"result": result, "steps": steps, "success": True}  # type: ignore[return-value]
 
             finally:
+                # Restore original config
                 agent.agent_config.max_steps = original_max_steps
                 agent.agent_config.system_prompt = original_system_prompt
 

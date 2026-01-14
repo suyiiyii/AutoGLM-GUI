@@ -225,9 +225,6 @@ class SchedulerManager:
             agent = manager.get_agent(device.primary_device_id)
             agent.reset()
 
-            # FIXME: Scheduler currently only supports synchronous agents (BaseAgent)
-            # AsyncAgent support requires refactoring to use async BackgroundScheduler
-            # For now, we assume the agent is BaseAgent and ignore type errors
             # 使用 step 循环执行，收集每步信息
             is_first = True
             result_message = ""

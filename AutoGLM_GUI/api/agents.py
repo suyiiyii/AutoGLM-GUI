@@ -7,8 +7,6 @@ from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
-from AutoGLM_GUI.agents import is_async_agent
-from AutoGLM_GUI.agents.events import AgentEventType
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.schemas import (
@@ -170,14 +168,18 @@ async def chat(request: ChatRequest) -> ChatResponse:
     acquired = False
     try:
         acquired = await asyncio.to_thread(
-            manager.acquire_device, device_id, timeout=None, auto_initialize=True
+            manager.acquire_device, device_id, timeout=None, auto_initialize=False
         )
-        agent = await asyncio.to_thread(manager.get_agent, device_id)
+        # Use chat context with async agent
+        agent = await asyncio.to_thread(
+            manager.get_agent_with_context,
+            device_id,
+            context="chat",
+            agent_type="glm-async",
+        )
 
-        if is_async_agent(agent):
-            result = await agent.run(request.message)  # type: ignore[misc]
-        else:
-            result = await asyncio.to_thread(agent.run, request.message)
+        # AsyncAgent is always used for chat context
+        result = await agent.run(request.message)  # type: ignore[misc]
 
         steps = agent.step_count
         agent.reset()
@@ -207,13 +209,10 @@ async def chat_stream(request: ChatRequest):
 
     Agent 会在首次使用时自动初始化，无需手动调用 /api/init。
 
-    支持两种 agent 类型:
-    - AsyncAgent: 使用原生 async for，支持立即取消
-    - BaseAgent: 使用 AgentStepStreamer (向后兼容)
+    Chat API 使用 AsyncAgent 实现原生 async streaming 和立即取消。
     """
     from datetime import datetime
 
-    from AutoGLM_GUI.agents.stream_runner import AgentStepStreamer
     from AutoGLM_GUI.device_manager import DeviceManager
     from AutoGLM_GUI.exceptions import AgentInitializationError, DeviceBusyError
     from AutoGLM_GUI.history_manager import history_manager
@@ -248,109 +247,67 @@ async def chat_stream(request: ChatRequest):
                 device_id,
                 timeout=0,
                 raise_on_timeout=True,
-                auto_initialize=True,
+                auto_initialize=False,
             )
 
             try:
-                # 获取 agent
-                agent = await asyncio.to_thread(manager.get_agent, device_id)
+                # 使用 chat context 获取 AsyncAgent
+                agent = await asyncio.to_thread(
+                    manager.get_agent_with_context,
+                    device_id,
+                    context="chat",
+                    agent_type="glm-async",
+                )
 
-                if is_async_agent(agent):
-                    # AsyncAgent: 使用原生 async for
-                    logger.info(f"Using AsyncAgent for device {device_id}")
+                logger.info(f"Using AsyncAgent for device {device_id}")
 
-                    # 注册异步取消处理器
-                    async def cancel_handler():
-                        await agent.cancel()  # type: ignore[union-attr]
+                # 注册异步取消处理器
+                async def cancel_handler():
+                    await agent.cancel()  # type: ignore[union-attr]
 
+                await asyncio.to_thread(
+                    manager.register_abort_handler, device_id, cancel_handler
+                )
+
+                try:
+                    # 直接使用 agent.stream()
+                    async for event in agent.stream(request.message):  # type: ignore[union-attr]
+                        event_type = event["type"]
+                        event_data_dict = event["data"]
+
+                        # 收集每个 step 的消息
+                        if event_type == "step":
+                            messages.append(
+                                MessageRecord(
+                                    role="assistant",
+                                    content="",
+                                    timestamp=datetime.now(),
+                                    thinking=event_data_dict.get("thinking"),
+                                    action=event_data_dict.get("action"),
+                                    step=event_data_dict.get("step"),
+                                )
+                            )
+
+                        if event_type == "done":
+                            final_message = event_data_dict.get("message", "")
+                            final_success = event_data_dict.get("success", False)
+                            final_steps = event_data_dict.get("steps", 0)
+
+                        # 发送 SSE 事件
+                        sse_event = _create_sse_event(event_type, event_data_dict)
+                        yield f"event: {event_type}\n"
+                        yield f"data: {json.dumps(sse_event, ensure_ascii=False)}\n\n"
+
+                except asyncio.CancelledError:
+                    logger.info(f"AsyncAgent task cancelled for device {device_id}")
+                    yield "event: cancelled\n"
+                    yield f"data: {json.dumps({'message': 'Task cancelled by user'})}\n\n"
+                    raise
+
+                finally:
                     await asyncio.to_thread(
-                        manager.register_abort_handler, device_id, cancel_handler
+                        manager.unregister_abort_handler, device_id
                     )
-
-                    try:
-                        # 直接使用 agent.stream()
-                        async for event in agent.stream(request.message):  # type: ignore[union-attr]
-                            event_type = event["type"]
-                            event_data_dict = event["data"]
-
-                            # 收集每个 step 的消息
-                            if event_type == "step":
-                                messages.append(
-                                    MessageRecord(
-                                        role="assistant",
-                                        content="",
-                                        timestamp=datetime.now(),
-                                        thinking=event_data_dict.get("thinking"),
-                                        action=event_data_dict.get("action"),
-                                        step=event_data_dict.get("step"),
-                                    )
-                                )
-
-                            if event_type == "done":
-                                final_message = event_data_dict.get("message", "")
-                                final_success = event_data_dict.get("success", False)
-                                final_steps = event_data_dict.get("steps", 0)
-
-                            # 发送 SSE 事件
-                            sse_event = _create_sse_event(event_type, event_data_dict)
-                            yield f"event: {event_type}\n"
-                            yield f"data: {json.dumps(sse_event, ensure_ascii=False)}\n\n"
-
-                    except asyncio.CancelledError:
-                        logger.info(f"AsyncAgent task cancelled for device {device_id}")
-                        yield "event: cancelled\n"
-                        yield f"data: {json.dumps({'message': 'Task cancelled by user'})}\n\n"
-                        raise
-
-                    finally:
-                        await asyncio.to_thread(
-                            manager.unregister_abort_handler, device_id
-                        )
-
-                else:
-                    # BaseAgent: 使用 AgentStepStreamer (向后兼容)
-                    logger.info(
-                        f"Using BaseAgent with AgentStepStreamer for device {device_id}"
-                    )
-
-                    # Note: is_async_agent returned False, so agent is BaseAgent at runtime
-                    streamer = AgentStepStreamer(agent=agent, task=request.message)  # type: ignore[arg-type]
-
-                    with streamer.stream_context() as abort_fn:
-                        manager.register_abort_handler(device_id, abort_fn)
-
-                        for event in streamer:
-                            event_type = event["type"]
-                            event_data_dict = event["data"]
-
-                            if (
-                                event_type == AgentEventType.STEP.value
-                                and event_data_dict.get("step") == -1
-                            ):
-                                continue
-
-                            # 收集每个 step 的消息
-                            if event_type == AgentEventType.STEP.value:
-                                messages.append(
-                                    MessageRecord(
-                                        role="assistant",
-                                        content="",
-                                        timestamp=datetime.now(),
-                                        thinking=event_data_dict.get("thinking"),
-                                        action=event_data_dict.get("action"),
-                                        step=event_data_dict.get("step"),
-                                    )
-                                )
-
-                            if event_type == AgentEventType.DONE.value:
-                                final_message = event_data_dict.get("message", "")
-                                final_success = event_data_dict.get("success", False)
-                                final_steps = event_data_dict.get("steps", 0)
-
-                            event_data = _create_sse_event(event_type, event_data_dict)
-
-                            yield f"event: {event_type}\n"
-                            yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
 
             finally:
                 if acquired:

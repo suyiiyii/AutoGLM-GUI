@@ -187,7 +187,7 @@ def _create_internal_mai_agent(
     )
 
 
-register_agent("glm", _create_async_glm_agent)  # 默认使用 AsyncGLMAgent
-register_agent("glm-sync", _create_glm_agent_sync)  # 旧的同步实现 (向后兼容)
+register_agent("glm", _create_glm_agent_sync)  # 默认使用同步实现 (向后兼容)
+register_agent("glm-async", _create_async_glm_agent)  # 异步实现 (显式选择)
+register_agent("async-glm", _create_async_glm_agent)  # 别名
 register_agent("mai", _create_internal_mai_agent)
-register_agent("async-glm", _create_async_glm_agent)  # 别名，与 glm 相同
