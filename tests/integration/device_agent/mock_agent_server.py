@@ -183,14 +183,24 @@ def _register_routes(app: FastAPI):
     async def tap(device_id: str, req: TapRequest):
         state.record("tap", device_id, x=req.x, y=req.y, delay=req.delay)
         if state.state_machine:
-            state.state_machine.handle_tap(req.x, req.y)
+            # Always convert pixel coordinates to normalized (0-1000) for state machine
+            screen_width = 1080
+            screen_height = 2400
+            norm_x = int(req.x / screen_width * 1000)
+            norm_y = int(req.y / screen_height * 1000)
+            state.state_machine.handle_tap(norm_x, norm_y)
         return {"status": "ok"}
 
     @app.post("/device/{device_id}/double_tap")
     async def double_tap(device_id: str, req: TapRequest):
         state.record("double_tap", device_id, x=req.x, y=req.y, delay=req.delay)
         if state.state_machine:
-            state.state_machine.handle_tap(req.x, req.y)
+            # Always convert pixel coordinates to normalized (0-1000)
+            screen_width = 1080
+            screen_height = 2400
+            norm_x = int(req.x / screen_width * 1000)
+            norm_y = int(req.y / screen_height * 1000)
+            state.state_machine.handle_tap(norm_x, norm_y)
         return {"status": "ok"}
 
     @app.post("/device/{device_id}/long_press")
@@ -204,7 +214,12 @@ def _register_routes(app: FastAPI):
             delay=req.delay,
         )
         if state.state_machine:
-            state.state_machine.handle_tap(req.x, req.y)
+            # Always convert pixel coordinates to normalized (0-1000)
+            screen_width = 1080
+            screen_height = 2400
+            norm_x = int(req.x / screen_width * 1000)
+            norm_y = int(req.y / screen_height * 1000)
+            state.state_machine.handle_tap(norm_x, norm_y)
         return {"status": "ok"}
 
     @app.post("/device/{device_id}/swipe")
