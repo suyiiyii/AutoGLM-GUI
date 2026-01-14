@@ -72,10 +72,21 @@ def test_metrics_no_errors(client):
     # Metrics should not be empty
     assert len(response.text) > 0
 
-    # Should not contain error indicators
-    assert (
-        "error" not in response.text.lower() or "error_count" in response.text.lower()
-    )
+    # Should not contain error indicators (excluding legitimate state="error" label)
+    metrics_text = response.text.lower()
+
+    # Check for actual error messages, not the state="error" label
+    # The state="error" label is legitimate and shows agent error states
+    error_indicators = [
+        "traceback",
+        "exception",
+        "failed to",
+        "cannot",
+        "unable to",
+    ]
+
+    for indicator in error_indicators:
+        assert indicator not in metrics_text, f"Found error indicator: {indicator}"
 
 
 def test_metrics_capture_failed_agents():
