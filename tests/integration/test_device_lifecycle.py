@@ -62,7 +62,7 @@ class TestDeviceConnectionFlow:
 
     def test_remove_remote_device(self, api_client: TestClient, mock_agent_server: str):
         """Test removing a remote device."""
-        api_client.post("/api/devices/add_remote", json={"url": mock_agent_server})
+        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
 
         response = api_client.get("/api/devices")
         devices = response.json()["devices"]
@@ -89,7 +89,7 @@ class TestAgentInitialization:
         self, api_client: TestClient, mock_llm_server: str, mock_agent_server: str
     ):
         """Test successful agent initialization."""
-        api_client.post("/api/devices/add_remote", json={"url": mock_agent_server})
+        api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
 
         response = api_client.post(
             "/api/config",
@@ -157,7 +157,7 @@ class TestTaskExecutionFlow:
         wait_for_server(llm_url, timeout=5.0, endpoint="/test/stats")
 
         try:
-            api_client.post("/api/devices/add_remote", json={"url": mock_agent_server})
+            api_client.post("/api/devices/add_remote", json={"base_url": mock_agent_server, "device_id": "mock_device_001"})
             api_client.post(
                 "/api/config",
                 json={
