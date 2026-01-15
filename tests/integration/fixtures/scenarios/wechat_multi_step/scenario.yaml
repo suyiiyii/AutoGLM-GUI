@@ -1,0 +1,101 @@
+test_name: "微信多步骤操作测试"
+instruction: "打开微信，搜索'张三'，发送消息'你好'"
+max_steps: 10
+
+states:
+  # 步骤 1: 首页（微信入口）
+  - id: "home"
+    screenshot: "state_1_home.png"
+    current_app: "com.android.launcher"
+    transitions:
+      # Normalized [0, 700, 500, 1000] → Pixel [0, 1869, 600, 2670] for 1200x2670 screen
+      - click_region: [0, 1869, 600, 2670]
+        next_state: "wechat_main"
+        description: "点击微信图标"
+
+  # 步骤 2: 微信主界面
+  - id: "wechat_main"
+    screenshot: "state_2_main.png"
+    current_app: "com.tencent.mm"
+    transitions:
+      # Normalized [700, 0, 1000, 200] → Pixel [840, 0, 1200, 534]
+      - click_region: [840, 0, 1200, 534]
+        next_state: "search_page"
+        description: "点击搜索按钮"
+
+  # 步骤 3: 搜索界面
+  - id: "search_page"
+    screenshot: "state_3_search.png"
+    current_app: "com.tencent.mm"
+    transitions:
+      # Normalized [0, 0, 1000, 200] → Pixel [0, 0, 1200, 534]
+      - click_region: [0, 0, 1200, 534]
+        next_state: "search_result"
+        description: "点击搜索框"
+
+  # 步骤 4: 搜索结果
+  - id: "search_result"
+    screenshot: "state_4_search_result.png"
+    current_app: "com.tencent.mm"
+    transitions:
+      # Normalized [0, 200, 1000, 500] → Pixel [0, 534, 1200, 1335]
+      - click_region: [0, 534, 1200, 1335]
+        next_state: "chat_detail"
+        description: "点击第一个联系人"
+
+  # 步骤 5: 聊天详情
+  - id: "chat_detail"
+    screenshot: "state_5_chat_detail.png"
+    current_app: "com.tencent.mm"
+    transitions:
+      # Normalized [0, 700, 1000, 900] → Pixel [0, 1869, 1200, 2403]
+      - click_region: [0, 1869, 1200, 2403]
+        next_state: "input_active"
+        description: "点击输入框"
+
+  # 步骤 6: 输入框激活
+  - id: "input_active"
+    screenshot: "state_6_input.png"
+    current_app: "com.tencent.mm"
+    transitions:
+      # Normalized [400, 700, 700, 900] → Pixel [480, 1869, 840, 2403]
+      - click_region: [480, 1869, 840, 2403]
+        next_state: "typing"
+        description: "确认输入框激活"
+
+  # 步骤 7: 输入文字后
+  - id: "typing"
+    screenshot: "state_7_typing.png"
+    current_app: "com.tencent.mm"
+    transitions:
+      # Normalized [850, 700, 1000, 900] → Pixel [1020, 1869, 1200, 2403]
+      - click_region: [1020, 1869, 1200, 2403]
+        next_state: "message_sent"
+        description: "点击发送按钮"
+
+  # 步骤 8: 消息发送后
+  - id: "message_sent"
+    screenshot: "state_8_sent.png"
+    current_app: "com.tencent.mm"
+    transitions:
+      # Normalized [0, 0, 200, 300] → Pixel [0, 0, 240, 801]
+      - click_region: [0, 0, 240, 801]
+        next_state: "back_to_list"
+        description: "点击返回按钮"
+
+  # 步骤 9: 返回聊天列表
+  - id: "back_to_list"
+    screenshot: "state_9_back.png"
+    current_app: "com.tencent.mm"
+    transitions:
+      # Normalized [400, 400, 700, 700] → Pixel [480, 1068, 840, 1869]
+      - click_region: [480, 1068, 840, 1869]
+        next_state: "finished"
+        description: "确认返回"
+
+  # 步骤 10: 完成状态（终端状态）
+  - id: "finished"
+    screenshot: "state_10_finished.png"
+    current_app: "com.tencent.mm"
+    is_terminal: true
+    expected_finish: true
