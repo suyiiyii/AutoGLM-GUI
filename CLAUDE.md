@@ -703,9 +703,9 @@ scrcpy-server-v3.3.3   # Scrcpy server binary (bundled)
 5. **Port Conflicts**: Electron auto-finds available port (8000-8100), but may fail if all ports occupied
 6. **Backend Startup Timeout**: If backend doesn't respond within 30s, check logs and ensure all dependencies bundled correctly
 7. **Path Issues in PyInstaller**: Always use `sys._MEIPASS` for bundled resource paths, see `scrcpy_stream.py` and `api/__init__.py`
-8. **Runtime Dependencies Missing**: electron-updater and electron-log must be in `electron/package.json` `dependencies` (not devDependencies). Symptom: "Cannot find module 'electron-updater'" after packaging. Fix: Run `cd electron && pnpm run verify` before building.
+8. **Runtime Dependencies Missing**: electron-updater and electron-log must be in `electron/package.json` `dependencies` (not devDependencies). Symptom: "Cannot find module 'electron-updater'" after packaging. Fix: Run `cd electron && npm run verify` before building.
 9. **Files Configuration**: Don't explicitly exclude node_modules in `electron-builder.yml` unless you use asarUnpack for runtime dependencies. Let electron-builder auto-manage dependencies from package.json.
-10. **Package Manager Consistency**: Use the same package manager (pnpm) in both package.json and build scripts (build_electron.py). Mixing npm and pnpm can cause dependency tree inconsistencies.
+10. **Package Manager**: Electron directory MUST use npm (not pnpm), because electron-builder requires npm's package structure. Frontend uses pnpm, electron uses npm - they are separate environments.
 
 ## Development Workflow
 
