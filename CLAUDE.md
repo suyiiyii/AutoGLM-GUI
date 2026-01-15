@@ -720,3 +720,133 @@ scrcpy-server-v3.3.3   # Scrcpy server binary (bundled)
 - **Resources**: Always check `sys._MEIPASS` exists in PyInstaller environment
 - **ADB**: Use `AutoGLM_GUI/platform_utils.py` for executing commands
 - **Refactoring**: Prefer internal agent implementations in `AutoGLM_GUI/agents/`
+
+## Lessons Learned: Common Pitfalls
+
+### 🚨 Case Study: Coordinate System Confusion in Integration Tests
+
+**Date**: 2026-01-15
+**PR**: #181 (Integration test fixes)
+**Impact**: Introduced incorrect coordinate conversions that broke the semantic meaning of coordinates
+
+#### The Error
+
+I attempted to "improve" the coordinate system by converting pixel coordinates to normalized coordinates (0-1000), but made a critical error in the assumption about the original coordinate system.
+
+**What I did wrong:**
+
+1. **False assumption**: Assumed original pixel coordinates `[487, 2516, 721, 2667]` were based on a 1080x2400 screen
+2. **Incorrect conversion**: Converted to `[451, 1048, 667, 1111]` thinking these were normalized coordinates
+3. **Failed validation**: Didn't notice that 1048 and 1111 both exceed 1000, which is impossible for valid normalized coordinates
+4. **Broke working system**: The original coordinates were already correct for the actual screenshot size (1200x2670)
+
+**The root cause**:
+```python
+# Original (CORRECT): Pixel coordinates for 1200x2670 screen
+click_region: [487, 2516, 721, 2667]  # ✓ Valid pixel coordinates
+
+# My change (WRONG): "Normalized" coordinates  
+click_region: [451, 1048, 667, 1111]  # ✗ 1048>1000 and 1111>1000!
+```
+
+#### The Correct Analysis
+
+**Actual screenshot dimensions**: 1200x2670 (from `file state_home.jpg`)
+
+**Original coordinates**:
+```
+[487, 2516, 721, 2667] - Pixel coordinates
+✓ x range: 487-721 (within 0-1200)
+✓ y range: 2516-2670 (within 0-2670)
+✓ y2=2670 is at the screen bottom (bottom navigation button)
+```
+
+**True normalized coordinates** (if we wanted them):
+```
+x1 = 487/1200*1000 = 405.8 ≈ 406
+y1 = 2516/2670*1000 = 942.3 ≈ 942
+x2 = 721/1200*1000 = 600.8 ≈ 601
+y2 = 2667/2670*1000 = 998.9 ≈ 999
+```
+
+#### What I Should Have Done
+
+1. **First principle**: Understand the existing system before changing it
+   - Check: What coordinate system is being used?
+   - Verify: Are the coordinates valid for their claimed system?
+   - Test: Do the coordinates make sense for the actual screenshot dimensions?
+
+2. **Validation checklist**:
+   - [ ] Verify screenshot dimensions with `file` or PIL
+   - [ ] Check if coordinates are within valid ranges
+   - [ ] For normalized coordinates: all values must be 0-1000
+   - [ ] For pixel coordinates: must be within actual screenshot dimensions
+   - [ ] Calculate the conversion both ways to verify
+
+3. **Red flags I missed**:
+   - ❌ Normalized coordinates exceeding 1000 (1048, 1111)
+   - ❌ Assumed screen size (1080x2400) without verification
+   - ❌ Didn't check actual screenshot size first
+   - ❌ Made assumptions instead of measuring
+
+#### Prevention Guidelines
+
+**When working with coordinate systems**:
+
+1. **Always verify dimensions first**:
+   ```bash
+   file screenshot.jpg  # Check actual dimensions
+   ```
+
+2. **Validate coordinate ranges**:
+   ```python
+   # For normalized (0-1000)
+   assert all(0 <= v <= 1000 for v in coordinates)
+   
+   # For pixel coordinates
+   assert all(0 <= v <= max_dimension for v in coordinates)
+   ```
+
+3. **Document the coordinate system**:
+   ```yaml
+   # Clearly document what system you're using
+   click_region: [487, 2516, 721, 2667]  # Pixel coordinates for 1200x2670 screen
+   ```
+
+4. **Test assumptions**:
+   ```python
+   # Verify the conversion is correct
+   screen_width, screen_height = get_screenshot_dimensions()
+   assert 0 <= x <= screen_width
+   assert 0 <= y <= screen_height
+   ```
+
+5. **When in doubt, measure twice**:
+   - Use PIL to get exact image dimensions
+   - Calculate conversions explicitly
+   - Verify with actual test runs
+
+#### Key Takeaway
+
+**Don't optimize what you don't understand.**
+
+The original pixel coordinate system was:
+- ✓ Correct for the actual screenshots (1200x2670)
+- ✓ Simple and direct
+- ✓ Working in production
+
+My "improvement":
+- ✗ Based on wrong assumptions
+- ✗ Introduced invalid coordinates (>1000)
+- ✗ Broke the semantic meaning
+- ✗ Made the system more complex
+
+**Lesson**: When fixing bugs, focus on understanding the root cause first, not on "architectural improvements" that may be unnecessary.
+
+#### Related Code
+
+- **Coordinate conversion**: `AutoGLM_GUI/devices/mock_device.py`
+- **State machine**: `tests/integration/state_machine.py`
+- **Test scenarios**: `tests/integration/fixtures/scenarios/meituan_message/scenario.yaml`
+- **Coordinate validation**: Always check ranges against actual dimensions
+
