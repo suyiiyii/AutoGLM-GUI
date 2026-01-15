@@ -15,7 +15,6 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-
 # Predefined responses for the "点击消息按钮" task
 DEFAULT_RESPONSES = [
     # Response A: First request (find and tap message button)
@@ -30,8 +29,8 @@ DEFAULT_RESPONSES = [
 
 消息按钮在底部导航栏的中间位置，显示为"消息"图标，上面有红色的数字2，表示有2条未读消息。
 
-我需要点击这个消息按钮。根据截图，消息按钮的位置大约在底部导航栏的中间位置，坐标大约是(559, 1080)左右。
-do(action="Tap", element=[559,1080])""",
+我需要点击这个消息按钮。根据截图，消息按钮的位置大约在底部导航栏的中间位置，坐标大约是(499, 966)左右。
+do(action="Tap", element=[499,966])""",
     # Response B: Second request (finish with success message)
     """好的，我成功点击了消息按钮，现在进入了消息页面。页面显示了各种消息类型，包括：
 - 订单动态
