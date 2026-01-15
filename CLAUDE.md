@@ -470,6 +470,26 @@ AutoGLM-GUI uses `electron-updater` for automatic updates from GitHub Releases:
 - Use staging releases (e.g., `v1.5.2-beta`) for end-to-end testing
 - Verify update flow: detection → download → install → restart
 
+**DevTools Log Output**:
+
+Auto-update logs are output to the DevTools console by default:
+
+- **View Method**: Open app → Right-click → "Inspect" (or Cmd+Option+I / Ctrl+Shift+I) → Console tab
+- **Log Format**:
+  - Green `[Updater]` prefix: Normal information (checking for updates, download progress, installation complete)
+  - Red `[Updater]` prefix: Error messages
+- **Throttling Strategy**: Download progress only shows key percentages (0%, 25%, 50%, 75%, 100%) to avoid flooding the console
+- **Disable Method**: To disable DevTools logs, set the environment variable `DEBUG_UPDATER=0`:
+  ```bash
+  # macOS/Linux
+  DEBUG_UPDATER=0 ./AutoGLM\ GUI.app
+
+  # Windows
+  set DEBUG_UPDATER=0
+  AutoGLM GUI.exe
+  ```
+- **File Logs**: All logs are still written to log files (see LOG_LOCATION.md), unaffected by this setting
+
 ## Critical Implementation Details
 
 ### Video Streaming (Scrcpy)

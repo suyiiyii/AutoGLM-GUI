@@ -16,25 +16,76 @@ autoUpdater.logger = log;
 autoUpdater.autoDownload = true;  // 自动下载更新
 autoUpdater.autoInstallOnAppQuit = true;  // 退出时自动安装
 
-// 更新事件监听
+// ==================== DevTools 日志输出配置 ====================
+
+/**
+ * 判断是否应该将更新日志输出到 DevTools 控制台
+ * @returns {boolean} true 表示启用
+ */
+function shouldLogToDevTools() {
+  // 默认启用（按用户要求）
+  // 如果需要禁用，可以设置环境变量 DEBUG_UPDATER=0
+  return process.env.DEBUG_UPDATER !== '0';
+}
+
+/**
+ * 将日志消息输出到渲染进程的 DevTools 控制台
+ * @param {string} message - 日志消息
+ * @param {'info' | 'error'} level - 日志级别
+ */
+function logToDevTools(message, level = 'info') {
+  if (!shouldLogToDevTools()) return;
+  if (!mainWindow?.webContents) return;
+
+  const styles = {
+    info: 'color: #00a67e; font-weight: bold;',
+    error: 'color: #e74c3c; font-weight: bold;'
+  };
+
+  const consoleMethod = level === 'error' ? 'error' : 'log';
+  const style = styles[level] || styles.info;
+
+  mainWindow.webContents
+    .executeJavaScript(`console.${consoleMethod}('%c${message}', '${style}')`)
+    .catch(() => {
+      // 忽略错误（窗口可能未就绪）
+    });
+}
+
+// ==================== 更新事件监听 ====================
 autoUpdater.on('checking-for-update', () => {
   log.info('[Updater] Checking for updates...');
+  logToDevTools('[Updater] Checking for updates...', 'info');
 });
 
 autoUpdater.on('update-available', (info) => {
   log.info('[Updater] Update available:', info.version);
+  logToDevTools(`[Updater] Update available: ${info.version}`, 'info');
 });
 
 autoUpdater.on('update-not-available', () => {
   log.info('[Updater] No updates available');
+  logToDevTools('[Updater] No updates available', 'info');
 });
 
+// 高频事件：降频处理，仅记录关键百分比
+let lastLoggedPercent = -1;
 autoUpdater.on('download-progress', (progressObj) => {
-  log.info(`[Updater] Downloaded ${Math.round(progressObj.percent)}%`);
+  const percent = Math.round(progressObj.percent);
+
+  // 仅记录关键百分比（0, 25, 50, 75, 100）
+  const shouldLog = [0, 25, 50, 75, 100].includes(percent);
+
+  if (shouldLog && percent !== lastLoggedPercent) {
+    log.info(`[Updater] Downloaded ${percent}%`);
+    logToDevTools(`[Updater] Downloaded ${percent}%`, 'info');
+    lastLoggedPercent = percent;
+  }
 });
 
 autoUpdater.on('update-downloaded', (info) => {
   log.info('[Updater] Update downloaded, will install on quit');
+  logToDevTools('[Updater] Update downloaded, will install on quit', 'info');
 
   // 显示系统通知
   dialog.showMessageBox({
@@ -54,6 +105,7 @@ autoUpdater.on('update-downloaded', (info) => {
 
 autoUpdater.on('error', (err) => {
   log.error('[Updater] Error:', err);
+  logToDevTools(`[Updater] Error: ${err.message}`, 'error');
   // 静默失败，不干扰用户
 });
 
