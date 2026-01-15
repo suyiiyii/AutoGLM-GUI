@@ -66,17 +66,24 @@ class MockDevice(DeviceProtocol):
 
     # === Input Operations ===
     def tap(self, x: int, y: int, delay: float | None = None) -> None:
-        """Handle tap action through state machine."""
+        """Handle tap action through state machine.
+
+        Passes pixel coordinates directly to state machine (no conversion).
+        The click_region in scenario.yaml is in pixel coordinates.
+        """
+        # Pass pixel coordinates directly to state machine (no conversion)
         self._state_machine.handle_tap(x, y)
 
     def double_tap(self, x: int, y: int, delay: float | None = None) -> None:
         """Handle double tap (treated as single tap)."""
+        # Pass pixel coordinates directly to state machine (no conversion)
         self._state_machine.handle_tap(x, y)
 
     def long_press(
         self, x: int, y: int, duration_ms: int = 3000, delay: float | None = None
     ) -> None:
         """Handle long press (treated as tap for testing)."""
+        # Pass pixel coordinates directly to state machine (no conversion)
         self._state_machine.handle_tap(x, y)
 
     def swipe(

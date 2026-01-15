@@ -1,12 +1,12 @@
 """Agent lifecycle and chat routes."""
 
+import asyncio
 import json
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
-from AutoGLM_GUI.agents.events import AgentEventType
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.schemas import (
@@ -154,8 +154,8 @@ def init_agent(request: InitRequest) -> dict:
 
 
 @router.post("/api/chat", response_model=ChatResponse)
-def chat(request: ChatRequest) -> ChatResponse:
-    """发送任务给 Agent 并执行。
+async def chat(request: ChatRequest) -> ChatResponse:
+    """发送任务给 Agent 并执行（支持 AsyncAgent）。
 
     Agent 会在首次使用时自动初始化，无需手动调用 /api/init。
     """
@@ -165,15 +165,27 @@ def chat(request: ChatRequest) -> ChatResponse:
     device_id = request.device_id
     manager = PhoneAgentManager.get_instance()
 
-    # use_agent 默认 auto_initialize=True，会自动初始化 Agent
+    acquired = False
     try:
-        with manager.use_agent(device_id, timeout=None) as agent:
-            result = agent.run(request.message)
-            steps = agent.step_count
-            agent.reset()
-            return ChatResponse(result=result, steps=steps, success=True)
+        acquired = await asyncio.to_thread(
+            manager.acquire_device, device_id, timeout=None, auto_initialize=False
+        )
+        # Use chat context with async agent
+        agent = await asyncio.to_thread(
+            manager.get_agent_with_context,
+            device_id,
+            context="chat",
+            agent_type="glm-async",
+        )
+
+        # AsyncAgent is always used for chat context
+        result = await agent.run(request.message)  # type: ignore[misc]
+
+        steps = agent.step_count
+        agent.reset()
+        return ChatResponse(result=result, steps=steps, success=True)  # type: ignore[arg-type]
+
     except AgentInitializationError as e:
-        # 配置错误或初始化失败
         logger.error(f"Failed to initialize agent for {device_id}: {e}")
         raise HTTPException(
             status_code=500,
@@ -186,17 +198,21 @@ def chat(request: ChatRequest) -> ChatResponse:
     except Exception as e:
         logger.exception(f"Unexpected error in chat for {device_id}")
         return ChatResponse(result=str(e), steps=0, success=False)
+    finally:
+        if acquired:
+            await asyncio.to_thread(manager.release_device, device_id)
 
 
 @router.post("/api/chat/stream")
-def chat_stream(request: ChatRequest):
+async def chat_stream(request: ChatRequest):
     """发送任务给 Agent 并实时推送执行进度（SSE，多设备支持）。
 
     Agent 会在首次使用时自动初始化，无需手动调用 /api/init。
+
+    Chat API 使用 AsyncAgent 实现原生 async streaming 和立即取消。
     """
     from datetime import datetime
 
-    from AutoGLM_GUI.agents.stream_runner import AgentStepStreamer
     from AutoGLM_GUI.device_manager import DeviceManager
     from AutoGLM_GUI.exceptions import AgentInitializationError, DeviceBusyError
     from AutoGLM_GUI.history_manager import history_manager
@@ -206,7 +222,7 @@ def chat_stream(request: ChatRequest):
     device_id = request.device_id
     manager = PhoneAgentManager.get_instance()
 
-    def event_generator():
+    async def event_generator():
         acquired = False
         start_time = datetime.now()
         final_message = ""
@@ -225,29 +241,42 @@ def chat_stream(request: ChatRequest):
         )
 
         try:
-            acquired = manager.acquire_device(
-                device_id, timeout=0, raise_on_timeout=True, auto_initialize=True
+            # 获取设备锁（在线程池中执行）
+            acquired = await asyncio.to_thread(
+                manager.acquire_device,
+                device_id,
+                timeout=0,
+                raise_on_timeout=True,
+                auto_initialize=False,
             )
 
             try:
-                agent = manager.get_agent(device_id)
-                streamer = AgentStepStreamer(agent=agent, task=request.message)
+                # 使用 chat context 获取 AsyncAgent
+                agent = await asyncio.to_thread(
+                    manager.get_agent_with_context,
+                    device_id,
+                    context="chat",
+                    agent_type="glm-async",
+                )
 
-                with streamer.stream_context() as abort_fn:
-                    manager.register_abort_handler(device_id, abort_fn)
+                logger.info(f"Using AsyncAgent for device {device_id}")
 
-                    for event in streamer:
+                # 注册异步取消处理器
+                async def cancel_handler():
+                    await agent.cancel()  # type: ignore[union-attr]
+
+                await asyncio.to_thread(
+                    manager.register_abort_handler, device_id, cancel_handler
+                )
+
+                try:
+                    # 直接使用 agent.stream()
+                    async for event in agent.stream(request.message):  # type: ignore[union-attr]
                         event_type = event["type"]
                         event_data_dict = event["data"]
 
-                        if (
-                            event_type == AgentEventType.STEP.value
-                            and event_data_dict.get("step") == -1
-                        ):
-                            continue
-
                         # 收集每个 step 的消息
-                        if event_type == AgentEventType.STEP.value:
+                        if event_type == "step":
                             messages.append(
                                 MessageRecord(
                                     role="assistant",
@@ -259,19 +288,28 @@ def chat_stream(request: ChatRequest):
                                 )
                             )
 
-                        if event_type == AgentEventType.DONE.value:
+                        if event_type == "done":
                             final_message = event_data_dict.get("message", "")
                             final_success = event_data_dict.get("success", False)
                             final_steps = event_data_dict.get("steps", 0)
 
-                        event_data = _create_sse_event(event_type, event_data_dict)
-
+                        # 发送 SSE 事件
+                        sse_event = _create_sse_event(event_type, event_data_dict)
                         yield f"event: {event_type}\n"
-                        yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+                        yield f"data: {json.dumps(sse_event, ensure_ascii=False)}\n\n"
+
+                except asyncio.CancelledError:
+                    logger.info(f"AsyncAgent task cancelled for device {device_id}")
+                    yield "event: cancelled\n"
+                    yield f"data: {json.dumps({'message': 'Task cancelled by user'})}\n\n"
+                    raise
+
+                finally:
+                    await asyncio.to_thread(manager.unregister_abort_handler, device_id)
 
             finally:
                 if acquired:
-                    manager.release_device(device_id)
+                    await asyncio.to_thread(manager.release_device, device_id)
 
                 device_manager = DeviceManager.get_instance()
                 serialno = device_manager.get_serial_by_device_id(device_id)
@@ -375,14 +413,15 @@ def reset_agent(request: ResetRequest) -> dict:
 
 
 @router.post("/api/chat/abort")
-def abort_chat(request: AbortRequest) -> dict:
-    """中断正在进行的对话流。"""
+async def abort_chat(request: AbortRequest) -> dict:
+    """中断正在进行的对话流 (支持 AsyncAgent)。"""
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
     device_id = request.device_id
     manager = PhoneAgentManager.get_instance()
 
-    success = manager.abort_streaming_chat(device_id)
+    # 使用异步方法 (支持 AsyncAgent 和 BaseAgent)
+    success = await manager.abort_streaming_chat_async(device_id)
 
     return {
         "success": success,

@@ -216,7 +216,7 @@ def _sync_chat(device_id: str, message: str) -> str:
                 # 重置 agent 确保干净状态
                 agent.reset()
 
-                result = agent.run(message)
+                result = agent.run(message)  # type: ignore[misc]
                 steps = agent.step_count
 
                 # 检查是否达到步数限制

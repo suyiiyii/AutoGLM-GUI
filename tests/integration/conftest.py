@@ -69,6 +69,12 @@ def sample_test_case(scenarios_dir: Path) -> Path:
     return scenarios_dir / "meituan_message" / "scenario.yaml"
 
 
+@pytest.fixture
+def wechat_test_case(scenarios_dir: Path) -> Path:
+    """Get the WeChat multi-step test case path."""
+    return scenarios_dir / "wechat_multi_step" / "scenario.yaml"
+
+
 def _run_llm_server(port: int):
     """Run the mock LLM server in a subprocess."""
     from tests.integration.device_agent.mock_llm_server import run_server

@@ -15,7 +15,6 @@ import uvicorn
 from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 
-
 # Predefined responses for the "点击消息按钮" task
 DEFAULT_RESPONSES = [
     # Response A: First request (find and tap message button)

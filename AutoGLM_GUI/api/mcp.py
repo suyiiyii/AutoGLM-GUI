@@ -58,12 +58,12 @@ def chat(device_id: str, message: str) -> ChatResult:
                 # Reset agent before each chat to ensure clean state
                 agent.reset()
 
-                result = agent.run(message)
+                result = agent.run(message)  # type: ignore[misc]
                 steps = agent.step_count
 
                 # Check if MCP step limit was reached
                 if steps >= MCP_MAX_STEPS and result == "Max steps reached":
-                    return {
+                    return {  # type: ignore[return-value]
                         "result": (
                             f"已达到 MCP 最大步数限制（{MCP_MAX_STEPS}步）。任务可能未完成，"
                             "建议将任务拆分为更小的子任务。"
@@ -72,7 +72,7 @@ def chat(device_id: str, message: str) -> ChatResult:
                         "success": False,
                     }
 
-                return {"result": result, "steps": steps, "success": True}
+                return {"result": result, "steps": steps, "success": True}  # type: ignore[return-value]
 
             finally:
                 # Restore original config

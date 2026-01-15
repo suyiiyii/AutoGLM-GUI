@@ -231,7 +231,7 @@ class SchedulerManager:
             task_success = False
 
             while agent.step_count < agent.agent_config.max_steps:
-                step_result = agent.step(workflow["text"] if is_first else None)
+                step_result = agent.step(workflow["text"] if is_first else None)  # type: ignore[misc]
                 is_first = False
 
                 # 收集每个 step 的消息
@@ -240,15 +240,15 @@ class SchedulerManager:
                         role="assistant",
                         content="",
                         timestamp=datetime.now(),
-                        thinking=step_result.thinking,
-                        action=step_result.action,
+                        thinking=step_result.thinking,  # type: ignore[union-attr]
+                        action=step_result.action,  # type: ignore[union-attr]
                         step=agent.step_count,
                     )
                 )
 
-                if step_result.finished:
-                    result_message = step_result.message or "Task completed"
-                    task_success = step_result.success
+                if step_result.finished:  # type: ignore[union-attr]
+                    result_message = step_result.message or "Task completed"  # type: ignore[union-attr]
+                    task_success = step_result.success  # type: ignore[union-attr]
                     break
             else:
                 result_message = "Max steps reached"

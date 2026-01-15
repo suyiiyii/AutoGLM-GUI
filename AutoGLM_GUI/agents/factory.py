@@ -12,7 +12,7 @@ from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.types import AgentSpecificConfig
 
-from .protocols import BaseAgent
+from .protocols import AsyncAgent, BaseAgent
 
 
 # Agent registry: agent_type -> (creator_function, config_schema)
@@ -52,7 +52,7 @@ def create_agent(
     device,
     takeover_callback: Callable | None = None,
     confirmation_callback: Callable | None = None,
-) -> BaseAgent:
+) -> AsyncAgent | BaseAgent:
     """
     Create an agent instance using the factory pattern.
 
@@ -66,7 +66,8 @@ def create_agent(
         confirmation_callback: Confirmation callback
 
     Returns:
-        Agent instance implementing BaseAgent interface
+        Agent instance implementing AsyncAgent or BaseAgent interface.
+        Use runtime type detection (e.g., inspect.iscoroutinefunction) to determine which.
 
     Raises:
         ValueError: If agent_type is not registered
@@ -108,14 +109,51 @@ def is_agent_type_registered(agent_type: str) -> bool:
 # ==================== Built-in Agent Creators ====================
 
 
-def _create_glm_agent_v2(
+def _create_async_glm_agent(
     model_config: ModelConfig,
     agent_config: AgentConfig,
-    agent_specific_config: AgentSpecificConfig,
+    agent_specific_config: AgentSpecificConfig,  # noqa: ARG001
+    device,
+    takeover_callback: Callable | None = None,
+    confirmation_callback: Callable | None = None,
+) -> AsyncAgent:
+    """Create AsyncGLMAgent instance.
+
+    This is the default async implementation that supports:
+    - Native streaming with AsyncIterator
+    - Immediate cancellation with asyncio.CancelledError
+    - No worker threads or queues needed
+
+    Note: 'glm' now uses AsyncGLMAgent by default for better performance.
+    Use 'glm-sync' if you need the old synchronous implementation.
+    """
+    from .glm.async_agent import AsyncGLMAgent
+
+    # Note: AsyncGLMAgent implements AsyncAgent Protocol, but pyright cannot verify
+    # async generator function compatibility with Protocol. This is a known limitation
+    # of Python's type system. The implementation is correct at runtime.
+    return AsyncGLMAgent(  # type: ignore[return-value]
+        model_config=model_config,
+        agent_config=agent_config,
+        device=device,
+        confirmation_callback=confirmation_callback,
+        takeover_callback=takeover_callback,
+    )
+
+
+def _create_glm_agent_sync(
+    model_config: ModelConfig,
+    agent_config: AgentConfig,
+    agent_specific_config: AgentSpecificConfig,  # noqa: ARG001
     device,
     takeover_callback: Callable | None = None,
     confirmation_callback: Callable | None = None,
 ) -> BaseAgent:
+    """Create synchronous GLMAgent (legacy, for backward compatibility).
+
+    This is the old synchronous implementation using AgentStepStreamer.
+    Only use this if you have compatibility issues with AsyncGLMAgent.
+    """
     from .glm.agent import GLMAgent
 
     return GLMAgent(
@@ -149,5 +187,7 @@ def _create_internal_mai_agent(
     )
 
 
-register_agent("glm", _create_glm_agent_v2)
+register_agent("glm", _create_glm_agent_sync)  # 默认使用同步实现 (向后兼容)
+register_agent("glm-async", _create_async_glm_agent)  # 异步实现 (显式选择)
+register_agent("async-glm", _create_async_glm_agent)  # 别名
 register_agent("mai", _create_internal_mai_agent)

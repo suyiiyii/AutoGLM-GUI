@@ -183,6 +183,8 @@ def _register_routes(app: FastAPI):
     async def tap(device_id: str, req: TapRequest):
         state.record("tap", device_id, x=req.x, y=req.y, delay=req.delay)
         if state.state_machine:
+            # Pass pixel coordinates directly to state machine (no conversion)
+            # The click_region in scenario.yaml is in pixel coordinates
             state.state_machine.handle_tap(req.x, req.y)
         return {"status": "ok"}
 
@@ -190,6 +192,7 @@ def _register_routes(app: FastAPI):
     async def double_tap(device_id: str, req: TapRequest):
         state.record("double_tap", device_id, x=req.x, y=req.y, delay=req.delay)
         if state.state_machine:
+            # Pass pixel coordinates directly to state machine (no conversion)
             state.state_machine.handle_tap(req.x, req.y)
         return {"status": "ok"}
 
@@ -204,6 +207,7 @@ def _register_routes(app: FastAPI):
             delay=req.delay,
         )
         if state.state_machine:
+            # Pass pixel coordinates directly to state machine (no conversion)
             state.state_machine.handle_tap(req.x, req.y)
         return {"status": "ok"}
 
