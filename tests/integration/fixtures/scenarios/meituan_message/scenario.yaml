@@ -6,7 +6,7 @@ states:
     screenshot: "state_home.jpg"
     current_app: "com.sankuai.meituan"
     transitions:
-      - click_region: [451, 1048, 667, 1111]  # Normalized coordinates (0-1000)
+      - click_region: [487, 2516, 721, 2667]  # x1, y1, x2, y2
         next_state: "message"
         description: "点击消息按钮"
   - id: "message"

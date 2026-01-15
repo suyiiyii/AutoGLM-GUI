@@ -73,8 +73,7 @@ class TestRemoteDeviceWithStateMachine:
         state_before = test_client.get_state()
         assert state_before["current_state"] == "home"
 
-        # Tap at center of click_region [451, 1048, 667, 1111] on 1200x2670 screen
-        device.tap(671, 2884)
+        device.tap(600, 2590)
 
         test_client.assert_state("message")
 
@@ -109,10 +108,9 @@ class TestRemoteDeviceWithStateMachine:
         test_client.load_scenario(str(sample_test_case))
         device = RemoteDevice("mock_001", mock_agent_server)
 
-        # Tap at center of click_region [451, 1048, 667, 1111] on 1200x2670 screen
-        device.tap(671, 2884)
+        device.tap(600, 2590)
 
-        test_client.assert_tap_in_region(541, 2798, 800, 2966)
+        test_client.assert_tap_in_region(487, 2516, 721, 2667)
 
 
 class TestMockAgentAssertionAPI:

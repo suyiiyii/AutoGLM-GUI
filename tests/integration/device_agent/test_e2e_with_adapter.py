@@ -66,7 +66,7 @@ class TestE2EWithAgent:
             f"Expected at least 1 tap, got {len(tap_commands)}"
         )
 
-        test_client.assert_tap_in_region(541, 2798, 800, 2966)
+        test_client.assert_tap_in_region(487, 2516, 721, 2667)
 
         test_client.assert_state("message")
 
@@ -86,8 +86,7 @@ class TestE2EWithoutLLM:
         ss = remote_device.get_screenshot()
         assert ss.width > 0
 
-        # Tap at center of click_region [451, 1048, 667, 1111] on 1200x2670 screen
-        remote_device.tap(671, 2884)
+        remote_device.tap(600, 2590)
 
         commands = test_client.get_actions()
         assert any(c["action"] == "screenshot" for c in commands)
@@ -173,7 +172,7 @@ class TestE2EWithMockLLM:
         )
 
         # Verify tap was in correct region
-        test_client.assert_tap_in_region(541, 2798, 800, 2966)
+        test_client.assert_tap_in_region(487, 2516, 721, 2667)
 
         # Verify final state
         test_client.assert_state("message")

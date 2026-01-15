@@ -5,48 +5,14 @@ with a Mock Device Agent and Mock LLM server running on the host machine.
 
 Prerequisites:
     - Docker is installed and running
-
-Tests will be automatically skipped if Docker is not available.
 """
 
-import shutil
 import subprocess
 import time
 from pathlib import Path
 
 import httpx
 import pytest
-
-
-def _is_docker_available() -> bool:
-    """Check if Docker is installed and running.
-
-    Returns:
-        True if Docker command exists and docker info succeeds
-    """
-    # Check if docker command exists
-    if not shutil.which("docker"):
-        return False
-
-    # Check if docker daemon is running
-    try:
-        result = subprocess.run(
-            ["docker", "info"],
-            capture_output=True,
-            timeout=5,
-        )
-        return result.returncode == 0
-    except (subprocess.TimeoutExpired, FileNotFoundError):
-        return False
-
-
-# Skip all tests in this module if Docker is not available
-pytestmark = [
-    pytest.mark.skipif(
-        not _is_docker_available(),
-        reason="Docker is not installed or not running. Skip Docker E2E tests.",
-    )
-]
 
 
 @pytest.fixture
@@ -342,9 +308,8 @@ class TestDockerE2E:
 
         tap = tap_commands[0]
         x, y = tap["params"]["x"], tap["params"]["y"]
-        # Expected coordinates for click_region [451, 1048, 667, 1111] on 1200x2670 screen
-        assert 541 <= x <= 800, f"Tap x={x} not in message button region [541, 800]"
-        assert 2798 <= y <= 2966, f"Tap y={y} not in message button region [2798, 2966]"
+        assert 487 <= x <= 721, f"Tap x={x} not in message button region [487, 721]"
+        assert 2516 <= y <= 2667, f"Tap y={y} not in message button region [2516, 2667]"
 
         state = test_client.get_state()
         assert state["current_state"] == "message", (
