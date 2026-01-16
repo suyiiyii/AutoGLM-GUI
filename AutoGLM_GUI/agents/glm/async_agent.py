@@ -96,29 +96,42 @@ class AsyncGLMAgent:
         self._cancel_event.clear()
 
         try:
-            # 首步执行
-            async for event in self._execute_step_async(task):
-                yield event
+            # ===== 初始化阶段：添加首次用户输入 =====
+            try:
+                screenshot = await asyncio.to_thread(self.device.get_screenshot)
+                current_app = await asyncio.to_thread(self.device.get_current_app)
+            except Exception as e:
+                logger.error(f"Failed to get device info during initialization: {e}")
+                yield {
+                    "type": "error",
+                    "data": {"message": f"Device error: {e}"},
+                }
+                yield {
+                    "type": "done",
+                    "data": {
+                        "message": f"Device error: {e}",
+                        "steps": 0,
+                        "success": False,
+                    },
+                }
+                return
 
-                # 检查是否完成
-                if event["type"] == "step" and event["data"].get("finished"):
-                    yield {
-                        "type": "done",
-                        "data": {
-                            "message": event["data"].get("message", "Task completed"),
-                            "steps": self._step_count,
-                            "success": event["data"].get("success", True),
-                        },
-                    }
-                    return
+            screen_info = MessageBuilder.build_screen_info(current_app)
+            initial_message = f"{task}\n\n** Screen Info **\n\n{screen_info}"
 
-            # 后续步骤
+            self._context.append(
+                MessageBuilder.create_user_message(
+                    text=initial_message, image_base64=screenshot.base64_data
+                )
+            )
+
+            # ===== 执行阶段：循环执行步骤 =====
             while self._step_count < self.agent_config.max_steps and self._is_running:
                 # 检查取消
                 if self._cancel_event.is_set():
                     raise asyncio.CancelledError()
 
-                async for event in self._execute_step_async(None):
+                async for event in self._execute_step_async():
                     yield event
 
                     # 检查是否完成
@@ -155,20 +168,19 @@ class AsyncGLMAgent:
         finally:
             self._is_running = False
 
-    async def _execute_step_async(
-        self, user_prompt: str | None
-    ) -> AsyncIterator[dict[str, Any]]:
+    async def _execute_step_async(self) -> AsyncIterator[dict[str, Any]]:
         """执行单步，支持流式输出和取消。
 
-        Args:
-            user_prompt: 用户输入（首步必需，后续可选）
+        注意：不再需要 user_prompt 参数，因为：
+        - 首次用户输入已在 stream() 的初始化阶段添加
+        - 此方法只负责执行步骤：获取屏幕 → 调用 LLM → 执行动作
 
         Yields:
             dict[str, Any]: 事件字典
         """
         self._step_count += 1
 
-        # 1. 截图和获取当前应用（使用线程池）
+        # 1. 获取当前屏幕状态（使用线程池）
         try:
             screenshot = await asyncio.to_thread(self.device.get_screenshot)
             current_app = await asyncio.to_thread(self.device.get_current_app)
@@ -191,20 +203,9 @@ class AsyncGLMAgent:
             }
             return
 
-        # 2. 构建消息（自动检测是否首次执行）
-        is_first_execution = len(self._context) == 1  # 只有 system message
-
+        # 2. 构建消息（统一格式：只有屏幕信息）
         screen_info = MessageBuilder.build_screen_info(current_app)
-
-        if is_first_execution:
-            # 首次执行：不添加 "Screen Info" 标题
-            text_content = f"{user_prompt}\n\n{screen_info}"
-        else:
-            # 后续执行：添加 "Screen Info" 标题
-            if user_prompt:
-                text_content = f"{user_prompt}\n\n** Screen Info **\n\n{screen_info}"
-            else:
-                text_content = f"** Screen Info **\n\n{screen_info}"
+        text_content = f"** Screen Info **\n\n{screen_info}"
 
         self._context.append(
             MessageBuilder.create_user_message(
@@ -482,11 +483,30 @@ class AsyncGLMAgent:
             StepResult: 步骤结果
         """
         is_first_execution = len(self._context) == 1  # 只有 system message
-        if is_first_execution and not task:
-            raise ValueError("Task is required for the first step")
+        if is_first_execution:
+            if not task:
+                raise ValueError("Task is required for the first step")
 
+            # 首次执行：需要先添加用户输入
+            try:
+                screenshot = await asyncio.to_thread(self.device.get_screenshot)
+                current_app = await asyncio.to_thread(self.device.get_current_app)
+            except Exception as e:
+                logger.error(f"Failed to get device info during initialization: {e}")
+                raise RuntimeError(f"Device error: {e}") from e
+
+            screen_info = MessageBuilder.build_screen_info(current_app)
+            initial_message = f"{task}\n\n** Screen Info **\n\n{screen_info}"
+
+            self._context.append(
+                MessageBuilder.create_user_message(
+                    text=initial_message, image_base64=screenshot.base64_data
+                )
+            )
+
+        # 执行步骤
         result = None
-        async for event in self._execute_step_async(task):
+        async for event in self._execute_step_async():
             if event["type"] == "step":
                 result = StepResult(
                     thinking=event["data"]["thinking"],
