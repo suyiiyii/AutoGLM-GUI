@@ -27,20 +27,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5
+      - name: Setup Python & uv
+        uses: ./.github/actions/setup-python
         with:
-          python-version: '3.11'
-
-      - name: Install uv
-        uses: astral-sh/setup-uv@v4
-        with:
-          enable-cache: true
-          cache-dependency-glob: "uv.lock"
-
-      - name: Install dependencies
-        run: |
-          uv sync --dev --frozen
+          frozen: "true"
 
       - name: Run Docker E2E tests
         run: |
