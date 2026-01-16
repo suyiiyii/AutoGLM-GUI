@@ -182,7 +182,6 @@ async def chat(request: ChatRequest) -> ChatResponse:
         result = await agent.run(request.message)  # type: ignore[misc]
 
         steps = agent.step_count
-        agent.reset()
         return ChatResponse(result=result, steps=steps, success=True)  # type: ignore[arg-type]
 
     except AgentInitializationError as e:

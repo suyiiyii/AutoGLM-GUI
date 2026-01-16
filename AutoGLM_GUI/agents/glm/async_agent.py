@@ -61,8 +61,16 @@ class AsyncGLMAgent:
         # 取消机制
         self._cancel_event = asyncio.Event()
 
+        # 初始化 system prompt（Agent 一创建就有"人格"）
+        system_prompt = self.agent_config.system_prompt
+        if system_prompt is None:
+            system_prompt = get_system_prompt(self.agent_config.lang)
+
+        # 保存初始 system message 用于 reset()
+        self._initial_system_message = MessageBuilder.create_system_message(system_prompt)
+
         # 状态
-        self._context: list[dict[str, Any]] = []
+        self._context: list[dict[str, Any]] = [self._initial_system_message]
         self._step_count = 0
         self._is_running = False
 
@@ -82,14 +90,12 @@ class AsyncGLMAgent:
         - "cancelled": {"message": str}
         - "error": {"message": str}
         """
-        self._context = []
-        self._step_count = 0
         self._is_running = True
         self._cancel_event.clear()
 
         try:
             # 首步执行
-            async for event in self._execute_step_async(task, is_first=True):
+            async for event in self._execute_step_async(task):
                 yield event
 
                 # 检查是否完成
@@ -110,7 +116,7 @@ class AsyncGLMAgent:
                 if self._cancel_event.is_set():
                     raise asyncio.CancelledError()
 
-                async for event in self._execute_step_async(None, is_first=False):
+                async for event in self._execute_step_async(None):
                     yield event
 
                     # 检查是否完成
@@ -148,13 +154,12 @@ class AsyncGLMAgent:
             self._is_running = False
 
     async def _execute_step_async(
-        self, user_prompt: str | None, is_first: bool
+        self, user_prompt: str | None
     ) -> AsyncIterator[dict[str, Any]]:
         """执行单步，支持流式输出和取消。
 
         Args:
             user_prompt: 用户输入（首步必需，后续可选）
-            is_first: 是否是首步
 
         Yields:
             dict[str, Any]: 事件字典
@@ -184,34 +189,26 @@ class AsyncGLMAgent:
             }
             return
 
-        # 2. 构建消息
-        if is_first:
-            system_prompt = self.agent_config.system_prompt
-            if system_prompt is None:
-                system_prompt = get_system_prompt(self.agent_config.lang)
+        # 2. 构建消息（自动检测是否首次执行）
+        is_first_execution = len(self._context) == 1  # 只有 system message
 
-            self._context.append(MessageBuilder.create_system_message(system_prompt))
+        screen_info = MessageBuilder.build_screen_info(current_app)
 
-            screen_info = MessageBuilder.build_screen_info(current_app)
+        if is_first_execution:
+            # 首次执行：不添加 "Screen Info" 标题
             text_content = f"{user_prompt}\n\n{screen_info}"
-
-            self._context.append(
-                MessageBuilder.create_user_message(
-                    text=text_content, image_base64=screenshot.base64_data
-                )
-            )
         else:
-            screen_info = MessageBuilder.build_screen_info(current_app)
+            # 后续执行：添加 "Screen Info" 标题
             if user_prompt:
                 text_content = f"{user_prompt}\n\n** Screen Info **\n\n{screen_info}"
             else:
                 text_content = f"** Screen Info **\n\n{screen_info}"
 
-            self._context.append(
-                MessageBuilder.create_user_message(
-                    text=text_content, image_base64=screenshot.base64_data
-                )
+        self._context.append(
+            MessageBuilder.create_user_message(
+                text=text_content, image_base64=screenshot.base64_data
             )
+        )
 
         # 3. 流式调用 OpenAI（真正的异步，可取消）
         try:
@@ -452,8 +449,8 @@ class AsyncGLMAgent:
         logger.info("AsyncGLMAgent cancelled by user")
 
     def reset(self) -> None:
-        """重置状态。"""
-        self._context = []
+        """重置状态（恢复到初始状态，保留 system message）。"""
+        self._context = [self._initial_system_message]
         self._step_count = 0
         self._is_running = False
         self._cancel_event.clear()
@@ -482,12 +479,12 @@ class AsyncGLMAgent:
         Returns:
             StepResult: 步骤结果
         """
-        is_first = len(self._context) == 0
-        if is_first and not task:
+        is_first_execution = len(self._context) == 1  # 只有 system message
+        if is_first_execution and not task:
             raise ValueError("Task is required for the first step")
 
         result = None
-        async for event in self._execute_step_async(task, is_first):
+        async for event in self._execute_step_async(task):
             if event["type"] == "step":
                 result = StepResult(
                     thinking=event["data"]["thinking"],
