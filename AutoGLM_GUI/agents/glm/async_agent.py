@@ -9,7 +9,7 @@ from openai import AsyncOpenAI
 
 from AutoGLM_GUI.actions import ActionHandler, ActionResult
 from AutoGLM_GUI.agents.protocols import AsyncAgent
-from AutoGLM_GUI.config import AgentConfig, ModelConfig, StepResult
+from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.device_protocol import DeviceProtocol
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.prompt_config import get_messages, get_system_prompt
