@@ -67,7 +67,9 @@ class AsyncGLMAgent:
             system_prompt = get_system_prompt(self.agent_config.lang)
 
         # 保存初始 system message 用于 reset()
-        self._initial_system_message = MessageBuilder.create_system_message(system_prompt)
+        self._initial_system_message = MessageBuilder.create_system_message(
+            system_prompt
+        )
 
         # 状态
         self._context: list[dict[str, Any]] = [self._initial_system_message]
