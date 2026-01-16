@@ -8,6 +8,7 @@ from typing import Any, AsyncIterator, Callable
 from openai import AsyncOpenAI
 
 from AutoGLM_GUI.actions import ActionHandler, ActionResult
+from AutoGLM_GUI.agents.protocols import AsyncAgent
 from AutoGLM_GUI.config import AgentConfig, ModelConfig, StepResult
 from AutoGLM_GUI.device_protocol import DeviceProtocol
 from AutoGLM_GUI.logger import logger
@@ -17,7 +18,7 @@ from .message_builder import MessageBuilder
 from .parser import GLMParser
 
 
-class AsyncGLMAgent:
+class AsyncGLMAgent(AsyncAgent):
     """异步 GLM Agent 实现。
 
     核心特性:
@@ -465,54 +466,6 @@ class AsyncGLMAgent:
             if event["type"] == "done":
                 final_message = event["data"].get("message", "")
         return final_message
-
-    async def step(self, task: str | None = None) -> StepResult:
-        """执行单步（兼容接口）。
-
-        Args:
-            task: 任务描述（首步必需，后续可选）
-
-        Returns:
-            StepResult: 步骤结果
-        """
-        is_first_execution = len(self._context) == 1  # 只有 system message
-        if is_first_execution:
-            if not task:
-                raise ValueError("Task is required for the first step")
-
-            # 首次执行：需要先添加用户输入
-            try:
-                screenshot = await asyncio.to_thread(self.device.get_screenshot)
-                current_app = await asyncio.to_thread(self.device.get_current_app)
-            except Exception as e:
-                logger.error(f"Failed to get device info during initialization: {e}")
-                raise RuntimeError(f"Device error: {e}") from e
-
-            screen_info = MessageBuilder.build_screen_info(current_app)
-            initial_message = f"{task}\n\n** Screen Info **\n\n{screen_info}"
-
-            self._context.append(
-                MessageBuilder.create_user_message(
-                    text=initial_message, image_base64=screenshot.base64_data
-                )
-            )
-
-        # 执行步骤
-        result = None
-        async for event in self._execute_step_async():
-            if event["type"] == "step":
-                result = StepResult(
-                    thinking=event["data"]["thinking"],
-                    action=event["data"]["action"],
-                    success=event["data"]["success"],
-                    finished=event["data"]["finished"],
-                    message=event["data"].get("message"),
-                )
-
-        if result is None:
-            raise RuntimeError("Step execution did not produce a result")
-
-        return result
 
     @property
     def step_count(self) -> int:
