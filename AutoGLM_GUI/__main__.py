@@ -78,14 +78,19 @@ def main() -> None:
     """Start the AutoGLM-GUI server."""
     # Configure logging BEFORE any other imports to ensure DEBUG level from the start
     # This is especially important for --reload mode where subprocess reimports modules
-    import argparse
     import os
     import sys
 
     # Parse args early to get log level
     early_parser = argparse.ArgumentParser(add_help=False)
-    early_parser.add_argument("--log-level", choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"], default="INFO")
-    early_parser.add_argument("--log-file", default="logs/autoglm_{time:YYYY-MM-DD}.log")
+    early_parser.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        default="INFO",
+    )
+    early_parser.add_argument(
+        "--log-file", default="logs/autoglm_{time:YYYY-MM-DD}.log"
+    )
     early_parser.add_argument("--no-log-file", action="store_true")
     early_args, _ = early_parser.parse_known_args()
 
@@ -98,6 +103,7 @@ def main() -> None:
 
     # Import and configure logger FIRST
     from AutoGLM_GUI.logger import configure_logger
+
     configure_logger(
         console_level=early_args.log_level,
         log_file=None if early_args.no_log_file else early_args.log_file,

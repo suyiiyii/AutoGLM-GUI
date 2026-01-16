@@ -85,9 +85,14 @@ def create_app() -> FastAPI:
     import os
 
     log_level = os.getenv("AUTOGLM_LOG_LEVEL", "INFO")
-    log_file = None if os.getenv("AUTOGLM_NO_LOG_FILE") else os.getenv("AUTOGLM_LOG_FILE", "logs/autoglm_{time:YYYY-MM-DD}.log")
+    log_file = (
+        None
+        if os.getenv("AUTOGLM_NO_LOG_FILE")
+        else os.getenv("AUTOGLM_LOG_FILE", "logs/autoglm_{time:YYYY-MM-DD}.log")
+    )
 
     from AutoGLM_GUI.logger import configure_logger
+
     configure_logger(console_level=log_level, log_file=log_file)
 
     # Create MCP ASGI app
