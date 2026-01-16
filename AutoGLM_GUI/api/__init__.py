@@ -79,6 +79,17 @@ def _get_static_dir() -> Path | None:
 def create_app() -> FastAPI:
     """Build the FastAPI app with routers and static assets."""
 
+    # Configure logging from environment variables (for reload mode)
+    # In reload mode, the subprocess imports this module directly, bypassing __main__.py
+    # So we need to read log config from environment variables set by the parent process
+    import os
+
+    log_level = os.getenv("AUTOGLM_LOG_LEVEL", "INFO")
+    log_file = None if os.getenv("AUTOGLM_NO_LOG_FILE") else os.getenv("AUTOGLM_LOG_FILE", "logs/autoglm_{time:YYYY-MM-DD}.log")
+
+    from AutoGLM_GUI.logger import configure_logger
+    configure_logger(console_level=log_level, log_file=log_file)
+
     # Create MCP ASGI app
     mcp_app = mcp.get_mcp_asgi_app()
 
