@@ -184,6 +184,16 @@ export const zh = {
     increaseWidth: '增大宽度',
     showWidthControls: '显示宽度控制',
     hideWidthControls: '隐藏宽度控制',
+    videoUnavailableWarning: '视频流不可用',
+    requireHttpsOrLocalhost:
+      '视频流需要 HTTPS 或 localhost 环境。建议下载桌面应用以获得完整功能。',
+    browserNotSupported:
+      '当前浏览器不支持 WebCodecs API。请使用最新版 Chrome 或 Edge 浏览器。',
+    decoderInitFailed: '视频解码器初始化失败',
+    codecNotSupported: '设备编解码器不支持',
+    unknownError: '未知错误',
+    downloadElectron: '下载桌面应用',
+    videoStreamWarning: '视频流可能不可用，正在尝试连接...',
   },
   deviceCard: {
     unknownDevice: '未知设备',

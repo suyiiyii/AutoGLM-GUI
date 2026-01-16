@@ -20,7 +20,12 @@ import {
   AlertCircle,
   CheckCircle2,
   Loader2,
+  X,
 } from 'lucide-react';
+import {
+  shouldShowWebCodecsWarning,
+  dismissWebCodecsWarning,
+} from '../lib/webcodecs-utils';
 
 interface DeviceMonitorProps {
   deviceId: string;
@@ -56,6 +61,8 @@ export function DeviceMonitor({
     'device-monitor-width',
     320
   );
+  const [fallbackReason, setFallbackReason] = useState<string | null>(null);
+  const [showWebCodecsWarning, setShowWebCodecsWarning] = useState(false);
 
   const videoStreamRef = useRef<{ close: () => void } | null>(null);
   const screenshotFetchingRef = useRef(false);
@@ -111,10 +118,19 @@ export function DeviceMonitor({
     []
   );
 
-  const handleFallback = useCallback(() => {
-    setVideoStreamFailed(true);
-    setUseVideoStream(false);
-  }, []);
+  const handleFallback = useCallback(
+    (reason?: string) => {
+      setVideoStreamFailed(true);
+      setUseVideoStream(false);
+      setFallbackReason(reason || null);
+
+      // Show warning only when user actively chose video mode
+      if (displayMode === 'video' && reason && shouldShowWebCodecsWarning()) {
+        setShowWebCodecsWarning(true);
+      }
+    },
+    [displayMode]
+  );
 
   const toggleDisplayMode = (mode: 'auto' | 'video' | 'screenshot') => {
     setDisplayMode(mode);
@@ -166,6 +182,22 @@ export function DeviceMonitor({
 
     return () => clearInterval(interval);
   }, [deviceId, videoStreamFailed, displayMode, isVisible]);
+
+  const getReasonMessage = (reason: string): string => {
+    const messages: Record<string, string> = {
+      insecure_context:
+        t.deviceMonitor?.requireHttpsOrLocalhost ||
+        '视频流需要 HTTPS 或 localhost 环境。建议下载桌面应用以获得完整功能。',
+      browser_unsupported:
+        t.deviceMonitor?.browserNotSupported ||
+        '当前浏览器不支持 WebCodecs API。请使用最新版 Chrome 或 Edge 浏览器。',
+      decoder_error:
+        t.deviceMonitor?.decoderInitFailed || '视频解码器初始化失败。',
+      decoder_unsupported:
+        t.deviceMonitor?.codecNotSupported || '设备编解码器不支持。',
+    };
+    return messages[reason] || t.deviceMonitor?.unknownError || '未知错误';
+  };
 
   const widthStyle =
     typeof panelWidth === 'number' ? `${panelWidth}px` : 'auto';
@@ -311,40 +343,87 @@ export function DeviceMonitor({
       {/* Video stream */}
       {displayMode === 'video' ||
       (displayMode === 'auto' && useVideoStream && !videoStreamFailed) ? (
-        <ScrcpyPlayer
-          deviceId={deviceId}
-          className="w-full h-full"
-          enableControl={true}
-          onFallback={handleFallback}
-          onTapSuccess={() =>
-            showFeedback(t.devicePanel?.tapped || 'Tapped', 2000, 'tap')
-          }
-          onTapError={error =>
-            showFeedback(
-              (t.devicePanel?.tapError || 'Tap error: {error}').replace(
-                '{error}',
-                error
-              ),
-              3000,
-              'error'
-            )
-          }
-          onSwipeSuccess={() =>
-            showFeedback(t.devicePanel?.swiped || 'Swiped', 2000, 'swipe')
-          }
-          onSwipeError={error =>
-            showFeedback(
-              (t.devicePanel?.swipeError || 'Swipe error: {error}').replace(
-                '{error}',
-                error
-              ),
-              3000,
-              'error'
-            )
-          }
-          onStreamReady={handleVideoStreamReady}
-          fallbackTimeout={20000}
-        />
+        <>
+          {/* WebCodecs unavailability warning banner */}
+          {showWebCodecsWarning && fallbackReason && (
+            <div className="absolute top-0 left-0 right-0 z-20 bg-amber-50/95 dark:bg-amber-950/95 border-b border-amber-200 dark:border-amber-800 backdrop-blur-sm">
+              <div className="px-4 py-3 flex items-start gap-3">
+                <AlertCircle className="w-5 h-5 text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                <div className="flex-1 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
+                      {t.deviceMonitor?.videoUnavailableWarning ||
+                        '视频流不可用'}
+                    </p>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 -mr-2 hover:bg-amber-100 dark:hover:bg-amber-900"
+                      onClick={() => {
+                        setShowWebCodecsWarning(false);
+                        dismissWebCodecsWarning();
+                      }}
+                    >
+                      <X className="w-3 h-3" />
+                    </Button>
+                  </div>
+                  <p className="text-xs text-amber-700 dark:text-amber-300">
+                    {getReasonMessage(fallbackReason)}
+                  </p>
+                  {fallbackReason === 'insecure_context' && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="h-7 text-xs"
+                      onClick={() =>
+                        window.open(
+                          'https://github.com/suyiiyii/AutoGLM-GUI/releases',
+                          '_blank'
+                        )
+                      }
+                    >
+                      {t.deviceMonitor?.downloadElectron || '下载桌面应用'}
+                    </Button>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+          <ScrcpyPlayer
+            deviceId={deviceId}
+            className="w-full h-full"
+            enableControl={true}
+            onFallback={handleFallback}
+            onTapSuccess={() =>
+              showFeedback(t.devicePanel?.tapped || 'Tapped', 2000, 'tap')
+            }
+            onTapError={error =>
+              showFeedback(
+                (t.devicePanel?.tapError || 'Tap error: {error}').replace(
+                  '{error}',
+                  error
+                ),
+                3000,
+                'error'
+              )
+            }
+            onSwipeSuccess={() =>
+              showFeedback(t.devicePanel?.swiped || 'Swiped', 2000, 'swipe')
+            }
+            onSwipeError={error =>
+              showFeedback(
+                (t.devicePanel?.swipeError || 'Swipe error: {error}').replace(
+                  '{error}',
+                  error
+                ),
+                3000,
+                'error'
+              )
+            }
+            onStreamReady={handleVideoStreamReady}
+            fallbackTimeout={20000}
+          />
+        </>
       ) : (
         <div className="w-full h-full flex items-center justify-center bg-muted/30 min-h-0">
           {screenshot && screenshot.success ? (

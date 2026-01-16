@@ -186,6 +186,17 @@ export const en = {
     increaseWidth: 'Increase width',
     showWidthControls: 'Show width controls',
     hideWidthControls: 'Hide width controls',
+    videoUnavailableWarning: 'Video streaming is unavailable',
+    requireHttpsOrLocalhost:
+      'Video streaming requires HTTPS or localhost. Consider downloading the desktop app for full functionality.',
+    browserNotSupported:
+      'Current browser does not support WebCodecs API. Please use latest Chrome or Edge browser.',
+    decoderInitFailed: 'Video decoder initialization failed',
+    codecNotSupported: 'Device codec not supported',
+    unknownError: 'Unknown error',
+    downloadElectron: 'Download Desktop App',
+    videoStreamWarning:
+      'Video streaming may be unavailable, attempting connection...',
   },
   deviceCard: {
     unknownDevice: 'Unknown Device',
