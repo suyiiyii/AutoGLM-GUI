@@ -217,9 +217,7 @@ class AsyncGLMAgent:
         try:
             if self.agent_config.verbose:
                 msgs = get_messages(self.agent_config.lang)
-                print("\n" + "=" * 50)
-                print(f"💭 {msgs['thinking']}:")
-                print("-" * 50)
+                logger.debug(f"💭 {msgs['thinking']}:")
 
             thinking_parts = []
             raw_content = ""
@@ -240,7 +238,7 @@ class AsyncGLMAgent:
 
                     # Verbose output
                     if self.agent_config.verbose:
-                        print(chunk_data["content"], end="", flush=True)
+                        logger.debug(chunk_data["content"])
 
                 elif chunk_data["type"] == "raw":
                     raw_content += chunk_data["content"]
@@ -254,7 +252,7 @@ class AsyncGLMAgent:
         except Exception as e:
             logger.error(f"LLM error: {e}")
             if self.agent_config.verbose:
-                traceback.print_exc()
+                logger.debug(traceback.format_exc())
 
             yield {
                 "type": "error",
@@ -285,11 +283,8 @@ class AsyncGLMAgent:
 
         if self.agent_config.verbose:
             msgs = get_messages(self.agent_config.lang)
-            print()
-            print("-" * 50)
-            print(f"🎯 {msgs['action']}:")
-            print(json.dumps(action, ensure_ascii=False, indent=2))
-            print("=" * 50 + "\n")
+            logger.debug(f"🎯 {msgs['action']}:")
+            logger.debug(json.dumps(action, ensure_ascii=False, indent=2))
 
         # 5. 执行 action（使用线程池）
         try:
@@ -299,7 +294,7 @@ class AsyncGLMAgent:
         except Exception as e:
             logger.error(f"Action execution error: {e}")
             if self.agent_config.verbose:
-                traceback.print_exc()
+                logger.debug(traceback.format_exc())
             result = ActionResult(success=False, should_finish=True, message=str(e))
 
         # 6. 更新上下文
@@ -316,11 +311,9 @@ class AsyncGLMAgent:
 
         if finished and self.agent_config.verbose:
             msgs = get_messages(self.agent_config.lang)
-            print("\n" + "🎉 " + "=" * 48)
-            print(
+            logger.debug(
                 f"✅ {msgs['task_completed']}: {result.message or action.get('message', msgs['done'])}"
             )
-            print("=" * 50 + "\n")
 
         # 8. 返回步骤结果
         yield {
