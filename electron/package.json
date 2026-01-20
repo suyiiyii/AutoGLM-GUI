@@ -31,7 +31,7 @@
   "license": "MIT",
   "devDependencies": {
     "electron": "^35.7.5",
-    "electron-builder": "^24.9.0"
+    "electron-builder": "^26.5.0"
   },
   "dependencies": {
     "electron-log": "^5.4.3",
