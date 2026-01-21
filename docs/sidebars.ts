@@ -39,6 +39,7 @@ const sidebars: SidebarsConfig = {
     },
     'deployment',
     'upgrade',
+    'release-notes-v1.5',
     'license',
   ],
 };
