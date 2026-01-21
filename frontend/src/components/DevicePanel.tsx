@@ -66,6 +66,7 @@ interface DevicePanelProps {
   deviceName: string;
   deviceConnectionType?: string; // Device connection type (usb/wifi/remote)
   isConfigured: boolean;
+  isVisible?: boolean; // ✅ 新增：控制视频流行为
 }
 
 export function DevicePanel({
@@ -74,6 +75,7 @@ export function DevicePanel({
   deviceName,
   deviceConnectionType,
   isConfigured,
+  isVisible = true, // ✅ 新增：默认 true 向后兼容
 }: DevicePanelProps) {
   const t = useTranslation();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -961,7 +963,7 @@ export function DevicePanel({
         deviceId={deviceId}
         serial={deviceSerial}
         connectionType={deviceConnectionType}
-        isVisible={true}
+        isVisible={isVisible} // ✅ 修改：传递实际的 isVisible（原为硬编码 true）
       />
     </div>
   );

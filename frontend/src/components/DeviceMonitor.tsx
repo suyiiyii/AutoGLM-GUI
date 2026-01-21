@@ -422,6 +422,7 @@ export function DeviceMonitor({
             }
             onStreamReady={handleVideoStreamReady}
             fallbackTimeout={20000}
+            isVisible={isVisible} // ✅ 新增：传递 isVisible prop
           />
         </>
       ) : (
