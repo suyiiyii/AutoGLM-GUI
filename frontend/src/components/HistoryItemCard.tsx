@@ -3,14 +3,45 @@ import { CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import type { HistoryItem } from '../types/history';
-import { formatHistoryTime, formatDuration } from '../utils/history';
+import type { HistoryRecordResponse } from '../api';
 import { useTranslation } from '../lib/i18n-context';
 
 interface HistoryItemCardProps {
-  item: HistoryItem;
-  onSelect: (item: HistoryItem) => void;
+  item: HistoryRecordResponse;
+  onSelect: (item: HistoryRecordResponse) => void;
   onDelete: (itemId: string) => void;
+}
+
+function formatHistoryTime(timestamp: string): string {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffMinutes = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+
+  if (diffMinutes < 1) return 'Just now';
+  if (diffMinutes < 60) return `${diffMinutes}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+
+  return date.toLocaleString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
+}
+
+function formatDuration(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  if (minutes === 0) {
+    return `${seconds}s`;
+  }
+  return `${minutes}m ${seconds}s`;
 }
 
 export function HistoryItemCard({
@@ -35,19 +66,19 @@ export function HistoryItemCard({
       <div className="p-3 space-y-2">
         {/* Task Text */}
         <p className="text-sm font-medium text-slate-900 dark:text-slate-100 line-clamp-2">
-          {item.taskText}
+          {item.task_text}
         </p>
 
         {/* Metadata Row */}
         <div className="flex items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-            <span>{formatHistoryTime(item.startTime)}</span>
+            <span>{formatHistoryTime(item.start_time)}</span>
             <span>•</span>
             <span>
               {item.steps} {item.steps === 1 ? 'step' : 'steps'}
             </span>
             <span>•</span>
-            <span>{formatDuration(item.duration)}</span>
+            <span>{formatDuration(item.duration_ms)}</span>
           </div>
 
           <div className="flex items-center gap-2">

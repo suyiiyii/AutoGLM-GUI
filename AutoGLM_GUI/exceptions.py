@@ -79,9 +79,9 @@ class AgentInitializationError(Exception):
     How to fix:
         1. Check configuration:
             >>> from AutoGLM_GUI.config_manager import config_manager
-            >>> config = config_manager.get_effective_config()
-            >>> print(f"base_url: {config.base_url}")
-            >>> print(f"model_name: {config.model_name}")
+            >>> effective_config = config_manager.get_effective_config()
+            >>> print(f"base_url: {effective_config.base_url}")
+            >>> print(f"model_name: {effective_config.model_name}")
 
         2. Set configuration:
             >>> via API: POST /api/config {"base_url": "...", "model_name": "...", "api_key": "..."}

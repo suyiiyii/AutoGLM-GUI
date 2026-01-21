@@ -44,19 +44,25 @@ def find_available_port(
     )
 
 
-def open_browser(host: str, port: int, delay: float = 1.5) -> None:
+def open_browser(
+    host: str, port: int, use_ssl: bool = False, delay: float = 1.5
+) -> None:
     """Open browser after a delay to ensure server is ready.
 
     Args:
         host: Server host
         port: Server port
+        use_ssl: Whether to use HTTPS
         delay: Delay in seconds before opening browser
     """
 
-    def _open():
+    def _open() -> None:
         time.sleep(delay)
+        protocol = "https" if use_ssl else "http"
         url = (
-            f"http://127.0.0.1:{port}" if host == "0.0.0.0" else f"http://{host}:{port}"
+            f"{protocol}://127.0.0.1:{port}"
+            if host == "0.0.0.0"
+            else f"{protocol}://{host}:{port}"
         )
         try:
             webbrowser.open(url)
@@ -70,6 +76,39 @@ def open_browser(host: str, port: int, delay: float = 1.5) -> None:
 
 def main() -> None:
     """Start the AutoGLM-GUI server."""
+    # Configure logging BEFORE any other imports to ensure DEBUG level from the start
+    # This is especially important for --reload mode where subprocess reimports modules
+    import os
+    import sys
+
+    # Parse args early to get log level
+    early_parser = argparse.ArgumentParser(add_help=False)
+    early_parser.add_argument(
+        "--log-level",
+        choices=["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"],
+        default="INFO",
+    )
+    early_parser.add_argument(
+        "--log-file", default="logs/autoglm_{time:YYYY-MM-DD}.log"
+    )
+    early_parser.add_argument("--no-log-file", action="store_true")
+    early_args, _ = early_parser.parse_known_args()
+
+    # Set environment variable for reload mode (subprocess will read this)
+    os.environ["AUTOGLM_LOG_LEVEL"] = early_args.log_level
+    if early_args.no_log_file:
+        os.environ["AUTOGLM_NO_LOG_FILE"] = "1"
+    else:
+        os.environ["AUTOGLM_LOG_FILE"] = early_args.log_file
+
+    # Import and configure logger FIRST
+    from AutoGLM_GUI.logger import configure_logger
+
+    configure_logger(
+        console_level=early_args.log_level,
+        log_file=None if early_args.no_log_file else early_args.log_file,
+    )
+
     parser = argparse.ArgumentParser(
         description="AutoGLM-GUI - Web GUI for AutoGLM Phone Agent"
     )
@@ -125,6 +164,22 @@ def main() -> None:
         action="store_true",
         help="Disable file logging",
     )
+    parser.add_argument(
+        "--ssl-keyfile",
+        default=None,
+        help="SSL key file path (for HTTPS)",
+    )
+    parser.add_argument(
+        "--ssl-certfile",
+        default=None,
+        help="SSL certificate file path (for HTTPS)",
+    )
+    parser.add_argument(
+        "--layered-max-turns",
+        type=int,
+        default=None,
+        help="Maximum turns for layered agent mode (default: 50, minimum: 1)",
+    )
 
     args = parser.parse_args()
 
@@ -140,22 +195,17 @@ def main() -> None:
     import uvicorn
 
     from AutoGLM_GUI import server
-    from AutoGLM_GUI.config import config
     from AutoGLM_GUI.config_manager import config_manager
-    from AutoGLM_GUI.logger import configure_logger
-
-    # Configure logging system
-    configure_logger(
-        console_level=args.log_level,
-        log_file=None if args.no_log_file else args.log_file,
-    )
 
     # ==================== 配置系统初始化 ====================
     # 使用统一配置管理器（四层优先级：CLI > ENV > FILE > DEFAULT）
 
     # 1. 设置 CLI 参数配置（最高优先级）
     config_manager.set_cli_config(
-        base_url=args.base_url, model_name=args.model, api_key=args.apikey
+        base_url=args.base_url,
+        model_name=args.model,
+        api_key=args.apikey,
+        layered_max_turns=args.layered_max_turns,
     )
 
     # 2. 加载环境变量配置
@@ -170,11 +220,11 @@ def main() -> None:
     # 5. 同步到环境变量（reload 模式需要）
     config_manager.sync_to_env()
 
-    # 6. 刷新旧的 config 对象（保持现有代码兼容）
-    config.refresh_from_env()
-
     # 获取配置来源
     config_source = config_manager.get_config_source()
+
+    # Determine if SSL is enabled
+    use_ssl = args.ssl_keyfile is not None and args.ssl_certfile is not None
 
     # Display startup banner
     print()
@@ -183,7 +233,8 @@ def main() -> None:
     print("=" * 50)
     print(f"  Version:    {__version__}")
     print()
-    print(f"  Server:     http://{args.host}:{args.port}")
+    protocol = "https" if use_ssl else "http"
+    print(f"  Server:     {protocol}://{args.host}:{args.port}")
     print()
     print("  Model Configuration:")
     print(f"    Source:   {config_source.value}")
@@ -206,13 +257,15 @@ def main() -> None:
 
     # Open browser automatically unless disabled
     if not args.no_browser:
-        open_browser(args.host, args.port)
+        open_browser(args.host, args.port, use_ssl=use_ssl)
 
     uvicorn.run(
         server.app if not args.reload else "AutoGLM_GUI.server:app",
         host=args.host,
         port=args.port,
         reload=args.reload,
+        ssl_keyfile=args.ssl_keyfile,
+        ssl_certfile=args.ssl_certfile,
     )
 
 

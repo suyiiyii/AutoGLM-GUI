@@ -79,7 +79,8 @@ def configure_logger(
     _configured = True
 
 
-# Default initialization (can be reconfigured later)
-configure_logger()
+# Note: Logger is NOT auto-initialized to allow early configuration
+# The first call to configure_logger() will initialize the logger
+# If not configured before use, it will use loguru's default behavior (no handlers)
 
 __all__ = ["logger", "configure_logger"]

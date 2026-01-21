@@ -1,21 +1,16 @@
 """Agent lifecycle and chat routes."""
 
+import asyncio
 import json
-import queue
-import threading
-from typing import Any
 
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
-from AutoGLM_GUI.config import config
+from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.logger import logger
-from AutoGLM_GUI.phone_agent_patches import apply_patches
 from AutoGLM_GUI.schemas import (
     AbortRequest,
-    APIAgentConfig,
-    APIModelConfig,
     ChatRequest,
     ChatResponse,
     ConfigResponse,
@@ -28,11 +23,6 @@ from AutoGLM_GUI.state import (
     non_blocking_takeover,
 )
 from AutoGLM_GUI.version import APP_VERSION
-from phone_agent.agent import AgentConfig
-from phone_agent.model import ModelConfig
-
-# Apply monkey patches to phone_agent
-apply_patches()
 
 router = APIRouter()
 
@@ -60,95 +50,95 @@ def _setup_adb_keyboard(device_id: str) -> None:
         logger.info(f"✓ Device {device_id}: ADB Keyboard ready")
 
 
-def _initialize_agent_with_config(
-    device_id: str,
-    model_config: ModelConfig,
-    agent_config: AgentConfig,
-) -> None:
-    """使用给定配置初始化 Agent。
-
-    Args:
-        device_id: 设备 ID
-        model_config: 模型配置
-        agent_config: Agent 配置
-
-    Raises:
-        Exception: 初始化失败时抛出异常
-    """
-    from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
-
-    # Setup ADB Keyboard first
-    _setup_adb_keyboard(device_id)
-
-    # Initialize agent
-    manager = PhoneAgentManager.get_instance()
-    manager.initialize_agent(
-        device_id=device_id,
-        model_config=model_config,
-        agent_config=agent_config,
-        takeover_callback=non_blocking_takeover,
-    )
-    logger.info(f"Agent initialized successfully for device {device_id}")
+SSEPayload = dict[str, str | int | bool | None | dict]
 
 
 def _create_sse_event(
-    event_type: str, data: dict[str, Any], role: str = "assistant"
-) -> dict[str, Any]:
+    event_type: str, data: SSEPayload, role: str = "assistant"
+) -> SSEPayload:
     """Create an SSE event with standardized fields including role."""
     event_data = {"type": event_type, "role": role, **data}
     return event_data
 
 
-@router.post("/api/init")
+@router.post("/api/init", deprecated=True)
 def init_agent(request: InitRequest) -> dict:
-    """初始化 PhoneAgent（多设备支持）。"""
+    """初始化 PhoneAgent（已废弃，多设备支持）。
+
+    ⚠️ 此端点已废弃，将在未来版本移除。
+
+    Agent 现在会在首次使用时自动初始化，无需手动调用此端点。
+    如需修改配置，请使用 /api/config 端点或直接修改配置文件 ~/.config/autoglm/config.json。
+    配置保存后会自动销毁所有 Agent，确保下次使用时应用新配置。
+
+    配置完全由 ConfigManager 提供（CLI > ENV > FILE > DEFAULT），
+    不接受运行时覆盖。
+    """
     from AutoGLM_GUI.config_manager import config_manager
 
-    req_model_config = request.model or APIModelConfig()
-    req_agent_config = request.agent or APIAgentConfig()
-
-    device_id = req_agent_config.device_id
+    device_id = request.device_id
     if not device_id:
-        raise HTTPException(
-            status_code=400, detail="device_id is required in agent_config"
-        )
+        raise HTTPException(status_code=400, detail="device_id is required")
 
     # 热重载配置文件（支持运行时手动修改）
     config_manager.load_file_config()
     config_manager.sync_to_env()
-    config.refresh_from_env()
 
-    base_url = req_model_config.base_url or config.base_url
-    api_key = req_model_config.api_key or config.api_key
-    model_name = req_model_config.model_name or config.model_name
+    # 获取有效配置（CLI > ENV > FILE > DEFAULT）
+    effective_config = config_manager.get_effective_config()
 
-    if not base_url:
+    if not effective_config.base_url:
         raise HTTPException(
             status_code=400,
             detail="base_url is required. Please configure via Settings or start with --base-url",
         )
 
+    # 直接使用有效配置构造 ModelConfig 和 AgentConfig
     model_config = ModelConfig(
-        base_url=base_url,
-        api_key=api_key,
-        model_name=model_name,
-        max_tokens=req_model_config.max_tokens,
-        temperature=req_model_config.temperature,
-        top_p=req_model_config.top_p,
-        frequency_penalty=req_model_config.frequency_penalty,
+        base_url=effective_config.base_url,
+        api_key=effective_config.api_key,
+        model_name=effective_config.model_name,
+        # max_tokens, temperature, top_p, frequency_penalty 使用 ModelConfig 默认值
     )
 
     agent_config = AgentConfig(
-        max_steps=req_agent_config.max_steps,
+        max_steps=effective_config.default_max_steps,
         device_id=device_id,
-        lang=req_agent_config.lang,
-        system_prompt=req_agent_config.system_prompt,
-        verbose=req_agent_config.verbose,
+        # lang, system_prompt, verbose 使用 AgentConfig 默认值
     )
 
     # Initialize agent (includes ADB Keyboard setup)
     try:
-        _initialize_agent_with_config(device_id, model_config, agent_config)
+        # Setup ADB Keyboard (common for all agents)
+        _setup_adb_keyboard(device_id)
+
+        # Use agent factory to create agent
+        from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
+
+        manager = PhoneAgentManager.get_instance()
+
+        # Initialize agent using factory pattern
+        from typing import cast
+
+        from AutoGLM_GUI.types import AgentSpecificConfig
+
+        agent_config_params = cast(
+            AgentSpecificConfig, request.agent_config_params or {}
+        )
+        manager.initialize_agent_with_factory(
+            device_id=device_id,
+            agent_type=request.agent_type,
+            model_config=model_config,
+            agent_config=agent_config,
+            agent_specific_config=agent_config_params,
+            takeover_callback=non_blocking_takeover,
+            force=request.force,
+        )
+
+        logger.warning(
+            f"/api/init is deprecated. Agent of type '{request.agent_type}' initialized for device {device_id}. "
+            f"Consider using auto-initialization instead."
+        )
     except Exception as e:
         logger.error(f"Failed to initialize agent: {e}")
         raise HTTPException(status_code=500, detail=str(e))
@@ -156,189 +146,199 @@ def init_agent(request: InitRequest) -> dict:
     return {
         "success": True,
         "device_id": device_id,
-        "message": f"Agent initialized for device {device_id}",
+        "message": f"Agent initialized for device {device_id} (⚠️ /api/init is deprecated)",
+        "agent_type": request.agent_type,
+        "deprecated": True,
+        "hint": "Agent 会在首次使用时自动初始化，无需手动调用此端点",
     }
 
 
 @router.post("/api/chat", response_model=ChatResponse)
-def chat(request: ChatRequest) -> ChatResponse:
-    """发送任务给 Agent 并执行。"""
-    from AutoGLM_GUI.exceptions import DeviceBusyError
+async def chat(request: ChatRequest) -> ChatResponse:
+    """发送任务给 Agent 并执行（支持 AsyncAgent）。
+
+    Agent 会在首次使用时自动初始化，无需手动调用 /api/init。
+    """
+    from AutoGLM_GUI.exceptions import AgentInitializationError, DeviceBusyError
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
     device_id = request.device_id
     manager = PhoneAgentManager.get_instance()
 
-    # Check if agent is initialized
-    if not manager.is_initialized(device_id):
-        raise HTTPException(
-            status_code=400, detail="Agent not initialized. Call /api/init first."
+    acquired = False
+    try:
+        acquired = await asyncio.to_thread(
+            manager.acquire_device, device_id, timeout=None, auto_initialize=True
+        )
+        # Use chat context with async agent
+        agent = await asyncio.to_thread(
+            manager.get_agent_with_context,
+            device_id,
+            context="chat",
+            agent_type="glm-async",
         )
 
-    # Use context manager for automatic lock management
-    try:
-        with manager.use_agent(device_id, timeout=None) as agent:
-            result = agent.run(request.message)
-            steps = agent.step_count
-            agent.reset()
-            return ChatResponse(result=result, steps=steps, success=True)
+        # AsyncAgent is always used for chat context
+        result = await agent.run(request.message)  # type: ignore[misc]
+
+        steps = agent.step_count
+        return ChatResponse(result=result, steps=steps, success=True)  # type: ignore[arg-type]
+
+    except AgentInitializationError as e:
+        logger.error(f"Failed to initialize agent for {device_id}: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"初始化失败: {str(e)}. 请检查全局配置 (base_url, api_key, model_name)",
+        )
     except DeviceBusyError:
         raise HTTPException(
             status_code=409, detail=f"Device {device_id} is busy. Please wait."
         )
     except Exception as e:
+        logger.exception(f"Unexpected error in chat for {device_id}")
         return ChatResponse(result=str(e), steps=0, success=False)
+    finally:
+        if acquired:
+            await asyncio.to_thread(manager.release_device, device_id)
 
 
 @router.post("/api/chat/stream")
-def chat_stream(request: ChatRequest):
-    """发送任务给 Agent 并实时推送执行进度（SSE，多设备支持）。"""
-    from AutoGLM_GUI.exceptions import DeviceBusyError
+async def chat_stream(request: ChatRequest):
+    """发送任务给 Agent 并实时推送执行进度（SSE，多设备支持）。
+
+    Agent 会在首次使用时自动初始化，无需手动调用 /api/init。
+
+    Chat API 使用 AsyncAgent 实现原生 async streaming 和立即取消。
+    """
+    from datetime import datetime
+
+    from AutoGLM_GUI.device_manager import DeviceManager
+    from AutoGLM_GUI.exceptions import AgentInitializationError, DeviceBusyError
+    from AutoGLM_GUI.history_manager import history_manager
+    from AutoGLM_GUI.models.history import ConversationRecord, MessageRecord
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
     device_id = request.device_id
     manager = PhoneAgentManager.get_instance()
 
-    # 验证 agent 已初始化
-    if not manager.is_initialized(device_id):
-        raise HTTPException(
-            status_code=400,
-            detail=f"Device {device_id} not initialized. Call /api/init first.",
+    async def event_generator():
+        acquired = False
+        start_time = datetime.now()
+        final_message = ""
+        final_success = False
+        final_steps = 0
+
+        # 收集完整对话消息
+        messages: list[MessageRecord] = []
+        # 添加用户消息
+        messages.append(
+            MessageRecord(
+                role="user",
+                content=request.message,
+                timestamp=start_time,
+            )
         )
 
-    def event_generator():
-        """SSE 事件生成器."""
-        threads: list[threading.Thread] = []
-
         try:
-            # 创建事件队列用于 agent → SSE 通信
-            event_queue: queue.Queue[tuple[str, Any]] = queue.Queue()
+            # 获取设备锁（在线程池中执行）
+            acquired = await asyncio.to_thread(
+                manager.acquire_device,
+                device_id,
+                timeout=0,
+                raise_on_timeout=True,
+                auto_initialize=True,
+            )
 
-            # 思考块回调
-            def on_thinking_chunk(chunk: str):
-                chunk_data = _create_sse_event("thinking_chunk", {"chunk": chunk})
-                event_queue.put(("thinking_chunk", chunk_data))
-
-            # 使用 streaming agent context manager（自动处理所有管理逻辑！）
-            with manager.use_streaming_agent(
-                device_id, on_thinking_chunk, timeout=0
-            ) as (streaming_agent, stop_event):
-                # 早期 abort 检查
-                if stop_event.is_set():
-                    logger.info(f"[Abort] Chat aborted before starting for {device_id}")
-                    yield "event: aborted\n"
-                    yield 'data: {"type": "aborted", "role": "assistant", "message": "Chat aborted by user"}\n\n'
-                    return
-
-                # 在线程中运行 agent 步骤
-                step_result: list[Any] = [None]
-                error_result: list[Any] = [None]
-
-                def run_step(is_first: bool = True, task: str | None = None):
-                    try:
-                        if stop_event.is_set():
-                            return
-
-                        result = (
-                            streaming_agent.step(task)
-                            if is_first
-                            else streaming_agent.step()
-                        )
-
-                        if stop_event.is_set():
-                            return
-
-                        step_result[0] = result
-                    except Exception as e:
-                        error_result[0] = e
-                    finally:
-                        event_queue.put(("step_done", None))
-
-                # 启动第一步
-                thread = threading.Thread(
-                    target=run_step, args=(True, request.message), daemon=True
+            try:
+                # 使用 chat context 获取 AsyncAgent
+                agent = await asyncio.to_thread(
+                    manager.get_agent_with_context,
+                    device_id,
+                    context="chat",
+                    agent_type="glm-async",
                 )
-                thread.start()
-                threads.append(thread)
 
-                # 事件循环
-                while not stop_event.is_set():
-                    try:
-                        event_type, event_data = event_queue.get(timeout=0.1)
-                    except queue.Empty:
-                        continue
+                logger.info(f"Using AsyncAgent for device {device_id}")
 
-                    if event_type == "thinking_chunk":
-                        yield "event: thinking_chunk\n"
-                        yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+                # 注册异步取消处理器
+                async def cancel_handler():
+                    await agent.cancel()  # type: ignore[union-attr]
 
-                    elif event_type == "step_done":
-                        if error_result[0]:
-                            raise error_result[0]
+                await asyncio.to_thread(
+                    manager.register_abort_handler, device_id, cancel_handler
+                )
 
-                        result = step_result[0]
-                        event_data = _create_sse_event(
-                            "step",
-                            {
-                                "step": streaming_agent.step_count,
-                                "thinking": result.thinking,
-                                "action": result.action,
-                                "success": result.success,
-                                "finished": result.finished,
-                            },
-                        )
+                try:
+                    # 直接使用 agent.stream()
+                    async for event in agent.stream(request.message):  # type: ignore[union-attr]
+                        event_type = event["type"]
+                        event_data_dict = event["data"]
 
-                        yield "event: step\n"
-                        yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
-
-                        if result.finished:
-                            done_data = _create_sse_event(
-                                "done",
-                                {
-                                    "message": result.message,
-                                    "steps": streaming_agent.step_count,
-                                    "success": result.success,
-                                },
+                        # 收集每个 step 的消息
+                        if event_type == "step":
+                            messages.append(
+                                MessageRecord(
+                                    role="assistant",
+                                    content="",
+                                    timestamp=datetime.now(),
+                                    thinking=event_data_dict.get("thinking"),
+                                    action=event_data_dict.get("action"),
+                                    step=event_data_dict.get("step"),
+                                )
                             )
-                            yield "event: done\n"
-                            yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
-                            break
 
-                        if (
-                            streaming_agent.step_count
-                            >= streaming_agent.agent_config.max_steps
-                        ):
-                            done_data = _create_sse_event(
-                                "done",
-                                {
-                                    "message": "Max steps reached",
-                                    "steps": streaming_agent.step_count,
-                                    "success": result.success,
-                                },
-                            )
-                            yield "event: done\n"
-                            yield f"data: {json.dumps(done_data, ensure_ascii=False)}\n\n"
-                            break
+                        if event_type == "done":
+                            final_message = event_data_dict.get("message", "")
+                            final_success = event_data_dict.get("success", False)
+                            final_steps = event_data_dict.get("steps", 0)
 
-                        # 启动下一步
-                        step_result[0] = None
-                        error_result[0] = None
-                        thread = threading.Thread(
-                            target=run_step, args=(False, None), daemon=True
-                        )
-                        thread.start()
-                        threads.append(thread)
+                        # 发送 SSE 事件
+                        sse_event = _create_sse_event(event_type, event_data_dict)
+                        yield f"event: {event_type}\n"
+                        yield f"data: {json.dumps(sse_event, ensure_ascii=False)}\n\n"
 
-                # 检查是否被中止
-                if stop_event.is_set():
-                    logger.info(f"[Abort] Streaming chat terminated for {device_id}")
-                    yield "event: aborted\n"
-                    yield 'data: {"type": "aborted", "role": "assistant", "message": "Chat aborted by user"}\n\n'
+                except asyncio.CancelledError:
+                    logger.info(f"AsyncAgent task cancelled for device {device_id}")
+                    yield "event: cancelled\n"
+                    yield f"data: {json.dumps({'message': 'Task cancelled by user'})}\n\n"
+                    raise
 
-                # 重置原始 agent（context 已由 use_streaming_agent 同步）
-                original_agent = manager.get_agent(device_id)
-                original_agent.reset()
+                finally:
+                    await asyncio.to_thread(manager.unregister_abort_handler, device_id)
 
+            finally:
+                if acquired:
+                    await asyncio.to_thread(manager.release_device, device_id)
+
+                device_manager = DeviceManager.get_instance()
+                serialno = device_manager.get_serial_by_device_id(device_id)
+                if serialno and final_message:
+                    end_time = datetime.now()
+                    record = ConversationRecord(
+                        task_text=request.message,
+                        final_message=final_message,
+                        success=final_success,
+                        steps=final_steps,
+                        start_time=start_time,
+                        end_time=end_time,
+                        duration_ms=int((end_time - start_time).total_seconds() * 1000),
+                        source="chat",
+                        error_message=None if final_success else final_message,
+                        messages=messages,
+                    )
+                    history_manager.add_record(serialno, record)
+
+        except AgentInitializationError as e:
+            logger.error(f"Failed to initialize agent for {device_id}: {e}")
+            error_data = _create_sse_event(
+                "error",
+                {
+                    "message": f"初始化失败: {str(e)}",
+                    "hint": "请检查全局配置 (base_url, api_key, model_name)",
+                },
+            )
+            yield "event: error\n"
+            yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
         except DeviceBusyError:
             error_data = _create_sse_event("error", {"message": "Device is busy"})
             yield "event: error\n"
@@ -349,14 +349,7 @@ def chat_stream(request: ChatRequest):
             yield "event: error\n"
             yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
         finally:
-            # 通知线程停止
-            if "stop_event" in locals():
-                stop_event.set()
-
-            # 等待线程完成（带超时）
-            for thread in threads:
-                if thread.is_alive():
-                    thread.join(timeout=5.0)
+            manager.unregister_abort_handler(device_id)
 
     return StreamingResponse(
         event_generator(),
@@ -419,14 +412,15 @@ def reset_agent(request: ResetRequest) -> dict:
 
 
 @router.post("/api/chat/abort")
-def abort_chat(request: AbortRequest) -> dict:
-    """中断正在进行的对话流。"""
+async def abort_chat(request: AbortRequest) -> dict:
+    """中断正在进行的对话流 (支持 AsyncAgent)。"""
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
     device_id = request.device_id
     manager = PhoneAgentManager.get_instance()
 
-    success = manager.abort_streaming_chat(device_id)
+    # 使用异步方法 (支持 AsyncAgent 和 BaseAgent)
+    success = await manager.abort_streaming_chat_async(device_id)
 
     return {
         "success": success,
@@ -454,12 +448,13 @@ def get_config_endpoint() -> ConfigResponse:
         model_name=effective_config.model_name,
         api_key=effective_config.api_key if effective_config.api_key != "EMPTY" else "",
         source=source.value,
-        dual_model_enabled=effective_config.dual_model_enabled,
+        agent_type=effective_config.agent_type,
+        agent_config_params=effective_config.agent_config_params,
+        default_max_steps=effective_config.default_max_steps,
+        layered_max_turns=effective_config.layered_max_turns,
         decision_base_url=effective_config.decision_base_url,
         decision_model_name=effective_config.decision_model_name,
-        decision_api_key=effective_config.decision_api_key
-        if effective_config.decision_api_key
-        else "",
+        decision_api_key=effective_config.decision_api_key,
         conflicts=[
             {
                 "field": c.field,
@@ -476,8 +471,13 @@ def get_config_endpoint() -> ConfigResponse:
 
 @router.post("/api/config")
 def save_config_endpoint(request: ConfigSaveRequest) -> dict:
-    """保存配置到文件."""
+    """保存配置到文件.
+
+    副作用：保存配置后会自动销毁所有已初始化的 Agent，
+    确保下次使用时所有 Agent 都使用新配置。
+    """
     from AutoGLM_GUI.config_manager import ConfigModel, config_manager
+    from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
     try:
         # Validate incoming configuration
@@ -492,7 +492,10 @@ def save_config_endpoint(request: ConfigSaveRequest) -> dict:
             base_url=request.base_url,
             model_name=request.model_name,
             api_key=request.api_key,
-            dual_model_enabled=request.dual_model_enabled,
+            agent_type=request.agent_type,
+            agent_config_params=request.agent_config_params,
+            default_max_steps=request.default_max_steps,
+            layered_max_turns=request.layered_max_turns,
             decision_base_url=request.decision_base_url,
             decision_model_name=request.decision_model_name,
             decision_api_key=request.decision_api_key,
@@ -504,10 +507,26 @@ def save_config_endpoint(request: ConfigSaveRequest) -> dict:
 
         # 同步到环境变量
         config_manager.sync_to_env()
-        config.refresh_from_env()
+
+        # 副作用：销毁所有已初始化的 Agent，确保下次使用新配置
+        manager = PhoneAgentManager.get_instance()
+        destroyed_agents = manager.list_agents()  # 获取需要销毁的 agent 列表
+
+        for device_id in destroyed_agents:
+            try:
+                manager.destroy_agent(device_id)
+                logger.info(f"Destroyed agent for {device_id} after config change")
+            except Exception as e:
+                logger.warning(f"Failed to destroy agent for {device_id}: {e}")
 
         # 检测冲突并返回警告
         conflicts = config_manager.detect_conflicts()
+
+        response_message = f"Configuration saved to {config_manager.get_config_path()}"
+        if destroyed_agents:
+            response_message += (
+                f". Destroyed {len(destroyed_agents)} agent(s) to apply new config."
+            )
 
         if conflicts:
             warnings = [
@@ -516,13 +535,15 @@ def save_config_endpoint(request: ConfigSaveRequest) -> dict:
             ]
             return {
                 "success": True,
-                "message": f"Configuration saved to {config_manager.get_config_path()}",
+                "message": response_message,
                 "warnings": warnings,
+                "destroyed_agents": len(destroyed_agents),
             }
 
         return {
             "success": True,
-            "message": f"Configuration saved to {config_manager.get_config_path()}",
+            "message": response_message,
+            "destroyed_agents": len(destroyed_agents),
         }
 
     except ValidationError as e:
@@ -546,3 +567,8 @@ def delete_config_endpoint() -> dict:
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ✅ 已删除 /api/agents/reinit-all 端点
+# 原因：配置保存时自动销毁所有 Agent（副作用），无需单独的 reinit 端点
+# 见 /api/config POST 端点的实现

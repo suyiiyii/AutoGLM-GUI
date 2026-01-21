@@ -216,6 +216,39 @@ class AutoGLMLinter:
 
         return result
 
+    def lint_backend_types(self) -> LintResult:
+        """运行 Pyright 类型检查 (Python 3.10 兼容性)"""
+        if not (self.root_dir / "pyproject.toml").exists():
+            return LintResult(
+                name="Pyright 类型检查 (后端)",
+                success=True,
+                output="跳过: 后端项目不存在",
+            )
+
+        # 使用 pyrightconfig.json 中的配置 (Python 3.10)
+        cmd = ["uv", "run", "pyright", "AutoGLM_GUI/"]
+
+        print(f"🔷 运行: {' '.join(cmd)} (后端)")
+        result = self.run_command(cmd, self.backend_dir)
+
+        if result.success:
+            print("✅ Pyright 类型检查通过 (Python 3.10 兼容)")
+        else:
+            print("❌ Pyright 类型检查失败")
+            if result.output:
+                # 只显示错误摘要，不显示全部输出
+                lines = result.output.strip().split("\n")
+                error_lines = [line for line in lines if "error:" in line.lower()]
+                if error_lines:
+                    print(f"发现 {len(error_lines)} 个类型错误:")
+                    # 最多显示前 10 个错误
+                    for line in error_lines[:10]:
+                        print(f"  {line}")
+                    if len(error_lines) > 10:
+                        print(f"  ... 还有 {len(error_lines) - 10} 个错误")
+
+        return result
+
     def lint_frontend(
         self, fix: bool = False, check_only: bool = False
     ) -> List[LintResult]:
@@ -256,6 +289,9 @@ class AutoGLMLinter:
             results.append(self.lint_backend_format(check_only=True))
         else:
             results.append(self.lint_backend_format(check_only=False))
+
+        # Pyright 类型检查 (Python 3.10 兼容性)
+        results.append(self.lint_backend_types())
 
         return results
 

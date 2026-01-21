@@ -49,12 +49,22 @@ def extract_serial_from_mdns(device_id: str) -> Optional[str]:
     return None
 
 
-def get_device_serial(device_id: str, adb_path: str = "adb") -> str | None:
+# Serial number properties to try, in order of preference
+_SERIAL_PROPS = [
+    "ro.serialno",
+    "ro.boot.serialno",
+    "ro.product.serial",
+]
+
+
+def get_device_serial(device_id: str, adb_path: str = "adb") -> str:
     """
     Get the real hardware serial number of a device.
 
     For mDNS devices, attempts to extract serial from service name first.
     Falls back to getprop for USB/WiFi devices or if extraction fails.
+    If all methods fail, returns device_id as fallback (for emulators or
+    restricted devices that don't expose serial number).
 
     This works for both USB and WiFi connected devices,
     returning the actual hardware serial number (ro.serialno).
@@ -64,7 +74,8 @@ def get_device_serial(device_id: str, adb_path: str = "adb") -> str | None:
         adb_path: Path to adb executable (default: "adb")
 
     Returns:
-        The device hardware serial number, or None if failed
+        The device hardware serial number. Always returns a value - uses
+        device_id as fallback if serial cannot be obtained.
     """
     from AutoGLM_GUI.logger import logger
 
@@ -74,21 +85,28 @@ def get_device_serial(device_id: str, adb_path: str = "adb") -> str | None:
         logger.debug(f"Extracted serial from mDNS name: {device_id} → {mdns_serial}")
         return mdns_serial
 
-    # Fallback: Use getprop (original behavior)
-    try:
-        # Use getprop to get the actual hardware serial number
-        # This works for both USB and WiFi connections
-        result = run_cmd_silently_sync(
-            [adb_path, "-s", device_id, "shell", "getprop", "ro.serialno"],
-            timeout=3,
-        )
-        if result.returncode == 0:
-            serial = result.stdout.strip()
-            # Filter out error messages and empty values
-            if serial and not serial.startswith("error:") and serial != "unknown":
-                logger.debug(f"Got serial via getprop: {device_id} → {serial}")
-                return serial
-    except Exception as e:
-        logger.debug(f"Failed to get serial via getprop for {device_id}: {e}")
+    # Try multiple serial properties (some emulators use different props)
+    for prop in _SERIAL_PROPS:
+        try:
+            result = run_cmd_silently_sync(
+                [adb_path, "-s", device_id, "shell", "getprop", prop],
+                timeout=5,  # Increased timeout for network devices
+            )
+            if result.returncode == 0:
+                serial = result.stdout.strip()
+                # Filter out error messages and empty values
+                if serial and not serial.startswith("error:") and serial != "unknown":
+                    logger.debug(f"Got serial via {prop}: {device_id} → {serial}")
+                    return serial
+        except Exception as e:
+            logger.debug(f"Failed to get serial via {prop} for {device_id}: {e}")
+            continue
 
-    return None
+    # Fallback: Use device_id itself as serial
+    # This handles emulators (MuMu, Nox, etc.) and restricted devices
+    # that don't expose serial number via getprop
+    logger.warning(
+        f"Could not get hardware serial for {device_id}, "
+        f"using device_id as serial (emulator/restricted device)"
+    )
+    return device_id

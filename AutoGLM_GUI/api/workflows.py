@@ -17,7 +17,8 @@ def list_workflows() -> WorkflowListResponse:
     """获取所有 workflows."""
     from AutoGLM_GUI.workflow_manager import workflow_manager
 
-    workflows = workflow_manager.list_workflows()
+    workflow_dicts = workflow_manager.list_workflows()
+    workflows = [WorkflowResponse(**wf) for wf in workflow_dicts]
     return WorkflowListResponse(workflows=workflows)
 
 

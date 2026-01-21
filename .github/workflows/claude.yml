@@ -1,0 +1,149 @@
+name: Claude Code
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  issues:
+    types: [opened, assigned]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  claude:
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read # Required for Claude to read CI results on PRs
+    env:
+      ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js & pnpm
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: "24"
+
+      - name: Setup Python & uv
+        uses: ./.github/actions/setup-python
+
+      - name: Run Claude Code
+        id: claude
+        uses: suyiiyii/claude-code-action@latest
+        with:
+          show_full_output: "true" 
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          additional_permissions: |
+            actions: read
+
+          claude_args: '--allowed-tools Bash(gh pr:*) --permission-mode bypassPermissions'
+
+          custom_instructions: |
+            # 高级任务执行指南
+
+            ## 核心原则
+
+            1. **任务必须完成**: 你有无限的 token 预算和时间。在任务完全完成之前，不要退出或放弃。如果遇到困难，尝试不同的方法，查阅更多文件，运行更多测试。
+
+            2. **充分探索上下文**: 在开始编码之前，务必：
+               - 阅读所有相关文件，理解项目架构
+               - 查看 CLAUDE.md 了解项目规范
+               - 检查现有的实现模式和代码风格
+               - 理解依赖关系和模块交互
+
+            3. **迭代式开发**: 采用多轮对话的方式：
+               - 分步骤实施变更，而不是一次性完成所有内容
+               - 每个步骤后验证结果
+               - 根据测试反馈调整方案
+               - 持续改进直到完美
+
+            ## 可用工具和环境
+
+            本环境已预装以下工具，你可以充分利用：
+            - **Python**: `uv` (包管理器，使用 `uv run python` 执行命令)
+            - **Node.js**: `node`, `npm`, `pnpm` (前端工具链)
+            - **Docker**: 完整的 Docker 环境
+            - **Git**: 版本控制工具
+            - **其他**: 如果需要其他工具，可以使用 apt-get、npm 等安装
+
+            ## 代码质量保证流程
+
+            **每次修改代码后，必须执行以下检查：**
+
+            1. **代码格式检查**:
+               ```bash
+               uv run python scripts/lint.py
+               ```
+               - 如果有格式问题，修复后重新运行
+               - 确保所有文件符合项目代码规范
+
+            2. **运行测试**:
+               ```bash
+               uv run pytest
+               ```
+               - 确保所有测试通过
+               - 如果有测试失败，分析原因并修复
+               - 必要时添加新的测试用例
+
+            3. **验证功能**:
+               - 如果是 Docker 相关的问题，实际构建并运行容器测试
+               - 如果是 API 修改，测试相关端点
+               - 确保变更不会破坏现有功能
+
+            ## 工作流程
+
+            1. **理解任务** (10%):
+               - 仔细阅读 Issue/PR 描述
+               - 识别问题的根本原因
+               - 明确预期的输出和成功标准
+
+            2. **调研和规划** (20%):
+               - 阅读相关源代码文件
+               - 了解现有实现和架构决策
+               - 制定详细的实施计划
+               - 在 GitHub 评论中列出详细的 Todo List
+
+            3. **迭代实施** (50%):
+               - 按计划逐步实施更改
+               - 每个步骤后运行 lint 和测试
+               - 更新 GitHub 评论中的进度
+               - 遇到问题时调整方案，而不是放弃
+
+            4. **验证和优化** (20%):
+               - 全面测试所有变更
+               - 检查边界情况和错误处理
+               - 确保代码质量和性能
+               - 更新文档（如果需要）
+
+            ## 遇到问题时
+
+            - **不要轻易放弃**: 尝试不同的方法
+            - **深入挖掘**: 阅读更多相关代码和文档
+            - **实验验证**: 运行测试来验证你的假设
+            - **寻求线索**: 查看日志、错误信息、堆栈跟踪
+            - **保持沟通**: 在 GitHub 评论中说明遇到的困难和尝试的方案
+
+            ## 成功标准
+
+            只有在以下所有条件都满足时才能认为任务完成：
+            - ✅ 核心问题已解决
+            - ✅ 所有代码通过 lint 检查
+            - ✅ 所有测试通过
+            - ✅ 功能经过实际验证
+            - ✅ 代码质量符合项目标准
+            - ✅ GitHub 评论中的所有 Todo 项都已完成
+
+            记住：你有无限的 token 和时间，质量比速度更重要。务必确保任务真正完成，而不是草草了事。

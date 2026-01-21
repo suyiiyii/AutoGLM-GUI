@@ -1,7 +1,113 @@
-const { app, BrowserWindow, dialog } = require('electron');
+const { app, BrowserWindow, dialog, ipcMain, shell, Menu } = require('electron');
 const { spawn } = require('child_process');
 const path = require('path');
 const net = require('net');
+const fs = require('fs');
+
+// ==================== 自动更新模块 ====================
+const { autoUpdater } = require('electron-updater');
+const log = require('electron-log');
+
+// 配置日志
+log.transports.file.level = 'info';
+autoUpdater.logger = log;
+
+// 配置自动更新
+autoUpdater.autoDownload = true;  // 自动下载更新
+autoUpdater.autoInstallOnAppQuit = true;  // 退出时自动安装
+
+// ==================== DevTools 日志输出配置 ====================
+
+/**
+ * 判断是否应该将更新日志输出到 DevTools 控制台
+ * @returns {boolean} true 表示启用
+ */
+function shouldLogToDevTools() {
+  // 默认启用（按用户要求）
+  // 如果需要禁用，可以设置环境变量 DEBUG_UPDATER=0
+  return process.env.DEBUG_UPDATER !== '0';
+}
+
+/**
+ * 将日志消息输出到渲染进程的 DevTools 控制台
+ * @param {string} message - 日志消息
+ * @param {'info' | 'error'} level - 日志级别
+ */
+function logToDevTools(message, level = 'info') {
+  if (!shouldLogToDevTools()) return;
+  if (!mainWindow?.webContents) return;
+
+  const styles = {
+    info: 'color: #00a67e; font-weight: bold;',
+    error: 'color: #e74c3c; font-weight: bold;'
+  };
+
+  const consoleMethod = level === 'error' ? 'error' : 'log';
+  const style = styles[level] || styles.info;
+
+  mainWindow.webContents
+    .executeJavaScript(`console.${consoleMethod}('%c${message}', '${style}')`)
+    .catch(() => {
+      // 忽略错误（窗口可能未就绪）
+    });
+}
+
+// ==================== 更新事件监听 ====================
+autoUpdater.on('checking-for-update', () => {
+  log.info('[Updater] Checking for updates...');
+  logToDevTools('[Updater] Checking for updates...', 'info');
+});
+
+autoUpdater.on('update-available', (info) => {
+  log.info('[Updater] Update available:', info.version);
+  logToDevTools(`[Updater] Update available: ${info.version}`, 'info');
+});
+
+autoUpdater.on('update-not-available', () => {
+  log.info('[Updater] No updates available');
+  logToDevTools('[Updater] No updates available', 'info');
+});
+
+// 高频事件：降频处理，仅记录关键百分比
+let lastLoggedPercent = -1;
+autoUpdater.on('download-progress', (progressObj) => {
+  const percent = Math.round(progressObj.percent);
+
+  // 仅记录关键百分比（0, 25, 50, 75, 100）
+  const shouldLog = [0, 25, 50, 75, 100].includes(percent);
+
+  if (shouldLog && percent !== lastLoggedPercent) {
+    log.info(`[Updater] Downloaded ${percent}%`);
+    logToDevTools(`[Updater] Downloaded ${percent}%`, 'info');
+    lastLoggedPercent = percent;
+  }
+});
+
+autoUpdater.on('update-downloaded', (info) => {
+  log.info('[Updater] Update downloaded, will install on quit');
+  logToDevTools('[Updater] Update downloaded, will install on quit', 'info');
+
+  // 显示系统通知
+  dialog.showMessageBox({
+    type: 'info',
+    title: '更新已下载',
+    message: `新版本 ${info.version} 已下载完成`,
+    detail: '应用将在下次启动时自动更新',
+    buttons: ['立即重启', '稍后'],
+    defaultId: 1,
+    cancelId: 1
+  }).then((result) => {
+    if (result.response === 0) {
+      autoUpdater.quitAndInstall(false, true);
+    }
+  });
+});
+
+autoUpdater.on('error', (err) => {
+  log.error('[Updater] Error:', err);
+  logToDevTools(`[Updater] Error: ${err.message}`, 'error');
+  // 静默失败，不干扰用户
+});
 
 // ==================== 全局变量 ====================
 let backendProcess = null;
@@ -50,7 +156,7 @@ function perfDiff(startMark, endMark) {
  * @param {number} maxAttempts - 最大尝试次数
  * @returns {Promise<number>} 可用端口号
  */
-async function findAvailablePort(startPort = 8000, maxAttempts = 100) {
+async function findAvailablePort(startPort = 38000, maxAttempts = 100) {
   perfMark('开始查找可用端口');
   for (let port = startPort; port < startPort + maxAttempts; port++) {
     if (await isPortAvailable(port)) {
@@ -479,6 +585,85 @@ function createWindow() {
   });
 }
 
+/**
+ * 创建自定义菜单
+ */
+function createMenu() {
+  const isMac = process.platform === 'darwin';
+
+  const template = [
+    // macOS 上的应用菜单
+    ...(isMac ? [{
+      label: app.name,
+      submenu: [
+        { role: 'about' },
+        { type: 'separator' },
+        { role: 'hide' },
+        { role: 'hideOthers' },
+        { role: 'unhide' },
+        { type: 'separator' },
+        { role: 'quit' }
+      ]
+    }] : []),
+    // 文件菜单
+    {
+      label: '文件',
+      submenu: [
+        isMac ? { role: 'close' } : { role: 'quit', label: '退出' }
+      ]
+    },
+    // 视图菜单
+    {
+      label: '视图',
+      submenu: [
+        { role: 'reload', label: '重新加载' },
+        { role: 'forceReload', label: '强制重新加载' },
+        { type: 'separator' },
+        { role: 'toggleDevTools', label: '开发者工具' },
+        { type: 'separator' },
+        {
+          label: '在浏览器中打开',
+          click: () => {
+            shell.openExternal(`http://127.0.0.1:${backendPort}`);
+          }
+        },
+        {
+          label: '打开日志目录',
+          click: () => {
+            const logDir = path.dirname(getActualLogFilePath());
+            if (fs.existsSync(logDir)) {
+              shell.openPath(logDir);
+            } else {
+              dialog.showMessageBox({
+                type: 'info',
+                title: '日志目录',
+                message: '日志目录尚未创建',
+                detail: `日志目录将在应用运行后创建:\n${logDir}`
+              });
+            }
+          }
+        }
+      ]
+    },
+    // 窗口菜单
+    {
+      label: '窗口',
+      submenu: [
+        { role: 'minimize', label: '最小化' },
+        ...(isMac ? [
+          { type: 'separator' },
+          { role: 'front', label: '全部置于顶层' }
+        ] : [
+          { role: 'close', label: '关闭' }
+        ])
+      ]
+    }
+  ];
+
+  const menu = Menu.buildFromTemplate(template);
+  Menu.setApplicationMenu(menu);
+}
+
 // ==================== 应用生命周期 ====================
 
 /**
@@ -494,7 +679,7 @@ app.whenReady().then(async () => {
     console.log(`打包模式: ${app.isPackaged ? '是' : '否'}`);
 
     // 1. 查找可用端口
-    backendPort = await findAvailablePort(8000);
+    backendPort = await findAvailablePort(38000);
     console.log(`✓ 已分配端口: ${backendPort}`);
 
     // 2. 启动后端
@@ -508,6 +693,20 @@ app.whenReady().then(async () => {
 
     // 4. 创建主窗口
     createWindow();
+
+    // 5. 创建自定义菜单
+    createMenu();
+
+    // 6. 检查更新（仅生产环境）
+    if (app.isPackaged) {
+      // 延迟 5 秒检查更新，避免干扰启动性能
+      setTimeout(() => {
+        log.info('[Updater] Starting update check...');
+        autoUpdater.checkForUpdatesAndNotify().catch(err => {
+          log.error('[Updater] Check failed:', err);
+        });
+      }, 5000);
+    }
 
     console.log('✓ AutoGLM GUI 启动流程完成');
   } catch (error) {
@@ -545,4 +744,90 @@ process.on('uncaughtException', (error) => {
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('未处理的 Promise 拒绝:', reason);
+});
+
+ipcMain.handle('get-logs-directory', () => {
+  const logPath = getActualLogFilePath();
+  return path.dirname(logPath);
+});
+
+ipcMain.handle('list-log-files', async () => {
+  const logDir = path.dirname(getActualLogFilePath());
+
+  try {
+    if (!fs.existsSync(logDir)) {
+      console.log('日志目录不存在，返回空列表:', logDir);
+      return [];
+    }
+
+    const files = fs.readdirSync(logDir);
+    return files
+      .filter(f => f.endsWith('.log') || f.endsWith('.zip'))
+      .map(f => {
+        const filePath = path.join(logDir, f);
+        const stats = fs.statSync(filePath);
+        return {
+          name: f,
+          path: filePath,
+          size: stats.size,
+          modified: stats.mtime,
+          isError: f.startsWith('errors_'),
+          isCompressed: f.endsWith('.zip')
+        };
+      })
+      .sort((a, b) => b.modified - a.modified);
+  } catch (error) {
+    console.error('读取日志目录失败:', error);
+    return [];
+  }
+});
+
+ipcMain.handle('read-log-file', async (event, filename) => {
+  const logDir = path.dirname(getActualLogFilePath());
+  const filePath = path.join(logDir, filename);
+
+  if (!filePath.startsWith(logDir)) {
+    throw new Error('非法访问：文件路径不在日志目录中');
+  }
+
+  if (filename.includes('..') || filename.includes('/') || filename.includes('\\')) {
+    throw new Error('非法文件名');
+  }
+
+  try {
+    if (!fs.existsSync(filePath)) {
+      throw new Error('文件不存在');
+    }
+
+    const stats = fs.statSync(filePath);
+    if (stats.size > 10 * 1024 * 1024) {
+      throw new Error('文件过大（超过 10MB），请在文件管理器中查看');
+    }
+
+    return fs.readFileSync(filePath, 'utf-8');
+  } catch (error) {
+    console.error('读取日志文件失败:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('open-logs-folder', async () => {
+  const logPath = getActualLogFilePath();
+
+  try {
+    if (fs.existsSync(logPath)) {
+      shell.showItemInFolder(logPath);
+    } else {
+      const logDir = path.dirname(logPath);
+      if (fs.existsSync(logDir)) {
+        shell.openPath(logDir);
+      } else {
+        throw new Error('日志目录不存在');
+      }
+    }
+    return { success: true };
+  } catch (error) {
+    console.error('打开日志目录失败:', error);
+    return { success: false, error: error.message };
+  }
 });

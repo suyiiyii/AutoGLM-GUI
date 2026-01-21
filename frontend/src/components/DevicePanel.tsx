@@ -6,44 +6,28 @@ import {
   AlertCircle,
   Loader2,
   Sparkles,
-  Video,
-  Image as ImageIcon,
-  MonitorPlay,
-  Fingerprint,
-  ArrowUpDown,
-  ChevronLeft,
-  ChevronRight,
   History,
   ListChecks,
   Square,
-  Zap,
-  Target,
-  Rocket,
 } from 'lucide-react';
 import { throttle } from 'lodash';
-import { ScrcpyPlayer } from './ScrcpyPlayer';
-import { DualModelPanel } from './DualModelPanel';
-import { useDualModelState } from './useDualModelState';
+import { DeviceMonitor } from './DeviceMonitor';
 import type {
-  ScreenshotResponse,
   ThinkingChunkEvent,
   StepEvent,
   DoneEvent,
   ErrorEvent,
   Workflow,
-  DualModelStreamEvent,
+  HistoryRecordResponse,
 } from '../api';
 import {
   abortChat,
-  getScreenshot,
-  initAgent,
   resetChat,
   sendMessageStream,
   listWorkflows,
-  initDualModel,
-  sendDualModelStream,
-  abortDualModelChat,
-  resetDualModel,
+  listHistory,
+  clearHistory as clearHistoryApi,
+  deleteHistoryRecord,
 } from '../api';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -56,14 +40,6 @@ import {
 } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useTranslation } from '../lib/i18n-context';
-import {
-  createHistoryItem,
-  saveHistoryItem,
-  loadHistoryItems,
-  clearHistory,
-  deleteHistoryItem,
-} from '../utils/history';
-import type { HistoryItem } from '../types/history';
 import { HistoryItemCard } from './HistoryItemCard';
 import {
   Tooltip,
@@ -84,38 +60,20 @@ interface Message {
   currentThinking?: string; // Current thinking text being streamed
 }
 
-interface GlobalConfig {
-  base_url: string;
-  model_name: string;
-  api_key?: string;
-  thinking_mode?: string;
-  dual_model_enabled?: boolean;
-  decision_base_url?: string;
-  decision_model_name?: string;
-  decision_api_key?: string;
-}
-
 interface DevicePanelProps {
   deviceId: string; // Used for API calls
   deviceSerial: string; // Used for history storage
   deviceName: string;
-  config: GlobalConfig | null;
-  isVisible: boolean;
+  deviceConnectionType?: string; // Device connection type (usb/wifi/remote)
   isConfigured: boolean;
-  thinkingMode?: 'fast' | 'deep' | 'turbo'; // Per-device thinking mode
-  onThinkingModeChange?: (mode: 'fast' | 'deep' | 'turbo') => void; // Callback to update thinking mode
-  dualModelEnabled?: boolean; // Controlled by parent component
 }
 
 export function DevicePanel({
   deviceId,
   deviceSerial,
   deviceName,
-  config,
+  deviceConnectionType,
   isConfigured,
-  thinkingMode = 'deep',
-  onThinkingModeChange,
-  dualModelEnabled = false,
 }: DevicePanelProps) {
   const t = useTranslation();
   const [messages, setMessages] = useState<Message[]>([]);
@@ -123,89 +81,18 @@ export function DevicePanel({
   const [loading, setLoading] = useState(false);
   const [aborting, setAborting] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [initialized, setInitialized] = useState(false);
-  const [screenshot, setScreenshot] = useState<ScreenshotResponse | null>(null);
-  const [useVideoStream, setUseVideoStream] = useState(true);
-  const [videoStreamFailed, setVideoStreamFailed] = useState(false);
-  const [displayMode, setDisplayMode] = useState<
-    'auto' | 'video' | 'screenshot'
-  >('auto');
-  const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
-  const [feedbackType, setFeedbackType] = useState<
-    'tap' | 'swipe' | 'error' | 'success'
-  >('success');
+  // ✅ 移除 initialized 状态，依赖后端自动初始化
+  // const [initialized, setInitialized] = useState(false);
   const [showHistoryPopover, setShowHistoryPopover] = useState(false);
-  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+  const [historyItems, setHistoryItems] = useState<HistoryRecordResponse[]>([]);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [showWorkflowPopover, setShowWorkflowPopover] = useState(false);
-  const [dualModelInitialized, setDualModelInitialized] = useState(false);
-  const {
-    state: dualModelState,
-    handleEvent: handleDualModelEvent,
-    reset: resetDualModelState,
-  } = useDualModelState();
-  const feedbackTimeoutRef = useRef<number | null>(null);
-
-  const showFeedback = (
-    message: string,
-    duration = 2000,
-    type: 'tap' | 'swipe' | 'error' | 'success' = 'success'
-  ) => {
-    if (feedbackTimeoutRef.current) {
-      clearTimeout(feedbackTimeoutRef.current);
-    }
-    setFeedbackType(type);
-    setFeedbackMessage(message);
-    feedbackTimeoutRef.current = setTimeout(() => {
-      setFeedbackMessage(null);
-    }, duration);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (feedbackTimeoutRef.current) {
-        clearTimeout(feedbackTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const [showControlArea, setShowControlArea] = useState(false);
-  const [showControls, setShowControls] = useState(false);
-  const controlsTimeoutRef = useRef<number | null>(null);
-
-  const handleMouseEnter = () => {
-    if (controlsTimeoutRef.current) {
-      clearTimeout(controlsTimeoutRef.current);
-    }
-    setShowControlArea(true);
-  };
-
-  const handleMouseLeave = () => {
-    controlsTimeoutRef.current = setTimeout(() => {
-      setShowControlArea(false);
-    }, 500);
-  };
-
-  useEffect(() => {
-    return () => {
-      if (controlsTimeoutRef.current) {
-        clearTimeout(controlsTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  const toggleControls = () => {
-    setShowControls(prev => !prev);
-  };
 
   const chatStreamRef = useRef<{ close: () => void } | null>(null);
-  const dualModelStreamRef = useRef<{ close: () => void } | null>(null);
-  const videoStreamRef = useRef<{ close: () => void } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const screenshotFetchingRef = useRef(false);
-  const hasAutoInited = useRef(false);
-  const prevConfigRef = useRef<GlobalConfig | null>(null);
+  // ✅ 移除 hasAutoInited，不再需要自动初始化逻辑
+  // const hasAutoInited = useRef(false);
   const prevMessageCountRef = useRef(0);
   const prevMessageSigRef = useRef<string | null>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
@@ -240,106 +127,79 @@ export function DevicePanel({
     };
   }, []);
 
-  const handleInit = useCallback(async () => {
-    if (!config) return;
+  // ✅ 移除 handleInit 函数，不再需要显式初始化
+  // Agent 会在首次发送消息时自动初始化
 
-    try {
-      await initAgent({
-        model_config: {
-          base_url: config.base_url || undefined,
-          api_key: config.api_key || undefined,
-          model_name: config.model_name || undefined,
-        },
-        agent_config: {
-          device_id: deviceId,
-        },
-      });
-      setInitialized(true);
-      setError(null);
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'Initialization failed';
-      setError(errorMessage);
-    }
-  }, [deviceId, config]);
-
-  // Initialize dual model
-  const handleInitDualModel = useCallback(async () => {
-    if (!config) return;
-
-    try {
-      await initDualModel({
-        device_id: deviceId,
-        decision_base_url: config.decision_base_url || '',
-        decision_api_key: config.decision_api_key || '',
-        decision_model_name: config.decision_model_name || '',
-        vision_base_url: config.base_url,
-        vision_api_key: config.api_key,
-        vision_model_name: config.model_name,
-        thinking_mode: thinkingMode,
-      });
-      setDualModelInitialized(true);
-      setError(null);
-    } catch (err) {
-      const errorMessage =
-        err instanceof Error ? err.message : 'Dual model initialization failed';
-      setError(errorMessage);
-    }
-  }, [deviceId, config, thinkingMode]);
-
-  // Auto-initialize dual model when enabled from parent
-  useEffect(() => {
-    if (dualModelEnabled && !dualModelInitialized) {
-      handleInitDualModel();
-    }
-  }, [dualModelEnabled, dualModelInitialized, handleInitDualModel]);
-
-  // Reinitialize dual model when thinking mode changes (while dual model is enabled)
-  useEffect(() => {
-    if (dualModelEnabled && dualModelInitialized) {
-      handleInitDualModel();
-    }
-  }, [thinkingMode]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  // Auto-initialize on mount if configured
-  useEffect(() => {
-    if (isConfigured && config && !initialized && !hasAutoInited.current) {
-      hasAutoInited.current = true;
-      handleInit();
-    }
-  }, [isConfigured, config, initialized, handleInit]);
+  // ✅ 移除自动初始化 useEffect，不再需要
 
   // Load history items when popover opens
   useEffect(() => {
     if (showHistoryPopover) {
-      const items = loadHistoryItems(deviceSerial);
-      setHistoryItems(items);
+      const loadItems = async () => {
+        try {
+          const data = await listHistory(deviceSerial, 20, 0);
+          setHistoryItems(data.records);
+        } catch (error) {
+          console.error('Failed to load history:', error);
+          setHistoryItems([]);
+        }
+      };
+      loadItems();
     }
   }, [showHistoryPopover, deviceSerial]);
 
-  const handleSelectHistory = (item: HistoryItem) => {
-    const userMessage: Message = {
-      id: `${item.id}-user`,
-      role: 'user',
-      content: item.taskText,
-      timestamp: item.startTime,
-    };
+  const handleSelectHistory = (record: HistoryRecordResponse) => {
+    // Convert backend messages to frontend Message format
+    const newMessages: Message[] = [];
+
+    // Find user message from record
+    const userMsg = record.messages.find(m => m.role === 'user');
+    if (userMsg) {
+      newMessages.push({
+        id: `${record.id}-user`,
+        role: 'user',
+        content: userMsg.content || record.task_text,
+        timestamp: new Date(userMsg.timestamp),
+      });
+    } else {
+      // Fallback to task_text if no user message
+      newMessages.push({
+        id: `${record.id}-user`,
+        role: 'user',
+        content: record.task_text,
+        timestamp: new Date(record.start_time),
+      });
+    }
+
+    // Collect thinking and actions from assistant messages
+    const thinkingList: string[] = [];
+    const actionsList: Record<string, unknown>[] = [];
+    record.messages
+      .filter(m => m.role === 'assistant')
+      .forEach(m => {
+        if (m.thinking) thinkingList.push(m.thinking);
+        if (m.action) actionsList.push(m.action);
+      });
+
+    // Create agent message
     const agentMessage: Message = {
-      id: `${item.id}-agent`,
+      id: `${record.id}-agent`,
       role: 'assistant',
-      content: item.finalMessage,
-      timestamp: item.endTime,
-      steps: item.steps,
-      success: item.success,
-      thinking: item.thinking,
-      actions: item.actions,
+      content: record.final_message,
+      timestamp: record.end_time
+        ? new Date(record.end_time)
+        : new Date(record.start_time),
+      steps: record.steps,
+      success: record.success,
+      thinking: thinkingList,
+      actions: actionsList,
       isStreaming: false,
     };
-    const newMessages = [userMessage, agentMessage];
+    newMessages.push(agentMessage);
+
     setMessages(newMessages);
 
     // Reset previous message tracking refs to match the loaded history
-    // so that the next effect run does not treat this as a new message.
     prevMessageCountRef.current = newMessages.length;
     prevMessageSigRef.current = [
       agentMessage.id,
@@ -355,50 +215,36 @@ export function DevicePanel({
     setShowHistoryPopover(false);
   };
 
-  const handleClearHistory = () => {
+  const handleClearHistory = async () => {
     if (confirm(t.history.clearAllConfirm)) {
-      clearHistory(deviceSerial);
-      setHistoryItems([]);
+      try {
+        await clearHistoryApi(deviceSerial);
+        setHistoryItems([]);
+      } catch (error) {
+        console.error('Failed to clear history:', error);
+      }
     }
   };
 
-  const handleDeleteItem = (itemId: string) => {
-    deleteHistoryItem(deviceSerial, itemId);
-    // 从列表中移除已删除的项
-    setHistoryItems(prev => prev.filter(item => item.id !== itemId));
+  const handleDeleteItem = async (itemId: string) => {
+    try {
+      await deleteHistoryRecord(deviceSerial, itemId);
+      // 从列表中移除已删除的项
+      setHistoryItems(prev => prev.filter(item => item.id !== itemId));
+    } catch (error) {
+      console.error('Failed to delete history item:', error);
+    }
   };
 
-  // Re-initialize when config changes (for already initialized devices)
-  useEffect(() => {
-    // Skip if not initialized yet or no config
-    if (!initialized || !config) return;
-
-    // Check if config actually changed
-    const prevConfig = prevConfigRef.current;
-    if (
-      prevConfig &&
-      (prevConfig.base_url !== config.base_url ||
-        prevConfig.model_name !== config.model_name ||
-        prevConfig.api_key !== config.api_key)
-    ) {
-      // Config changed, re-initialize
-      console.log(
-        `[DevicePanel] Config changed for device ${deviceId}, re-initializing...`
-      );
-      handleInit();
-    }
-
-    // Update previous config
-    prevConfigRef.current = config;
-  }, [config, initialized, deviceId, handleInit]);
+  // Note: Configuration is now managed entirely by backend ConfigManager.
+  // If user updates config via Settings, they need to manually re-initialize agents.
 
   const handleSend = useCallback(async () => {
     const inputValue = input.trim();
     if (!inputValue || loading) return;
 
-    if (!initialized) {
-      await handleInit();
-    }
+    // ✅ 移除初始化检查，后端会自动初始化
+    // Agent 会在首次使用时自动创建
 
     const userMessage: Message = {
       id: Date.now().toString(),
@@ -522,15 +368,7 @@ export function DevicePanel({
         );
         setLoading(false);
         chatStreamRef.current = null;
-
-        // 保存到历史记录
-        const historyItem = createHistoryItem(
-          deviceSerial,
-          deviceName,
-          userMessage,
-          updatedAgentMessage
-        );
-        saveHistoryItem(deviceSerial, historyItem);
+        // 历史记录已由后端自动保存，无需前端保存
       },
       (event: ErrorEvent) => {
         // Clear any pending updates
@@ -557,15 +395,7 @@ export function DevicePanel({
         setLoading(false);
         setError(event.message);
         chatStreamRef.current = null;
-
-        // 保存失败的任务到历史记录
-        const historyItem = createHistoryItem(
-          deviceSerial,
-          deviceName,
-          userMessage,
-          updatedAgentMessage
-        );
-        saveHistoryItem(deviceSerial, historyItem);
+        // 历史记录已由后端自动保存，无需前端保存
       },
       (event: { type: 'aborted'; message: string }) => {
         // Clear any pending updates
@@ -591,170 +421,15 @@ export function DevicePanel({
         );
         setLoading(false);
         chatStreamRef.current = null;
-
-        // Show feedback
-        setFeedbackMessage(t.chat.aborted);
-        setFeedbackType('success');
-        setTimeout(() => setFeedbackMessage(null), 2000);
       }
     );
 
     chatStreamRef.current = stream;
-  }, [
-    input,
-    loading,
-    initialized,
-    deviceId,
-    deviceSerial,
-    deviceName,
-    handleInit,
-    t,
-    setFeedbackMessage,
-    setFeedbackType,
-  ]);
-
-  // Dual model send function
-  const handleSendDualModel = useCallback(async () => {
-    const inputValue = input.trim();
-    if (!inputValue || loading) return;
-
-    if (!dualModelInitialized) {
-      await handleInitDualModel();
-    }
-
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: inputValue,
-      timestamp: new Date(),
-    };
-
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
-    setLoading(true);
-    setError(null);
-    resetDualModelState();
-
-    const agentMessageId = (Date.now() + 1).toString();
-    const agentMessage: Message = {
-      id: agentMessageId,
-      role: 'assistant',
-      content: '',
-      timestamp: new Date(),
-      thinking: [],
-      actions: [],
-      isStreaming: true,
-    };
-
-    setMessages(prev => [...prev, agentMessage]);
-
-    const stream = sendDualModelStream(
-      userMessage.content,
-      deviceId,
-      (event: DualModelStreamEvent) => {
-        handleDualModelEvent(event);
-
-        if (event.type === 'task_complete') {
-          const completeEvent = event as {
-            type: 'task_complete';
-            success: boolean;
-            message: string;
-            steps: number;
-          };
-          setMessages(prev =>
-            prev.map(msg =>
-              msg.id === agentMessageId
-                ? {
-                    ...msg,
-                    content: completeEvent.message,
-                    success: completeEvent.success,
-                    steps: completeEvent.steps,
-                    isStreaming: false,
-                  }
-                : msg
-            )
-          );
-          setLoading(false);
-          dualModelStreamRef.current = null;
-        } else if (event.type === 'error') {
-          const errorEvent = event as { type: 'error'; message: string };
-          setMessages(prev =>
-            prev.map(msg =>
-              msg.id === agentMessageId
-                ? {
-                    ...msg,
-                    content: `Error: ${errorEvent.message}`,
-                    success: false,
-                    isStreaming: false,
-                  }
-                : msg
-            )
-          );
-          setLoading(false);
-          setError(errorEvent.message);
-          dualModelStreamRef.current = null;
-        } else if (event.type === 'aborted') {
-          setMessages(prev =>
-            prev.map(msg =>
-              msg.id === agentMessageId
-                ? {
-                    ...msg,
-                    content: 'Task aborted',
-                    success: false,
-                    isStreaming: false,
-                  }
-                : msg
-            )
-          );
-          setLoading(false);
-          dualModelStreamRef.current = null;
-        }
-      },
-      (error: Error) => {
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === agentMessageId
-              ? {
-                  ...msg,
-                  content: `Error: ${error.message}`,
-                  success: false,
-                  isStreaming: false,
-                }
-              : msg
-          )
-        );
-        setLoading(false);
-        setError(error.message);
-        dualModelStreamRef.current = null;
-      }
-    );
-
-    dualModelStreamRef.current = stream;
-  }, [
-    input,
-    loading,
-    dualModelInitialized,
-    deviceId,
-    handleInitDualModel,
-    handleDualModelEvent,
-    resetDualModelState,
-  ]);
-
-  // Unified send function
-  const handleSendMessage = useCallback(async () => {
-    if (dualModelEnabled) {
-      await handleSendDualModel();
-    } else {
-      await handleSend();
-    }
-  }, [dualModelEnabled, handleSendDualModel, handleSend]);
+  }, [input, loading, deviceId]);
 
   const handleReset = useCallback(async () => {
     if (chatStreamRef.current) {
       chatStreamRef.current.close();
-    }
-    if (dualModelStreamRef.current) {
-      dualModelStreamRef.current.close();
     }
 
     setMessages([]);
@@ -763,20 +438,14 @@ export function DevicePanel({
     setShowNewMessageNotice(false);
     setIsAtBottom(true);
     chatStreamRef.current = null;
-    dualModelStreamRef.current = null;
     prevMessageCountRef.current = 0;
     prevMessageSigRef.current = null;
-    resetDualModelState();
 
-    if (dualModelEnabled) {
-      await resetDualModel(deviceId);
-    } else {
-      await resetChat(deviceId);
-    }
-  }, [deviceId, dualModelEnabled, resetDualModelState]);
+    await resetChat(deviceId);
+  }, [deviceId]);
 
   const handleAbortChat = useCallback(async () => {
-    if (!chatStreamRef.current && !dualModelStreamRef.current) return;
+    if (!chatStreamRef.current) return;
 
     setAborting(true);
 
@@ -785,10 +454,6 @@ export function DevicePanel({
       if (chatStreamRef.current) {
         chatStreamRef.current.close();
         chatStreamRef.current = null;
-      }
-      if (dualModelStreamRef.current) {
-        dualModelStreamRef.current.close();
-        dualModelStreamRef.current = null;
       }
 
       // Immediately update UI - set isStreaming to false and update message content
@@ -815,30 +480,14 @@ export function DevicePanel({
       });
 
       // Notify backend to abort (don't wait for response)
-      if (dualModelEnabled) {
-        abortDualModelChat(deviceId).catch(e =>
-          console.error('Backend abort failed:', e)
-        );
-      } else {
-        abortChat(deviceId).catch(e =>
-          console.error('Backend abort failed:', e)
-        );
-      }
-
-      // Show feedback
-      setFeedbackMessage(t.chat.aborted);
-      setFeedbackType('success');
-      setTimeout(() => setFeedbackMessage(null), 2000);
+      abortChat(deviceId).catch(e => console.error('Backend abort failed:', e));
     } catch (error) {
       console.error('Failed to abort chat:', error);
-      setFeedbackMessage(t.chat.abortFailed);
-      setFeedbackType('error');
-      setTimeout(() => setFeedbackMessage(null), 2000);
     } finally {
       setLoading(false);
       setAborting(false);
     }
-  }, [deviceId, dualModelEnabled, t]);
+  }, [deviceId, t]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -888,12 +537,6 @@ export function DevicePanel({
       if (chatStreamRef.current) {
         chatStreamRef.current.close();
       }
-      if (dualModelStreamRef.current) {
-        dualModelStreamRef.current.close();
-      }
-      if (videoStreamRef.current) {
-        videoStreamRef.current.close();
-      }
     };
   }, [deviceId]);
 
@@ -927,62 +570,13 @@ export function DevicePanel({
     setIsAtBottom(true);
   };
 
-  useEffect(() => {
-    if (!deviceId) return;
-
-    const shouldPollScreenshots =
-      displayMode === 'screenshot' ||
-      (displayMode === 'auto' && videoStreamFailed);
-
-    if (!shouldPollScreenshots) {
-      return;
-    }
-
-    const fetchScreenshot = async () => {
-      if (screenshotFetchingRef.current) return;
-
-      screenshotFetchingRef.current = true;
-      try {
-        const data = await getScreenshot(deviceId);
-        if (data.success) {
-          setScreenshot(data);
-        }
-      } catch (e) {
-        console.error('Failed to fetch screenshot:', e);
-      } finally {
-        screenshotFetchingRef.current = false;
-      }
-    };
-
-    fetchScreenshot();
-    const interval = setInterval(fetchScreenshot, 500);
-
-    return () => clearInterval(interval);
-  }, [deviceId, videoStreamFailed, displayMode]);
-
   const handleInputKeyDown = (
     event: React.KeyboardEvent<HTMLTextAreaElement>
   ) => {
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
       event.preventDefault();
-      handleSendMessage();
+      handleSend();
     }
-  };
-
-  const handleVideoStreamReady = useCallback(
-    (stream: { close: () => void } | null) => {
-      videoStreamRef.current = stream;
-    },
-    []
-  );
-
-  const handleFallback = useCallback(() => {
-    setVideoStreamFailed(true);
-    setUseVideoStream(false);
-  }, []);
-
-  const toggleDisplayMode = (mode: 'auto' | 'video' | 'screenshot') => {
-    setDisplayMode(mode);
   };
 
   return (
@@ -1070,121 +664,11 @@ export function DevicePanel({
               </PopoverContent>
             </Popover>
 
-            {!isConfigured ? (
+            {!isConfigured && (
               <Badge variant="warning">
                 <AlertCircle className="w-3 h-3 mr-1" />
                 {t.devicePanel.noConfig}
               </Badge>
-            ) : !initialized ? (
-              <Button
-                onClick={handleInit}
-                disabled={!isConfigured || !config}
-                size="sm"
-                variant="twitter"
-              >
-                {t.devicePanel.initializing}
-              </Button>
-            ) : (
-              <Badge variant="success">
-                <CheckCircle2 className="w-3 h-3 mr-1" />
-                {t.devicePanel.ready}
-              </Badge>
-            )}
-
-            {/* Thinking Mode Toggle - visible when dual model is enabled */}
-            {dualModelEnabled && onThinkingModeChange && (
-              <>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant={thinkingMode === 'fast' ? 'default' : 'ghost'}
-                      size="icon"
-                      onClick={() => onThinkingModeChange('fast')}
-                      className={`h-8 w-8 rounded-full ${
-                        thinkingMode === 'fast'
-                          ? 'bg-green-500 hover:bg-green-600 text-white'
-                          : 'text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300'
-                      }`}
-                    >
-                      <Zap className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent
-                    side="bottom"
-                    sideOffset={8}
-                    className="max-w-xs"
-                  >
-                    <div className="space-y-1">
-                      <p className="font-medium">
-                        {t.devicePanel.tooltips.fastMode}
-                      </p>
-                      <p className="text-xs opacity-80">
-                        {t.devicePanel.tooltips.fastModeDesc}
-                      </p>
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant={thinkingMode === 'deep' ? 'default' : 'ghost'}
-                      size="icon"
-                      onClick={() => onThinkingModeChange('deep')}
-                      className={`h-8 w-8 rounded-full ${
-                        thinkingMode === 'deep'
-                          ? 'bg-blue-500 hover:bg-blue-600 text-white'
-                          : 'text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300'
-                      }`}
-                    >
-                      <Target className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent
-                    side="bottom"
-                    sideOffset={8}
-                    className="max-w-xs"
-                  >
-                    <div className="space-y-1">
-                      <p className="font-medium">
-                        {t.devicePanel.tooltips.deepMode}
-                      </p>
-                      <p className="text-xs opacity-80">
-                        {t.devicePanel.tooltips.deepModeDesc}
-                      </p>
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      variant={thinkingMode === 'turbo' ? 'default' : 'ghost'}
-                      size="icon"
-                      onClick={() => onThinkingModeChange('turbo')}
-                      className={`h-8 w-8 rounded-full ${
-                        thinkingMode === 'turbo'
-                          ? 'bg-orange-500 hover:bg-orange-600 text-white'
-                          : 'text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300'
-                      }`}
-                    >
-                      <Rocket className="h-4 w-4" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent
-                    side="bottom"
-                    sideOffset={8}
-                    className="max-w-xs"
-                  >
-                    <div className="space-y-1">
-                      <p className="font-medium">
-                        {t.devicePanel.tooltips.turboMode}
-                      </p>
-                      <p className="text-xs opacity-80">
-                        {t.devicePanel.tooltips.turboModeDesc}
-                      </p>
-                    </div>
-                  </TooltipContent>
-                </Tooltip>
-              </>
             )}
 
             <Button
@@ -1198,19 +682,6 @@ export function DevicePanel({
             </Button>
           </div>
         </div>
-
-        {/* Dual Model Panel */}
-        {dualModelEnabled && (
-          <div className="border-b border-slate-200 dark:border-slate-800 p-4">
-            <DualModelPanel
-              state={dualModelState}
-              isStreaming={loading}
-              className=""
-              decisionModelName={config?.decision_model_name || ''}
-              visionModelName={config?.model_name || 'autoglm-phone'}
-            />
-          </div>
-        )}
 
         {/* Error message */}
         {error && (
@@ -1377,9 +848,7 @@ export function DevicePanel({
               placeholder={
                 !isConfigured
                   ? t.devicePanel.configureFirst
-                  : !initialized
-                    ? t.devicePanel.initDeviceFirst
-                    : t.devicePanel.whatToDo
+                  : t.devicePanel.whatToDo
               }
               disabled={loading}
               className="flex-1 min-h-[40px] max-h-[120px] resize-none"
@@ -1475,7 +944,7 @@ export function DevicePanel({
             {/* Send Button */}
             {!loading && (
               <Button
-                onClick={handleSendMessage}
+                onClick={handleSend}
                 disabled={!input.trim()}
                 size="icon"
                 variant="twitter"
@@ -1488,183 +957,12 @@ export function DevicePanel({
         </div>
       </Card>
 
-      {/* Screen preview - phone aspect ratio */}
-      <Card
-        className="w-[320px] flex-shrink-0 relative min-h-0 overflow-hidden bg-background"
-        onMouseEnter={handleMouseEnter}
-        onMouseLeave={handleMouseLeave}
-      >
-        {/* Toggle and controls - shown on hover */}
-        <div
-          className={`absolute top-4 right-4 z-10 transition-opacity duration-200 ${
-            showControlArea ? 'opacity-100' : 'opacity-0 pointer-events-none'
-          }`}
-        >
-          <div className="flex items-center gap-2">
-            {/* Control buttons - slide in/out */}
-            <div
-              className={`flex items-center gap-1 bg-popover/90 backdrop-blur rounded-xl p-1 shadow-lg border border-border transition-all duration-300 ${
-                showControls
-                  ? 'opacity-100 translate-x-0'
-                  : 'opacity-0 translate-x-4 pointer-events-none'
-              }`}
-            >
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => toggleDisplayMode('auto')}
-                className={`h-7 px-3 text-xs rounded-lg transition-colors ${
-                  displayMode === 'auto'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-foreground hover:bg-accent hover:text-accent-foreground'
-                }`}
-              >
-                {t.devicePanel.auto}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => toggleDisplayMode('video')}
-                className={`h-7 px-3 text-xs rounded-lg transition-colors ${
-                  displayMode === 'video'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-foreground hover:bg-accent hover:text-accent-foreground'
-                }`}
-              >
-                <Video className="w-3 h-3 mr-1" />
-                {t.devicePanel.video}
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={() => toggleDisplayMode('screenshot')}
-                className={`h-7 px-3 text-xs rounded-lg transition-colors ${
-                  displayMode === 'screenshot'
-                    ? 'bg-primary text-primary-foreground'
-                    : 'text-foreground hover:bg-accent hover:text-accent-foreground'
-                }`}
-              >
-                <ImageIcon className="w-3 h-3 mr-1" />
-                {t.devicePanel.image}
-              </Button>
-            </div>
-
-            {/* Toggle button - visible when control area is shown */}
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={toggleControls}
-              className="h-8 w-8 rounded-full bg-popover/90 backdrop-blur border border-border shadow-lg hover:bg-accent"
-              title={showControls ? 'Hide controls' : 'Show controls'}
-            >
-              {showControls ? (
-                <ChevronRight className="w-4 h-4" />
-              ) : (
-                <ChevronLeft className="w-4 h-4" />
-              )}
-            </Button>
-          </div>
-        </div>
-
-        {/* Current mode indicator - bottom left */}
-        <div className="absolute bottom-4 left-4 z-10">
-          <Badge
-            variant="secondary"
-            className="bg-white/90 text-slate-700 border border-slate-200 dark:bg-slate-900/90 dark:text-slate-300 dark:border-slate-700"
-          >
-            {displayMode === 'auto' && t.devicePanel.auto}
-            {displayMode === 'video' && (
-              <>
-                <MonitorPlay className="w-3 h-3 mr-1" />
-                {t.devicePanel.video}
-              </>
-            )}
-            {displayMode === 'screenshot' && (
-              <>
-                <ImageIcon className="w-3 h-3 mr-1" />
-                {t.devicePanel.imageRefresh}
-              </>
-            )}
-          </Badge>
-        </div>
-
-        {/* Feedback message */}
-        {feedbackMessage && (
-          <div className="absolute bottom-4 right-4 z-20 flex items-center gap-2 px-3 py-2 bg-[#1d9bf0] text-white text-sm rounded-xl shadow-lg">
-            {feedbackType === 'error' && <AlertCircle className="w-4 h-4" />}
-            {feedbackType === 'tap' && <Fingerprint className="w-4 h-4" />}
-            {feedbackType === 'swipe' && <ArrowUpDown className="w-4 h-4" />}
-            {feedbackType === 'success' && <CheckCircle2 className="w-4 h-4" />}
-            <span>{feedbackMessage}</span>
-          </div>
-        )}
-
-        {/* Video stream */}
-        {displayMode === 'video' ||
-        (displayMode === 'auto' && useVideoStream && !videoStreamFailed) ? (
-          <ScrcpyPlayer
-            deviceId={deviceId}
-            className="w-full h-full"
-            enableControl={true}
-            onFallback={handleFallback}
-            onTapSuccess={() => showFeedback(t.devicePanel.tapped, 2000, 'tap')}
-            onTapError={error =>
-              showFeedback(
-                t.devicePanel.tapError.replace('{error}', error),
-                3000,
-                'error'
-              )
-            }
-            onSwipeSuccess={() =>
-              showFeedback(t.devicePanel.swiped, 2000, 'swipe')
-            }
-            onSwipeError={error =>
-              showFeedback(
-                t.devicePanel.swipeError.replace('{error}', error),
-                3000,
-                'error'
-              )
-            }
-            onStreamReady={handleVideoStreamReady}
-            fallbackTimeout={100000}
-          />
-        ) : (
-          /* Screenshot mode */
-          <div className="w-full h-full flex items-center justify-center bg-muted/30 min-h-0">
-            {screenshot && screenshot.success ? (
-              <div className="relative w-full h-full flex items-center justify-center min-h-0">
-                <img
-                  src={`data:image/png;base64,${screenshot.image}`}
-                  alt="Device Screenshot"
-                  className="max-w-full max-h-full object-contain"
-                  style={{
-                    width:
-                      screenshot.width > screenshot.height ? '100%' : 'auto',
-                    height:
-                      screenshot.width > screenshot.height ? 'auto' : '100%',
-                  }}
-                />
-                {screenshot.is_sensitive && (
-                  <div className="absolute top-12 right-2 px-2 py-1 bg-yellow-500 text-white text-xs rounded-lg">
-                    {t.devicePanel.sensitiveContent}
-                  </div>
-                )}
-              </div>
-            ) : screenshot?.error ? (
-              <div className="text-center text-destructive">
-                <AlertCircle className="w-8 h-8 mx-auto mb-2" />
-                <p className="font-medium">{t.devicePanel.screenshotFailed}</p>
-                <p className="text-xs mt-1 opacity-60">{screenshot.error}</p>
-              </div>
-            ) : (
-              <div className="text-center text-muted-foreground">
-                <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin" />
-                <p className="text-sm">{t.devicePanel.loading}</p>
-              </div>
-            )}
-          </div>
-        )}
-      </Card>
+      <DeviceMonitor
+        deviceId={deviceId}
+        serial={deviceSerial}
+        connectionType={deviceConnectionType}
+        isVisible={true}
+      />
     </div>
   );
 }

@@ -1,11 +1,21 @@
 """MCP (Model Context Protocol) tools for AutoGLM-GUI."""
 
-from typing import Any, Dict, List
+from typing import Any
+
+from typing_extensions import TypedDict
 
 from fastmcp import FastMCP
 
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.prompts import MCP_SYSTEM_PROMPT_ZH
+from AutoGLM_GUI.schemas import DeviceResponse
+
+
+class ChatResult(TypedDict):
+    result: str
+    steps: int
+    success: bool
+
 
 # 创建 MCP 服务器实例
 mcp = FastMCP("AutoGLM-GUI MCP Server")
@@ -15,7 +25,7 @@ MCP_MAX_STEPS = 5
 
 
 @mcp.tool()
-def chat(device_id: str, message: str) -> Dict[str, Any]:
+def chat(device_id: str, message: str) -> ChatResult:
     """
     Send a task to the AutoGLM Phone Agent for execution.
 
@@ -26,13 +36,6 @@ def chat(device_id: str, message: str) -> Dict[str, Any]:
     Args:
         device_id: Device identifier (e.g., "192.168.1.100:5555" or serial)
         message: Natural language task (e.g., "打开微信", "发送消息")
-
-    Returns:
-        {
-            "result": str,    # Task execution result
-            "steps": int,     # Number of steps taken
-            "success": bool   # Success flag
-        }
     """
     from AutoGLM_GUI.exceptions import DeviceBusyError
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
@@ -55,12 +58,12 @@ def chat(device_id: str, message: str) -> Dict[str, Any]:
                 # Reset agent before each chat to ensure clean state
                 agent.reset()
 
-                result = agent.run(message)
+                result = agent.run(message)  # type: ignore[misc]
                 steps = agent.step_count
 
                 # Check if MCP step limit was reached
                 if steps >= MCP_MAX_STEPS and result == "Max steps reached":
-                    return {
+                    return {  # type: ignore[return-value]
                         "result": (
                             f"已达到 MCP 最大步数限制（{MCP_MAX_STEPS}步）。任务可能未完成，"
                             "建议将任务拆分为更小的子任务。"
@@ -69,7 +72,7 @@ def chat(device_id: str, message: str) -> Dict[str, Any]:
                         "success": False,
                     }
 
-                return {"result": result, "steps": steps, "success": True}
+                return {"result": result, "steps": steps, "success": True}  # type: ignore[return-value]
 
             finally:
                 # Restore original config
@@ -84,7 +87,7 @@ def chat(device_id: str, message: str) -> Dict[str, Any]:
 
 
 @mcp.tool()
-def list_devices() -> List[Dict[str, Any]]:
+def list_devices() -> list[DeviceResponse]:
     """
     List all connected ADB devices and their agent status.
 
@@ -122,7 +125,7 @@ def list_devices() -> List[Dict[str, Any]]:
     return devices_with_agents
 
 
-def get_mcp_asgi_app():
+def get_mcp_asgi_app() -> Any:
     """
     Get the MCP server's ASGI app for mounting in FastAPI.
 

@@ -80,20 +80,30 @@ def test_metrics_no_errors(client):
 
 def test_metrics_capture_failed_agents():
     """Test that failed agent initialization is captured in metrics."""
-    from AutoGLM_GUI.phone_agent_manager import AgentState, PhoneAgentManager
+    from AutoGLM_GUI.phone_agent_manager import (
+        AgentMetadata,
+        AgentState,
+        PhoneAgentManager,
+    )
     from AutoGLM_GUI.metrics import get_metrics_registry
     from prometheus_client import generate_latest
 
     manager = PhoneAgentManager.get_instance()
 
-    # Simulate a failed agent initialization (state=ERROR, no metadata)
+    # Simulate a failed agent initialization (state=ERROR)
     test_device_id = "test_failed_device_123"
 
-    # Directly set state to ERROR without metadata (simulating failed init)
+    # Directly set state to ERROR in metadata (simulating failed init)
     with manager._manager_lock:
-        manager._states[test_device_id] = AgentState.ERROR
-        # Explicitly ensure no metadata exists
-        manager._metadata.pop(test_device_id, None)
+        manager._metadata[test_device_id] = AgentMetadata(
+            device_id=test_device_id,
+            state=AgentState.ERROR,
+            model_config=None,  # type: ignore
+            agent_config=None,  # type: ignore
+            created_at=0.0,
+            last_used=0.0,
+            error_message="Test error",
+        )
 
     try:
         # Collect metrics
@@ -137,4 +147,4 @@ def test_metrics_capture_failed_agents():
     finally:
         # Cleanup: remove test state
         with manager._manager_lock:
-            manager._states.pop(test_device_id, None)
+            manager._metadata.pop(test_device_id, None)

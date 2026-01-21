@@ -1,18 +1,35 @@
 import React, { useState } from 'react';
 import {
+  Edit,
+  Loader2,
+  Server,
+  Smartphone,
+  Trash2,
   Wifi,
   WifiOff,
-  CheckCircle2,
-  Smartphone,
-  Loader2,
-  XCircle,
-  Clock,
 } from 'lucide-react';
-import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { ConfirmDialog } from './ConfirmDialog';
 import { useTranslation } from '../lib/i18n-context';
+import { removeRemoteDevice, updateDeviceName } from '../api';
 import type { AgentStatus } from '../api';
+import type { ToastType } from './Toast';
 
 interface DeviceCardProps {
   id: string;
@@ -20,34 +37,79 @@ interface DeviceCardProps {
   model: string;
   status: string;
   connectionType?: string;
+  displayName?: string | null;
   agent?: AgentStatus | null;
   isActive: boolean;
   onClick: () => void;
   onConnectWifi?: () => Promise<void>;
   onDisconnectWifi?: () => Promise<void>;
+  onNameUpdated?: () => void;
+  showToast?: (message: string, type: ToastType) => void;
 }
 
 export function DeviceCard({
-  id,
-  serial: _serial,
+  id: _id,
+  serial,
   model,
   status,
   connectionType,
+  displayName,
   agent,
   isActive,
   onClick,
   onConnectWifi,
   onDisconnectWifi,
+  onNameUpdated,
+  showToast,
 }: DeviceCardProps) {
   const t = useTranslation();
   const isOnline = status === 'device';
   const isUsb = connectionType === 'usb';
+  const isWifi = connectionType === 'wifi';
   const isRemote = connectionType === 'remote';
   const [loading, setLoading] = useState(false);
   const [showWifiConfirm, setShowWifiConfirm] = useState(false);
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
+  const [showEditDialog, setShowEditDialog] = useState(false);
+  const [editingName, setEditingName] = useState('');
+  const [saving, setSaving] = useState(false);
 
-  const displayName = model || t.deviceCard.unknownDevice;
+  const actualDisplayName = displayName || model || t.deviceCard.unknownDevice;
+
+  // Determine agent status indicator class and tooltip
+  const getAgentStatusClass = () => {
+    if (!isOnline) return 'status-agent-none';
+    if (!agent) return 'status-agent-none';
+    switch (agent.state) {
+      case 'idle':
+        return 'status-agent-idle';
+      case 'busy':
+        return 'status-agent-busy';
+      case 'error':
+        return 'status-agent-error';
+      case 'initializing':
+        return 'status-agent-initializing';
+      default:
+        return 'status-agent-none';
+    }
+  };
+
+  const getCurrentStatusText = () => {
+    if (!isOnline) return t.deviceCard.statusTooltip.none;
+    if (!agent) return t.deviceCard.statusTooltip.none;
+    switch (agent.state) {
+      case 'idle':
+        return t.deviceCard.statusTooltip.idle;
+      case 'busy':
+        return t.deviceCard.statusTooltip.busy;
+      case 'error':
+        return t.deviceCard.statusTooltip.error;
+      case 'initializing':
+        return t.deviceCard.statusTooltip.initializing;
+      default:
+        return t.deviceCard.statusTooltip.none;
+    }
+  };
 
   const handleWifiClick = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -85,6 +147,42 @@ export function DeviceCard({
     }
   };
 
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setEditingName(displayName || model || '');
+    setShowEditDialog(true);
+  };
+
+  const handleSaveName = async () => {
+    try {
+      setSaving(true);
+      const trimmedName = editingName.trim();
+      const response = await updateDeviceName(serial, trimmedName || null);
+
+      if (!response.success) {
+        if (showToast) {
+          showToast(response.error || t.deviceCard.saveNameError, 'error');
+        }
+        return;
+      }
+
+      setShowEditDialog(false);
+      if (onNameUpdated) {
+        onNameUpdated();
+      }
+      if (showToast) {
+        showToast(t.deviceCard.saveNameSuccess, 'success');
+      }
+    } catch (error) {
+      console.error('Failed to update device name:', error);
+      if (showToast) {
+        showToast(t.deviceCard.saveNameError, 'error');
+      }
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <>
       <div
@@ -112,14 +210,30 @@ export function DeviceCard({
         )}
 
         <div className="flex items-center gap-3 pl-2">
-          {/* Status indicator */}
-          <div
-            className={`relative flex-shrink-0 ${
-              isOnline ? 'status-online' : 'status-offline'
-            } w-3 h-3 rounded-full transition-all ${
-              isActive ? 'scale-110' : ''
-            }`}
-          />
+          {/* Agent status indicator with tooltip */}
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <div
+                className={`relative flex-shrink-0 ${getAgentStatusClass()} w-3 h-3 rounded-full transition-all cursor-help ${
+                  isActive ? 'scale-110' : ''
+                }`}
+              />
+            </TooltipTrigger>
+            <TooltipContent side="right" sideOffset={8} className="max-w-xs">
+              <div className="space-y-1.5">
+                <p className="font-medium">
+                  {t.deviceCard.statusTooltip.title}
+                  {getCurrentStatusText()}
+                </p>
+                <div className="text-xs opacity-80 space-y-0.5">
+                  <p>{t.deviceCard.statusTooltip.legend.green}</p>
+                  <p>{t.deviceCard.statusTooltip.legend.yellow}</p>
+                  <p>{t.deviceCard.statusTooltip.legend.red}</p>
+                  <p>{t.deviceCard.statusTooltip.legend.gray}</p>
+                </div>
+              </div>
+            </TooltipContent>
+          </Tooltip>
 
           {/* Device icon and info */}
           <div className="flex-1 min-w-0 flex flex-col justify-center gap-0.5">
@@ -138,8 +252,23 @@ export function DeviceCard({
                     : 'text-slate-700 dark:text-slate-300'
                 }`}
               >
-                {displayName}
+                {actualDisplayName}
               </span>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleEditClick}
+                    className="h-5 w-5 text-slate-400 hover:text-[#1d9bf0] opacity-0 group-hover:opacity-100 transition-opacity"
+                  >
+                    <Edit className="w-3 h-3" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{t.deviceCard.editName}</p>
+                </TooltipContent>
+              </Tooltip>
             </div>
             <span
               className={`text-xs font-mono truncate ${
@@ -148,102 +277,118 @@ export function DeviceCard({
                   : 'text-slate-400 dark:text-slate-500'
               }`}
             >
-              {model || id}
+              {serial}
             </span>
-
-            {/* Agent status */}
-            {agent && (
-              <div className="flex items-center gap-1.5 mt-1">
-                {agent.state === 'busy' && (
-                  <Badge
-                    variant="secondary"
-                    className="text-xs px-1.5 py-0 bg-[#1d9bf0]/10 text-[#1d9bf0] hover:bg-[#1d9bf0]/20"
-                  >
-                    <Loader2 className="w-2.5 h-2.5 animate-spin mr-1" />
-                    {t.deviceCard.agentBusy}
-                  </Badge>
-                )}
-                {agent.state === 'idle' && (
-                  <Badge
-                    variant="secondary"
-                    className="text-xs px-1.5 py-0 bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400"
-                  >
-                    <CheckCircle2 className="w-2.5 h-2.5 mr-1" />
-                    {t.deviceCard.agentIdle}
-                  </Badge>
-                )}
-                {agent.state === 'error' && (
-                  <Badge
-                    variant="secondary"
-                    className="text-xs px-1.5 py-0 bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400"
-                  >
-                    <XCircle className="w-2.5 h-2.5 mr-1" />
-                    {t.deviceCard.agentError}
-                  </Badge>
-                )}
-                {agent.state === 'initializing' && (
-                  <Badge
-                    variant="secondary"
-                    className="text-xs px-1.5 py-0 bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
-                  >
-                    <Clock className="w-2.5 h-2.5 mr-1" />
-                    {t.deviceCard.agentInitializing}
-                  </Badge>
-                )}
-              </div>
-            )}
           </div>
 
-          {/* Connection type badge */}
-          {isUsb && (
-            <Badge
-              variant="outline"
-              className="flex-shrink-0 text-xs border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-400"
-            >
-              USB
-            </Badge>
-          )}
-          {isRemote && (
-            <Badge
-              variant="outline"
-              className="flex-shrink-0 text-xs border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-400"
-            >
-              <WifiOff className="w-2.5 h-2.5 mr-1" />
-              Remote
-            </Badge>
-          )}
+          {/* Right column: Connection type badges */}
+          <div className="flex-shrink-0 flex flex-col items-end gap-1">
+            {/* Connection type badge */}
+            {(() => {
+              if (isRemote) {
+                return (
+                  <Badge
+                    variant="outline"
+                    className="text-xs border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-400"
+                  >
+                    <Server className="w-2.5 h-2.5 mr-1" />
+                    {t.deviceCard.remote || 'Remote'}
+                  </Badge>
+                );
+              } else if (isWifi) {
+                return (
+                  <Badge
+                    variant="outline"
+                    className="text-xs border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-400"
+                  >
+                    <Wifi className="w-2.5 h-2.5 mr-1" />
+                    {t.deviceCard.wifi || 'WiFi'}
+                  </Badge>
+                );
+              } else if (isUsb) {
+                return (
+                  <Badge
+                    variant="outline"
+                    className="text-xs border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-400"
+                  >
+                    USB
+                  </Badge>
+                );
+              }
+              return null;
+            })()}
+          </div>
 
           {/* Action buttons */}
           <div className="flex items-center gap-1 flex-shrink-0">
             {onConnectWifi && isUsb && (
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={handleWifiClick}
-                disabled={loading}
-                className="h-7 w-7 text-slate-400 hover:text-[#1d9bf0]"
-                title={t.deviceCard.connectViaWifi}
-              >
-                {loading ? (
-                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                ) : (
-                  <Wifi className="w-3.5 h-3.5" />
-                )}
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleWifiClick}
+                    disabled={loading}
+                    className="h-7 w-7 text-slate-400 hover:text-[#1d9bf0]"
+                  >
+                    {loading ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <Wifi className="w-3.5 h-3.5" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{t.deviceCard.connectViaWifi}</p>
+                </TooltipContent>
+              </Tooltip>
             )}
-            {onDisconnectWifi && isRemote && (
+            {onDisconnectWifi && isWifi && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleDisconnectClick}
+                    disabled={loading}
+                    className="h-7 w-7 text-slate-400 hover:text-orange-500"
+                  >
+                    {loading ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                    ) : (
+                      <WifiOff className="w-3.5 h-3.5" />
+                    )}
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>
+                  <p>{t.deviceCard.disconnectWifi}</p>
+                </TooltipContent>
+              </Tooltip>
+            )}
+            {isRemote && (
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={handleDisconnectClick}
+                onClick={async e => {
+                  e.stopPropagation();
+                  setLoading(true);
+                  try {
+                    await removeRemoteDevice(serial);
+                    // Refresh will happen via polling
+                  } catch (error) {
+                    console.error('Failed to remove remote device:', error);
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
                 disabled={loading}
-                className="h-7 w-7 text-slate-400 hover:text-orange-500"
-                title={t.deviceCard.disconnectWifi}
+                className="h-7 w-7 text-slate-400 hover:text-red-500"
+                title={t.deviceCard.removeRemote || '移除远程设备'}
               >
                 {loading ? (
                   <Loader2 className="w-3.5 h-3.5 animate-spin" />
                 ) : (
-                  <WifiOff className="w-3.5 h-3.5" />
+                  <Trash2 className="w-3.5 h-3.5" />
                 )}
               </Button>
             )}
@@ -268,6 +413,59 @@ export function DeviceCard({
         onConfirm={handleConfirmDisconnect}
         onCancel={() => setShowDisconnectConfirm(false)}
       />
+
+      {/* Device Name Edit Dialog */}
+      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t.deviceCard.editNameDialogTitle}</DialogTitle>
+            <DialogDescription>
+              {t.deviceCard.editNameDialogDescription}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="device-name">
+                {t.deviceCard.deviceNameLabel}
+              </Label>
+              <Input
+                id="device-name"
+                value={editingName}
+                onChange={e => setEditingName(e.target.value)}
+                placeholder={t.deviceCard.deviceNamePlaceholder}
+                maxLength={100}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' && !saving) {
+                    handleSaveName();
+                  }
+                }}
+              />
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {t.deviceCard.deviceSerialLabel}: {serial}
+              </p>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowEditDialog(false)}
+              disabled={saving}
+            >
+              {t.common.cancel}
+            </Button>
+            <Button onClick={handleSaveName} disabled={saving}>
+              {saving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  {t.common.loading}
+                </>
+              ) : (
+                t.common.save
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

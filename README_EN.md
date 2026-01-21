@@ -343,6 +343,48 @@ uv run python scripts/build.py
 uv run python scripts/build.py --pack
 ```
 
+## 🤝 How to Contribute
+
+We warmly welcome community contributions! Whether it's fixing bugs, adding new features, improving documentation, or sharing your experiences, every contribution is valuable to the project.
+
+### 🎯 Quick Start Contributing
+
+1. **Check the Pinned Issue** - [🎯 Start Here: How to Contribute / Claim Tasks / Run Locally](https://github.com/suyiiyii/AutoGLM-GUI/issues/170)
+2. **Read the Contribution Guide** - See [CONTRIBUTING.md](./CONTRIBUTING.md) for detailed steps
+3. **Claim a Task** - Comment `/assign me` on the Issue you're interested in
+
+### 💡 Ways to Contribute
+
+- 🐛 **Fix Bugs** - Look for Issues labeled `bug`
+- ✨ **Add Features** - Implement Issues labeled `enhancement`
+- 📖 **Improve Documentation** - Fix errors, add explanations, provide examples
+- 🧪 **Add Tests** - Improve code quality and test coverage
+- 🌍 **Translate Docs** - Help users in other languages
+
+### 🏷️ Beginner-Friendly Tasks
+
+If this is your first time contributing to open source, you can start with:
+
+- Look for Issues labeled [`good first issue`](https://github.com/suyiiyii/AutoGLM-GUI/labels/good%20first%20issue)
+- Improve documentation (fix typos, add explanations)
+- Test the software and report your experience
+
+### 📚 Reference Resources
+
+| Document | Description |
+|----------|-------------|
+| [CONTRIBUTING.md](./CONTRIBUTING.md) | Complete contribution guide (setup, workflow, PR standards) |
+| [CLAUDE.md](./CLAUDE.md) | Technical architecture documentation (code structure, key details) |
+| [Issues](https://github.com/suyiiyii/AutoGLM-GUI/issues) | Browse and claim tasks |
+
+### 💬 Discussion
+
+- 💭 Discuss ideas and questions in Issues
+- 🎮 Join our [QQ Group](https://qm.qq.com/q/J5eAs9tn0W)
+- 📝 [Create a new Issue](https://github.com/suyiiyii/AutoGLM-GUI/issues/new/choose) to report problems or suggest improvements
+
+Thank you to all contributors - you make AutoGLM-GUI better! 🎉
+
 ## 📝 License
 
 Apache License 2.0

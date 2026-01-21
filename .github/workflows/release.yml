@@ -5,6 +5,10 @@ on:
     tags:
       - v*
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
 jobs:
   release:
     name: Release
@@ -20,15 +24,10 @@ jobs:
       - name: Setup Python & uv
         uses: ./.github/actions/setup-python
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      - name: Setup Node.js & pnpm
+        uses: ./.github/actions/setup-node
         with:
-          node-version: "20"
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 9
+          pnpm-version: "10"
 
       - name: Get Version
         id: version
@@ -74,6 +73,67 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  build-docker:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: release
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Get version from tag
+        id: version
+        run: |
+          echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+          echo "VERSION=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          platforms: linux/amd64
+
+      - name: Generate summary
+        run: |
+          echo "## Docker Image Published" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Version:** ${{ steps.version.outputs.VERSION }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+
   # Build Electron application for macOS
   build-electron-macos:
     name: Build Electron (macOS ARM64)
@@ -86,47 +146,20 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install uv
+      - name: Pre-clean mounted images and disable Spotlight
         run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          # Disable Spotlight indexing to prevent mds interference
+          sudo mdutil -a -i off || true
+          # Kill any mds processes that might be accessing disk images
+          sudo pkill -9 mds || true
+          sudo pkill -9 mds_stores || true
+          # Unmount all mounted disk images
+          hdiutil info | awk '/\/dev\/disk[0-9]+/ {print $1}' | xargs -n1 -I{} hdiutil detach -force -quiet {} || true
+          # Give the system time to clean up resources
+          sleep 5
 
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-          cache-dependency-path: 'frontend/pnpm-lock.yaml'
-
-      - name: Get pnpm store directory
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
-      - name: Cache uv
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-uv-
+      - name: Setup Electron build environment
+        uses: ./.github/actions/setup-electron-build
 
       - name: Build Electron application
         run: uv run python scripts/build_electron.py
@@ -150,6 +183,74 @@ jobs:
             echo "Uploading blockmap: $(basename "$blockmap_file")"
             gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} "$blockmap_file"
           fi
+
+          # Upload latest-mac.yml (auto-update metadata)
+          latest_yml=$(find electron/dist -type f -name "latest-mac.yml" | head -n 1)
+          if [ -n "$latest_yml" ]; then
+            echo "Uploading latest-mac.yml"
+            gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} "$latest_yml"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Build Electron application for macOS (Intel x64)
+  build-electron-macos-x64:
+    name: Build Electron (macOS x64)
+    runs-on: macos-15-intel
+    needs: release
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Disable Spotlight indexing and clean mounted images
+        run: |
+          # Disable Spotlight indexing to prevent mds interference
+          sudo mdutil -a -i off || true
+          # Kill any mds processes that might be accessing disk images
+          sudo pkill -9 mds || true
+          sudo pkill -9 mds_stores || true
+          # Unmount all mounted disk images
+          hdiutil info | awk '/\/dev\/disk[0-9]+/ {print $1}' | xargs -n1 -I{} hdiutil detach -force -quiet {} || true
+          # Give the system time to clean up resources
+          sleep 5
+
+      - name: Setup Electron build environment
+        uses: ./.github/actions/setup-electron-build
+        with:
+          cache-suffix: "x64"
+
+      - name: Build Electron application
+        run: uv run python scripts/build_electron.py
+
+      - name: Get version
+        id: version
+        run: echo "TAG_NAME=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Find and upload macOS x64 artifacts
+        run: |
+          # Find DMG file
+          dmg_file=$(find electron/dist -type f -name "*.dmg" ! -name "*.blockmap" | head -n 1)
+          if [ -n "$dmg_file" ]; then
+            echo "Uploading DMG: $(basename "$dmg_file")"
+            gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} "$dmg_file"
+          fi
+
+          # Find blockmap file
+          blockmap_file=$(find electron/dist -type f -name "*.dmg.blockmap" | head -n 1)
+          if [ -n "$blockmap_file" ]; then
+            echo "Uploading blockmap: $(basename "$blockmap_file")"
+            gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} "$blockmap_file"
+          fi
+
+          # Upload latest-mac.yml (auto-update metadata)
+          latest_yml=$(find electron/dist -type f -name "latest-mac.yml" | head -n 1)
+          if [ -n "$latest_yml" ]; then
+            echo "Uploading latest-mac.yml"
+            gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} "$latest_yml"
+          fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -168,49 +269,10 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - name: Setup Electron build environment
+        uses: ./.github/actions/setup-electron-build
         with:
-          python-version: '3.11'
-
-      - name: Install uv
-        shell: pwsh
-        run: |
-          irm https://astral.sh/uv/install.ps1 | iex
-          echo "$env:USERPROFILE\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '24'
-          cache: 'pnpm'
-          cache-dependency-path: 'frontend/pnpm-lock.yaml'
-
-      - name: Get pnpm store directory
-        shell: pwsh
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $env:GITHUB_ENV
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
-      - name: Cache uv
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-uv-
+          node-version: "24"
 
       - name: Build Electron application
         run: uv run python scripts/build_electron.py
@@ -245,6 +307,13 @@ jobs:
             Write-Host "Uploading blockmap: $($blockmap.Name)"
             gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} $blockmap.FullName
           }
+
+          # Upload latest.yml (auto-update metadata)
+          $latestYml = Get-ChildItem -Path electron\dist -Filter latest.yml -File | Select-Object -First 1
+          if ($latestYml) {
+            Write-Host "Uploading latest.yml"
+            gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} $latestYml.FullName
+          }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -260,47 +329,8 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Setup Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: '3.11'
-
-      - name: Install uv
-        run: |
-          curl -LsSf https://astral.sh/uv/install.sh | sh
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
-
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
-          cache: 'pnpm'
-          cache-dependency-path: 'frontend/pnpm-lock.yaml'
-
-      - name: Get pnpm store directory
-        run: |
-          echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
-
-      - name: Cache pnpm store
-        uses: actions/cache@v4
-        with:
-          path: ${{ env.STORE_PATH }}
-          key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
-          restore-keys: |
-            ${{ runner.os }}-pnpm-store-
-
-      - name: Cache uv
-        uses: actions/cache@v4
-        with:
-          path: ~/.cache/uv
-          key: ${{ runner.os }}-uv-${{ hashFiles('**/uv.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-uv-
+      - name: Setup Electron build environment
+        uses: ./.github/actions/setup-electron-build
 
       - name: Build Electron application
         run: uv run python scripts/build_electron.py
@@ -330,6 +360,13 @@ jobs:
           if [ -n "$targz_file" ]; then
             echo "Uploading tar.gz: $(basename "$targz_file")"
             gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} "$targz_file"
+          fi
+
+          # Upload latest-linux.yml (auto-update metadata)
+          latest_yml=$(find electron/dist -type f -name "latest-linux.yml" | head -n 1)
+          if [ -n "$latest_yml" ]; then
+            echo "Uploading latest-linux.yml"
+            gh release upload --clobber ${{ steps.version.outputs.TAG_NAME }} "$latest_yml"
           fi
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

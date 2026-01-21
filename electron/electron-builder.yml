@@ -2,6 +2,16 @@ appId: com.autoglm.gui
 productName: AutoGLM GUI
 copyright: Copyright © 2025
 
+# 配置发布到 GitHub Releases
+publish:
+  provider: github
+  owner: suyiiyii
+  repo: AutoGLM-GUI
+  releaseType: release
+
+# 启用更新元数据生成
+electronUpdaterCompatibility: ">=2.16"
+
 # 使用本地 Electron，避免网络下载
 electronDist: node_modules/electron/dist
 
@@ -13,8 +23,11 @@ directories:
   buildResources: build
 
 files:
-  - "**/*"
-  - "!node_modules"
+  - "main.js"
+  - "preload.js"
+  - "afterPack.js"
+  - "package.json"
+  # 不显式配置 node_modules，让 electron-builder 自动从 dependencies 中包含运行时依赖
 
 extraResources:
   - from: ../resources/backend
@@ -45,6 +58,14 @@ mac:
   category: public.app-category.developer-tools
   # 开发阶段不签名，使用 xattr -cr 移除隔离属性
   identity: null
+
+dmg:
+  # 启用 writeUpdateInfo 生成 latest-mac.yml（自动更新必需）
+  writeUpdateInfo: true
+  format: UDZO
+  sign: false
+  internetEnabled: false
+
 
 linux:
   target:

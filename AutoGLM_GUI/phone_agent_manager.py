@@ -1,25 +1,24 @@
-"""PhoneAgent lifecycle and concurrency manager (singleton)."""
+"""Agent lifecycle and concurrency manager (singleton)."""
 
 from __future__ import annotations
 
+import asyncio
 import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import Enum
-from typing import TYPE_CHECKING, Callable, Optional
+from typing import Awaitable, Callable, Optional
 
+from AutoGLM_GUI.agents.protocols import AsyncAgent, BaseAgent
+from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.exceptions import (
     AgentInitializationError,
     AgentNotInitializedError,
     DeviceBusyError,
 )
 from AutoGLM_GUI.logger import logger
-
-if TYPE_CHECKING:
-    from phone_agent import PhoneAgent
-    from phone_agent.agent import AgentConfig
-    from phone_agent.model import ModelConfig
+from AutoGLM_GUI.types import AgentSpecificConfig
 
 
 class AgentState(str, Enum):
@@ -33,29 +32,28 @@ class AgentState(str, Enum):
 
 @dataclass
 class AgentMetadata:
-    """Metadata for a PhoneAgent instance."""
+    """Metadata for an agent instance."""
 
     device_id: str
     state: AgentState
     model_config: ModelConfig
     agent_config: AgentConfig
-    created_at: float
-    last_used: float
+    agent_type: str = "glm"
+    created_at: float = 0.0
+    last_used: float = 0.0
     error_message: Optional[str] = None
 
 
 @dataclass
 class StreamingAgentContext:
-    """Streaming agent 会话上下文."""
-
-    streaming_agent: "PhoneAgent"
-    original_agent: "PhoneAgent"
+    streaming_agent: BaseAgent
+    original_agent: BaseAgent
     stop_event: threading.Event
 
 
 class PhoneAgentManager:
     """
-    Singleton manager for PhoneAgent lifecycle and concurrency control.
+    Singleton manager for agent lifecycle and concurrency control.
 
     Features:
     - Thread-safe agent creation/destruction
@@ -74,10 +72,7 @@ class PhoneAgentManager:
     Example:
         >>> manager = PhoneAgentManager.get_instance()
         >>>
-        >>> # Initialize agent
-        >>> agent = manager.initialize_agent(device_id, model_config, agent_config)
-        >>>
-        >>> # Use agent with automatic locking
+        >>> # Use agent with automatic locking (auto-initializes if needed)
         >>> with manager.use_agent(device_id) as agent:
         >>>     result = agent.run("Open WeChat")
     """
@@ -95,17 +90,21 @@ class PhoneAgentManager:
         self._device_locks_lock = threading.Lock()
 
         # Agent metadata (indexed by device_id)
+        # State is stored in AgentMetadata.state (single source of truth)
         self._metadata: dict[str, AgentMetadata] = {}
-
-        # State tracking
-        self._states: dict[str, AgentState] = {}
 
         # Streaming agent state (device_id -> StreamingAgentContext)
         self._streaming_contexts: dict[str, StreamingAgentContext] = {}
         self._streaming_contexts_lock = threading.Lock()
 
-        # Abort events (device_id -> threading.Event)
-        self._abort_events: dict[str, threading.Event] = {}
+        self._abort_events: dict[
+            str, threading.Event | Callable[[], None] | Callable[[], Awaitable[None]]
+        ] = {}
+
+        # Agent storage (transition from global state to instance state)
+        # Agents can be either AsyncAgent or BaseAgent depending on agent_type
+        self._agents: dict[str, AsyncAgent | BaseAgent] = {}
+        self._agent_configs: dict[str, tuple[ModelConfig, AgentConfig]] = {}
 
     @classmethod
     def get_instance(cls) -> PhoneAgentManager:
@@ -119,316 +118,188 @@ class PhoneAgentManager:
 
     # ==================== Agent Lifecycle ====================
 
-    def initialize_agent(
+    def initialize_agent_with_factory(
         self,
         device_id: str,
+        agent_type: str,
         model_config: ModelConfig,
         agent_config: AgentConfig,
+        agent_specific_config: AgentSpecificConfig,
         takeover_callback: Optional[Callable] = None,
+        confirmation_callback: Optional[Callable] = None,
         force: bool = False,
-    ) -> PhoneAgent:
-        """
-        Initialize PhoneAgent for a device (thread-safe, idempotent).
-
-        Args:
-            device_id: Device identifier (USB serial / IP:port)
-            model_config: Model configuration
-            agent_config: Agent configuration
-            takeover_callback: Optional takeover callback
-            force: Force re-initialization even if agent exists
-
-        Returns:
-            PhoneAgent: Initialized agent instance
-
-        Raises:
-            AgentInitializationError: If initialization fails
-            DeviceBusyError: If device is currently processing
-
-        Transactional Guarantee:
-            - On failure, state is rolled back
-            - state.agents and state.agent_configs remain consistent
-        """
-        from phone_agent import PhoneAgent
-
-        from AutoGLM_GUI.state import agent_configs, agents, non_blocking_takeover
+    ) -> AsyncAgent | BaseAgent:
+        from AutoGLM_GUI.agents import create_agent
 
         with self._manager_lock:
-            # Check if already initialized
-            if device_id in agents and not force:
+            if device_id in self._agents and not force:
                 logger.debug(f"Agent already initialized for {device_id}")
-                return agents[device_id]
+                return self._agents[device_id]
 
-            # Check device availability (non-blocking check)
             device_lock = self._get_device_lock(device_id)
             if device_lock.locked():
                 raise DeviceBusyError(
                     f"Device {device_id} is currently processing a request"
                 )
 
-            # Set initializing state
-            self._states[device_id] = AgentState.INITIALIZING
+            self._metadata[device_id] = AgentMetadata(
+                device_id=device_id,
+                state=AgentState.INITIALIZING,
+                model_config=model_config,
+                agent_config=agent_config,
+                agent_type=agent_type,
+                created_at=time.time(),
+                last_used=time.time(),
+            )
 
             try:
-                # Create agent
-                agent = PhoneAgent(
+                from AutoGLM_GUI.device_manager import DeviceManager
+
+                device_manager = DeviceManager.get_instance()
+                # Use agent_config.device_id (actual device ID) instead of device_id (storage key)
+                # to get device protocol, as device_id may be a composite key like "device_id:context"
+                actual_device_id = agent_config.device_id
+                if not actual_device_id:
+                    raise AgentInitializationError(
+                        "agent_config.device_id is required but was None"
+                    )
+                try:
+                    device = device_manager.get_device_protocol(actual_device_id)
+                except ValueError:
+                    # Ensure cold starts refresh device cache before failing.
+                    device_manager.force_refresh()
+                    device = device_manager.get_device_protocol(actual_device_id)
+
+                agent = create_agent(
+                    agent_type=agent_type,
                     model_config=model_config,
                     agent_config=agent_config,
-                    takeover_callback=takeover_callback or non_blocking_takeover,
+                    agent_specific_config=agent_specific_config,
+                    device=device,
+                    takeover_callback=takeover_callback,
+                    confirmation_callback=confirmation_callback,
                 )
 
-                # Store in state (transactional)
-                agents[device_id] = agent
-                agent_configs[device_id] = (model_config, agent_config)
+                self._agents[device_id] = agent
+                self._agent_configs[device_id] = (model_config, agent_config)
 
-                # Update metadata
-                self._metadata[device_id] = AgentMetadata(
-                    device_id=device_id,
-                    state=AgentState.IDLE,
-                    model_config=model_config,
-                    agent_config=agent_config,
-                    created_at=time.time(),
-                    last_used=time.time(),
+                self._metadata[device_id].state = AgentState.IDLE
+
+                logger.info(
+                    f"Agent of type '{agent_type}' initialized for device {device_id}"
                 )
-                self._states[device_id] = AgentState.IDLE
-
-                logger.info(f"Agent initialized for device {device_id}")
                 return agent
 
             except Exception as e:
-                # Rollback on error
-                agents.pop(device_id, None)
-                agent_configs.pop(device_id, None)
-                self._metadata.pop(device_id, None)
-                self._states[device_id] = AgentState.ERROR
+                self._agents.pop(device_id, None)
+                self._agent_configs.pop(device_id, None)
+                self._metadata[device_id].state = AgentState.ERROR
+                self._metadata[device_id].error_message = str(e)
 
                 logger.error(f"Failed to initialize agent for {device_id}: {e}")
                 raise AgentInitializationError(
                     f"Failed to initialize agent: {str(e)}"
                 ) from e
 
-    def _create_streaming_agent(
-        self,
-        model_config: "ModelConfig",
-        agent_config: "AgentConfig",
-        on_thinking_chunk: Callable[[str], None],
-    ) -> "PhoneAgent":
-        """
-        创建支持流式输出的 PhoneAgent（monkey-patched model_client）.
-
-        Args:
-            model_config: 模型配置
-            agent_config: Agent 配置
-            on_thinking_chunk: 思考块回调函数
-
-        Returns:
-            已 patch 的 PhoneAgent 实例
-        """
-        from phone_agent import PhoneAgent
-
-        from AutoGLM_GUI.state import non_blocking_takeover
-
-        # 创建 agent
-        agent = PhoneAgent(
-            model_config=model_config,
-            agent_config=agent_config,
-            takeover_callback=non_blocking_takeover,
-        )
-
-        # Monkey-patch model_client.request 以支持流式回调
-        original_request = agent.model_client.request
-
-        def patched_request(messages, **kwargs):
-            return original_request(messages, on_thinking_chunk=on_thinking_chunk)
-
-        agent.model_client.request = patched_request
-
-        return agent
-
-    @contextmanager
-    def use_streaming_agent(
-        self,
-        device_id: str,
-        on_thinking_chunk: Callable[[str], None],
-        timeout: Optional[float] = None,
-        auto_initialize: bool = True,
-    ):
-        """
-        Context manager for streaming-enabled agent with automatic:
-        - 设备锁获取/释放
-        - Streaming agent 创建（带 monkey-patch）
-        - 上下文隔离和同步
-        - Abort 事件注册/清理
-
-        By default, automatically initializes the agent using global configuration
-        if not already initialized. Set auto_initialize=False to require explicit
-        initialization via initialize_agent().
-
-        Args:
-            device_id: 设备标识符
-            on_thinking_chunk: 流式思考块回调函数
-            timeout: 锁获取超时时间（None=阻塞，0=非阻塞）
-            auto_initialize: 自动初始化（默认: True）
-
-        Yields:
-            tuple[PhoneAgent, threading.Event]: (streaming_agent, stop_event)
-
-        Raises:
-            DeviceBusyError: 设备忙
-            AgentNotInitializedError: Agent 未初始化且 auto_initialize=False
-            AgentInitializationError: auto_initialize=True 且初始化失败
-
-        Example:
-            >>> def on_chunk(chunk: str):
-            >>>     print(chunk, end='', flush=True)
-            >>>
-            >>> with manager.use_streaming_agent("device_123", on_chunk) as (agent, stop_event):
-            >>>     result = agent.step("Open WeChat")
-        """
-        acquired = False
-        streaming_agent = None
-        stop_event = threading.Event()
-
-        try:
-            # 获取设备锁（默认非阻塞）
-            acquired = self.acquire_device(
-                device_id,
-                timeout=timeout if timeout is not None else 0,
-                raise_on_timeout=True,
-                auto_initialize=auto_initialize,
-            )
-
-            # 获取原始 agent 和配置
-            original_agent = self.get_agent(device_id)
-            model_config, agent_config = self.get_config(device_id)
-
-            # 创建 streaming agent
-            streaming_agent = self._create_streaming_agent(
-                model_config=model_config,
-                agent_config=agent_config,
-                on_thinking_chunk=on_thinking_chunk,
-            )
-
-            # 复制上下文（由于持有设备锁，线程安全）
-            streaming_agent._context = original_agent._context.copy()
-            streaming_agent._step_count = original_agent._step_count
-
-            # 注册 abort 事件
-            with self._streaming_contexts_lock:
-                self._abort_events[device_id] = stop_event
-                self._streaming_contexts[device_id] = StreamingAgentContext(
-                    streaming_agent=streaming_agent,
-                    original_agent=original_agent,
-                    stop_event=stop_event,
-                )
-
-            logger.debug(f"Streaming agent created for {device_id}")
-
-            yield streaming_agent, stop_event
-
-        finally:
-            # 同步状态回原始 agent
-            if streaming_agent and not stop_event.is_set():
-                original_agent = self.get_agent_safe(device_id)
-                if original_agent:
-                    original_agent._context = streaming_agent._context
-                    original_agent._step_count = streaming_agent._step_count
-                    logger.debug(
-                        f"Synchronized context back to original agent for {device_id}"
-                    )
-
-            # 清理 abort 事件注册
-            with self._streaming_contexts_lock:
-                self._abort_events.pop(device_id, None)
-                self._streaming_contexts.pop(device_id, None)
-
-            # 释放设备锁
-            if acquired:
-                self.release_device(device_id)
-
-    def _auto_initialize_agent(self, device_id: str) -> None:
+    def _auto_initialize_agent(
+        self, agent_key: str, actual_device_id: str, agent_type: str | None = None
+    ) -> None:
         """
         使用全局配置自动初始化 agent（内部方法，需在 manager_lock 内调用）.
 
+        使用 factory 模式创建 agent，避免直接依赖 phone_agent.PhoneAgent。
+
         Args:
-            device_id: 设备标识符
+            agent_key: Agent 存储键（可能是 device_id 或 device_id:context）
+            actual_device_id: 实际设备标识符（用于设备操作）
+            agent_type: 可选的 agent 类型覆盖
 
         Raises:
             AgentInitializationError: 如果配置不完整或初始化失败
         """
-        from phone_agent.agent import AgentConfig
-        from phone_agent.model import ModelConfig
+        from typing import cast
 
-        from AutoGLM_GUI.config import config
+        from AutoGLM_GUI.config import AgentConfig, ModelConfig
         from AutoGLM_GUI.config_manager import config_manager
+        from AutoGLM_GUI.types import AgentSpecificConfig
 
-        logger.info(f"Auto-initializing agent for device {device_id}...")
+        logger.info(
+            f"Auto-initializing agent for key {agent_key} (device: {actual_device_id})..."
+        )
 
         # 热重载配置
         config_manager.load_file_config()
         config_manager.sync_to_env()
-        config.refresh_from_env()
 
         effective_config = config_manager.get_effective_config()
 
         if not effective_config.base_url:
             raise AgentInitializationError(
-                f"Cannot auto-initialize agent for {device_id}: base_url not configured. "
+                f"Cannot auto-initialize agent for {agent_key}: base_url not configured. "
                 f"Please configure base_url via /api/config or call /api/init explicitly."
             )
 
+        # 使用本地配置类型
         model_config = ModelConfig(
             base_url=effective_config.base_url,
             api_key=effective_config.api_key,
             model_name=effective_config.model_name,
         )
 
-        agent_config = AgentConfig(device_id=device_id)
+        # 使用实际的 device_id 创建 AgentConfig
+        agent_config = AgentConfig(device_id=actual_device_id)
 
-        # 调用 initialize_agent（RLock 支持重入，不会死锁）
-        self.initialize_agent(device_id, model_config, agent_config)
-        logger.info(f"Agent auto-initialized for device {device_id}")
+        # 调用 factory 方法创建 agent（避免直接依赖 phone_agent）
+        agent_specific_config = cast(
+            AgentSpecificConfig, effective_config.agent_config_params or {}
+        )
+        # 使用提供的 agent_type 或从配置中获取
+        effective_agent_type = agent_type or effective_config.agent_type
+        self.initialize_agent_with_factory(
+            device_id=agent_key,
+            agent_type=effective_agent_type,
+            model_config=model_config,
+            agent_config=agent_config,
+            agent_specific_config=agent_specific_config,
+        )
+        logger.info(f"Agent auto-initialized for key {agent_key}")
 
-    def get_agent(self, device_id: str) -> PhoneAgent:
-        """
-        Get initialized agent for a device.
+    def get_agent(self, device_id: str) -> AsyncAgent | BaseAgent:
+        """Get agent using default context (backward compatible)."""
+        return self.get_agent_with_context(device_id, context="default")
 
-        Auto-initializes the agent using global config if not already initialized.
-
-        Args:
-            device_id: Device identifier
-
-        Returns:
-            PhoneAgent: Agent instance
-
-        Raises:
-            AgentInitializationError: If agent not initialized and auto-init fails
-        """
-        from AutoGLM_GUI.state import agents
-
-        with self._manager_lock:
-            if device_id not in agents:
-                # 自动初始化：使用全局配置
-                self._auto_initialize_agent(device_id)
-            return agents[device_id]
-
-    def get_agent_safe(self, device_id: str) -> Optional[PhoneAgent]:
-        """
-        Get initialized agent for a device (safe version, no exception).
+    def get_agent_with_context(
+        self,
+        device_id: str,
+        context: str = "default",
+        agent_type: str | None = None,
+    ) -> AsyncAgent | BaseAgent:
+        """Get or create agent for specific context.
 
         Args:
             device_id: Device identifier
+            context: Context identifier (e.g., "chat", "default")
+            agent_type: Optional agent type override
 
         Returns:
-            PhoneAgent or None: Agent instance or None if not initialized
+            Agent instance for this device+context combination
         """
-        from AutoGLM_GUI.state import agents
-
         with self._manager_lock:
-            return agents.get(device_id)
+            # Use composite key for context isolation (except for default)
+            agent_key = device_id if context == "default" else f"{device_id}:{context}"
+
+            if agent_key not in self._agents:
+                self._auto_initialize_agent(agent_key, device_id, agent_type=agent_type)
+
+            return self._agents[agent_key]
+
+    def get_agent_safe(self, device_id: str) -> AsyncAgent | BaseAgent | None:
+        with self._manager_lock:
+            return self._agents.get(device_id)
 
     def reset_agent(self, device_id: str) -> None:
         """
-        Reset agent state and rebuild from cached config.
+        Reset agent state by calling the agent's reset() method.
 
         Args:
             device_id: Device identifier
@@ -436,39 +307,20 @@ class PhoneAgentManager:
         Raises:
             AgentNotInitializedError: If agent not initialized
         """
-        from phone_agent import PhoneAgent
-
-        from AutoGLM_GUI.state import agent_configs, agents, non_blocking_takeover
-
         with self._manager_lock:
-            if device_id not in agents:
+            if device_id not in self._agents:
                 raise AgentNotInitializedError(
                     f"Agent not initialized for device {device_id}"
                 )
 
-            # Get cached config
-            if device_id not in agent_configs:
-                logger.warning(
-                    f"No cached config for {device_id}, only resetting agent state"
-                )
-                agents[device_id].reset()
-                return
-
-            # Rebuild agent from cached config
-            model_config, agent_config = agent_configs[device_id]
-
-            agents[device_id] = PhoneAgent(
-                model_config=model_config,
-                agent_config=agent_config,
-                takeover_callback=non_blocking_takeover,
-            )
+            # Reset agent state using its reset() method
+            self._agents[device_id].reset()
 
             # Update metadata
             if device_id in self._metadata:
                 self._metadata[device_id].last_used = time.time()
                 self._metadata[device_id].error_message = None
-
-            self._states[device_id] = AgentState.IDLE
+                self._metadata[device_id].state = AgentState.IDLE
 
             logger.info(f"Agent reset for device {device_id}")
 
@@ -479,11 +331,9 @@ class PhoneAgentManager:
         Args:
             device_id: Device identifier
         """
-        from AutoGLM_GUI.state import agent_configs, agents
-
         with self._manager_lock:
             # Remove agent
-            agent = agents.pop(device_id, None)
+            agent = self._agents.pop(device_id, None)
             if agent:
                 try:
                     agent.reset()  # Clean up agent state
@@ -491,20 +341,17 @@ class PhoneAgentManager:
                     logger.warning(f"Error resetting agent during destroy: {e}")
 
             # Remove config
-            agent_configs.pop(device_id, None)
+            self._agent_configs.pop(device_id, None)
 
             # Remove metadata
             self._metadata.pop(device_id, None)
-            self._states.pop(device_id, None)
 
             logger.info(f"Agent destroyed for device {device_id}")
 
     def is_initialized(self, device_id: str) -> bool:
         """Check if agent is initialized for device."""
-        from AutoGLM_GUI.state import agents
-
         with self._manager_lock:
-            return device_id in agents
+            return device_id in self._agents
 
     # ==================== Concurrency Control ====================
 
@@ -559,7 +406,7 @@ class PhoneAgentManager:
                 # Double-check locking pattern for thread safety
                 with self._manager_lock:
                     if not self.is_initialized(device_id):
-                        self._auto_initialize_agent(device_id)
+                        self._auto_initialize_agent(device_id, device_id)
             else:
                 raise AgentNotInitializedError(
                     f"Agent not initialized for device {device_id}. "
@@ -582,8 +429,8 @@ class PhoneAgentManager:
         if acquired:
             # Update state
             with self._manager_lock:
-                self._states[device_id] = AgentState.BUSY
                 if device_id in self._metadata:
+                    self._metadata[device_id].state = AgentState.BUSY
                     self._metadata[device_id].last_used = time.time()
 
             logger.debug(f"Device lock acquired for {device_id}")
@@ -610,7 +457,8 @@ class PhoneAgentManager:
 
             # Update state
             with self._manager_lock:
-                self._states[device_id] = AgentState.IDLE
+                if device_id in self._metadata:
+                    self._metadata[device_id].state = AgentState.IDLE
 
             logger.debug(f"Device lock released for {device_id}")
 
@@ -626,7 +474,7 @@ class PhoneAgentManager:
 
         By default, automatically initializes the agent using global configuration
         if not already initialized. Set auto_initialize=False to require explicit
-        initialization via initialize_agent().
+        initialization via initialize_agent_with_factory().
 
         Args:
             device_id: Device identifier
@@ -634,7 +482,7 @@ class PhoneAgentManager:
             auto_initialize: Auto-initialize if not already initialized (default: True)
 
         Yields:
-            PhoneAgent: Agent instance
+            BaseAgent: Agent instance
 
         Raises:
             DeviceBusyError: If device is busy
@@ -671,13 +519,14 @@ class PhoneAgentManager:
     def get_state(self, device_id: str) -> AgentState:
         """Get current agent state."""
         with self._manager_lock:
-            return self._states.get(device_id, AgentState.ERROR)
+            metadata = self._metadata.get(device_id)
+            return metadata.state if metadata else AgentState.ERROR
 
     def set_error_state(self, device_id: str, error_message: str) -> None:
         """Mark agent as errored."""
         with self._manager_lock:
-            self._states[device_id] = AgentState.ERROR
             if device_id in self._metadata:
+                self._metadata[device_id].state = AgentState.ERROR
                 self._metadata[device_id].error_message = error_message
 
             logger.error(f"Agent error for {device_id}: {error_message}")
@@ -686,97 +535,52 @@ class PhoneAgentManager:
 
     def get_config(self, device_id: str) -> tuple[ModelConfig, AgentConfig]:
         """Get cached configuration for device."""
-        from AutoGLM_GUI.state import agent_configs
-
         with self._manager_lock:
-            if device_id not in agent_configs:
+            if device_id not in self._agent_configs:
                 raise AgentNotInitializedError(
                     f"No configuration found for device {device_id}"
                 )
-            return agent_configs[device_id]
-
-    def update_config(
-        self,
-        device_id: str,
-        model_config: Optional[ModelConfig] = None,
-        agent_config: Optional[AgentConfig] = None,
-    ) -> None:
-        """
-        Update agent configuration (requires reinitialization).
-
-        Args:
-            device_id: Device identifier
-            model_config: New model config (None = keep existing)
-            agent_config: New agent config (None = keep existing)
-        """
-        from AutoGLM_GUI.state import agent_configs
-
-        with self._manager_lock:
-            if device_id not in agent_configs:
-                raise AgentNotInitializedError(
-                    f"No configuration found for device {device_id}"
-                )
-
-            old_model_config, old_agent_config = agent_configs[device_id]
-
-            new_model_config = model_config or old_model_config
-            new_agent_config = agent_config or old_agent_config
-
-            # Reinitialize with new config
-            self.initialize_agent(
-                device_id,
-                new_model_config,
-                new_agent_config,
-                force=True,
-            )
-
-    # ==================== DeviceManager Integration ====================
-
-    def find_agent_by_serial(self, serial: str) -> Optional[str]:
-        """
-        Find agent device_id by hardware serial (connection switching support).
-
-        Args:
-            serial: Hardware serial number
-
-        Returns:
-            Optional[str]: device_id of initialized agent, or None
-        """
-        from AutoGLM_GUI.device_manager import DeviceManager
-        from AutoGLM_GUI.state import agents
-
-        with self._manager_lock:
-            # Get device by serial from DeviceManager
-            device_manager = DeviceManager.get_instance()
-            device = device_manager._devices.get(serial)
-
-            if not device:
-                return None
-
-            # Check all connections for initialized agents
-            for conn in device.connections:
-                if conn.device_id in agents:
-                    return conn.device_id
-
-            return None
+            return self._agent_configs[device_id]
 
     # ==================== Introspection ====================
 
     def list_agents(self) -> list[str]:
         """Get list of all initialized device IDs."""
-        from AutoGLM_GUI.state import agents
-
         with self._manager_lock:
-            return list(agents.keys())
+            return list(self._agents.keys())
 
     def get_metadata(self, device_id: str) -> Optional[AgentMetadata]:
         """Get agent metadata."""
         with self._manager_lock:
             return self._metadata.get(device_id)
 
-    def abort_streaming_chat(self, device_id: str) -> bool:
+    def register_abort_handler(
+        self,
+        device_id: str,
+        abort_handler: threading.Event
+        | Callable[[], None]
+        | Callable[[], Awaitable[None]],
+    ) -> None:
+        """注册取消处理器 (支持同步和异步处理器)。
+
+        Args:
+            device_id: 设备标识符
+            abort_handler: 取消处理器 (Event / 同步函数 / 异步函数)
         """
-        中止正在进行的流式对话.
+        with self._streaming_contexts_lock:
+            self._abort_events[device_id] = abort_handler
+
+    def unregister_abort_handler(self, device_id: str) -> None:
+        """注销取消处理器。
+
+        Args:
+            device_id: 设备标识符
+        """
+        with self._streaming_contexts_lock:
+            self._abort_events.pop(device_id, None)
+
+    async def abort_streaming_chat_async(self, device_id: str) -> bool:
+        """异步中止流式对话 (支持 AsyncAgent)。
 
         Args:
             device_id: 设备标识符
@@ -785,12 +589,72 @@ class PhoneAgentManager:
             bool: True 表示发送了中止信号，False 表示没有活跃会话
         """
         with self._streaming_contexts_lock:
-            if device_id in self._abort_events:
-                logger.info(f"Aborting streaming chat for device {device_id}")
-                self._abort_events[device_id].set()
+            if device_id not in self._abort_events:
+                logger.warning(f"No active streaming chat for device {device_id}")
+                return False
+
+            logger.info(f"Aborting async streaming chat for device {device_id}")
+            handler = self._abort_events[device_id]
+
+        # 执行取消 (根据类型选择方式)
+        if isinstance(handler, threading.Event):
+            handler.set()
+        elif asyncio.iscoroutinefunction(handler):
+            await handler()
+        elif callable(handler):
+            handler()
+        else:
+            logger.warning(f"Unknown abort handler type: {type(handler)}")
+            return False
+
+        return True
+
+    def abort_streaming_chat(self, device_id: str) -> bool:
+        """同步中止流式对话 (向后兼容)。
+
+        Args:
+            device_id: 设备标识符
+
+        Returns:
+            bool: True 表示发送了中止信号，False 表示没有活跃会话
+        """
+        with self._streaming_contexts_lock:
+            if device_id not in self._abort_events:
+                logger.warning(f"No active streaming chat for device {device_id}")
+                return False
+
+            logger.info(f"Aborting streaming chat for device {device_id}")
+            handler = self._abort_events[device_id]
+
+            if isinstance(handler, threading.Event):
+                handler.set()
+                return True
+            elif asyncio.iscoroutinefunction(handler):
+                logger.warning(
+                    f"Detected async handler for {device_id}, "
+                    f"but called sync abort. Use abort_streaming_chat_async instead."
+                )
+                # 尝试在当前线程的 event loop 中运行
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        # 不能在运行中的 loop 中调用 run_until_complete
+                        # 创建一个 task
+                        asyncio.create_task(self.abort_streaming_chat_async(device_id))
+                        return True
+                    else:
+                        loop.run_until_complete(
+                            self.abort_streaming_chat_async(device_id)
+                        )
+                        return True
+                except RuntimeError:
+                    logger.error("Cannot abort async agent from sync context")
+                    return False
+            elif callable(handler):
+                handler()
                 return True
             else:
-                logger.warning(f"No active streaming chat for device {device_id}")
+                logger.warning(f"Unknown abort handler type: {type(handler)}")
                 return False
 
     def is_streaming_active(self, device_id: str) -> bool:

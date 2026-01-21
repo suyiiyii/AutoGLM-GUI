@@ -1,11 +1,23 @@
 name: Setup Python & uv
-description: Setup Python and uv package manager
+description: Setup Python and uv package manager with caching
 
 inputs:
   python-version:
     description: Python version to use
     required: false
     default: "3.11"
+  install-deps:
+    description: Whether to install dependencies
+    required: false
+    default: "true"
+  dev-deps:
+    description: Whether to install dev dependencies (only if install-deps is true)
+    required: false
+    default: "true"
+  frozen:
+    description: Whether to use --frozen flag (only if install-deps is true)
+    required: false
+    default: "false"
 
 runs:
   using: composite
@@ -14,6 +26,7 @@ runs:
       uses: astral-sh/setup-uv@v4
       with:
         enable-cache: true
+        cache-dependency-glob: "uv.lock"
 
     - name: Setup Python
       uses: actions/setup-python@v5
@@ -21,5 +34,14 @@ runs:
         python-version: ${{ inputs.python-version }}
 
     - name: Install dependencies
+      if: inputs.install-deps == 'true'
       shell: bash
-      run: uv sync
+      run: |
+        FLAGS=""
+        if [ "${{ inputs.dev-deps }}" = "true" ]; then
+          FLAGS="$FLAGS --dev"
+        fi
+        if [ "${{ inputs.frozen }}" = "true" ]; then
+          FLAGS="$FLAGS --frozen"
+        fi
+        uv sync $FLAGS

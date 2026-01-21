@@ -1,0 +1,52 @@
+name: Integration Tests
+
+on:
+  pull_request:
+    branches: [ main, dev ]
+    paths:
+      - 'tests/integration/**'
+      - 'AutoGLM_GUI/**'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/integration-tests.yml'
+  push:
+    branches: [ main, dev ]
+    paths:
+      - 'tests/integration/**'
+      - 'AutoGLM_GUI/**'
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  test:
+    name: Run Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.11', '3.12', '3.13', '3.14']
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python & uv
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: ${{ matrix.python-version }}
+          frozen: "true"
+
+      - name: Run integration tests
+        run: |
+          uv run pytest -v
+
+      - name: Generate test summary
+        if: always()
+        run: |
+          echo "## Integration Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ All integration tests passed!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Some tests failed. Check the logs above." >> $GITHUB_STEP_SUMMARY
+          fi

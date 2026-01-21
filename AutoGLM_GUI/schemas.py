@@ -2,63 +2,34 @@
 
 import re
 
-from pydantic import BaseModel, Field, field_validator
+from pydantic import BaseModel, field_validator
 
-
-class APIModelConfig(BaseModel):
-    base_url: str | None = None
-    api_key: str | None = None
-    model_name: str | None = None
-    max_tokens: int = 3000
-    temperature: float = 0.0
-    top_p: float = 0.85
-    frequency_penalty: float = 0.2
-
-    @field_validator("base_url")
-    @classmethod
-    def validate_base_url(cls, v: str | None) -> str | None:
-        """验证 base_url 格式."""
-        if v is None:
-            return v
-        v = v.strip()
-        if not v:
-            return None
-        # 检查是否是有效的 HTTP/HTTPS URL
-        if not re.match(r"^https?://", v):
-            raise ValueError("base_url must start with http:// or https://")
-        return v
-
-
-class APIAgentConfig(BaseModel):
-    max_steps: int = 100
-    device_id: str | None = None
-    lang: str = "cn"
-    system_prompt: str | None = None
-    verbose: bool = True
-
-    @field_validator("max_steps")
-    @classmethod
-    def validate_max_steps(cls, v: int) -> int:
-        """验证 max_steps 范围."""
-        if v <= 0:
-            raise ValueError("max_steps must be positive")
-        if v > 1000:
-            raise ValueError("max_steps must be <= 1000")
-        return v
-
-    @field_validator("lang")
-    @classmethod
-    def validate_lang(cls, v: str) -> str:
-        """验证 lang 有效性."""
-        allowed_langs = ["cn", "en"]
-        if v not in allowed_langs:
-            raise ValueError(f"lang must be one of {allowed_langs}")
-        return v
+from AutoGLM_GUI.device_metadata_manager import DISPLAY_NAME_MAX_LENGTH
 
 
 class InitRequest(BaseModel):
-    model: APIModelConfig | None = Field(default=None, alias="model_config")
-    agent: APIAgentConfig | None = Field(default=None, alias="agent_config")
+    device_id: str  # Device ID (required)
+
+    # Agent configuration (factory pattern)
+    agent_type: str = "glm"  # Agent type to use (e.g., "glm", "mai")
+    agent_config_params: dict | None = None  # Agent-specific configuration parameters
+
+    # Hot-reload support
+    force: bool = False  # Force re-initialization even if agent already exists
+
+    @field_validator("agent_type")
+    @classmethod
+    def validate_agent_type(cls, v: str) -> str:
+        """验证 agent_type 有效性."""
+        # Don't import at module level to avoid circular imports
+        from AutoGLM_GUI.agents import is_agent_type_registered
+
+        if not is_agent_type_registered(v):
+            raise ValueError(
+                f"Unknown agent_type: '{v}'. "
+                f"Please register the agent type first or use a known type."
+            )
+        return v
 
 
 class ChatRequest(BaseModel):
@@ -305,6 +276,7 @@ class DeviceResponse(BaseModel):
     connection_type: str
     state: str
     is_available_only: bool
+    display_name: str | None = None
     agent: AgentStatusResponse | None = None
 
 
@@ -320,11 +292,20 @@ class ConfigResponse(BaseModel):
     api_key: str  # 返回实际值（明文）
     source: str  # "CLI arguments" | "environment variables" | "config file (...)" | "default"
 
-    # 双模型配置
-    dual_model_enabled: bool = False
-    decision_base_url: str = ""
-    decision_model_name: str = ""
-    decision_api_key: str = ""
+    # Agent 类型配置
+    agent_type: str = "glm"  # Agent type (e.g., "glm", "mai")
+    agent_config_params: dict | None = None  # Agent-specific configuration
+
+    # Agent 执行配置
+    default_max_steps: int = 100  # 单次任务最大执行步数
+
+    # 分层代理配置
+    layered_max_turns: int = 50  # 分层代理模式的最大轮次
+
+    # 决策模型配置（用于分层代理）
+    decision_base_url: str | None = None
+    decision_model_name: str | None = None
+    decision_api_key: str | None = None
 
     conflicts: list[dict] | None = None  # 配置冲突信息（可选）
 
@@ -336,11 +317,41 @@ class ConfigSaveRequest(BaseModel):
     model_name: str = "autoglm-phone-9b"
     api_key: str | None = None
 
-    # 双模型配置
-    dual_model_enabled: bool | None = None
+    # Agent 类型配置
+    agent_type: str = "glm"  # Agent type to use (e.g., "glm", "mai")
+    agent_config_params: dict | None = None  # Agent-specific configuration parameters
+
+    # Agent 执行配置
+    default_max_steps: int | None = None  # 单次任务最大执行步数
+
+    # 分层代理配置
+    layered_max_turns: int | None = None  # 分层代理模式的最大轮次
+
+    # 决策模型配置（用于分层代理）
     decision_base_url: str | None = None
     decision_model_name: str | None = None
     decision_api_key: str | None = None
+
+    @field_validator("default_max_steps")
+    @classmethod
+    def validate_default_max_steps(cls, v: int | None) -> int | None:
+        """验证 default_max_steps 范围."""
+        if v is None:
+            return v
+        if v <= 0:
+            raise ValueError("default_max_steps must be positive")
+        if v > 1000:
+            raise ValueError("default_max_steps must be <= 1000")
+        return v
+
+    @field_validator("layered_max_turns")
+    @classmethod
+    def validate_layered_max_turns(cls, v: int | None) -> int | None:
+        if v is None:
+            return v
+        if v < 1:
+            raise ValueError("layered_max_turns must be >= 1")
+        return v
 
     @field_validator("base_url")
     @classmethod
@@ -365,12 +376,21 @@ class ConfigSaveRequest(BaseModel):
     @classmethod
     def validate_decision_base_url(cls, v: str | None) -> str | None:
         """验证 decision_base_url 格式."""
-        if v is None or not v.strip():
-            return None
-        v = v.strip()
-        if not re.match(r"^https?://", v):
-            raise ValueError("decision_base_url must start with http:// or https://")
-        return v
+        if v is not None and v.strip():
+            if not re.match(r"^https?://", v):
+                raise ValueError(
+                    "decision_base_url must start with http:// or https://"
+                )
+            return v.rstrip("/")
+        return None
+
+    @field_validator("decision_model_name")
+    @classmethod
+    def validate_decision_model_name(cls, v: str | None) -> str | None:
+        """验证 decision_model_name 非空."""
+        if v is not None and v.strip():
+            return v.strip()
+        return None
 
 
 class WiFiConnectRequest(BaseModel):
@@ -595,3 +615,293 @@ class WorkflowListResponse(BaseModel):
     """Workflow 列表响应."""
 
     workflows: list[WorkflowResponse]
+
+
+class RemoteDeviceInfo(BaseModel):
+    """远程设备信息."""
+
+    device_id: str
+    model: str
+    platform: str
+    status: str
+
+
+class RemoteDeviceDiscoverRequest(BaseModel):
+    """远程设备发现请求."""
+
+    base_url: str
+    timeout: int = 5
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_base_url(cls, v: str) -> str:
+        v = v.strip().rstrip("/")
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("base_url must start with http:// or https://")
+        return v
+
+    @field_validator("timeout")
+    @classmethod
+    def validate_timeout(cls, v: int) -> int:
+        if v <= 0:
+            raise ValueError("timeout must be positive")
+        if v > 30:
+            raise ValueError("timeout must be <= 30 seconds")
+        return v
+
+
+class RemoteDeviceDiscoverResponse(BaseModel):
+    """远程设备发现响应."""
+
+    success: bool
+    devices: list[RemoteDeviceInfo]
+    message: str
+    error: str | None = None
+
+
+class RemoteDeviceAddRequest(BaseModel):
+    """添加远程设备请求."""
+
+    base_url: str
+    device_id: str
+
+    @field_validator("base_url")
+    @classmethod
+    def validate_base_url(cls, v: str) -> str:
+        v = v.strip().rstrip("/")
+        if not v.startswith(("http://", "https://")):
+            raise ValueError("base_url must start with http:// or https://")
+        return v
+
+    @field_validator("device_id")
+    @classmethod
+    def validate_device_id(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("device_id cannot be empty")
+        if len(v) > 100:
+            raise ValueError("device_id too long (max 100 characters)")
+        return v
+
+
+class RemoteDeviceAddResponse(BaseModel):
+    """添加远程设备响应."""
+
+    success: bool
+    message: str
+    serial: str | None = None
+    error: str | None = None
+
+
+class RemoteDeviceRemoveRequest(BaseModel):
+    """移除远程设备请求."""
+
+    serial: str
+
+
+class RemoteDeviceRemoveResponse(BaseModel):
+    """移除远程设备响应."""
+
+    success: bool
+    message: str
+    error: str | None = None
+
+
+class ReinitAllAgentsResponse(BaseModel):
+    """批量重新初始化 agent 响应."""
+
+    success: bool
+    total: int
+    succeeded: list[str]
+    failed: dict[str, str]
+    message: str
+
+
+# History Models
+
+
+class MessageRecordResponse(BaseModel):
+    """对话消息响应."""
+
+    role: str  # "user" | "assistant"
+    content: str
+    timestamp: str
+    thinking: str | None = None
+    action: dict | None = None
+    step: int | None = None
+
+
+class HistoryRecordResponse(BaseModel):
+    """历史记录条目响应."""
+
+    id: str
+    task_text: str
+    final_message: str
+    success: bool
+    steps: int
+    start_time: str
+    end_time: str | None
+    duration_ms: int
+    source: str
+    source_detail: str
+    error_message: str | None
+    messages: list[MessageRecordResponse] = []
+
+
+class HistoryListResponse(BaseModel):
+    """历史记录列表响应."""
+
+    records: list[HistoryRecordResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+# Scheduled Task Models
+
+
+class ScheduledTaskCreate(BaseModel):
+    """创建定时任务请求."""
+
+    name: str
+    workflow_uuid: str
+    device_serialno: str
+    cron_expression: str
+    enabled: bool = True
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("name cannot be empty")
+        return v.strip()
+
+    @field_validator("cron_expression")
+    @classmethod
+    def validate_cron(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("cron_expression cannot be empty")
+        parts = v.strip().split()
+        if len(parts) != 5:
+            raise ValueError(
+                "cron_expression must have 5 fields (minute hour day month weekday)"
+            )
+        return v.strip()
+
+
+class ScheduledTaskUpdate(BaseModel):
+    """更新定时任务请求."""
+
+    name: str | None = None
+    workflow_uuid: str | None = None
+    device_serialno: str | None = None
+    cron_expression: str | None = None
+    enabled: bool | None = None
+
+    @field_validator("cron_expression")
+    @classmethod
+    def validate_cron(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        if not v.strip():
+            raise ValueError("cron_expression cannot be empty")
+        parts = v.strip().split()
+        if len(parts) != 5:
+            raise ValueError(
+                "cron_expression must have 5 fields (minute hour day month weekday)"
+            )
+        return v.strip()
+
+
+class ScheduledTaskResponse(BaseModel):
+    """定时任务响应."""
+
+    id: str
+    name: str
+    workflow_uuid: str
+    device_serialno: str
+    cron_expression: str
+    enabled: bool
+    created_at: str
+    updated_at: str
+    last_run_time: str | None
+    last_run_success: bool | None
+    last_run_message: str | None
+    next_run_time: str | None = None
+
+
+class ScheduledTaskListResponse(BaseModel):
+    """定时任务列表响应."""
+
+    tasks: list[ScheduledTaskResponse]
+
+
+class DeleteResponse(BaseModel):
+    success: bool
+    message: str
+
+
+class ResetResponse(BaseModel):
+    success: bool
+    message: str
+    device_id: str
+
+
+class ConfigSaveResponse(BaseModel):
+    success: bool
+    message: str
+    warnings: list[str] | None = None
+    destroyed_agents: int
+
+
+class InitResponse(BaseModel):
+    success: bool
+    message: str
+    device_id: str
+    agent_type: str
+
+
+class StreamResetResponse(BaseModel):
+    success: bool
+    message: str
+    device_id: str | None = None
+
+
+class EnableDisableResponse(BaseModel):
+    success: bool
+    message: str
+    task_id: str
+    enabled: bool
+
+
+# Device Name Models
+
+
+class DeviceNameUpdateRequest(BaseModel):
+    """更新设备显示名称请求."""
+
+    display_name: str | None
+
+    @field_validator("display_name")
+    @classmethod
+    def validate_display_name(cls, v: str | None) -> str | None:
+        """验证 display_name."""
+        if v is None:
+            return v
+        v = v.strip()
+        if not v:
+            return None
+        if len(v) > DISPLAY_NAME_MAX_LENGTH:
+            raise ValueError(
+                f"display_name too long (max {DISPLAY_NAME_MAX_LENGTH} characters)"
+            )
+        return v
+
+
+class DeviceNameResponse(BaseModel):
+    """设备显示名称响应."""
+
+    success: bool
+    serial: str
+    display_name: str | None = None
+    error: str | None = None

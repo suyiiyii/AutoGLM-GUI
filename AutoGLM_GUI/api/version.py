@@ -3,8 +3,9 @@
 import json
 import re
 import time
+import urllib.error
 import urllib.request
-from typing import Any
+from typing_extensions import TypedDict
 
 from fastapi import APIRouter
 
@@ -12,13 +13,30 @@ from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.schemas import VersionCheckResponse
 from AutoGLM_GUI.version import APP_VERSION
 
+
+class GitHubRelease(TypedDict, total=False):
+    """GitHub Release API response structure."""
+
+    tag_name: str
+    html_url: str
+    published_at: str
+
+
+class _VersionCache(TypedDict):
+    """Internal cache structure for version checking."""
+
+    data: VersionCheckResponse | None
+    timestamp: float
+    ttl: int
+
+
 router = APIRouter()
 
 # In-memory cache for version check results
-_version_cache: dict[str, Any] = {
+_version_cache: _VersionCache = {
     "data": None,
     "timestamp": 0,
-    "ttl": 3600,  # 1 hour cache TTL
+    "ttl": 3600,
 }
 
 # GitHub repository information
@@ -74,13 +92,8 @@ def compare_versions(current: str, latest: str) -> bool:
     return latest_tuple > current_tuple
 
 
-def fetch_latest_release() -> dict[str, Any] | None:
-    """
-    Fetch latest release information from GitHub API.
-
-    Returns:
-        Release data dict with 'tag_name', 'html_url', 'published_at' or None on error
-    """
+def fetch_latest_release() -> GitHubRelease | None:
+    """Fetch latest release information from GitHub API."""
     try:
         # Create request with User-Agent header (required by GitHub API)
         req = urllib.request.Request(

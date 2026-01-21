@@ -27,17 +27,41 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { QRCodeSVG } from 'qrcode.react';
-import type { Device, MdnsDevice } from '../api';
+import type { Device, MdnsDevice, RemoteDeviceInfo } from '../api';
 import {
+  addRemoteDevice,
+  cancelQRPairing,
   connectWifiManual,
-  pairWifi,
   discoverMdnsDevices,
+  discoverRemoteDevices,
   generateQRPairing,
   getQRPairingStatus,
-  cancelQRPairing,
+  pairWifi,
 } from '../api';
 import { useTranslation } from '../lib/i18n-context';
 import { useDebouncedState } from '@/hooks/useDebouncedState';
+import type { ToastType } from './Toast';
+
+// Emulator presets for quick connection
+interface EmulatorPreset {
+  id: string;
+  nameKey: string; // i18n key
+  ip: string;
+  port: number;
+}
+
+const EMULATOR_PRESETS: EmulatorPreset[] = [
+  { id: 'mumu', nameKey: 'emulatorMumu', ip: '127.0.0.1', port: 7555 },
+  { id: 'nox', nameKey: 'emulatorNox', ip: '127.0.0.1', port: 62001 },
+  { id: 'ldplayer', nameKey: 'emulatorLdplayer', ip: '127.0.0.1', port: 5555 },
+  {
+    id: 'bluestacks',
+    nameKey: 'emulatorBluestacks',
+    ip: '127.0.0.1',
+    port: 5555,
+  },
+  { id: 'custom', nameKey: 'emulatorCustom', ip: '', port: 5555 },
+];
 
 const getInitialCollapsedState = (): boolean => {
   try {
@@ -56,6 +80,8 @@ interface DeviceSidebarProps {
   onOpenConfig: () => void;
   onConnectWifi: (deviceId: string) => void;
   onDisconnectWifi: (deviceId: string) => void;
+  onRefreshDevices?: () => void;
+  showToast?: (message: string, type: ToastType) => void;
 }
 
 export function DeviceSidebar({
@@ -65,6 +91,8 @@ export function DeviceSidebar({
   onOpenConfig,
   onConnectWifi,
   onDisconnectWifi,
+  onRefreshDevices,
+  showToast,
 }: DeviceSidebarProps) {
   const t = useTranslation();
   const [isCollapsed, setIsCollapsed] = useState(getInitialCollapsedState);
@@ -75,6 +103,9 @@ export function DeviceSidebar({
   const [manualConnectPort, setManualConnectPort] = useState('5555');
   const [ipError, setIpError] = useState('');
   const [portError, setPortError] = useState('');
+
+  // Emulator preset selection
+  const [selectedEmulator, setSelectedEmulator] = useState('custom');
 
   // WiFi pairing (Android 11+)
   const [activeTab, setActiveTab] = useState('direct');
@@ -106,6 +137,17 @@ export function DeviceSidebar({
   const [qrSession, setQrSession] = useState<QRPairingSession | null>(null);
   const [isGeneratingQR, setIsGeneratingQR] = useState(false);
   const qrPollIntervalRef = useRef<number | null>(null);
+
+  const [remoteBaseUrl, setRemoteBaseUrl] = useState('');
+  const [remoteUrlError, setRemoteUrlError] = useState('');
+  const [isDiscoveringRemote, setIsDiscoveringRemote] = useState(false);
+  const [discoveredRemoteDevices, setDiscoveredRemoteDevices] = useState<
+    RemoteDeviceInfo[]
+  >([]);
+  const [selectedRemoteDevice, setSelectedRemoteDevice] = useState<
+    string | null
+  >(null);
+  const [isConnectingRemote, setIsConnectingRemote] = useState(false);
 
   useEffect(() => {
     localStorage.setItem('sidebar-collapsed', JSON.stringify(isCollapsed));
@@ -331,6 +373,73 @@ export function DeviceSidebar({
     }
   }, [qrSession, stopQRStatusPolling]);
 
+  const handleDiscoverRemote = async () => {
+    setRemoteUrlError('');
+
+    if (!remoteBaseUrl.trim()) {
+      setRemoteUrlError(
+        t.deviceSidebar.remoteUrlRequired || '请输入远程服务器地址'
+      );
+      return;
+    }
+    if (
+      !remoteBaseUrl.startsWith('http://') &&
+      !remoteBaseUrl.startsWith('https://')
+    ) {
+      setRemoteUrlError(
+        t.deviceSidebar.remoteUrlInvalid ||
+          '地址必须以 http:// 或 https:// 开头'
+      );
+      return;
+    }
+
+    setIsDiscoveringRemote(true);
+    try {
+      const result = await discoverRemoteDevices({
+        base_url: remoteBaseUrl,
+        timeout: 5,
+      });
+
+      if (result.success) {
+        setDiscoveredRemoteDevices(result.devices);
+        setSelectedRemoteDevice(null);
+      } else {
+        setRemoteUrlError(result.message || '发现设备失败');
+        setDiscoveredRemoteDevices([]);
+      }
+    } catch {
+      setRemoteUrlError('连接失败，请检查地址是否正确');
+      setDiscoveredRemoteDevices([]);
+    } finally {
+      setIsDiscoveringRemote(false);
+    }
+  };
+
+  const handleAddRemoteDevice = async () => {
+    if (!selectedRemoteDevice) return;
+
+    setIsConnectingRemote(true);
+    try {
+      const result = await addRemoteDevice({
+        base_url: remoteBaseUrl,
+        device_id: selectedRemoteDevice,
+      });
+
+      if (result.success) {
+        setShowManualConnect(false);
+        setRemoteBaseUrl('');
+        setDiscoveredRemoteDevices([]);
+        setSelectedRemoteDevice(null);
+      } else {
+        setRemoteUrlError(result.message || t.toasts.remoteDeviceAddError);
+      }
+    } catch {
+      setRemoteUrlError(t.toasts.remoteDeviceAddError);
+    } finally {
+      setIsConnectingRemote(false);
+    }
+  };
+
   // Cleanup QR session when dialog closes or tab changes
   useEffect(() => {
     if (!showManualConnect || activeTab !== 'pair') {
@@ -532,6 +641,7 @@ export function DeviceSidebar({
                 id={device.id}
                 serial={device.serial}
                 model={device.model}
+                displayName={device.display_name}
                 status={device.status}
                 connectionType={device.connection_type}
                 agent={device.agent}
@@ -543,6 +653,12 @@ export function DeviceSidebar({
                 onDisconnectWifi={async () => {
                   await onDisconnectWifi(device.id);
                 }}
+                onNameUpdated={() => {
+                  if (onRefreshDevices) {
+                    onRefreshDevices();
+                  }
+                }}
+                showToast={showToast}
               />
             ))
           )}
@@ -585,12 +701,15 @@ export function DeviceSidebar({
               onValueChange={setActiveTab}
               className="w-full"
             >
-              <TabsList className="grid w-full grid-cols-2">
+              <TabsList className="grid w-full grid-cols-3">
                 <TabsTrigger value="direct">
                   {t.deviceSidebar.directConnectTab}
                 </TabsTrigger>
                 <TabsTrigger value="pair">
                   {t.deviceSidebar.pairTab}
+                </TabsTrigger>
+                <TabsTrigger value="remote">
+                  {t.deviceSidebar.remoteTab || '远程设备'}
                 </TabsTrigger>
               </TabsList>
 
@@ -693,18 +812,56 @@ export function DeviceSidebar({
 
                 {/* Manual Connect Form */}
                 <div className="space-y-3">
-                  <div className="rounded-lg bg-amber-50 dark:bg-amber-950/20 p-3 text-sm">
-                    <p className="text-amber-800 dark:text-amber-200">
-                      {t.deviceSidebar.directConnectNote}
+                  {/* Emulator Presets */}
+                  <div className="space-y-2">
+                    <Label>{t.deviceSidebar.emulatorPreset}</Label>
+                    <div className="grid grid-cols-3 gap-2">
+                      {EMULATOR_PRESETS.map(preset => (
+                        <button
+                          key={preset.id}
+                          onClick={() => {
+                            setSelectedEmulator(preset.id);
+                            if (preset.id !== 'custom') {
+                              setManualConnectIp(preset.ip);
+                              setManualConnectPort(String(preset.port));
+                            }
+                            setIpError('');
+                            setPortError('');
+                          }}
+                          className={`rounded-lg border p-2 text-xs text-center transition-colors ${
+                            selectedEmulator === preset.id
+                              ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300'
+                              : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          {t.deviceSidebar[
+                            preset.nameKey as keyof typeof t.deviceSidebar
+                          ] || preset.nameKey}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Emulator Note */}
+                  <div className="rounded-lg bg-blue-50 dark:bg-blue-950/20 p-3 text-sm">
+                    <p className="text-blue-800 dark:text-blue-200">
+                      {t.deviceSidebar.emulatorNote}
                     </p>
                   </div>
+
                   <div className="space-y-2">
                     <Label htmlFor="ip">{t.deviceSidebar.ipAddress}</Label>
                     <Input
                       id="ip"
                       placeholder="192.168.1.100"
                       value={manualConnectIp}
-                      onChange={e => setManualConnectIp(e.target.value)}
+                      onChange={e => {
+                        setManualConnectIp(e.target.value);
+                        // Switch to custom if user manually edits
+                        if (selectedEmulator !== 'custom') {
+                          setSelectedEmulator('custom');
+                        }
+                      }}
                       onKeyDown={e =>
                         e.key === 'Enter' && handleManualConnect()
                       }
@@ -717,7 +874,13 @@ export function DeviceSidebar({
                       id="port"
                       type="number"
                       value={manualConnectPort}
-                      onChange={e => setManualConnectPort(e.target.value)}
+                      onChange={e => {
+                        setManualConnectPort(e.target.value);
+                        // Switch to custom if user manually edits
+                        if (selectedEmulator !== 'custom') {
+                          setSelectedEmulator('custom');
+                        }
+                      }}
                       onKeyDown={e =>
                         e.key === 'Enter' && handleManualConnect()
                       }
@@ -1044,6 +1207,90 @@ export function DeviceSidebar({
                       : t.deviceSidebar.pairAndConnect}
                   </Button>
                 </div>
+              </TabsContent>
+
+              {/* Remote Device Tab */}
+              <TabsContent value="remote" className="space-y-4 mt-4">
+                <div className="space-y-2">
+                  <Label htmlFor="remote-url">
+                    {t.deviceSidebar.remoteUrl || '远程服务器地址'}
+                  </Label>
+                  <Input
+                    id="remote-url"
+                    placeholder="http://192.168.1.100:8001"
+                    value={remoteBaseUrl}
+                    onChange={e => {
+                      setRemoteBaseUrl(e.target.value);
+                      setRemoteUrlError('');
+                    }}
+                    disabled={isDiscoveringRemote}
+                    onKeyDown={e => e.key === 'Enter' && handleDiscoverRemote()}
+                    className={remoteUrlError ? 'border-red-500' : ''}
+                  />
+                  {remoteUrlError && (
+                    <p className="text-sm text-red-500">{remoteUrlError}</p>
+                  )}
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    {t.deviceSidebar.remoteUrlHint ||
+                      '运行 Device Agent Server 的地址'}
+                  </p>
+                  <Button
+                    onClick={handleDiscoverRemote}
+                    disabled={isDiscoveringRemote || !remoteBaseUrl}
+                    className="w-full"
+                  >
+                    {isDiscoveringRemote ? '正在发现...' : '发现设备'}
+                  </Button>
+                </div>
+
+                {discoveredRemoteDevices.length > 0 && (
+                  <div className="space-y-2">
+                    <Label>可用设备</Label>
+                    <div className="space-y-2">
+                      {discoveredRemoteDevices.map(device => (
+                        <button
+                          key={device.device_id}
+                          onClick={() =>
+                            setSelectedRemoteDevice(device.device_id)
+                          }
+                          className={`
+                            w-full rounded-lg border p-3 text-left transition-colors
+                            ${
+                              selectedRemoteDevice === device.device_id
+                                ? 'border-[#1d9bf0] bg-blue-50 dark:bg-blue-950/20'
+                                : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
+                            }
+                          `}
+                        >
+                          <div className="flex items-center gap-2">
+                            <Smartphone className="h-4 w-4 text-[#1d9bf0]" />
+                            <div className="flex-1">
+                              <p className="font-medium text-sm">
+                                {device.device_id}
+                              </p>
+                              <p className="text-xs text-slate-500">
+                                {device.model} · {device.platform}
+                              </p>
+                            </div>
+                            {selectedRemoteDevice === device.device_id && (
+                              <CheckCircle className="h-4 w-4 text-[#1d9bf0]" />
+                            )}
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {selectedRemoteDevice && (
+                  <Button
+                    onClick={handleAddRemoteDevice}
+                    disabled={isConnectingRemote}
+                    className="w-full"
+                  >
+                    {isConnectingRemote ? '正在连接...' : '连接远程设备'}
+                  </Button>
+                )}
               </TabsContent>
             </Tabs>
 

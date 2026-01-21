@@ -6,9 +6,13 @@ a decision model for planning and autoglm-phone for execution.
 
 import asyncio
 import json
-from typing import Any
+import threading
+from typing import TYPE_CHECKING, Any, AsyncGenerator
 
 from agents import Agent, Runner, SQLiteSession, function_tool
+
+if TYPE_CHECKING:
+    from agents.result import RunResultStreaming
 from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 from fastapi import APIRouter
 from fastapi.responses import StreamingResponse
@@ -23,6 +27,11 @@ router = APIRouter()
 # ==================== Session 管理 ====================
 # 存储每个 session_id 对应的 SQLiteSession（内存模式）
 _sessions: dict[str, SQLiteSession] = {}
+
+# ==================== 活跃运行管理 ====================
+# 存储每个 session_id 对应的活跃 RunResultStreaming 实例，用于 abort
+_active_runs: dict[str, "RunResultStreaming"] = {}
+_active_runs_lock = threading.Lock()
 
 
 def _get_or_create_session(session_id: str) -> SQLiteSession:
@@ -44,9 +53,20 @@ def _clear_session(session_id: str) -> bool:
 
 
 def get_planner_model() -> str:
-    """获取规划层使用的模型名称，从配置读取."""
-    config = config_manager.get_effective_config()
-    return config.decision_model_name or "glm-4.7"
+    """获取规划层使用的模型名称."""
+    config_manager.load_file_config()
+    effective_config = config_manager.get_effective_config()
+
+    model_name = effective_config.decision_model_name
+
+    if not model_name:
+        raise ValueError(
+            "决策模型未配置。使用分层代理模式需要配置决策模型。\n"
+            "请在全局配置中设置决策模型的 Base URL、模型名称和 API Key。"
+        )
+
+    logger.info(f"[LayeredAgent] Using decision model: {model_name}")
+    return model_name
 
 
 PLANNER_INSTRUCTIONS = """## 核心目标
@@ -146,7 +166,9 @@ def _sync_list_devices() -> str:
         _build_device_response_with_agent(d, agent_manager) for d in managed_devices
     ]
 
-    return json.dumps(devices_with_agents, ensure_ascii=False, indent=2)
+    # Convert DeviceResponse Pydantic models to dicts before JSON serialization
+    devices_dict = [device.model_dump() for device in devices_with_agents]
+    return json.dumps(devices_dict, ensure_ascii=False, indent=2)
 
 
 @function_tool
@@ -194,7 +216,7 @@ def _sync_chat(device_id: str, message: str) -> str:
                 # 重置 agent 确保干净状态
                 agent.reset()
 
-                result = agent.run(message)
+                result = agent.run(message)  # type: ignore[misc]
                 steps = agent.step_count
 
                 # 检查是否达到步数限制
@@ -271,20 +293,31 @@ async def chat(device_id: str, message: str) -> str:
 
 
 def _setup_openai_client() -> AsyncOpenAI:
-    """设置 OpenAI 客户端，使用 AutoGLM 的配置"""
+    """设置 OpenAI 客户端，使用决策模型配置"""
     config_manager.load_file_config()
     effective_config = config_manager.get_effective_config()
 
-    if not effective_config.base_url:
-        raise ValueError("base_url not configured")
+    # 检查决策模型配置
+    decision_base_url = effective_config.decision_base_url
+    decision_api_key = effective_config.decision_api_key
 
-    planner_model = get_planner_model()
-    logger.info(f"[LayeredAgent] API Base URL: {effective_config.base_url}")
-    logger.info(f"[LayeredAgent] Planner Model: {planner_model}")
+    if not decision_base_url:
+        raise ValueError(
+            "决策模型 Base URL 未配置。使用分层代理模式需要配置决策模型。\n"
+            "请在全局配置中设置决策模型的 Base URL、模型名称和 API Key。"
+        )
+
+    # decision_api_key 可以为 None（某些本地模型不需要）
+    planner_model = get_planner_model()  # 这里会再次检查 model_name
+
+    logger.info("[LayeredAgent] Decision model config:")
+    logger.info(f"  - Base URL: {decision_base_url}")
+    logger.info(f"  - Model: {planner_model}")
+    logger.info(f"  - API Key: {'***' if decision_api_key else 'None'}")
 
     return AsyncOpenAI(
-        base_url=effective_config.base_url,
-        api_key=effective_config.api_key,
+        base_url=decision_base_url,
+        api_key=decision_api_key or "EMPTY",  # 某些本地模型需要非空字符串
     )
 
 
@@ -307,14 +340,35 @@ def _create_planner_agent(client: AsyncOpenAI) -> Agent[Any]:
 # Global agent instance (lazy initialized)
 _client: AsyncOpenAI | None = None
 _agent: Agent[Any] | None = None
+_cached_config_hash: str | None = None
+
+
+def _compute_config_hash() -> str:
+    import hashlib
+
+    config = config_manager.get_effective_config()
+    config_str = config.model_dump_json()
+    return hashlib.md5(config_str.encode()).hexdigest()
 
 
 def _ensure_agent() -> Agent[Any]:
-    """Ensure the planner agent is initialized."""
-    global _client, _agent
-    if _agent is None:
+    global _client, _agent, _cached_config_hash
+
+    current_hash = _compute_config_hash()
+
+    if _agent is None or _cached_config_hash != current_hash:
+        if _agent is not None and _cached_config_hash != current_hash:
+            logger.info(
+                f"[LayeredAgent] Config changed (hash: {_cached_config_hash} -> {current_hash}), reloading agent..."
+            )
+
         _client = _setup_openai_client()
         _agent = _create_planner_agent(_client)
+        _cached_config_hash = current_hash
+        logger.info(
+            f"[LayeredAgent] Agent initialized/reloaded with config hash: {current_hash}"
+        )
+
     return _agent
 
 
@@ -330,7 +384,7 @@ class LayeredAgentRequest(BaseModel):
 
 
 @router.post("/api/layered-agent/chat")
-async def layered_agent_chat(request: LayeredAgentRequest):
+async def layered_agent_chat(request: LayeredAgentRequest) -> StreamingResponse:
     """
     Layered agent chat API with streaming execution steps.
 
@@ -343,202 +397,216 @@ async def layered_agent_chat(request: LayeredAgentRequest):
     - done: Final response
     - error: Error occurred
     """
+    from datetime import datetime
+
     from agents.stream_events import (
         RawResponsesStreamEvent,
         RunItemStreamEvent,
     )
 
-    async def event_generator():
+    from AutoGLM_GUI.history_manager import history_manager
+    from AutoGLM_GUI.models.history import ConversationRecord
+
+    async def event_generator() -> AsyncGenerator[str, None]:
+        start_time = datetime.now()
+        final_output = ""
+        final_success = False
+
         try:
-            # Ensure agent is initialized
             agent = _ensure_agent()
 
-            # 获取或创建 session 以保持对话上下文
-            # 优先使用 session_id，其次使用 device_id，最后使用默认值
             session_id = request.session_id or request.device_id or "default"
             session = _get_or_create_session(session_id)
 
-            # Run the agent with streaming and session for memory
+            effective_config = config_manager.get_effective_config()
+
             result = Runner.run_streamed(
                 agent,
                 request.message,
-                max_turns=50,
+                max_turns=effective_config.layered_max_turns,
                 session=session,
             )
 
+            # 保存活跃运行实例，用于 abort
+            with _active_runs_lock:
+                _active_runs[session_id] = result
+
             current_tool_call: dict[str, Any] | None = None
 
-            async for event in result.stream_events():
-                if isinstance(event, RawResponsesStreamEvent):
-                    # Raw response chunk - could contain thinking
-                    pass
+            try:
+                async for event in result.stream_events():
+                    if isinstance(event, RawResponsesStreamEvent):
+                        # Raw response chunk - could contain thinking
+                        pass
 
-                elif isinstance(event, RunItemStreamEvent):
-                    item = event.item
+                    elif isinstance(event, RunItemStreamEvent):
+                        item = event.item
 
-                    # Handle different item types
-                    item_type = getattr(item, "type", None)
+                        # Handle different item types
+                        item_type = getattr(item, "type", None)
 
-                    if item_type == "tool_call_item":
-                        # Tool call started - extract name from raw_item
-                        tool_name = "unknown"
-                        tool_args: dict[str, Any] = {}
+                        if item_type == "tool_call_item":
+                            # Tool call started - extract name from raw_item
+                            tool_name = "unknown"
+                            tool_args: dict[str, Any] = {}
 
-                        # Try to get from raw_item
-                        if hasattr(item, "raw_item") and item.raw_item:
-                            raw = item.raw_item
+                            # Try to get from raw_item
+                            if hasattr(item, "raw_item") and item.raw_item:
+                                raw = item.raw_item
 
-                            # Handle dict format (sometimes returned as dict)
-                            if isinstance(raw, dict):
-                                tool_name = raw.get(
-                                    "name",
-                                    raw.get("function", {}).get("name", "unknown"),
-                                )
-                                args_str = raw.get(
-                                    "arguments",
-                                    raw.get("function", {}).get("arguments", "{}"),
-                                )
-                                try:
-                                    tool_args = (
-                                        json.loads(args_str)
-                                        if isinstance(args_str, str)
-                                        else args_str
+                                # Handle dict format (sometimes returned as dict)
+                                if isinstance(raw, dict):
+                                    tool_name = raw.get(
+                                        "name",
+                                        raw.get("function", {}).get("name", "unknown"),
                                     )
-                                except Exception:
-                                    tool_args = {"raw": str(args_str)}
-                            else:
-                                # Chat Completions API format: raw_item.function.name
-                                if hasattr(raw, "function") and raw.function:
-                                    func = raw.function
-                                    if hasattr(func, "name"):
-                                        tool_name = func.name
-                                    if hasattr(func, "arguments"):
-                                        try:
-                                            tool_args = (
-                                                json.loads(func.arguments)
-                                                if isinstance(func.arguments, str)
-                                                else func.arguments
-                                            )
-                                        except Exception:
-                                            tool_args = {"raw": str(func.arguments)}
-                                # Responses API format: raw_item.name directly
-                                elif hasattr(raw, "name") and raw.name:
-                                    tool_name = raw.name
-                                    if hasattr(raw, "arguments"):
-                                        try:
-                                            tool_args = (
-                                                json.loads(raw.arguments)
-                                                if isinstance(raw.arguments, str)
-                                                else raw.arguments
-                                            )
-                                        except Exception:
-                                            tool_args = {"raw": str(raw.arguments)}
-
-                        # Fallback to direct item attributes
-                        if tool_name == "unknown":
-                            if hasattr(item, "name") and item.name:
-                                tool_name = item.name
-                            elif hasattr(item, "call") and item.call:
-                                call = item.call
-                                if hasattr(call, "function") and call.function:
-                                    if hasattr(call.function, "name"):
-                                        tool_name = call.function.name
-                                    if hasattr(call.function, "arguments"):
-                                        try:
-                                            tool_args = (
-                                                json.loads(call.function.arguments)
-                                                if isinstance(
-                                                    call.function.arguments, str
+                                    args_str = raw.get(
+                                        "arguments",
+                                        raw.get("function", {}).get("arguments", "{}"),
+                                    )
+                                    try:
+                                        tool_args = (
+                                            json.loads(args_str)
+                                            if isinstance(args_str, str)
+                                            else args_str
+                                        )
+                                    except Exception:
+                                        tool_args = {"raw": str(args_str)}
+                                else:
+                                    func = getattr(raw, "function", None)
+                                    if func:
+                                        tool_name = getattr(func, "name", "unknown")
+                                        args_val = getattr(func, "arguments", None)
+                                        if args_val:
+                                            try:
+                                                tool_args = (
+                                                    json.loads(args_val)
+                                                    if isinstance(args_val, str)
+                                                    else args_val
                                                 )
-                                                else call.function.arguments
-                                            )
-                                        except Exception:
-                                            tool_args = {
-                                                "raw": str(call.function.arguments)
-                                            }
-                                elif hasattr(call, "name"):
-                                    tool_name = call.name
-                                    if hasattr(call, "arguments"):
-                                        try:
-                                            tool_args = (
-                                                json.loads(call.arguments)
-                                                if isinstance(call.arguments, str)
-                                                else call.arguments
-                                            )
-                                        except Exception:
-                                            tool_args = {"raw": str(call.arguments)}
+                                            except Exception:
+                                                tool_args = {"raw": str(args_val)}
+                                    else:
+                                        name_val = getattr(raw, "name", None)
+                                        if name_val:
+                                            tool_name = name_val
+                                            args_val = getattr(raw, "arguments", None)
+                                            if args_val:
+                                                try:
+                                                    tool_args = (
+                                                        json.loads(args_val)
+                                                        if isinstance(args_val, str)
+                                                        else args_val
+                                                    )
+                                                except Exception:
+                                                    tool_args = {"raw": str(args_val)}
 
-                        logger.info(
-                            f"[LayeredAgent] Tool call: {tool_name}, args keys: {list(tool_args.keys()) if isinstance(tool_args, dict) else 'not dict'}"
-                        )
+                            # Fallback to direct item attributes
+                            if tool_name == "unknown":
+                                if hasattr(item, "name") and item.name:
+                                    tool_name = item.name
+                                elif hasattr(item, "call") and item.call:
+                                    call = item.call
+                                    if hasattr(call, "function") and call.function:
+                                        if hasattr(call.function, "name"):
+                                            tool_name = call.function.name
+                                        if hasattr(call.function, "arguments"):
+                                            try:
+                                                tool_args = (
+                                                    json.loads(call.function.arguments)
+                                                    if isinstance(
+                                                        call.function.arguments, str
+                                                    )
+                                                    else call.function.arguments
+                                                )
+                                            except Exception:
+                                                tool_args = {
+                                                    "raw": str(call.function.arguments)
+                                                }
+                                    elif hasattr(call, "name"):
+                                        tool_name = call.name
+                                        if hasattr(call, "arguments"):
+                                            try:
+                                                tool_args = (
+                                                    json.loads(call.arguments)
+                                                    if isinstance(call.arguments, str)
+                                                    else call.arguments
+                                                )
+                                            except Exception:
+                                                tool_args = {"raw": str(call.arguments)}
 
-                        current_tool_call = {
-                            "name": tool_name,
-                            "args": tool_args,
-                        }
+                            logger.info(
+                                f"[LayeredAgent] Tool call: {tool_name}, args keys: {list(tool_args.keys()) if isinstance(tool_args, dict) else 'not dict'}"
+                            )
 
-                        event_data = {
-                            "type": "tool_call",
-                            "tool_name": tool_name,
-                            "tool_args": tool_args,
-                        }
-                        yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+                            current_tool_call = {
+                                "name": tool_name,
+                                "args": tool_args,
+                            }
 
-                    elif item_type == "tool_call_output_item":
-                        # Tool call result
-                        output = getattr(item, "output", "")
-
-                        # Get tool name from current_tool_call or try to extract from item
-                        tool_name = (
-                            current_tool_call["name"]
-                            if current_tool_call
-                            else "unknown"
-                        )
-
-                        # Try to get tool name from raw_item if available
-                        if (
-                            tool_name == "unknown"
-                            and hasattr(item, "raw_item")
-                            and item.raw_item
-                        ):
-                            if hasattr(item.raw_item, "name"):
-                                tool_name = item.raw_item.name
-
-                        logger.info(
-                            f"[LayeredAgent] Tool result for {tool_name}: {str(output)[:100] if output else 'empty'}..."
-                        )
-
-                        event_data = {
-                            "type": "tool_result",
-                            "tool_name": tool_name,
-                            "result": output,
-                        }
-                        yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
-                        current_tool_call = None
-
-                    elif item_type == "message_output_item":
-                        # Final message
-                        content = ""
-                        if hasattr(item, "raw_item") and item.raw_item:
-                            if (
-                                hasattr(item.raw_item, "content")
-                                and item.raw_item.content
-                            ):
-                                for c in item.raw_item.content:
-                                    if hasattr(c, "text"):
-                                        content += c.text
-
-                        if content:
                             event_data = {
-                                "type": "message",
-                                "content": content,
+                                "type": "tool_call",
+                                "tool_name": tool_name,
+                                "tool_args": tool_args,
                             }
                             yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
 
-            # Final result
+                        elif item_type == "tool_call_output_item":
+                            # Tool call result
+                            output = getattr(item, "output", "")
+
+                            # Get tool name from current_tool_call or try to extract from item
+                            tool_name = (
+                                current_tool_call["name"]
+                                if current_tool_call
+                                else "unknown"
+                            )
+
+                            raw_item = getattr(item, "raw_item", None)
+                            if tool_name == "unknown" and raw_item:
+                                name_val = getattr(raw_item, "name", None)
+                                if name_val:
+                                    tool_name = name_val
+
+                            logger.info(
+                                f"[LayeredAgent] Tool result for {tool_name}: {str(output)[:100] if output else 'empty'}..."
+                            )
+
+                            event_data = {
+                                "type": "tool_result",
+                                "tool_name": tool_name,
+                                "result": output,
+                            }
+                            yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+                            current_tool_call = None
+
+                        elif item_type == "message_output_item":
+                            content = ""
+                            raw_item = getattr(item, "raw_item", None)
+                            if raw_item:
+                                raw_content = getattr(raw_item, "content", None)
+                                if raw_content:
+                                    for c in raw_content:
+                                        text_val = getattr(c, "text", None)
+                                        if text_val:
+                                            content += text_val
+
+                            if content:
+                                event_data = {
+                                    "type": "message",
+                                    "content": content,
+                                }
+                                yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+
+            finally:
+                # 清理活跃运行实例
+                with _active_runs_lock:
+                    _active_runs.pop(session_id, None)
+
             final_output = (
                 result.final_output if hasattr(result, "final_output") else ""
             )
+            final_success = True
             event_data = {
                 "type": "done",
                 "content": final_output,
@@ -548,11 +616,35 @@ async def layered_agent_chat(request: LayeredAgentRequest):
 
         except Exception as e:
             logger.exception(f"[LayeredAgent] Error: {e}")
+            final_output = str(e)
+            final_success = False
             event_data = {
                 "type": "error",
                 "message": str(e),
             }
             yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+
+        finally:
+            if request.device_id and final_output:
+                from AutoGLM_GUI.device_manager import DeviceManager
+
+                device_manager = DeviceManager.get_instance()
+                serialno = device_manager.get_serial_by_device_id(request.device_id)
+                if serialno:
+                    end_time = datetime.now()
+                    record = ConversationRecord(
+                        task_text=request.message,
+                        final_message=final_output,
+                        success=final_success,
+                        steps=0,
+                        start_time=start_time,
+                        end_time=end_time,
+                        duration_ms=int((end_time - start_time).total_seconds() * 1000),
+                        source="layered",
+                        source_detail=request.session_id or "",
+                        error_message=None if final_success else final_output,
+                    )
+                    history_manager.add_record(serialno, record)
 
     return StreamingResponse(
         event_generator(),
@@ -565,6 +657,40 @@ async def layered_agent_chat(request: LayeredAgentRequest):
     )
 
 
+class AbortSessionRequest(BaseModel):
+    """Request for aborting a running session."""
+
+    session_id: str
+
+
+@router.post("/api/layered-agent/abort")
+def abort_session(request: AbortSessionRequest) -> dict[str, Any]:
+    """
+    Abort a running layered agent session.
+
+    Uses the OpenAI agents SDK's native cancel() method to stop execution.
+    """
+    session_id = request.session_id
+
+    with _active_runs_lock:
+        if session_id in _active_runs:
+            result = _active_runs[session_id]
+            result.cancel(mode="immediate")
+            logger.info(f"[LayeredAgent] Aborted session: {session_id}")
+            return {
+                "success": True,
+                "message": f"Session {session_id} abort signal sent",
+            }
+        else:
+            logger.warning(
+                f"[LayeredAgent] No active run found for session: {session_id}"
+            )
+            return {
+                "success": False,
+                "message": f"No active run found for session {session_id}",
+            }
+
+
 class ResetSessionRequest(BaseModel):
     """Request for resetting a session."""
 
@@ -572,7 +698,7 @@ class ResetSessionRequest(BaseModel):
 
 
 @router.post("/api/layered-agent/reset")
-def reset_session(request: ResetSessionRequest):
+def reset_session(request: ResetSessionRequest) -> dict[str, Any]:
     """
     Reset/clear a session to forget conversation history.
 

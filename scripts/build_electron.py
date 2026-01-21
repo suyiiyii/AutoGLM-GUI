@@ -266,7 +266,7 @@ class ElectronBuilder:
         """构建 Electron 应用"""
         print_step("安装 Electron 依赖", 7, 6)
 
-        # 安装 Electron 依赖
+        # 安装 Electron 依赖（使用 npm，electron-builder 要求）
         if not run_command(["npm", "install"], cwd=self.electron_dir):
             return False
 
@@ -276,7 +276,26 @@ class ElectronBuilder:
         if not run_command(
             ["npm", "run", "build", "--", "--publish", "never"], cwd=self.electron_dir
         ):
-            return False
+            if self.is_macos:
+                run_command(
+                    [
+                        "bash",
+                        "-lc",
+                        "hdiutil info | awk '/\\/dev\\/disk[0-9]+/ {print $1}' | xargs -n1 -I{} hdiutil detach -force -quiet {} || true; "
+                        "sudo mdutil -a -i off || true; "
+                        "sudo pkill -9 mds || true; "
+                        "sudo pkill -9 mds_stores || true; "
+                        "sleep 3",
+                    ],
+                    cwd=self.root_dir,
+                )
+                if not run_command(
+                    ["npm", "run", "build", "--", "--publish", "never"],
+                    cwd=self.electron_dir,
+                ):
+                    return False
+            else:
+                return False
 
         # 显示构建产物
         print("\n" + "=" * 60)

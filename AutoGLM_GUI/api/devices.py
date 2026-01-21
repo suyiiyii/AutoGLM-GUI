@@ -15,6 +15,21 @@ from AutoGLM_GUI.logger import logger
 
 from AutoGLM_GUI.schemas import (
     DeviceListResponse,
+    DeviceNameResponse,
+    DeviceNameUpdateRequest,
+    DeviceResponse,
+    MdnsDeviceResponse,
+    MdnsDiscoverResponse,
+    QRPairCancelResponse,
+    QRPairGenerateResponse,
+    QRPairStatusResponse,
+    RemoteDeviceAddRequest,
+    RemoteDeviceAddResponse,
+    RemoteDeviceDiscoverRequest,
+    RemoteDeviceDiscoverResponse,
+    RemoteDeviceInfo,
+    RemoteDeviceRemoveRequest,
+    RemoteDeviceRemoveResponse,
     WiFiConnectRequest,
     WiFiConnectResponse,
     WiFiDisconnectRequest,
@@ -23,49 +38,41 @@ from AutoGLM_GUI.schemas import (
     WiFiManualConnectResponse,
     WiFiPairRequest,
     WiFiPairResponse,
-    MdnsDiscoverResponse,
-    MdnsDeviceResponse,
-    QRPairGenerateResponse,
-    QRPairStatusResponse,
-    QRPairCancelResponse,
 )
 
 
 def _build_device_response_with_agent(
-    device: ManagedDevice, agent_manager: PhoneAgentManager
-) -> dict:
-    """组合设备信息和 Agent 状态（API 层职责）。
+    device: "ManagedDevice", agent_manager: "PhoneAgentManager"
+) -> DeviceResponse:
+    """聚合设备信息和 Agent 状态（API 层职责）.
 
-    Args:
-        device: ManagedDevice 实例
-        agent_manager: PhoneAgentManager 实例
-
-    Returns:
-        dict: 完整的设备响应，匹配 DeviceResponse schema
+    API 层负责协调 DeviceManager 和 PhoneAgentManager，
+    通过遍历设备的所有连接来查找已初始化的 Agent。
     """
-    # 获取纯设备信息
+
     response = device.to_dict()
 
-    # 通过 serial 查找 Agent（支持连接切换）
-    agent_device_id = agent_manager.find_agent_by_serial(device.serial)
-
-    if agent_device_id:
-        metadata = agent_manager.get_metadata(agent_device_id)
-
+    # 遍历设备的所有连接，查找已初始化的 Agent
+    # 使用 device.connections 公开属性（ManagedDevice 提供）
+    for conn in device.connections:
+        # 只调用 PhoneAgentManager 的公开方法
+        metadata = agent_manager.get_metadata(conn.device_id)
         if metadata:
+            # 找到了已初始化的 Agent
             response["agent"] = {
-                "state": metadata.state.value,
+                "state": metadata.state,  # AgentState is str, Enum, already a string
                 "created_at": metadata.created_at,
                 "last_used": metadata.last_used,
                 "error_message": metadata.error_message,
                 "model_name": metadata.model_config.model_name,
             }
-        else:
-            response["agent"] = None
+
+            break  # 找到第一个 Agent 即可退出
     else:
+        # 没有找到任何已初始化的 Agent
         response["agent"] = None
 
-    return response
+    return DeviceResponse.model_validate(response)
 
 
 router = APIRouter()
@@ -97,8 +104,14 @@ def list_devices() -> DeviceListResponse:
 
 @router.post("/api/devices/connect_wifi", response_model=WiFiConnectResponse)
 def connect_wifi(request: WiFiConnectRequest) -> WiFiConnectResponse:
-    """从 USB 启用 TCP/IP 并连接到 WiFi。"""
     from AutoGLM_GUI.device_manager import DeviceManager
+
+    if not request.device_id:
+        return WiFiConnectResponse(
+            success=False,
+            message="device_id is required",
+            error="device_not_found",
+        )
 
     device_manager = DeviceManager.get_instance()
     success, message, wifi_id = device_manager.connect_wifi(
@@ -235,7 +248,7 @@ def pair_wifi(request: WiFiPairRequest) -> WiFiPairResponse:
 @router.get("/api/devices/discover_mdns", response_model=MdnsDiscoverResponse)
 def discover_mdns() -> MdnsDiscoverResponse:
     """Discover wireless ADB devices via mDNS."""
-    from phone_agent.adb import ADBConnection
+    from AutoGLM_GUI.adb import ADBConnection
     from AutoGLM_GUI.adb_plus import discover_mdns_devices
 
     try:
@@ -281,7 +294,7 @@ def generate_qr_pairing(timeout: int = 90) -> QRPairGenerateResponse:
         QR code payload and session information
     """
     try:
-        from phone_agent.adb import ADBConnection
+        from AutoGLM_GUI.adb import ADBConnection
 
         conn = ADBConnection()
         session = qr_pairing_manager.create_session(
@@ -369,4 +382,147 @@ def cancel_qr_pairing(session_id: str) -> QRPairCancelResponse:
         return QRPairCancelResponse(
             success=False,
             message="Session not found or already completed",
+        )
+
+
+@router.post(
+    "/api/devices/discover_remote", response_model=RemoteDeviceDiscoverResponse
+)
+def discover_remote_devices(
+    request: RemoteDeviceDiscoverRequest,
+) -> RemoteDeviceDiscoverResponse:
+    """Discover devices from a remote Device Agent Server."""
+    from AutoGLM_GUI.device_manager import DeviceManager
+
+    device_manager = DeviceManager.get_instance()
+    success, message, devices_list = device_manager.discover_remote_devices(
+        base_url=request.base_url,
+        timeout=request.timeout,
+    )
+
+    devices = [RemoteDeviceInfo(**d) for d in devices_list]
+
+    return RemoteDeviceDiscoverResponse(
+        success=success,
+        devices=devices,
+        message=message,
+        error=None if success else message,
+    )
+
+
+@router.post("/api/devices/add_remote", response_model=RemoteDeviceAddResponse)
+def add_remote_device(request: RemoteDeviceAddRequest) -> RemoteDeviceAddResponse:
+    """Add a remote HTTP proxy device manually."""
+    from AutoGLM_GUI.device_manager import DeviceManager
+
+    device_manager = DeviceManager.get_instance()
+    success, message, serial = device_manager.add_remote_device(
+        base_url=request.base_url,
+        device_id=request.device_id,
+    )
+
+    if success:
+        return RemoteDeviceAddResponse(
+            success=True,
+            message=message,
+            serial=serial,
+        )
+    else:
+        error_type = "add_failed"
+        if "already exists" in message.lower():
+            error_type = "already_exists"
+        elif "connection failed" in message.lower():
+            error_type = "connection_failed"
+
+        return RemoteDeviceAddResponse(
+            success=False,
+            message=message,
+            error=error_type,
+        )
+
+
+@router.post("/api/devices/remove_remote", response_model=RemoteDeviceRemoveResponse)
+def remove_remote_device(
+    request: RemoteDeviceRemoveRequest,
+) -> RemoteDeviceRemoveResponse:
+    """Remove a remote device."""
+    from AutoGLM_GUI.device_manager import DeviceManager
+
+    device_manager = DeviceManager.get_instance()
+    success, message = device_manager.remove_remote_device(request.serial)
+
+    return RemoteDeviceRemoveResponse(
+        success=success,
+        message=message,
+        error=None if success else "remove_failed",
+    )
+
+
+@router.put("/api/devices/{serial}/name", response_model=DeviceNameResponse)
+def update_device_name(
+    serial: str, request: DeviceNameUpdateRequest
+) -> DeviceNameResponse:
+    """Update or clear device display name.
+
+    Args:
+        serial: Device hardware serial number
+        request: Contains display_name (str or None to clear)
+
+    Returns:
+        DeviceNameResponse with updated name or error
+    """
+    from AutoGLM_GUI.device_manager import DeviceManager
+
+    try:
+        device_manager = DeviceManager.get_instance()
+        device_manager.set_device_display_name(serial, request.display_name)
+
+        return DeviceNameResponse(
+            success=True,
+            serial=serial,
+            display_name=request.display_name,
+        )
+    except ValueError as e:
+        logger.warning(f"Failed to update device name for {serial}: {e}")
+        return DeviceNameResponse(
+            success=False,
+            serial=serial,
+            error=str(e),
+        )
+    except Exception as e:
+        logger.exception(f"Unexpected error updating device name for {serial}")
+        return DeviceNameResponse(
+            success=False,
+            serial=serial,
+            error=f"Internal error: {str(e)}",
+        )
+
+
+@router.get("/api/devices/{serial}/name", response_model=DeviceNameResponse)
+def get_device_name(serial: str) -> DeviceNameResponse:
+    """Get device display name.
+
+    Args:
+        serial: Device hardware serial number
+
+    Returns:
+        DeviceNameResponse with current display name or None if not set
+    """
+    from AutoGLM_GUI.device_manager import DeviceManager
+
+    try:
+        device_manager = DeviceManager.get_instance()
+        display_name = device_manager.get_device_display_name(serial)
+
+        return DeviceNameResponse(
+            success=True,
+            serial=serial,
+            display_name=display_name,
+        )
+    except Exception as e:
+        logger.exception(f"Unexpected error getting device name for {serial}")
+        return DeviceNameResponse(
+            success=False,
+            serial=serial,
+            error=f"Internal error: {str(e)}",
         )

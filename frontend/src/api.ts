@@ -1,5 +1,41 @@
 import axios from 'redaxios';
 
+/**
+ * 从 axios/redaxios 错误中提取详细的错误信息
+ * 优先返回后端 FastAPI HTTPException 的 detail 字段
+ */
+export function getErrorMessage(error: unknown): string {
+  if (error && typeof error === 'object') {
+    // redaxios 错误格式: { data: { detail: string }, status: number }
+    const axiosError = error as {
+      data?: { detail?: string };
+      status?: number;
+      message?: string;
+    };
+
+    // 优先使用后端返回的 detail 字段
+    if (axiosError.data?.detail) {
+      return axiosError.data.detail;
+    }
+
+    // 其次使用 message 字段
+    if (axiosError.message) {
+      return axiosError.message;
+    }
+
+    // 如果有状态码，返回状态码信息
+    if (axiosError.status) {
+      return `HTTP error! status: ${axiosError.status}`;
+    }
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return 'Unknown error';
+}
+
 export interface AgentStatus {
   state: 'idle' | 'busy' | 'error' | 'initializing';
   created_at: number;
@@ -16,6 +52,7 @@ export interface Device {
   connection_type: string;
   state: string;
   is_available_only: boolean;
+  display_name: string | null; // Custom display name (null if not set)
   agent: AgentStatus | null; // Agent runtime status (null if not initialized)
 }
 
@@ -35,25 +72,11 @@ export interface StatusResponse {
   step_count: number;
 }
 
-export interface APIModelConfig {
-  base_url?: string;
-  api_key?: string;
-  model_name?: string;
-  max_tokens?: number;
-  temperature?: number;
-  top_p?: number;
-  frequency_penalty?: number;
-}
-
-export interface APIAgentConfig {
-  max_steps?: number;
-  device_id?: string | null;
-  verbose?: boolean;
-}
-
 export interface InitRequest {
-  model_config?: APIModelConfig;
-  agent_config?: APIAgentConfig;
+  device_id: string; // Device ID (required)
+  agent_type?: string; // Agent type (default: "glm")
+  agent_config_params?: Record<string, unknown>; // Agent-specific configuration
+  force?: boolean; // Force re-initialization
 }
 
 export interface ScreenshotRequest {
@@ -235,6 +258,47 @@ export interface MdnsDiscoverResponse {
   error?: string;
 }
 
+export interface RemoteDeviceInfo {
+  device_id: string;
+  model: string;
+  platform: string;
+  status: string;
+}
+
+export interface RemoteDeviceDiscoverRequest {
+  base_url: string;
+  timeout?: number;
+}
+
+export interface RemoteDeviceDiscoverResponse {
+  success: boolean;
+  devices: RemoteDeviceInfo[];
+  message: string;
+  error?: string;
+}
+
+export interface RemoteDeviceAddRequest {
+  base_url: string;
+  device_id: string;
+}
+
+export interface RemoteDeviceAddResponse {
+  success: boolean;
+  message: string;
+  serial?: string;
+  error?: string;
+}
+
+export interface RemoteDeviceRemoveRequest {
+  serial: string;
+}
+
+export interface RemoteDeviceRemoveResponse {
+  success: boolean;
+  message: string;
+  error?: string;
+}
+
 export async function listDevices(): Promise<DeviceListResponse> {
   const res = await axios.get<DeviceListResponse>('/api/devices');
   return res.data;
@@ -287,6 +351,36 @@ export async function pairWifi(
   return res.data;
 }
 
+export async function discoverRemoteDevices(
+  payload: RemoteDeviceDiscoverRequest
+): Promise<RemoteDeviceDiscoverResponse> {
+  const res = await axios.post<RemoteDeviceDiscoverResponse>(
+    '/api/devices/discover_remote',
+    payload
+  );
+  return res.data;
+}
+
+export async function addRemoteDevice(
+  payload: RemoteDeviceAddRequest
+): Promise<RemoteDeviceAddResponse> {
+  const res = await axios.post<RemoteDeviceAddResponse>(
+    '/api/devices/add_remote',
+    payload
+  );
+  return res.data;
+}
+
+export async function removeRemoteDevice(
+  serial: string
+): Promise<RemoteDeviceRemoveResponse> {
+  const res = await axios.post<RemoteDeviceRemoveResponse>(
+    '/api/devices/remove_remote',
+    { serial }
+  );
+  return res.data;
+}
+
 export async function initAgent(
   config?: InitRequest
 ): Promise<{ success: boolean; message: string; device_id?: string }> {
@@ -320,7 +414,16 @@ export function sendMessageStream(
   })
     .then(async response => {
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        let errorDetail = `HTTP error! status: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          if (errorData.detail) {
+            errorDetail = errorData.detail;
+          }
+        } catch {
+          // 如果无法解析响应体，使用默认的状态码错误
+        }
+        throw new Error(errorDetail);
       }
 
       if (!response.body) {
@@ -525,19 +628,29 @@ export interface ConfigResponse {
   model_name: string;
   api_key: string;
   source: string;
-  // 双模型配置
-  dual_model_enabled: boolean;
-  decision_base_url: string;
-  decision_model_name: string;
-  decision_api_key: string;
+  // Agent 类型配置
+  agent_type?: string;
+  agent_config_params?: Record<string, unknown>;
+  // Agent 执行配置
+  default_max_steps: number;
+  layered_max_turns: number;
+  // 决策模型配置
+  decision_base_url?: string;
+  decision_model_name?: string;
+  decision_api_key?: string;
 }
 
 export interface ConfigSaveRequest {
   base_url: string;
   model_name: string;
   api_key?: string;
-  // 双模型配置
-  dual_model_enabled?: boolean;
+  // Agent 类型配置
+  agent_type?: string;
+  agent_config_params?: Record<string, unknown>;
+  // Agent 执行配置
+  default_max_steps?: number;
+  layered_max_turns?: number;
+  // 决策模型配置
   decision_base_url?: string;
   decision_model_name?: string;
   decision_api_key?: string;
@@ -560,6 +673,21 @@ export async function deleteConfig(): Promise<{
   message: string;
 }> {
   const res = await axios.delete('/api/config');
+  return res.data;
+}
+
+export interface ReinitAllAgentsResponse {
+  success: boolean;
+  total: number;
+  succeeded: string[];
+  failed: Record<string, string>;
+  message: string;
+}
+
+export async function reinitAllAgents(): Promise<ReinitAllAgentsResponse> {
+  const res = await axios.post<ReinitAllAgentsResponse>(
+    '/api/agents/reinit-all'
+  );
   return res.data;
 }
 
@@ -687,271 +815,202 @@ export async function deleteWorkflow(uuid: string): Promise<void> {
   await axios.delete(`/api/workflows/${uuid}`);
 }
 
-// ==================== Dual Model API ====================
+// ==================== Layered Agent API ====================
 
-export interface DualModelInitRequest {
-  device_id: string;
-  decision_base_url?: string;
-  decision_api_key: string;
-  decision_model_name?: string;
-  vision_base_url?: string;
-  vision_api_key?: string;
-  vision_model_name?: string;
-  thinking_mode?: 'fast' | 'deep' | 'turbo';
-  max_steps?: number;
-}
-
-export interface DualModelChatRequest {
-  device_id: string;
-  message: string;
-}
-
-// Dual Model SSE Event Types
-export interface DualModelDecisionStartEvent {
-  type: 'decision_start';
-  model: 'decision';
-  stage: string;
-  task?: string;
-  step: number;
-  timestamp: number;
-}
-
-export interface DualModelDecisionThinkingEvent {
-  type: 'decision_thinking';
-  model: 'decision';
-  chunk: string;
-  step: number;
-  timestamp: number;
-}
-
-export interface DualModelDecisionResultEvent {
-  type: 'decision_result';
-  model: 'decision';
-  decision: {
-    action: string;
-    target: string;
-    reasoning: string;
-    content?: string;
-    finished: boolean;
-  };
-  reasoning: string;
-  step: number;
-  timestamp: number;
-}
-
-export interface DualModelTaskPlanEvent {
-  type: 'task_plan';
-  model: 'decision';
-  plan: {
-    summary: string;
-    steps: string[];
-    estimated_actions: number;
-  };
-  step: number;
-  timestamp: number;
-}
-
-export interface DualModelVisionStartEvent {
-  type: 'vision_start';
-  model: 'vision';
-  stage: string;
-  step: number;
-  timestamp: number;
-}
-
-export interface DualModelVisionRecognitionEvent {
-  type: 'vision_recognition';
-  model: 'vision';
-  description: string;
-  current_app: string;
-  elements: string[];
-  step: number;
-  timestamp: number;
-}
-
-export interface DualModelActionStartEvent {
-  type: 'action_start';
-  model: 'vision';
-  action: {
-    action: string;
-    target: string;
-    content?: string;
-  };
-  step: number;
-  timestamp: number;
-}
-
-export interface DualModelActionResultEvent {
-  type: 'action_result';
-  model: 'vision';
-  success: boolean;
-  action_type: string;
-  target: string;
-  position?: [number, number];
-  message: string;
-  step: number;
-  timestamp: number;
-}
-
-export interface DualModelStepCompleteEvent {
-  type: 'step_complete';
-  step: number;
-  success: boolean;
-  finished: boolean;
-  timestamp: number;
-}
-
-export interface DualModelTaskCompleteEvent {
-  type: 'task_complete';
+export async function abortLayeredAgentChat(sessionId: string): Promise<{
   success: boolean;
   message: string;
+}> {
+  const res = await axios.post('/api/layered-agent/abort', {
+    session_id: sessionId,
+  });
+  return res.data;
+}
+
+// ==================== History API ====================
+
+export interface MessageRecordResponse {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  thinking?: string | null;
+  action?: Record<string, unknown> | null;
+  step?: number | null;
+}
+
+export interface HistoryRecordResponse {
+  id: string;
+  task_text: string;
+  final_message: string;
+  success: boolean;
   steps: number;
-  timestamp: number;
+  start_time: string;
+  end_time: string | null;
+  duration_ms: number;
+  source: 'chat' | 'layered' | 'scheduled';
+  source_detail: string;
+  error_message: string | null;
+  messages: MessageRecordResponse[];
 }
 
-export interface DualModelErrorEvent {
-  type: 'error';
-  message: string;
-  timestamp: number;
+export interface HistoryListResponse {
+  records: HistoryRecordResponse[];
+  total: number;
+  limit: number;
+  offset: number;
 }
 
-export interface DualModelAbortedEvent {
-  type: 'aborted';
-  message: string;
-  timestamp: number;
-}
-
-export type DualModelStreamEvent =
-  | DualModelDecisionStartEvent
-  | DualModelDecisionThinkingEvent
-  | DualModelDecisionResultEvent
-  | DualModelTaskPlanEvent
-  | DualModelVisionStartEvent
-  | DualModelVisionRecognitionEvent
-  | DualModelActionStartEvent
-  | DualModelActionResultEvent
-  | DualModelStepCompleteEvent
-  | DualModelTaskCompleteEvent
-  | DualModelErrorEvent
-  | DualModelAbortedEvent;
-
-export interface DualModelStatusResponse {
-  active: boolean;
-  device_id?: string;
-  state?: {
-    decision: {
-      active: boolean;
-      stage: string;
-      thinking: string;
-      result: string;
-    };
-    vision: {
-      active: boolean;
-      stage: string;
-      description: string;
-      action: string;
-    };
-    progress: {
-      current_step: number;
-      total_steps: number;
-      task_plan: string[];
-    };
-  };
-}
-
-export async function initDualModel(
-  request: DualModelInitRequest
-): Promise<{ success: boolean; message: string; device_id?: string }> {
-  const res = await axios.post('/api/dual/init', request);
+export async function listHistory(
+  serialno: string,
+  limit: number = 50,
+  offset: number = 0
+): Promise<HistoryListResponse> {
+  const res = await axios.get<HistoryListResponse>(`/api/history/${serialno}`, {
+    params: { limit, offset },
+  });
   return res.data;
 }
 
-export function sendDualModelStream(
-  message: string,
-  deviceId: string,
-  onEvent: (event: DualModelStreamEvent) => void,
-  onError: (error: Error) => void
-): { close: () => void } {
-  const controller = new AbortController();
-
-  fetch('/api/dual/chat/stream', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
-    body: JSON.stringify({ message, device_id: deviceId }),
-    signal: controller.signal,
-  })
-    .then(async response => {
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-
-      if (!response.body) {
-        throw new Error('Response body is null');
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let eventType = 'message';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            eventType = line.slice(7).trim();
-          } else if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              console.log('[DualModel SSE] Received event:', eventType, data);
-              onEvent(data as DualModelStreamEvent);
-            } catch (e) {
-              console.error('Failed to parse SSE data:', line, e);
-            }
-          }
-        }
-      }
-    })
-    .catch(error => {
-      if (error.name !== 'AbortError') {
-        onError(error);
-      }
-    });
-
-  return {
-    close: () => controller.abort(),
-  };
+export async function getHistoryRecord(
+  serialno: string,
+  recordId: string
+): Promise<HistoryRecordResponse> {
+  const res = await axios.get<HistoryRecordResponse>(
+    `/api/history/${serialno}/${recordId}`
+  );
+  return res.data;
 }
 
-export async function abortDualModelChat(deviceId: string): Promise<{
+export async function deleteHistoryRecord(
+  serialno: string,
+  recordId: string
+): Promise<void> {
+  await axios.delete(`/api/history/${serialno}/${recordId}`);
+}
+
+export async function clearHistory(serialno: string): Promise<void> {
+  await axios.delete(`/api/history/${serialno}`);
+}
+
+// ==================== Scheduled Tasks API ====================
+
+export interface ScheduledTaskResponse {
+  id: string;
+  name: string;
+  workflow_uuid: string;
+  device_serialno: string;
+  cron_expression: string;
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+  last_run_time: string | null;
+  last_run_success: boolean | null;
+  last_run_message: string | null;
+  next_run_time: string | null;
+}
+
+export interface ScheduledTaskListResponse {
+  tasks: ScheduledTaskResponse[];
+}
+
+export interface ScheduledTaskCreate {
+  name: string;
+  workflow_uuid: string;
+  device_serialno: string;
+  cron_expression: string;
+  enabled?: boolean;
+}
+
+export interface ScheduledTaskUpdate {
+  name?: string;
+  workflow_uuid?: string;
+  device_serialno?: string;
+  cron_expression?: string;
+  enabled?: boolean;
+}
+
+export async function listScheduledTasks(): Promise<ScheduledTaskListResponse> {
+  const res = await axios.get<ScheduledTaskListResponse>(
+    '/api/scheduled-tasks'
+  );
+  return res.data;
+}
+
+export async function createScheduledTask(
+  data: ScheduledTaskCreate
+): Promise<ScheduledTaskResponse> {
+  const res = await axios.post<ScheduledTaskResponse>(
+    '/api/scheduled-tasks',
+    data
+  );
+  return res.data;
+}
+
+export async function getScheduledTask(
+  taskId: string
+): Promise<ScheduledTaskResponse> {
+  const res = await axios.get<ScheduledTaskResponse>(
+    `/api/scheduled-tasks/${taskId}`
+  );
+  return res.data;
+}
+
+export async function updateScheduledTask(
+  taskId: string,
+  data: ScheduledTaskUpdate
+): Promise<ScheduledTaskResponse> {
+  const res = await axios.put<ScheduledTaskResponse>(
+    `/api/scheduled-tasks/${taskId}`,
+    data
+  );
+  return res.data;
+}
+
+export async function deleteScheduledTask(taskId: string): Promise<void> {
+  await axios.delete(`/api/scheduled-tasks/${taskId}`);
+}
+
+export async function enableScheduledTask(
+  taskId: string
+): Promise<ScheduledTaskResponse> {
+  const res = await axios.post<ScheduledTaskResponse>(
+    `/api/scheduled-tasks/${taskId}/enable`
+  );
+  return res.data;
+}
+
+export async function disableScheduledTask(
+  taskId: string
+): Promise<ScheduledTaskResponse> {
+  const res = await axios.post<ScheduledTaskResponse>(
+    `/api/scheduled-tasks/${taskId}/disable`
+  );
+  return res.data;
+}
+
+export interface DeviceNameResponse {
   success: boolean;
-  message: string;
-}> {
-  const res = await axios.post('/api/dual/chat/abort', { device_id: deviceId });
+  serial: string;
+  display_name: string | null;
+  error?: string;
+}
+
+export async function updateDeviceName(
+  serial: string,
+  displayName: string | null
+): Promise<DeviceNameResponse> {
+  const res = await axios.put<DeviceNameResponse>(
+    `/api/devices/${serial}/name`,
+    { display_name: displayName }
+  );
   return res.data;
 }
 
-export async function getDualModelStatus(
-  deviceId?: string
-): Promise<DualModelStatusResponse> {
-  const url = deviceId
-    ? `/api/dual/status?device_id=${encodeURIComponent(deviceId)}`
-    : '/api/dual/status';
-  const res = await axios.get<DualModelStatusResponse>(url);
-  return res.data;
-}
-
-export async function resetDualModel(deviceId: string): Promise<{
-  success: boolean;
-  message: string;
-}> {
-  const res = await axios.post('/api/dual/reset', { device_id: deviceId });
+export async function getDeviceName(
+  serial: string
+): Promise<DeviceNameResponse> {
+  const res = await axios.get<DeviceNameResponse>(
+    `/api/devices/${serial}/name`
+  );
   return res.data;
 }

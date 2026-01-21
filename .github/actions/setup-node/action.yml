@@ -1,0 +1,45 @@
+name: Setup Node.js & pnpm
+description: Setup Node.js with pnpm and caching
+
+inputs:
+  node-version:
+    description: Node.js version to use
+    required: false
+    default: "20"
+  pnpm-version:
+    description: pnpm version to use
+    required: false
+    default: "10"
+  cache-dependency-path:
+    description: Path to pnpm-lock.yaml for caching
+    required: false
+    default: "frontend/pnpm-lock.yaml"
+
+runs:
+  using: composite
+  steps:
+    - name: Setup pnpm
+      uses: pnpm/action-setup@v4
+      with:
+        version: ${{ inputs.pnpm-version }}
+
+    - name: Setup Node.js
+      uses: actions/setup-node@v4
+      with:
+        node-version: ${{ inputs.node-version }}
+        cache: "pnpm"
+        cache-dependency-path: ${{ inputs.cache-dependency-path }}
+
+    - name: Get pnpm store directory
+      id: pnpm-cache
+      shell: bash
+      run: |
+        echo "STORE_PATH=$(pnpm store path --silent)" >> $GITHUB_ENV
+
+    - name: Cache pnpm store
+      uses: actions/cache@v4
+      with:
+        path: ${{ env.STORE_PATH }}
+        key: ${{ runner.os }}-pnpm-store-${{ hashFiles('**/pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pnpm-store-

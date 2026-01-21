@@ -35,9 +35,6 @@ a = Analysis(
         # 前端静态文件（必需）
         (str(ROOT_DIR / 'AutoGLM_GUI' / 'static'), 'AutoGLM_GUI/static'),
 
-        # phone_agent 配置文件（prompts, apps 等）
-        (str(ROOT_DIR / 'phone_agent' / 'config'), 'phone_agent/config'),
-
         # ADB Keyboard APK 及许可证文件（自动安装功能）
         (str(ROOT_DIR / 'AutoGLM_GUI' / 'resources' / 'apks'), 'AutoGLM_GUI/resources/apks'),
 
@@ -94,7 +91,6 @@ a = Analysis(
         # 排除不需要的模块以减小体积
         'tkinter',
         'matplotlib',
-        'numpy',  # 如果不需要的话
     ],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,

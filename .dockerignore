@@ -1,0 +1,66 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.eggs
+*.egg-info
+.venv
+venv
+ENV
+env
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# Node
+node_modules
+frontend/node_modules
+frontend/dist
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+.trae
+
+# Build artifacts
+dist
+build
+*.egg
+*.whl
+electron/dist
+electron/node_modules
+resources
+
+# Logs and data
+logs
+*.log
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Test
+tests
+*.test.py
+conftest.py
+
+# Documentation (keep README for build)
+*.md
+!README.md
+
+# Scripts not needed in image
+scripts
+
+# Electron (not needed for Docker)
+electron
+
+# Lock files (use frozen lockfile)
+uv.lock

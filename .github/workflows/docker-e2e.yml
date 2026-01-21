@@ -1,0 +1,48 @@
+name: Docker E2E Tests
+
+on:
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'Dockerfile'
+      - 'AutoGLM_GUI/**'
+      - 'tests/integration/**'
+      - 'pyproject.toml'
+      - '.github/workflows/docker-e2e.yml'
+  push:
+    branches: [main, dev]
+    paths:
+      - 'Dockerfile'
+      - 'AutoGLM_GUI/**'
+      - 'tests/integration/**'
+  workflow_dispatch:
+
+jobs:
+  docker-e2e:
+    name: Docker E2E with Remote Device Mock
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python & uv
+        uses: ./.github/actions/setup-python
+        with:
+          frozen: "true"
+
+      - name: Run Docker E2E tests
+        run: |
+          uv run pytest tests/integration/test_docker_e2e.py -v -s
+
+      - name: Generate test summary
+        if: always()
+        run: |
+          echo "## Docker E2E Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ Docker E2E tests passed!" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Docker E2E tests failed. Check the logs above." >> $GITHUB_STEP_SUMMARY
+          fi

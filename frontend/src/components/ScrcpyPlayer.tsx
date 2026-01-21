@@ -15,6 +15,7 @@ import {
   sendTouchMove,
   sendTouchUp,
 } from '../api';
+import { detectWebCodecsUnavailabilityReason } from '../lib/webcodecs-utils';
 
 const MOTION_THROTTLE_MS = 50;
 const WHEEL_DELAY_MS = 300;
@@ -22,7 +23,7 @@ const WHEEL_DELAY_MS = 300;
 interface ScrcpyPlayerProps {
   deviceId: string;
   className?: string;
-  onFallback?: () => void;
+  onFallback?: (reason?: string) => void;
   fallbackTimeout?: number;
   enableControl?: boolean;
   onTapSuccess?: () => void;
@@ -50,7 +51,7 @@ export function ScrcpyPlayer({
   deviceId,
   className,
   onFallback,
-  fallbackTimeout = 5000,
+  fallbackTimeout = 20000,
   enableControl = false,
   onTapSuccess,
   onTapError,
@@ -173,6 +174,9 @@ export function ScrcpyPlayer({
   const createDecoder = useCallback(
     async (codecId: ScrcpyVideoCodecId) => {
       if (!WebCodecsVideoDecoder.isSupported) {
+        const reason =
+          detectWebCodecsUnavailabilityReason() || 'decoder_unsupported';
+        onFallbackRef.current?.(reason);
         throw new Error(
           'Current browser does not support WebCodecs API. Please use the latest Chrome/Edge.'
         );
@@ -389,7 +393,8 @@ export function ScrcpyPlayer({
         setErrorMessage('Decoder initialization failed');
         suppressReconnectRef.current = true;
         socket.close();
-        onFallbackRef.current?.();
+        const reason = detectWebCodecsUnavailabilityReason() || 'decoder_error';
+        onFallbackRef.current?.(reason);
       }
     });
 
@@ -397,6 +402,19 @@ export function ScrcpyPlayer({
       console.error('[ScrcpyPlayer] Socket error:', error);
       setStatus('error');
       setErrorMessage(error?.message || 'Socket error');
+
+      if (suppressReconnectRef.current) {
+        return;
+      }
+
+      onStreamReadyRef.current?.(null);
+
+      if (!reconnectTimerRef.current) {
+        reconnectTimerRef.current = setTimeout(() => {
+          reconnectTimerRef.current = null;
+          connectDeviceRef.current?.();
+        }, 3000);
+      }
     });
 
     socket.on('disconnect', () => {

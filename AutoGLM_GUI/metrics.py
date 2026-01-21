@@ -87,14 +87,12 @@ class AutoGLMMetricsCollector(Collector):
         busy_count = 0
 
         with manager._manager_lock:
-            # Get snapshots (shallow copy to minimize lock time)
+            # Get snapshot (shallow copy to minimize lock time)
             metadata_snapshot = dict(manager._metadata)
-            states_snapshot = dict(manager._states)
 
-        # Iterate over _states (not _metadata) to capture failed agents
-        for device_id, state in states_snapshot.items():
-            # Get metadata if exists (will be None for failed initialization)
-            metadata = metadata_snapshot.get(device_id)
+        # Iterate over _metadata (state is stored in AgentMetadata.state)
+        for device_id, metadata in metadata_snapshot.items():
+            state = metadata.state
 
             # Get serial from DeviceManager
             with device_manager._devices_lock:
@@ -113,20 +111,15 @@ class AutoGLMMetricsCollector(Collector):
             if state == AgentState.BUSY:
                 busy_count += 1
 
-            # Timestamps (0 if metadata doesn't exist, e.g., failed init)
-            if metadata:
-                last_used_gauge.add_metric(
-                    [device_id, serial],
-                    metadata.last_used,
-                )
-                created_gauge.add_metric(
-                    [device_id, serial],
-                    metadata.created_at,
-                )
-            else:
-                # Failed initialization: report 0 timestamps
-                last_used_gauge.add_metric([device_id, serial], 0)
-                created_gauge.add_metric([device_id, serial], 0)
+            # Timestamps from metadata
+            last_used_gauge.add_metric(
+                [device_id, serial],
+                metadata.last_used,
+            )
+            created_gauge.add_metric(
+                [device_id, serial],
+                metadata.created_at,
+            )
 
         metrics.extend([agents_gauge, last_used_gauge, created_gauge])
 
