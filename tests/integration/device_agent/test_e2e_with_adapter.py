@@ -293,12 +293,8 @@ class TestMultiDeviceConcurrent:
 
         print(f"[MultiDevice] Total commands: {len(commands)}")
 
-        device1_commands = [
-            c for c in commands if c["device_id"] == "mock_device_001"
-        ]
-        device2_commands = [
-            c for c in commands if c["device_id"] == "mock_device_002"
-        ]
+        device1_commands = [c for c in commands if c["device_id"] == "mock_device_001"]
+        device2_commands = [c for c in commands if c["device_id"] == "mock_device_002"]
 
         print(f"[MultiDevice] Device 1 commands: {len(device1_commands)}")
         print(f"[MultiDevice] Device 2 commands: {len(device2_commands)}")
@@ -309,10 +305,14 @@ class TestMultiDeviceConcurrent:
 
         # Verify device isolation - no command should have the wrong device_id
         for cmd in device1_commands:
-            assert cmd["device_id"] == "mock_device_001", "Device 1 command has wrong device_id"
+            assert cmd["device_id"] == "mock_device_001", (
+                "Device 1 command has wrong device_id"
+            )
 
         for cmd in device2_commands:
-            assert cmd["device_id"] == "mock_device_002", "Device 2 command has wrong device_id"
+            assert cmd["device_id"] == "mock_device_002", (
+                "Device 2 command has wrong device_id"
+            )
 
         print("[MultiDevice] ✓ Concurrent test passed!")
 
