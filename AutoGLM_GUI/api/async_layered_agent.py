@@ -161,6 +161,118 @@ def _setup_async_openai_client() -> AsyncOpenAI:
     )
 
 
+# ==================== Tool Functions ====================
+def _sync_list_devices() -> str:
+    """同步实现：获取所有连接的 ADB 设备列表。
+
+    Returns:
+        str: JSON 格式的设备列表
+    """
+    from AutoGLM_GUI.api.devices import _build_device_response_with_agent
+    from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
+
+    logger.info("[AsyncLayeredAgent] list_devices tool called")
+
+    device_manager = DeviceManager.get_instance()
+    agent_manager = PhoneAgentManager.get_instance()
+
+    # 如果轮询未启动，执行同步刷新
+    if not device_manager._poll_thread or not device_manager._poll_thread.is_alive():
+        logger.warning("Polling not started, performing sync refresh")
+        device_manager.force_refresh()
+
+    managed_devices = device_manager.get_devices()
+
+    # 构建设备响应
+    devices_with_agents = [
+        _build_device_response_with_agent(d, agent_manager) for d in managed_devices
+    ]
+
+    # Convert DeviceResponse Pydantic models to dicts before JSON serialization
+    devices_dict = [device.model_dump() for device in devices_with_agents]
+    return json.dumps(devices_dict, ensure_ascii=False, indent=2)
+
+
+@function_tool
+async def async_list_devices() -> str:
+    """获取所有连接的 ADB 设备列表。
+
+    返回设备信息包括:
+    - id: 设备标识符，用于 chat 工具调用
+    - model: 设备型号
+    - status: 连接状态
+    - connection_type: 连接类型 (usb/wifi/remote)
+
+    Returns:
+        JSON 格式的设备列表
+    """
+    return await asyncio.to_thread(_sync_list_devices)
+
+
+@function_tool
+async def async_chat(device_id: str, message: str) -> str:
+    """向指定设备的 Phone Agent 发送子任务指令。
+
+    Phone Agent 是一个视觉模型，能够看到手机屏幕并执行操作。
+    每次调用会执行一个原子化的子任务（最多 5 步操作）。
+
+    使用 AsyncGLMAgent 实现真正的异步执行。
+
+    Args:
+        device_id: 设备标识符，从 list_devices 获取
+        message: 子任务指令，例如 "打开微信"、"点击搜索按钮"
+
+    Returns:
+        JSON 格式的执行结果，包含:
+        - result: 执行结果描述
+        - steps: 执行的步数
+        - success: 是否成功
+    """
+    # TODO: 从 Runner 上下文传递 session_id
+    # 当前暂时使用 device_id 作为 session_id
+    session_id = device_id
+
+    logger.info(
+        f"[AsyncLayeredAgent] async_chat tool called: "
+        f"device_id={device_id}, message={message}"
+    )
+
+    try:
+        # 获取或创建 AsyncGLMAgent
+        agent = _get_or_create_async_agent(session_id, device_id)
+
+        # 真正的异步调用，带超时保护
+        result = await asyncio.wait_for(agent.run(message), timeout=60.0)
+
+        return json.dumps(
+            {"result": result, "steps": agent.step_count, "success": True},
+            ensure_ascii=False,
+        )
+
+    except asyncio.TimeoutError:
+        logger.warning(
+            f"[AsyncLayeredAgent] Agent execution timeout for device {device_id}"
+        )
+        # 尝试获取 agent 的步数（如果 agent 已创建）
+        steps = 0
+        if (
+            session_id in _async_sessions
+            and device_id in _async_sessions[session_id]["agents"]
+        ):
+            steps = _async_sessions[session_id]["agents"][device_id].step_count
+
+        return json.dumps(
+            {"result": "Execution timeout (60s)", "steps": steps, "success": False},
+            ensure_ascii=False,
+        )
+
+    except Exception as e:
+        logger.error(f"[AsyncLayeredAgent] async_chat tool error: {e}")
+        return json.dumps(
+            {"result": str(e), "steps": 0, "success": False}, ensure_ascii=False
+        )
+
+
 # ==================== Agent Creation Functions ====================
 def _create_async_planner_agent(client: AsyncOpenAI) -> Agent[Any]:
     """创建规划 Agent，使用 Chat Completions API。
@@ -183,7 +295,7 @@ def _create_async_planner_agent(client: AsyncOpenAI) -> Agent[Any]:
         name="AsyncPlanner",
         instructions=PLANNER_INSTRUCTIONS,
         model=model,
-        tools=[async_list_devices, async_chat],  # 后续实现
+        tools=[async_list_devices, async_chat],
     )
 
 
