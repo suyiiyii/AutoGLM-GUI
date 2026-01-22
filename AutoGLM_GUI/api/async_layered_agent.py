@@ -419,6 +419,18 @@ class LayeredAgentRequest(BaseModel):
     session_id: str | None = None  # 用于保持对话上下文，前端可传入 deviceId
 
 
+class AbortSessionRequest(BaseModel):
+    """Request for aborting a running session."""
+
+    session_id: str
+
+
+class ResetSessionRequest(BaseModel):
+    """Request for resetting a session."""
+
+    session_id: str
+
+
 # ==================== API Endpoints ====================
 @router.post("/api/async-layered-agent/chat")
 async def async_layered_agent_chat(
@@ -684,3 +696,73 @@ async def async_layered_agent_chat(
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@router.post("/api/async-layered-agent/abort")
+def async_abort_session(request: AbortSessionRequest) -> dict[str, Any]:
+    """Abort a running async layered agent session.
+
+    Uses the OpenAI agents SDK's native cancel() method to stop execution.
+
+    Args:
+        request: Abort request containing session_id
+
+    Returns:
+        dict: Success status and message
+    """
+    session_id = request.session_id
+
+    with _async_active_runs_lock:
+        if session_id in _async_active_runs:
+            result = _async_active_runs[session_id]
+            result.cancel(mode="immediate")
+            logger.info(f"[AsyncLayeredAgent] Aborted session: {session_id}")
+            return {
+                "success": True,
+                "message": f"Session {session_id} abort signal sent",
+            }
+        else:
+            logger.warning(
+                f"[AsyncLayeredAgent] No active run found for session: {session_id}"
+            )
+            return {
+                "success": False,
+                "message": f"No active run found for session {session_id}",
+            }
+
+
+@router.post("/api/async-layered-agent/reset")
+def async_reset_session(request: ResetSessionRequest) -> dict[str, Any]:
+    """Reset/clear a session to forget conversation history.
+
+    This should be called when the user clicks "reset" button
+    or refreshes the page.
+
+    Clears all agents for the session and deletes the session.
+
+    Args:
+        request: Reset request containing session_id
+
+    Returns:
+        dict: Success status and message
+    """
+    session_id = request.session_id
+
+    if session_id in _async_sessions:
+        # 清理所有 agents
+        agents = _async_sessions[session_id]["agents"]
+        for agent in agents.values():
+            agent.reset()  # 重置 agent 状态
+
+        # 删除整个 session
+        del _async_sessions[session_id]
+        logger.info(f"[AsyncLayeredAgent] Reset session: {session_id}")
+        return {
+            "success": True,
+            "message": f"Session {session_id} reset",
+        }
+
+    return {
+        "success": True,
+        "message": f"Session {session_id} not found (already empty)",
+    }
