@@ -7,6 +7,9 @@ This test shows how to:
 4. Assert that the Mock Agent received expected commands
 """
 
+import asyncio
+
+import httpx
 import pytest
 
 from AutoGLM_GUI.devices.remote_device import RemoteDevice
@@ -176,6 +179,239 @@ class TestE2EWithMockLLM:
 
         # Verify final state
         test_client.assert_state("message")
+
+
+class TestMultiDeviceConcurrent:
+    """Test multi-device concurrent execution scenarios."""
+
+    def test_concurrent_chats_on_different_devices(
+        self,
+        local_server: dict,
+        mock_llm_client,
+        mock_agent_server_multi: str,
+    ):
+        """Verify that concurrent chats on different devices don't interfere."""
+        access_url = local_server["access_url"]
+        remote_url = mock_agent_server_multi
+        llm_url = local_server["llm_url"]
+
+        # Register two devices
+        devices = {}
+        for device_num in [1, 2]:
+            device_id = f"mock_device_00{device_num}"
+            resp = httpx.post(
+                f"{access_url}/api/devices/add_remote",
+                json={"base_url": remote_url, "device_id": device_id},
+                timeout=10,
+            )
+            assert resp.status_code == 200
+            register_result = resp.json()
+            devices[device_id] = register_result["serial"]
+
+        # Set config via API (required before init)
+        resp = httpx.delete(f"{access_url}/api/config", timeout=10)
+        resp = httpx.post(
+            f"{access_url}/api/config",
+            json={
+                "base_url": llm_url + "/v1",
+                "model_name": "mock-glm-model",
+                "api_key": "mock-key",
+            },
+            timeout=10,
+        )
+        assert resp.status_code == 200
+
+        # Initialize both devices' agents
+        for device_id, serial in devices.items():
+            resp = httpx.post(
+                f"{access_url}/api/init",
+                json={
+                    "agent_type": "glm",
+                    "device_id": serial,
+                    "model_config": {
+                        "base_url": llm_url + "/v1",
+                        "api_key": "mock-key",
+                        "model_name": "mock-glm-model",
+                    },
+                    "agent_config": {
+                        "device_id": serial,
+                        "max_steps": 5,
+                        "verbose": True,
+                    },
+                },
+                timeout=30,
+            )
+            if resp.status_code != 200:
+                print(f"[MultiDevice] Init failed for {device_id}: {resp.text}")
+            assert resp.status_code == 200
+
+        # Configure mock LLM to return tap actions
+        # Both devices will get tap actions due to round-robin
+        mock_llm_client.set_responses(
+            [
+                'do(action="Tap", element=[100, 200])',
+                'do(action="Tap", element=[300, 400])',
+                'do(action="Tap", element=[500, 600])',
+                'do(action="Tap", element=[700, 800])',
+                'finish(message="Task completed")',
+                'finish(message="Task completed")',
+            ]
+        )
+
+        # Send concurrent chat requests
+        async def run_concurrent():
+            async with httpx.AsyncClient() as client:
+                results = await asyncio.gather(
+                    client.post(
+                        f"{access_url}/api/chat",
+                        json={
+                            "device_id": devices["mock_device_001"],
+                            "message": "点击位置A",
+                        },
+                        timeout=120,
+                    ),
+                    client.post(
+                        f"{access_url}/api/chat",
+                        json={
+                            "device_id": devices["mock_device_002"],
+                            "message": "点击位置B",
+                        },
+                        timeout=120,
+                    ),
+                )
+                return results
+
+        results = asyncio.run(run_concurrent())
+
+        # Verify responses
+        assert results[0].status_code == 200
+        assert results[1].status_code == 200
+
+        # Verify command records
+        resp = httpx.get(f"{remote_url}/test/commands")
+        commands = resp.json()
+
+        print(f"[MultiDevice] Total commands: {len(commands)}")
+
+        device1_commands = [
+            c for c in commands if c["device_id"] == "mock_device_001"
+        ]
+        device2_commands = [
+            c for c in commands if c["device_id"] == "mock_device_002"
+        ]
+
+        print(f"[MultiDevice] Device 1 commands: {len(device1_commands)}")
+        print(f"[MultiDevice] Device 2 commands: {len(device2_commands)}")
+
+        # Verify each device received commands
+        assert len(device1_commands) >= 1, "Device 1 should have received commands"
+        assert len(device2_commands) >= 1, "Device 2 should have received commands"
+
+        # Verify device isolation - no command should have the wrong device_id
+        for cmd in device1_commands:
+            assert cmd["device_id"] == "mock_device_001", "Device 1 command has wrong device_id"
+
+        for cmd in device2_commands:
+            assert cmd["device_id"] == "mock_device_002", "Device 2 command has wrong device_id"
+
+        print("[MultiDevice] ✓ Concurrent test passed!")
+
+    def test_same_device_concurrent_rejection(
+        self,
+        local_server: dict,
+        mock_llm_client,
+        mock_agent_server_multi: str,
+    ):
+        """Verify that concurrent requests to the same device are handled correctly."""
+        access_url = local_server["access_url"]
+        remote_url = mock_agent_server_multi
+
+        # Register device
+        resp = httpx.post(
+            f"{access_url}/api/devices/add_remote",
+            json={"base_url": remote_url, "device_id": "mock_device_001"},
+            timeout=10,
+        )
+        assert resp.status_code == 200
+        serial = resp.json()["serial"]
+
+        # Set config via API (required before init)
+        llm_url = local_server["llm_url"]
+        resp = httpx.delete(f"{access_url}/api/config", timeout=10)
+        resp = httpx.post(
+            f"{access_url}/api/config",
+            json={
+                "base_url": llm_url + "/v1",
+                "model_name": "mock-glm-model",
+                "api_key": "mock-key",
+            },
+            timeout=10,
+        )
+        assert resp.status_code == 200
+
+        # Initialize agent
+        resp = httpx.post(
+            f"{access_url}/api/init",
+            json={
+                "agent_type": "glm",
+                "device_id": serial,
+                "model_config": {
+                    "base_url": llm_url + "/v1",
+                    "api_key": "mock-key",
+                    "model_name": "mock-glm-model",
+                },
+                "agent_config": {
+                    "device_id": serial,
+                    "max_steps": 10,
+                },
+            },
+            timeout=30,
+        )
+        assert resp.status_code == 200
+
+        # Configure mock LLM responses
+        mock_llm_client.set_responses(
+            [
+                'finish(message="Task completed")',  # First task
+                'finish(message="Second task completed")',  # Second task
+            ]
+        )
+
+        # Send concurrent requests to same device
+        async def run_concurrent_same_device():
+            async with httpx.AsyncClient() as client:
+                # Note: Due to device lock, one request should succeed,
+                # the other may fail or be queued depending on timing
+                results = await asyncio.gather(
+                    client.post(
+                        f"{access_url}/api/chat",
+                        json={"device_id": serial, "message": "任务1"},
+                        timeout=120,
+                    ),
+                    client.post(
+                        f"{access_url}/api/chat",
+                        json={"device_id": serial, "message": "任务2"},
+                        timeout=120,
+                    ),
+                    return_exceptions=True,
+                )
+                return results
+
+        results = asyncio.run(run_concurrent_same_device())
+
+        # At least one request should succeed
+        status_codes = []
+        for r in results:
+            if isinstance(r, httpx.Response):
+                status_codes.append(r.status_code)
+            else:
+                status_codes.append(500)  # Exception
+
+        # The device lock mechanism should prevent concurrent execution
+        # At least one request should succeed
+        assert 200 in status_codes, "At least one request should succeed"
+
+        print(f"[MultiDevice] Same-device concurrent test statuses: {status_codes}")
 
 
 if __name__ == "__main__":

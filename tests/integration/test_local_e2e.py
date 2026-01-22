@@ -8,82 +8,10 @@ Prerequisites:
     - None (runs entirely in local Python processes)
 """
 
-import multiprocessing
 from pathlib import Path
 
 import httpx
 import pytest
-
-from tests.integration.conftest import find_free_port, wait_for_server
-
-
-def _run_autoglm_server(port: int, llm_url: str):
-    """Run AutoGLM-GUI server in a subprocess."""
-    import uvicorn
-
-    # Delete config file to use environment variables
-    import os
-
-    os.environ["AUTOGLM_BASE_URL"] = llm_url + "/v1"
-    os.environ["AUTOGLM_MODEL_NAME"] = "mock-glm-model"
-    os.environ["AUTOGLM_API_KEY"] = "mock-key"
-    os.environ["HOME"] = "/tmp"  # Override HOME to avoid loading user config
-
-    # Import and run the server
-    from AutoGLM_GUI.server import app
-
-    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
-
-
-@pytest.fixture
-def local_server(mock_llm_server: str, mock_agent_server: str):
-    """Start AutoGLM-GUI server locally (function-scoped for isolation).
-
-    Each test gets a fresh server instance on a unique port.
-
-    Returns:
-        Dict with server URLs and configuration
-    """
-    port = find_free_port(start=8000, end=8099)
-    access_url = f"http://127.0.0.1:{port}"
-    remote_url = mock_agent_server
-    llm_url = mock_llm_server
-
-    print(f"\n[Local E2E] Starting server on port {port}")
-    print(f"[Local E2E] Access URL: {access_url}")
-    print(f"[Local E2E] LLM URL: {llm_url}")
-
-    # Start server in subprocess
-    proc = multiprocessing.Process(
-        target=_run_autoglm_server, args=(port, llm_url), daemon=True
-    )
-    proc.start()
-
-    print("[Local E2E] Waiting for server to start...")
-    try:
-        wait_for_server(access_url, timeout=30.0, endpoint="/api/health")
-        print("[Local E2E] Server is ready!")
-    except RuntimeError as e:
-        proc.terminate()
-        proc.join(timeout=2)
-        if proc.is_alive():
-            proc.kill()
-        raise RuntimeError(f"Server failed to start: {e}")
-
-    yield {
-        "access_url": access_url,
-        "remote_url": remote_url,  # Will be set by test
-        "llm_url": llm_url,
-        "port": port,
-    }
-
-    # Cleanup: Stop server
-    print(f"[Local E2E] Stopping server on port {port}")
-    proc.terminate()
-    proc.join(timeout=2)
-    if proc.is_alive():
-        proc.kill()
-        proc.join(timeout=1)
 
 
 class TestLocalE2E:

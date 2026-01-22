@@ -48,6 +48,15 @@ class MockAgentState:
         self.commands: list[CommandRecord] = []
         self.state_machine = None
         self.scenario_path: str | None = None
+        self.available_devices: list[dict] = [
+            {
+                "device_id": "mock_device_001",
+                "status": "online",
+                "model": "MockPhone",
+                "platform": "android",
+                "connection_type": "mock",
+            }
+        ]
 
     def record(self, action: str, device_id: str, **params):
         """Record a command."""
@@ -92,6 +101,10 @@ class MockAgentState:
         if self.state_machine:
             return self.state_machine.current_state.current_app
         return "com.mock.app"
+
+    def set_devices(self, devices: list[dict]):
+        """Configure available devices list."""
+        self.available_devices = devices
 
 
 state = MockAgentState()
@@ -162,15 +175,7 @@ def _register_routes(app: FastAPI):
     @app.get("/devices")
     async def list_devices():
         """List available mock devices."""
-        return [
-            {
-                "device_id": "mock_device_001",
-                "status": "online",
-                "model": "MockPhone",
-                "platform": "android",
-                "connection_type": "mock",
-            }
-        ]
+        return state.available_devices
 
     # === Screenshot ===
     @app.post("/device/{device_id}/screenshot")

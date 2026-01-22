@@ -10,6 +10,24 @@ import httpx
 import pytest
 
 
+def _run_autoglm_server(port: int, llm_url: str):
+    """Run AutoGLM-GUI server in a subprocess."""
+    import uvicorn
+
+    # Delete config file to use environment variables
+    import os
+
+    os.environ["AUTOGLM_BASE_URL"] = llm_url + "/v1"
+    os.environ["AUTOGLM_MODEL_NAME"] = "mock-glm-model"
+    os.environ["AUTOGLM_API_KEY"] = "mock-key"
+    os.environ["HOME"] = "/tmp"  # Override HOME to avoid loading user config
+
+    # Import and run the server
+    from AutoGLM_GUI.server import app
+
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+
+
 def find_free_port(start: int = 18000, end: int = 19000) -> int:
     """Find a free port in the specified range.
 
@@ -208,3 +226,118 @@ def test_client(mock_agent_server: str):
     client = MockAgentTestClient(mock_agent_server)
     client.reset()
     return client
+
+
+def _run_multi_agent_server(port: int):
+    """Run the mock agent server with multiple devices configured."""
+    import uvicorn
+
+    from tests.integration.device_agent.mock_agent_server import (
+        create_app,
+        state,
+    )
+
+    # Configure 2 devices
+    state.set_devices(
+        [
+            {
+                "device_id": "mock_device_001",
+                "status": "online",
+                "model": "MockPhone",
+                "platform": "android",
+                "connection_type": "mock",
+            },
+            {
+                "device_id": "mock_device_002",
+                "status": "online",
+                "model": "MockPhone",
+                "platform": "android",
+                "connection_type": "mock",
+            },
+        ]
+    )
+
+    app = create_app()
+    uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
+
+
+@pytest.fixture
+def local_server(mock_llm_server: str, mock_agent_server: str):
+    """Start AutoGLM-GUI server locally (function-scoped for isolation).
+
+    Each test gets a fresh server instance on a unique port.
+
+    Returns:
+        Dict with server URLs and configuration
+    """
+    port = find_free_port(start=8000, end=8099)
+    access_url = f"http://127.0.0.1:{port}"
+    remote_url = mock_agent_server
+    llm_url = mock_llm_server
+
+    print(f"\n[Local E2E] Starting server on port {port}")
+    print(f"[Local E2E] Access URL: {access_url}")
+    print(f"[Local E2E] LLM URL: {llm_url}")
+
+    # Start server in subprocess
+    proc = multiprocessing.Process(
+        target=_run_autoglm_server, args=(port, llm_url), daemon=True
+    )
+    proc.start()
+
+    print("[Local E2E] Waiting for server to start...")
+    try:
+        wait_for_server(access_url, timeout=30.0, endpoint="/api/health")
+        print("[Local E2E] Server is ready!")
+    except RuntimeError as e:
+        proc.terminate()
+        proc.join(timeout=2)
+        if proc.is_alive():
+            proc.kill()
+        raise RuntimeError(f"Server failed to start: {e}")
+
+    yield {
+        "access_url": access_url,
+        "remote_url": remote_url,  # Will be set by test
+        "llm_url": llm_url,
+        "port": port,
+    }
+
+    # Cleanup: Stop server
+    print(f"[Local E2E] Stopping server on port {port}")
+    proc.terminate()
+    proc.join(timeout=2)
+    if proc.is_alive():
+        proc.kill()
+        proc.join(timeout=1)
+
+
+@pytest.fixture
+def mock_agent_server_multi():
+    """Start mock agent server with multiple devices (2 devices) on a free port.
+
+    Returns:
+        Base URL of the mock agent server (e.g., "http://127.0.0.1:19123")
+
+    Example:
+        def test_multi_device(mock_agent_server_multi: str):
+            # Server has 2 devices pre-configured
+            device1 = RemoteDevice("mock_device_001", mock_agent_server_multi)
+            device2 = RemoteDevice("mock_device_002", mock_agent_server_multi)
+    """
+    port = find_free_port(start=19000, end=19999)
+    proc = multiprocessing.Process(
+        target=_run_multi_agent_server, args=(port,), daemon=True
+    )
+    proc.start()
+
+    url = f"http://127.0.0.1:{port}"
+    wait_for_server(url, timeout=5.0, endpoint="/test/commands")
+
+    yield url
+
+    proc.terminate()
+    proc.join(timeout=2)
+    if proc.is_alive():
+        proc.kill()
+        proc.join(timeout=1)
