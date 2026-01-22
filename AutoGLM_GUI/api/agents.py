@@ -3,8 +3,8 @@
 import asyncio
 import json
 
-from fastapi import APIRouter, HTTPException
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import ValidationError
 
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
@@ -203,7 +203,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
 
 @router.post("/api/chat/stream")
-async def chat_stream(request: ChatRequest):
+async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
     """发送任务给 Agent 并实时推送执行进度（SSE，多设备支持）。
 
     Agent 会在首次使用时自动初始化，无需手动调用 /api/init。
@@ -221,8 +221,53 @@ async def chat_stream(request: ChatRequest):
     device_id = request.device_id
     manager = PhoneAgentManager.get_instance()
 
+    # ===== 在外层获取设备锁 =====
+    acquired = False
+    try:
+        acquired = await asyncio.to_thread(
+            manager.acquire_device,
+            device_id,
+            timeout=0,
+            raise_on_timeout=True,
+            auto_initialize=True,
+        )
+    except DeviceBusyError:
+        logger.warning(f"Device {device_id} is busy, returning 409")
+        return JSONResponse(
+            status_code=409,
+            content={"detail": f"Device {device_id} is busy. Please wait."},
+        )
+    except AgentInitializationError as e:
+        logger.error(f"Failed to initialize agent for {device_id}: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={
+                "detail": f"初始化失败: {str(e)}. 请检查全局配置 (base_url, api_key, model_name)"
+            },
+        )
+
+    logger.info(f"Device lock acquired for {device_id}")
+
+    # ===== 定义清理函数 =====
+    async def cleanup():
+        """Background task: 清理资源"""
+        try:
+            await asyncio.to_thread(manager.unregister_abort_handler, device_id)
+            logger.debug(f"Abort handler unregistered for {device_id}")
+        except Exception as e:
+            logger.warning(f"Failed to unregister abort handler for {device_id}: {e}")
+
+        if acquired:
+            try:
+                await asyncio.to_thread(manager.release_device, device_id)
+                logger.info(f"Device lock released for {device_id} (background task)")
+            except Exception as e:
+                logger.error(f"Failed to release device lock for {device_id}: {e}")
+
+    # ===== 注册 background task =====
+    background_tasks.add_task(cleanup)
+
     async def event_generator():
-        acquired = False
         start_time = datetime.now()
         final_message = ""
         final_success = False
@@ -240,93 +285,57 @@ async def chat_stream(request: ChatRequest):
         )
 
         try:
-            # 获取设备锁（在线程池中执行）
-            acquired = await asyncio.to_thread(
-                manager.acquire_device,
+            # 使用 chat context 获取 AsyncAgent
+            agent = await asyncio.to_thread(
+                manager.get_agent_with_context,
                 device_id,
-                timeout=0,
-                raise_on_timeout=True,
-                auto_initialize=True,
+                context="chat",
+                agent_type="glm-async",
             )
 
-            try:
-                # 使用 chat context 获取 AsyncAgent
-                agent = await asyncio.to_thread(
-                    manager.get_agent_with_context,
-                    device_id,
-                    context="chat",
-                    agent_type="glm-async",
-                )
+            logger.info(f"Using AsyncAgent for device {device_id}")
 
-                logger.info(f"Using AsyncAgent for device {device_id}")
+            # 注册异步取消处理器
+            async def cancel_handler():
+                await agent.cancel()  # type: ignore[union-attr]
 
-                # 注册异步取消处理器
-                async def cancel_handler():
-                    await agent.cancel()  # type: ignore[union-attr]
+            await asyncio.to_thread(
+                manager.register_abort_handler, device_id, cancel_handler
+            )
 
-                await asyncio.to_thread(
-                    manager.register_abort_handler, device_id, cancel_handler
-                )
+            # 直接使用 agent.stream()
+            async for event in agent.stream(request.message):  # type: ignore[union-attr]
+                event_type = event["type"]
+                event_data_dict = event["data"]
 
-                try:
-                    # 直接使用 agent.stream()
-                    async for event in agent.stream(request.message):  # type: ignore[union-attr]
-                        event_type = event["type"]
-                        event_data_dict = event["data"]
-
-                        # 收集每个 step 的消息
-                        if event_type == "step":
-                            messages.append(
-                                MessageRecord(
-                                    role="assistant",
-                                    content="",
-                                    timestamp=datetime.now(),
-                                    thinking=event_data_dict.get("thinking"),
-                                    action=event_data_dict.get("action"),
-                                    step=event_data_dict.get("step"),
-                                )
-                            )
-
-                        if event_type == "done":
-                            final_message = event_data_dict.get("message", "")
-                            final_success = event_data_dict.get("success", False)
-                            final_steps = event_data_dict.get("steps", 0)
-
-                        # 发送 SSE 事件
-                        sse_event = _create_sse_event(event_type, event_data_dict)
-                        yield f"event: {event_type}\n"
-                        yield f"data: {json.dumps(sse_event, ensure_ascii=False)}\n\n"
-
-                except asyncio.CancelledError:
-                    logger.info(f"AsyncAgent task cancelled for device {device_id}")
-                    yield "event: cancelled\n"
-                    yield f"data: {json.dumps({'message': 'Task cancelled by user'})}\n\n"
-                    raise
-
-                finally:
-                    await asyncio.to_thread(manager.unregister_abort_handler, device_id)
-
-            finally:
-                if acquired:
-                    await asyncio.to_thread(manager.release_device, device_id)
-
-                device_manager = DeviceManager.get_instance()
-                serialno = device_manager.get_serial_by_device_id(device_id)
-                if serialno and final_message:
-                    end_time = datetime.now()
-                    record = ConversationRecord(
-                        task_text=request.message,
-                        final_message=final_message,
-                        success=final_success,
-                        steps=final_steps,
-                        start_time=start_time,
-                        end_time=end_time,
-                        duration_ms=int((end_time - start_time).total_seconds() * 1000),
-                        source="chat",
-                        error_message=None if final_success else final_message,
-                        messages=messages,
+                # 收集每个 step 的消息
+                if event_type == "step":
+                    messages.append(
+                        MessageRecord(
+                            role="assistant",
+                            content="",
+                            timestamp=datetime.now(),
+                            thinking=event_data_dict.get("thinking"),
+                            action=event_data_dict.get("action"),
+                            step=event_data_dict.get("step"),
+                        )
                     )
-                    history_manager.add_record(serialno, record)
+
+                if event_type == "done":
+                    final_message = event_data_dict.get("message", "")
+                    final_success = event_data_dict.get("success", False)
+                    final_steps = event_data_dict.get("steps", 0)
+
+                # 发送 SSE 事件
+                sse_event = _create_sse_event(event_type, event_data_dict)
+                yield f"event: {event_type}\n"
+                yield f"data: {json.dumps(sse_event, ensure_ascii=False)}\n\n"
+
+        except asyncio.CancelledError:
+            logger.info(f"AsyncAgent task cancelled for device {device_id}")
+            yield "event: cancelled\n"
+            yield f"data: {json.dumps({'message': 'Task cancelled by user'})}\n\n"
+            # ✅ 不再 raise，让 generator 正常结束
 
         except AgentInitializationError as e:
             logger.error(f"Failed to initialize agent for {device_id}: {e}")
@@ -339,17 +348,33 @@ async def chat_stream(request: ChatRequest):
             )
             yield "event: error\n"
             yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
-        except DeviceBusyError:
-            error_data = _create_sse_event("error", {"message": "Device is busy"})
-            yield "event: error\n"
-            yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
+
         except Exception as e:
             logger.exception(f"Error in streaming chat for {device_id}")
             error_data = _create_sse_event("error", {"message": str(e)})
             yield "event: error\n"
             yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
-        finally:
-            manager.unregister_abort_handler(device_id)
+
+        # ===== 保存历史记录 =====
+        device_manager = DeviceManager.get_instance()
+        serialno = device_manager.get_serial_by_device_id(device_id)
+        if serialno and final_message:
+            end_time = datetime.now()
+            record = ConversationRecord(
+                task_text=request.message,
+                final_message=final_message,
+                success=final_success,
+                steps=final_steps,
+                start_time=start_time,
+                end_time=end_time,
+                duration_ms=int((end_time - start_time).total_seconds() * 1000),
+                source="chat",
+                error_message=None if final_success else final_message,
+                messages=messages,
+            )
+            history_manager.add_record(serialno, record)
+
+        # Generator 正常结束，cleanup 会在 background task 中执行
 
     return StreamingResponse(
         event_generator(),
