@@ -159,3 +159,140 @@ def _setup_async_openai_client() -> AsyncOpenAI:
         base_url=decision_base_url,
         api_key=decision_api_key or "EMPTY",  # 某些本地模型需要非空字符串
     )
+
+
+# ==================== Agent Creation Functions ====================
+def _create_async_planner_agent(client: AsyncOpenAI) -> Agent[Any]:
+    """创建规划 Agent，使用 Chat Completions API。
+
+    Args:
+        client: AsyncOpenAI 客户端
+
+    Returns:
+        Agent: 配置好的 planner agent
+    """
+    effective_config = config_manager.get_effective_config()
+    planner_model = effective_config.decision_model_name
+
+    model = OpenAIChatCompletionsModel(
+        model=planner_model,
+        openai_client=client,
+    )
+
+    return Agent(
+        name="AsyncPlanner",
+        instructions=PLANNER_INSTRUCTIONS,
+        model=model,
+        tools=[async_list_devices, async_chat],  # 后续实现
+    )
+
+
+def _ensure_async_agent() -> Agent[Any]:
+    """确保 planner agent 初始化，支持配置热加载。
+
+    检查配置哈希，如果配置变化则重新创建 agent。
+
+    Returns:
+        Agent: 全局 planner agent
+
+    Raises:
+        ValueError: 配置缺失
+    """
+    global _async_client, _async_agent, _async_cached_config_hash
+
+    current_hash = _compute_config_hash()
+
+    if _async_agent is None or _async_cached_config_hash != current_hash:
+        if _async_agent is not None and _async_cached_config_hash != current_hash:
+            logger.info(
+                f"[AsyncLayeredAgent] Config changed "
+                f"(hash: {_async_cached_config_hash} -> {current_hash}), "
+                f"reloading agent..."
+            )
+
+        _async_client = _setup_async_openai_client()
+        _async_agent = _create_async_planner_agent(_async_client)
+        _async_cached_config_hash = current_hash
+        logger.info(
+            f"[AsyncLayeredAgent] Agent initialized/reloaded "
+            f"with config hash: {current_hash}"
+        )
+
+    return _async_agent
+
+
+def _get_or_create_async_agent(session_id: str, device_id: str) -> AsyncGLMAgent:
+    """获取或创建指定 session 和 device 的 AsyncGLMAgent。
+
+    懒加载模式：
+    1. 如果 session 不存在，先创建 session
+    2. 如果 session 存在但没有该 device 的 agent，创建 agent
+    3. 否则返回已存在的 agent
+
+    Args:
+        session_id: Session 标识符
+        device_id: 设备标识符
+
+    Returns:
+        AsyncGLMAgent: 该 session+device 的 agent 实例
+
+    Raises:
+        ValueError: Device 不存在或 agent 创建失败
+    """
+    # 确保 session 存在
+    if session_id not in _async_sessions:
+        _async_sessions[session_id] = {
+            "sqlite_session": SQLiteSession(session_id),
+            "agents": {},
+        }
+        logger.info(f"[AsyncLayeredAgent] Created new session: {session_id}")
+
+    # 确保 agent 存在
+    agents = _async_sessions[session_id]["agents"]
+    if device_id not in agents:
+        try:
+            # 获取配置
+            config = config_manager.get_effective_config()
+            model_config = ModelConfig(
+                base_url=config.base_url,
+                api_key=config.api_key,
+                model_name=config.model_name,
+                max_tokens=config.max_tokens,
+                temperature=config.temperature,
+                top_p=config.top_p,
+                frequency_penalty=config.frequency_penalty,
+                extra_body=config.extra_body,
+            )
+
+            agent_config = AgentConfig(
+                max_steps=5,  # MCP 固定 5 步
+                system_prompt=MCP_SYSTEM_PROMPT_ZH,
+                verbose=config.verbose,
+                lang=config.lang,
+            )
+
+            # 获取 device
+            device_manager = DeviceManager.get_instance()
+            device = device_manager.get_device(device_id)
+            if device is None:
+                raise ValueError(f"Device {device_id} not found or offline")
+
+            # 创建 agent
+            agents[device_id] = AsyncGLMAgent(
+                model_config=model_config,
+                agent_config=agent_config,
+                device=device,
+            )
+            logger.info(
+                f"[AsyncLayeredAgent] Created AsyncGLMAgent for "
+                f"session={session_id}, device={device_id}"
+            )
+
+        except Exception as e:
+            logger.error(f"[AsyncLayeredAgent] Failed to create agent: {e}")
+            # 清理部分创建的状态
+            if device_id in agents:
+                del agents[device_id]
+            raise ValueError(f"Failed to create agent for device {device_id}: {e}")
+
+    return agents[device_id]
