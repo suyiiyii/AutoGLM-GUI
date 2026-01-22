@@ -59,3 +59,27 @@ from AutoGLM_GUI.prompts import MCP_SYSTEM_PROMPT_ZH
 from AutoGLM_GUI.api.layered_agent import PLANNER_INSTRUCTIONS
 
 router = APIRouter()
+
+# ==================== Session 管理 ====================
+# 存储每个 session_id 对应的 SQLiteSession 和 agents
+_async_sessions: dict[str, dict[str, Any]] = {}
+# 结构示例：
+# {
+#   "session_123": {
+#       "sqlite_session": SQLiteSession("session_123"),
+#       "agents": {
+#           "device_001": AsyncGLMAgent(...),
+#           "device_002": AsyncGLMAgent(...)
+#       }
+#   }
+# }
+
+# ==================== 活跃运行管理 ====================
+# 存储每个 session_id 对应的活跃 RunResultStreaming 实例，用于 abort
+_async_active_runs: dict[str, "RunResultStreaming"] = {}
+_async_active_runs_lock = threading.Lock()
+
+# ==================== 全局 Planner Agent ====================
+_async_client: AsyncOpenAI | None = None
+_async_agent: Agent[Any] | None = None
+_async_cached_config_hash: str | None = None
