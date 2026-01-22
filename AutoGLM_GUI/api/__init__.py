@@ -19,6 +19,7 @@ from AutoGLM_GUI.version import APP_VERSION
 
 from . import (
     agents,
+    async_layered_agent,
     control,
     devices,
     health,
@@ -135,6 +136,7 @@ def create_app() -> FastAPI:
     )
 
     app.include_router(agents.router)
+    app.include_router(async_layered_agent.router)
     app.include_router(health.router)
     app.include_router(history.router)
     app.include_router(layered_agent.router)
