@@ -1,3 +1,23 @@
+# AsyncLayeredAgent Implementation Plan
+
+> **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
+
+**Goal:** Implement true end-to-end async layered agent with <1s cancellation and zero blocking I/O
+
+**Architecture:** New file `async_layered_agent.py` with AsyncGLMAgent execution layer, session-isolated agent management, and lazy loading strategy
+
+**Tech Stack:** AsyncOpenAI, openai-agents SDK, AsyncGLMAgent, FastAPI streaming, SQLiteSession
+
+---
+
+## Task 1: Create Module Structure and Imports
+
+**Files:**
+- Create: `AutoGLM_GUI/api/async_layered_agent.py`
+
+**Step 1: Create file with module docstring**
+
+```python
 """Async Layered Agent API - 异步分层代理实现。
 
 这是 layered_agent.py 的异步版本，核心改进：
@@ -59,7 +79,27 @@ from AutoGLM_GUI.prompts import MCP_SYSTEM_PROMPT_ZH
 from AutoGLM_GUI.api.layered_agent import PLANNER_INSTRUCTIONS
 
 router = APIRouter()
+```
 
+**Step 2: Commit**
+
+```bash
+git add AutoGLM_GUI/api/async_layered_agent.py
+git commit -m "feat(async-layered): add module structure and imports"
+```
+
+---
+
+## Task 2: Implement Data Structures
+
+**Files:**
+- Modify: `AutoGLM_GUI/api/async_layered_agent.py`
+
+**Step 1: Add session management data structures**
+
+Add after imports:
+
+```python
 # ==================== Session 管理 ====================
 # 存储每个 session_id 对应的 SQLiteSession 和 agents
 _async_sessions: dict[str, dict[str, Any]] = {}
@@ -83,9 +123,25 @@ _async_active_runs_lock = threading.Lock()
 _async_client: AsyncOpenAI | None = None
 _async_agent: Agent[Any] | None = None
 _async_cached_config_hash: str | None = None
+```
 
+**Step 2: Commit**
 
-# ==================== Helper Functions ====================
+```bash
+git add AutoGLM_GUI/api/async_layered_agent.py
+git commit -m "feat(async-layered): add session and agent management data structures"
+```
+
+---
+
+## Task 3: Implement Helper Functions
+
+**Files:**
+- Modify: `AutoGLM_GUI/api/async_layered_agent.py`
+
+**Step 1: Implement _get_or_create_async_session**
+
+```python
 def _get_or_create_async_session(session_id: str) -> SQLiteSession:
     """获取或创建指定 session_id 的 session。
 
@@ -105,8 +161,11 @@ def _get_or_create_async_session(session_id: str) -> SQLiteSession:
         logger.info(f"[AsyncLayeredAgent] Created new session: {session_id}")
 
     return _async_sessions[session_id]["sqlite_session"]
+```
 
+**Step 2: Implement _compute_config_hash**
 
+```python
 def _compute_config_hash() -> str:
     """计算当前配置的哈希值，用于检测配置变化。
 
@@ -118,8 +177,11 @@ def _compute_config_hash() -> str:
     config = config_manager.get_effective_config()
     config_str = config.model_dump_json()
     return hashlib.md5(config_str.encode()).hexdigest()
+```
 
+**Step 3: Implement _setup_async_openai_client**
 
+```python
 def _setup_async_openai_client() -> AsyncOpenAI:
     """设置异步 OpenAI 客户端，使用决策模型配置。
 
@@ -159,9 +221,184 @@ def _setup_async_openai_client() -> AsyncOpenAI:
         base_url=decision_base_url,
         api_key=decision_api_key or "EMPTY",  # 某些本地模型需要非空字符串
     )
+```
 
+**Step 4: Commit**
 
-# ==================== Tool Functions ====================
+```bash
+git add AutoGLM_GUI/api/async_layered_agent.py
+git commit -m "feat(async-layered): add helper functions for session and config management"
+```
+
+---
+
+## Task 4: Implement Agent Creation Functions
+
+**Files:**
+- Modify: `AutoGLM_GUI/api/async_layered_agent.py`
+
+**Step 1: Implement _create_async_planner_agent**
+
+```python
+def _create_async_planner_agent(client: AsyncOpenAI) -> Agent[Any]:
+    """创建规划 Agent，使用 Chat Completions API。
+
+    Args:
+        client: AsyncOpenAI 客户端
+
+    Returns:
+        Agent: 配置好的 planner agent
+    """
+    effective_config = config_manager.get_effective_config()
+    planner_model = effective_config.decision_model_name
+
+    model = OpenAIChatCompletionsModel(
+        model=planner_model,
+        openai_client=client,
+    )
+
+    return Agent(
+        name="AsyncPlanner",
+        instructions=PLANNER_INSTRUCTIONS,
+        model=model,
+        tools=[async_list_devices, async_chat],  # 后续实现
+    )
+```
+
+**Step 2: Implement _ensure_async_agent**
+
+```python
+def _ensure_async_agent() -> Agent[Any]:
+    """确保 planner agent 初始化，支持配置热加载。
+
+    检查配置哈希，如果配置变化则重新创建 agent。
+
+    Returns:
+        Agent: 全局 planner agent
+
+    Raises:
+        ValueError: 配置缺失
+    """
+    global _async_client, _async_agent, _async_cached_config_hash
+
+    current_hash = _compute_config_hash()
+
+    if _async_agent is None or _async_cached_config_hash != current_hash:
+        if _async_agent is not None and _async_cached_config_hash != current_hash:
+            logger.info(
+                f"[AsyncLayeredAgent] Config changed "
+                f"(hash: {_async_cached_config_hash} -> {current_hash}), "
+                f"reloading agent..."
+            )
+
+        _async_client = _setup_async_openai_client()
+        _async_agent = _create_async_planner_agent(_async_client)
+        _async_cached_config_hash = current_hash
+        logger.info(
+            f"[AsyncLayeredAgent] Agent initialized/reloaded "
+            f"with config hash: {current_hash}"
+        )
+
+    return _async_agent
+```
+
+**Step 3: Implement _get_or_create_async_agent**
+
+```python
+def _get_or_create_async_agent(session_id: str, device_id: str) -> AsyncGLMAgent:
+    """获取或创建指定 session 和 device 的 AsyncGLMAgent。
+
+    懒加载模式：
+    1. 如果 session 不存在，先创建 session
+    2. 如果 session 存在但没有该 device 的 agent，创建 agent
+    3. 否则返回已存在的 agent
+
+    Args:
+        session_id: Session 标识符
+        device_id: 设备标识符
+
+    Returns:
+        AsyncGLMAgent: 该 session+device 的 agent 实例
+
+    Raises:
+        ValueError: Device 不存在或 agent 创建失败
+    """
+    # 确保 session 存在
+    if session_id not in _async_sessions:
+        _async_sessions[session_id] = {
+            "sqlite_session": SQLiteSession(session_id),
+            "agents": {},
+        }
+        logger.info(f"[AsyncLayeredAgent] Created new session: {session_id}")
+
+    # 确保 agent 存在
+    agents = _async_sessions[session_id]["agents"]
+    if device_id not in agents:
+        try:
+            # 获取配置
+            config = config_manager.get_effective_config()
+            model_config = ModelConfig(
+                base_url=config.base_url,
+                api_key=config.api_key,
+                model_name=config.model_name,
+                max_tokens=config.max_tokens,
+                temperature=config.temperature,
+                top_p=config.top_p,
+                frequency_penalty=config.frequency_penalty,
+                extra_body=config.extra_body,
+            )
+
+            agent_config = AgentConfig(
+                max_steps=5,  # MCP 固定 5 步
+                system_prompt=MCP_SYSTEM_PROMPT_ZH,
+                verbose=config.verbose,
+                lang=config.lang,
+            )
+
+            # 获取 device
+            device_manager = DeviceManager.get_instance()
+            device = device_manager.get_device(device_id)
+            if device is None:
+                raise ValueError(f"Device {device_id} not found or offline")
+
+            # 创建 agent
+            agents[device_id] = AsyncGLMAgent(
+                model_config=model_config,
+                agent_config=agent_config,
+                device=device,
+            )
+            logger.info(
+                f"[AsyncLayeredAgent] Created AsyncGLMAgent for "
+                f"session={session_id}, device={device_id}"
+            )
+
+        except Exception as e:
+            logger.error(f"[AsyncLayeredAgent] Failed to create agent: {e}")
+            # 清理部分创建的状态
+            if device_id in agents:
+                del agents[device_id]
+            raise ValueError(f"Failed to create agent for device {device_id}: {e}")
+
+    return agents[device_id]
+```
+
+**Step 4: Commit**
+
+```bash
+git add AutoGLM_GUI/api/async_layered_agent.py
+git commit -m "feat(async-layered): implement agent creation and management functions"
+```
+
+---
+
+## Task 5: Implement Tool Functions
+
+**Files:**
+- Modify: `AutoGLM_GUI/api/async_layered_agent.py`
+
+**Step 1: Implement _sync_list_devices helper**
+
+```python
 def _sync_list_devices() -> str:
     """同步实现：获取所有连接的 ADB 设备列表。
 
@@ -191,8 +428,11 @@ def _sync_list_devices() -> str:
     # Convert DeviceResponse Pydantic models to dicts before JSON serialization
     devices_dict = [device.model_dump() for device in devices_with_agents]
     return json.dumps(devices_dict, ensure_ascii=False, indent=2)
+```
 
+**Step 2: Implement async_list_devices tool**
 
+```python
 @function_tool
 async def async_list_devices() -> str:
     """获取所有连接的 ADB 设备列表。
@@ -207,8 +447,11 @@ async def async_list_devices() -> str:
         JSON 格式的设备列表
     """
     return await asyncio.to_thread(_sync_list_devices)
+```
 
+**Step 3: Implement async_chat tool**
 
+```python
 @function_tool
 async def async_chat(device_id: str, message: str) -> str:
     """向指定设备的 Phone Agent 发送子任务指令。
@@ -271,179 +514,45 @@ async def async_chat(device_id: str, message: str) -> str:
         return json.dumps(
             {"result": str(e), "steps": 0, "success": False}, ensure_ascii=False
         )
+```
 
+**Step 4: Update _create_async_planner_agent to use tools**
 
-# ==================== Agent Creation Functions ====================
-def _create_async_planner_agent(client: AsyncOpenAI) -> Agent[Any]:
-    """创建规划 Agent，使用 Chat Completions API。
+Modify the function to reference the now-defined tools:
 
-    Args:
-        client: AsyncOpenAI 客户端
+```python
+# In _create_async_planner_agent, the tools=[async_list_devices, async_chat]
+# is already correctly referenced
+```
 
-    Returns:
-        Agent: 配置好的 planner agent
-    """
-    effective_config = config_manager.get_effective_config()
-    planner_model = effective_config.decision_model_name
+**Step 5: Commit**
 
-    # 如果未配置决策模型，使用执行模型作为回退
-    if planner_model is None:
-        planner_model = effective_config.model_name
+```bash
+git add AutoGLM_GUI/api/async_layered_agent.py
+git commit -m "feat(async-layered): implement async tool functions for device listing and chat"
+```
 
-    model = OpenAIChatCompletionsModel(
-        model=planner_model,
-        openai_client=client,
-    )
+---
 
-    return Agent(
-        name="AsyncPlanner",
-        instructions=PLANNER_INSTRUCTIONS,
-        model=model,
-        tools=[async_list_devices, async_chat],
-    )
+## Task 6: Implement API Endpoints - Chat
 
+**Files:**
+- Modify: `AutoGLM_GUI/api/async_layered_agent.py`
 
-def _ensure_async_agent() -> Agent[Any]:
-    """确保 planner agent 初始化，支持配置热加载。
+**Step 1: Add request/response models**
 
-    检查配置哈希，如果配置变化则重新创建 agent。
-
-    Returns:
-        Agent: 全局 planner agent
-
-    Raises:
-        ValueError: 配置缺失
-    """
-    global _async_client, _async_agent, _async_cached_config_hash
-
-    current_hash = _compute_config_hash()
-
-    if _async_agent is None or _async_cached_config_hash != current_hash:
-        if _async_agent is not None and _async_cached_config_hash != current_hash:
-            logger.info(
-                f"[AsyncLayeredAgent] Config changed "
-                f"(hash: {_async_cached_config_hash} -> {current_hash}), "
-                f"reloading agent..."
-            )
-
-        _async_client = _setup_async_openai_client()
-        _async_agent = _create_async_planner_agent(_async_client)
-        _async_cached_config_hash = current_hash
-        logger.info(
-            f"[AsyncLayeredAgent] Agent initialized/reloaded "
-            f"with config hash: {current_hash}"
-        )
-
-    return _async_agent
-
-
-def _get_or_create_async_agent(session_id: str, device_id: str) -> AsyncGLMAgent:
-    """获取或创建指定 session 和 device 的 AsyncGLMAgent。
-
-    懒加载模式：
-    1. 如果 session 不存在，先创建 session
-    2. 如果 session 存在但没有该 device 的 agent，创建 agent
-    3. 否则返回已存在的 agent
-
-    Args:
-        session_id: Session 标识符
-        device_id: 设备标识符
-
-    Returns:
-        AsyncGLMAgent: 该 session+device 的 agent 实例
-
-    Raises:
-        ValueError: Device 不存在或 agent 创建失败
-    """
-    # 确保 session 存在
-    if session_id not in _async_sessions:
-        _async_sessions[session_id] = {
-            "sqlite_session": SQLiteSession(session_id),
-            "agents": {},
-        }
-        logger.info(f"[AsyncLayeredAgent] Created new session: {session_id}")
-
-    # 确保 agent 存在
-    agents = _async_sessions[session_id]["agents"]
-    if device_id not in agents:
-        try:
-            # 获取配置
-            config = config_manager.get_effective_config()
-            # 使用 ConfigModel 中的字段 + ModelConfig 默认值
-            model_config = ModelConfig(
-                base_url=config.base_url,
-                api_key=config.api_key,
-                model_name=config.model_name,
-                # 以下字段 ConfigModel 不提供，使用 ModelConfig 默认值
-                max_tokens=3000,
-                temperature=0.0,
-                top_p=0.85,
-                frequency_penalty=0.2,
-                extra_body={},
-                lang="cn",
-            )
-
-            agent_config = AgentConfig(
-                max_steps=5,  # MCP 固定 5 步
-                system_prompt=MCP_SYSTEM_PROMPT_ZH,
-                verbose=True,  # ConfigModel 不提供，使用默认值
-                lang="cn",  # ConfigModel 不提供，使用默认值
-            )
-
-            # 获取 device
-            device_manager = DeviceManager.get_instance()
-            managed_device = device_manager.get_device(device_id)
-            if managed_device is None:
-                raise ValueError(f"Device {device_id} not found or offline")
-
-            # 从 ManagedDevice 创建 DeviceProtocol 实例
-            from AutoGLM_GUI.devices import ADBDevice
-
-            device_protocol = ADBDevice(managed_device.primary_device_id)
-
-            # 创建 agent
-            agents[device_id] = AsyncGLMAgent(
-                model_config=model_config,
-                agent_config=agent_config,
-                device=device_protocol,
-            )
-            logger.info(
-                f"[AsyncLayeredAgent] Created AsyncGLMAgent for "
-                f"session={session_id}, device={device_id}"
-            )
-
-        except Exception as e:
-            logger.error(f"[AsyncLayeredAgent] Failed to create agent: {e}")
-            # 清理部分创建的状态
-            if device_id in agents:
-                del agents[device_id]
-            raise ValueError(f"Failed to create agent for device {device_id}: {e}")
-
-    return agents[device_id]
-
-
-# ==================== Request/Response Models ====================
+```python
 class LayeredAgentRequest(BaseModel):
     """Request for async layered agent chat."""
 
     message: str
     device_id: str | None = None
     session_id: str | None = None  # 用于保持对话上下文，前端可传入 deviceId
+```
 
+**Step 2: Implement chat endpoint (part 1 - setup)**
 
-class AbortSessionRequest(BaseModel):
-    """Request for aborting a running session."""
-
-    session_id: str
-
-
-class ResetSessionRequest(BaseModel):
-    """Request for resetting a session."""
-
-    session_id: str
-
-
-# ==================== API Endpoints ====================
+```python
 @router.post("/api/async-layered-agent/chat")
 async def async_layered_agent_chat(
     request: LayeredAgentRequest,
@@ -487,6 +596,15 @@ async def async_layered_agent_chat(
             current_tool_call: dict[str, Any] | None = None
 
             try:
+                # Event processing loop - to be implemented in next step
+                pass
+```
+
+**Step 3: Implement event processing loop**
+
+Continue in the `try` block:
+
+```python
                 async for event in result.stream_events():
                     if isinstance(event, RawResponsesStreamEvent):
                         # Raw response chunk - could contain thinking
@@ -652,7 +770,13 @@ async def async_layered_agent_chat(
                                     "content": content,
                                 }
                                 yield f"data: {json.dumps(event_data, ensure_ascii=False)}\n\n"
+```
 
+**Step 4: Implement completion and error handling**
+
+Continue after the event loop:
+
+```python
             finally:
                 # 清理活跃运行实例
                 with _async_active_runs_lock:
@@ -708,8 +832,40 @@ async def async_layered_agent_chat(
             "X-Accel-Buffering": "no",
         },
     )
+```
+
+**Step 5: Commit**
+
+```bash
+git add AutoGLM_GUI/api/async_layered_agent.py
+git commit -m "feat(async-layered): implement chat endpoint with SSE streaming"
+```
+
+---
+
+## Task 7: Implement API Endpoints - Abort and Reset
+
+**Files:**
+- Modify: `AutoGLM_GUI/api/async_layered_agent.py`
+
+**Step 1: Add request models**
+
+```python
+class AbortSessionRequest(BaseModel):
+    """Request for aborting a running session."""
+
+    session_id: str
 
 
+class ResetSessionRequest(BaseModel):
+    """Request for resetting a session."""
+
+    session_id: str
+```
+
+**Step 2: Implement abort endpoint**
+
+```python
 @router.post("/api/async-layered-agent/abort")
 def async_abort_session(request: AbortSessionRequest) -> dict[str, Any]:
     """Abort a running async layered agent session.
@@ -741,8 +897,11 @@ def async_abort_session(request: AbortSessionRequest) -> dict[str, Any]:
                 "success": False,
                 "message": f"No active run found for session {session_id}",
             }
+```
 
+**Step 3: Implement reset endpoint**
 
+```python
 @router.post("/api/async-layered-agent/reset")
 def async_reset_session(request: ResetSessionRequest) -> dict[str, Any]:
     """Reset/clear a session to forget conversation history.
@@ -778,3 +937,325 @@ def async_reset_session(request: ResetSessionRequest) -> dict[str, Any]:
         "success": True,
         "message": f"Session {session_id} not found (already empty)",
     }
+```
+
+**Step 4: Commit**
+
+```bash
+git add AutoGLM_GUI/api/async_layered_agent.py
+git commit -m "feat(async-layered): implement abort and reset endpoints"
+```
+
+---
+
+## Task 8: Register Router in API Module
+
+**Files:**
+- Modify: `AutoGLM_GUI/api/__init__.py`
+
+**Step 1: Import async_layered_agent**
+
+Add to imports section (around line 20-33):
+
+```python
+from . import (
+    agents,
+    async_layered_agent,  # Add this line
+    control,
+    devices,
+    health,
+    history,
+    layered_agent,
+    mcp,
+    media,
+    metrics,
+    scheduled_tasks,
+    version,
+    workflows,
+)
+```
+
+**Step 2: Register router**
+
+Find where routers are registered (after app creation) and add:
+
+```python
+app.include_router(async_layered_agent.router)
+```
+
+**Step 3: Verify registration order**
+
+Ensure the line is added with other router registrations, for example:
+
+```python
+app.include_router(agents.router)
+app.include_router(control.router)
+app.include_router(devices.router)
+app.include_router(health.router)
+app.include_router(history.router)
+app.include_router(layered_agent.router)
+app.include_router(async_layered_agent.router)  # Add here
+app.include_router(mcp.router)
+# ... etc
+```
+
+**Step 4: Run import test**
+
+Run: `uv run python -c "from AutoGLM_GUI.api import async_layered_agent; print('Import success')"`
+Expected: "Import success"
+
+**Step 5: Commit**
+
+```bash
+git add AutoGLM_GUI/api/__init__.py
+git commit -m "feat(async-layered): register async layered agent router"
+```
+
+---
+
+## Task 9: Manual Testing
+
+**Files:**
+- Test: API endpoints via server startup
+
+**Step 1: Start server**
+
+Run: `uv run autoglm-gui --base-url http://localhost:8080/v1 --reload`
+Expected: Server starts without errors
+
+**Step 2: Check API docs**
+
+Navigate to: `http://localhost:8000/docs`
+Expected: See three new endpoints:
+- POST `/api/async-layered-agent/chat`
+- POST `/api/async-layered-agent/abort`
+- POST `/api/async-layered-agent/reset`
+
+**Step 3: Test reset endpoint (safe)**
+
+```bash
+curl -X POST http://localhost:8000/api/async-layered-agent/reset \
+  -H "Content-Type: application/json" \
+  -d '{"session_id": "test_session"}'
+```
+
+Expected: `{"success": true, "message": "Session test_session not found (already empty)"}`
+
+**Step 4: Check logs**
+
+Check server logs for:
+- No import errors
+- Router registered successfully
+- No startup errors related to async_layered_agent
+
+**Step 5: Document results**
+
+Create a note of what worked and any issues found.
+
+---
+
+## Task 10: Update Documentation
+
+**Files:**
+- Modify: `AutoGLM_GUI/api/CLAUDE.md`
+
+**Step 1: Add section for async layered agent**
+
+Add after the `layered_agent.py` section:
+
+```markdown
+### Async Layered Agent (`async_layered_agent.py`)
+
+异步分层代理实现，是 `layered_agent.py` 的异步版本。
+
+**核心改进**：
+- 执行层使用 `AsyncGLMAgent` 替代同步包装
+- 真正的端到端异步，无阻塞 I/O
+- 取消响应 <1s（vs 同步版本的 10-30s）
+
+**架构**：
+```
+决策层 (AsyncOpenAI)
+    ↓ async_list_devices()
+    ↓ async_chat(device_id, message)
+执行层 (AsyncGLMAgent)
+    ↓ await agent.run(message) [真正异步]
+设备层 (Device via asyncio.to_thread)
+```
+
+**Session 管理**：
+- `_async_sessions: dict[str, dict]` - 每个 session 持有独立的 agents
+- 懒加载：首次调用 `chat(device_id)` 时创建对应 agent
+- 清理：`reset_session()` 删除整个 session
+
+**API 端点**：
+- `POST /api/async-layered-agent/chat` - 异步聊天
+- `POST /api/async-layered-agent/abort` - 取消执行
+- `POST /api/async-layered-agent/reset` - 重置 session
+
+**使用场景**：
+- 需要快速取消的长任务
+- 高并发场景（减少线程开销）
+- 需要实时流式输出的场景
+
+**限制**：
+- 当前无设备级并发控制（可能需要后续添加）
+- Session ID 传递依赖于 device_id（未来需改进）
+
+**与同步版本对比**：
+
+| 维度 | 同步版本 | 异步版本 |
+|------|----------|----------|
+| 执行层 | `asyncio.to_thread(agent.run)` | `await agent.run()` |
+| 取消响应 | 10-30s | <1s |
+| 线程开销 | 有（worker 线程） | 无 |
+| 代码复杂度 | 较高（queue、同步） | 简洁（标准 async） |
+| 内存占用 | 较高 | 较低 |
+```
+
+**Step 2: Commit**
+
+```bash
+git add AutoGLM_GUI/api/CLAUDE.md
+git commit -m "docs: add async layered agent documentation"
+```
+
+---
+
+## Task 11: Final Integration Test
+
+**Files:**
+- Test: Full workflow with mock device
+
+**Step 1: Ensure server is running**
+
+Run: `uv run autoglm-gui --base-url http://localhost:8080/v1 --reload`
+
+**Step 2: Test with real/mock device (if available)**
+
+If you have a test device or mock setup:
+
+```bash
+# Test chat endpoint
+curl -X POST http://localhost:8000/api/async-layered-agent/chat \
+  -H "Content-Type: application/json" \
+  -d '{
+    "message": "列出所有设备",
+    "device_id": "test_device",
+    "session_id": "test_session"
+  }'
+```
+
+Expected: SSE stream with tool_call, tool_result, and done events
+
+**Step 3: Verify no errors in logs**
+
+Check server logs for any errors during execution.
+
+**Step 4: Document test results**
+
+Note any issues found or successful execution.
+
+---
+
+## Task 12: Create Pull Request
+
+**Files:**
+- Git operations
+
+**Step 1: Review all changes**
+
+Run: `git diff main --stat`
+Expected: See changes to `async_layered_agent.py`, `__init__.py`, `CLAUDE.md`
+
+**Step 2: Push branch**
+
+```bash
+git push -u origin feature/async-layered-agent
+```
+
+**Step 3: Create PR via gh CLI**
+
+```bash
+gh pr create --title "feat: implement AsyncLayeredAgent with end-to-end async execution" --body "$(cat <<'EOF'
+## Summary
+
+Implements AsyncLayeredAgent as an async version of layered_agent.py with true end-to-end asynchronous execution.
+
+### Core Improvements
+
+- **Execution Layer**: Uses AsyncGLMAgent directly instead of asyncio.to_thread wrapper
+- **Cancellation**: <1s response time (vs 10-30s in sync version)
+- **Performance**: Zero blocking I/O, reduced memory footprint
+- **Architecture**: Session-isolated agent management with lazy loading
+
+### API Endpoints
+
+- `POST /api/async-layered-agent/chat` - Async chat with SSE streaming
+- `POST /api/async-layered-agent/abort` - Immediate cancellation
+- `POST /api/async-layered-agent/reset` - Session cleanup
+
+### Technical Details
+
+- New file: `AutoGLM_GUI/api/async_layered_agent.py`
+- Session management: Each session_id holds independent agents dict
+- Lazy loading: Agents created on first chat(device_id) call
+- Config hot-reload: Detects config changes via hash comparison
+
+### Testing
+
+- [x] Import test
+- [x] Server startup
+- [x] API docs generation
+- [x] Reset endpoint
+- [ ] Full chat workflow (requires device setup)
+
+### Documentation
+
+- Updated `AutoGLM_GUI/api/CLAUDE.md` with async version details
+- Design doc: `docs/plans/2026-01-22-async-layered-agent-design.md`
+
+## Test Plan
+
+1. Start server with test config
+2. Verify endpoints in /docs
+3. Test reset endpoint (safe, no device needed)
+4. Test chat with real device (if available)
+5. Test abort functionality
+
+Relates to performance optimization goals.
+EOF
+)"
+```
+
+**Step 4: Commit final changes**
+
+```bash
+git add -A
+git commit -m "feat: complete AsyncLayeredAgent implementation with documentation"
+git push
+```
+
+---
+
+## Summary
+
+**Implementation complete!** The AsyncLayeredAgent provides:
+
+✅ True end-to-end async execution
+✅ <1s cancellation response
+✅ Session-isolated agent management
+✅ Lazy loading strategy
+✅ Three API endpoints (chat, abort, reset)
+✅ Full documentation
+
+**Next steps:**
+1. Code review
+2. Integration testing with real devices
+3. Performance benchmarking vs sync version
+4. Optional: Frontend integration
+
+**Files created/modified:**
+- `AutoGLM_GUI/api/async_layered_agent.py` (new, ~600 lines)
+- `AutoGLM_GUI/api/__init__.py` (modified, +2 lines)
+- `AutoGLM_GUI/api/CLAUDE.md` (modified, +documentation)

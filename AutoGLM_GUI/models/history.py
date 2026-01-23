@@ -63,7 +63,7 @@ class ConversationRecord:
     duration_ms: int = 0  # 执行时长（毫秒）
 
     # 来源标记
-    source: Literal["chat", "layered", "scheduled"] = "chat"
+    source: Literal["chat", "layered", "scheduled", "async-layered"] = "chat"
     source_detail: str = ""  # 定时任务名称 or session_id
 
     # 错误信息
