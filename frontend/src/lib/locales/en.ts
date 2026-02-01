@@ -400,5 +400,6 @@ export const en = {
     deleteConfirm: 'Delete this scheduled task?',
     noWorkflows: 'No workflows available. Please create a workflow first.',
     noDevicesOnline: 'No devices online',
+    devicesSelected: 'devices selected',
   },
 };

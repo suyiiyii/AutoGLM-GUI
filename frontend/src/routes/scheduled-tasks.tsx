@@ -61,7 +61,7 @@ export const Route = createFileRoute('/scheduled-tasks')({
 interface TaskFormData {
   name: string;
   workflow_uuid: string;
-  device_serialno: string;
+  device_serialnos: string[];
   cron_expression: string;
   enabled: boolean;
 }
@@ -87,7 +87,7 @@ function ScheduledTasksComponent() {
   const [formData, setFormData] = useState<TaskFormData>({
     name: '',
     workflow_uuid: '',
-    device_serialno: '',
+    device_serialnos: [],
     cron_expression: '',
     enabled: true,
   });
@@ -123,7 +123,7 @@ function ScheduledTasksComponent() {
     setFormData({
       name: '',
       workflow_uuid: '',
-      device_serialno: '',
+      device_serialnos: [],
       cron_expression: '',
       enabled: true,
     });
@@ -135,7 +135,7 @@ function ScheduledTasksComponent() {
     setFormData({
       name: task.name,
       workflow_uuid: task.workflow_uuid,
-      device_serialno: task.device_serialno,
+      device_serialnos: task.device_serialnos,
       cron_expression: task.cron_expression,
       enabled: task.enabled,
     });
@@ -194,6 +194,15 @@ function ScheduledTasksComponent() {
     return device?.model || serialno;
   };
 
+  const getDeviceNames = (serialnos: string[]): string => {
+    if (serialnos.length === 0) return '-';
+    if (serialnos.length === 1) return getDeviceName(serialnos[0]);
+    const names = serialnos.map(s => getDeviceName(s));
+    const firstName = names[0];
+    const remaining = names.length - 1;
+    return `${firstName} (+${remaining})`;
+  };
+
   const formatTime = (timeStr: string | null): string => {
     if (!timeStr) return t.scheduledTasks.never;
     const date = new Date(timeStr);
@@ -208,7 +217,7 @@ function ScheduledTasksComponent() {
   const isFormValid =
     formData.name.trim() &&
     formData.workflow_uuid &&
-    formData.device_serialno &&
+    formData.device_serialnos.length > 0 &&
     formData.cron_expression.trim();
 
   return (
@@ -268,8 +277,13 @@ function ScheduledTasksComponent() {
                     <span className="text-slate-500 dark:text-slate-400">
                       {t.scheduledTasks.device}:{' '}
                     </span>
-                    <span className="font-medium">
-                      {getDeviceName(task.device_serialno)}
+                    <span
+                      className="font-medium"
+                      title={task.device_serialnos
+                        .map(s => getDeviceName(s))
+                        .join(', ')}
+                    >
+                      {getDeviceNames(task.device_serialnos)}
                     </span>
                   </div>
 
@@ -391,7 +405,6 @@ function ScheduledTasksComponent() {
               )}
             </div>
 
-            {/* Device */}
             <div className="space-y-2">
               <Label>{t.scheduledTasks.device}</Label>
               {devices.length === 0 ? (
@@ -399,23 +412,45 @@ function ScheduledTasksComponent() {
                   {t.scheduledTasks.noDevicesOnline}
                 </p>
               ) : (
-                <Select
-                  value={formData.device_serialno}
-                  onValueChange={(value: string) =>
-                    setFormData(prev => ({ ...prev, device_serialno: value }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={t.scheduledTasks.selectDevice} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {devices.map(device => (
-                      <SelectItem key={device.serial} value={device.serial}>
+                <div className="border rounded-md p-2 space-y-1 max-h-40 overflow-y-auto">
+                  {devices.map(device => (
+                    <label
+                      key={device.serial}
+                      className="flex items-center gap-2 p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded cursor-pointer"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={formData.device_serialnos.includes(
+                          device.serial
+                        )}
+                        onChange={e => {
+                          const checked = e.target.checked;
+                          setFormData(prev => ({
+                            ...prev,
+                            device_serialnos: checked
+                              ? [...prev.device_serialnos, device.serial]
+                              : prev.device_serialnos.filter(
+                                  s => s !== device.serial
+                                ),
+                          }));
+                        }}
+                        className="rounded border-gray-300"
+                      />
+                      <span className="text-sm">
                         {device.model || device.serial}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                      </span>
+                      {device.state === 'online' && (
+                        <span className="ml-auto w-2 h-2 bg-green-500 rounded-full" />
+                      )}
+                    </label>
+                  ))}
+                </div>
+              )}
+              {formData.device_serialnos.length > 0 && (
+                <p className="text-xs text-slate-500">
+                  {formData.device_serialnos.length}{' '}
+                  {t.scheduledTasks.devicesSelected || 'devices selected'}
+                </p>
               )}
             </div>
 

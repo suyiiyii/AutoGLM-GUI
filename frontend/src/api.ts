@@ -898,7 +898,7 @@ export interface ScheduledTaskResponse {
   id: string;
   name: string;
   workflow_uuid: string;
-  device_serialno: string;
+  device_serialnos: string[];
   cron_expression: string;
   enabled: boolean;
   created_at: string;
@@ -916,7 +916,7 @@ export interface ScheduledTaskListResponse {
 export interface ScheduledTaskCreate {
   name: string;
   workflow_uuid: string;
-  device_serialno: string;
+  device_serialnos: string[];
   cron_expression: string;
   enabled?: boolean;
 }
@@ -924,7 +924,7 @@ export interface ScheduledTaskCreate {
 export interface ScheduledTaskUpdate {
   name?: string;
   workflow_uuid?: string;
-  device_serialno?: string;
+  device_serialnos?: string[];
   cron_expression?: string;
   enabled?: boolean;
 }

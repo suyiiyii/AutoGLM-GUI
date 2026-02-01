@@ -393,5 +393,6 @@ export const zh = {
     deleteConfirm: '确定删除这个定时任务？',
     noWorkflows: '没有可用的工作流，请先创建工作流。',
     noDevicesOnline: '没有在线设备',
+    devicesSelected: '个设备已选择',
   },
 };
