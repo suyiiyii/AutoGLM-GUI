@@ -765,7 +765,7 @@ class ScheduledTaskCreate(BaseModel):
 
     name: str
     workflow_uuid: str
-    device_serialno: str
+    device_serialnos: list[str]
     cron_expression: str
     enabled: bool = True
 
@@ -775,6 +775,13 @@ class ScheduledTaskCreate(BaseModel):
         if not v or not v.strip():
             raise ValueError("name cannot be empty")
         return v.strip()
+
+    @field_validator("device_serialnos")
+    @classmethod
+    def validate_devices(cls, v: list[str]) -> list[str]:
+        if not v or len(v) == 0:
+            raise ValueError("at least one device must be selected")
+        return v
 
     @field_validator("cron_expression")
     @classmethod
@@ -794,9 +801,16 @@ class ScheduledTaskUpdate(BaseModel):
 
     name: str | None = None
     workflow_uuid: str | None = None
-    device_serialno: str | None = None
+    device_serialnos: list[str] | None = None
     cron_expression: str | None = None
     enabled: bool | None = None
+
+    @field_validator("device_serialnos")
+    @classmethod
+    def validate_devices(cls, v: list[str] | None) -> list[str] | None:
+        if v is not None and len(v) == 0:
+            raise ValueError("at least one device must be selected")
+        return v
 
     @field_validator("cron_expression")
     @classmethod
@@ -819,7 +833,7 @@ class ScheduledTaskResponse(BaseModel):
     id: str
     name: str
     workflow_uuid: str
-    device_serialno: str
+    device_serialnos: list[str]
     cron_expression: str
     enabled: bool
     created_at: str

@@ -14,7 +14,9 @@ class ScheduledTask:
     # 基础信息
     name: str = ""  # 任务名称
     workflow_uuid: str = ""  # 关联的 Workflow UUID
-    device_serialno: str = ""  # 绑定的设备 serialno
+    device_serialnos: list[str] = field(
+        default_factory=list
+    )  # 绑定的设备 serialno 列表
 
     # 调度配置
     cron_expression: str = ""  # Cron 表达式 (如 "0 8 * * *")
@@ -35,7 +37,7 @@ class ScheduledTask:
             "id": self.id,
             "name": self.name,
             "workflow_uuid": self.workflow_uuid,
-            "device_serialno": self.device_serialno,
+            "device_serialnos": self.device_serialnos,
             "cron_expression": self.cron_expression,
             "enabled": self.enabled,
             "created_at": self.created_at.isoformat(),
@@ -49,12 +51,20 @@ class ScheduledTask:
 
     @classmethod
     def from_dict(cls, data: dict) -> "ScheduledTask":
-        """从字典创建实例."""
+        """从字典创建实例，向后兼容旧数据格式."""
+        # 处理设备序列号：支持旧格式的单字符串和新格式的列表
+        device_serialnos = data.get("device_serialnos", [])
+        if not device_serialnos:
+            # 向后兼容：尝试读取旧字段 device_serialno
+            old_device = data.get("device_serialno", "")
+            if old_device:
+                device_serialnos = [old_device]
+
         return cls(
             id=data.get("id", str(uuid4())),
             name=data.get("name", ""),
             workflow_uuid=data.get("workflow_uuid", ""),
-            device_serialno=data.get("device_serialno", ""),
+            device_serialnos=device_serialnos,
             cron_expression=data.get("cron_expression", ""),
             enabled=data.get("enabled", True),
             created_at=datetime.fromisoformat(data["created_at"])
