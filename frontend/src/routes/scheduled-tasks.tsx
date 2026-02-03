@@ -51,6 +51,7 @@ import {
   Clock,
   CheckCircle,
   XCircle,
+  AlertTriangle,
 } from 'lucide-react';
 import { useTranslation } from '../lib/i18n-context';
 
@@ -214,6 +215,15 @@ function ScheduledTasksComponent() {
     });
   };
 
+  const getLastRunStatus = (
+    task: ScheduledTaskResponse
+  ): 'success' | 'partial' | 'failure' | null => {
+    if (task.last_run_status) return task.last_run_status;
+    if (task.last_run_success === true) return 'success';
+    if (task.last_run_success === false) return 'failure';
+    return null;
+  };
+
   const isFormValid =
     formData.name.trim() &&
     formData.workflow_uuid &&
@@ -302,12 +312,24 @@ function ScheduledTasksComponent() {
                     </span>
                     {task.last_run_time ? (
                       <>
-                        {task.last_run_success ? (
+                        {getLastRunStatus(task) === 'success' ? (
                           <CheckCircle className="w-4 h-4 text-green-500" />
+                        ) : getLastRunStatus(task) === 'partial' ? (
+                          <AlertTriangle className="w-4 h-4 text-amber-500" />
                         ) : (
                           <XCircle className="w-4 h-4 text-red-500" />
                         )}
-                        <span>{formatTime(task.last_run_time)}</span>
+                        <span title={task.last_run_message || undefined}>
+                          {formatTime(task.last_run_time)}
+                        </span>
+                        {typeof task.last_run_success_count === 'number' &&
+                          typeof task.last_run_total_count === 'number' &&
+                          task.last_run_total_count > 1 && (
+                            <span className="text-xs text-slate-500">
+                              ({task.last_run_success_count}/
+                              {task.last_run_total_count})
+                            </span>
+                          )}
                       </>
                     ) : (
                       <span className="text-slate-400">

@@ -5,14 +5,16 @@ import json
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from AutoGLM_GUI.logger import logger
-from AutoGLM_GUI.models.history import ConversationRecord, MessageRecord
 from AutoGLM_GUI.models.scheduled_task import ScheduledTask
+
+if TYPE_CHECKING:
+    from AutoGLM_GUI.models.history import ConversationRecord, MessageRecord
 
 
 @dataclass
@@ -187,6 +189,8 @@ class SchedulerManager:
         device_manager: Any,
         history_manager: Any,
     ) -> DeviceExecutionResult:
+        from AutoGLM_GUI.models.history import ConversationRecord, MessageRecord
+
         device = None
         for d in device_manager.get_devices():
             if d.serial == serialno and d.state.value == "online":
@@ -217,7 +221,7 @@ class SchedulerManager:
             )
 
         start_time = datetime.now()
-        messages: list[MessageRecord] = [
+        messages: list["MessageRecord"] = [
             MessageRecord(
                 role="user",
                 content=workflow["text"],
@@ -358,11 +362,28 @@ class SchedulerManager:
 
         workflow = workflow_manager.get_workflow(task.workflow_uuid)
         if not workflow:
-            self._record_failure(task, "Workflow not found")
+            self._record_run(
+                task=task,
+                status="failure",
+                message="Workflow not found",
+                success_count=0,
+                total_count=len(task.device_serialnos),
+            )
             return
 
         device_manager = DeviceManager.get_instance()
         manager = PhoneAgentManager.get_instance()
+
+        total_count = len(task.device_serialnos)
+        if total_count == 0:
+            self._record_run(
+                task=task,
+                status="failure",
+                message="No devices selected",
+                success_count=0,
+                total_count=0,
+            )
+            return
 
         results: list[DeviceExecutionResult] = []
         for serialno in task.device_serialnos:
@@ -381,8 +402,8 @@ class SchedulerManager:
             )
 
         success_count = sum(1 for r in results if r.success)
-        total_count = len(results)
         any_success = success_count > 0
+        all_success = success_count == total_count
 
         summary_parts = []
         for r in results:
@@ -396,24 +417,43 @@ class SchedulerManager:
             f"Task {task.name} completed: {success_count}/{total_count} devices succeeded"
         )
 
-        if any_success:
-            self._record_success(task, summary_message)
+        status: str
+        if all_success:
+            status = "success"
+        elif any_success:
+            status = "partial"
         else:
-            self._record_failure(task, summary_message)
+            status = "failure"
 
-    def _record_success(self, task: ScheduledTask, message: str) -> None:
+        self._record_run(
+            task=task,
+            status=status,
+            message=summary_message,
+            success_count=success_count,
+            total_count=total_count,
+        )
+
+    def _record_run(
+        self,
+        task: ScheduledTask,
+        status: str,
+        message: str,
+        success_count: int,
+        total_count: int,
+    ) -> None:
         task.last_run_time = datetime.now()
-        task.last_run_success = True
+        task.last_run_status = status
+        task.last_run_success = status == "success"
+        task.last_run_success_count = success_count
+        task.last_run_total_count = total_count
         task.last_run_message = message[:500] if message else ""
         self._save_tasks()
-        logger.info(f"Scheduled task completed: {task.name}")
-
-    def _record_failure(self, task: ScheduledTask, error: str) -> None:
-        task.last_run_time = datetime.now()
-        task.last_run_success = False
-        task.last_run_message = error[:500] if error else ""
-        self._save_tasks()
-        logger.warning(f"Scheduled task failed: {task.name} - {error}")
+        if status == "success":
+            logger.info(f"Scheduled task completed: {task.name}")
+        elif status == "partial":
+            logger.warning(f"Scheduled task partially succeeded: {task.name}")
+        else:
+            logger.warning(f"Scheduled task failed: {task.name} - {message}")
 
     def _load_tasks(self) -> None:
         if not self._tasks_path.exists():

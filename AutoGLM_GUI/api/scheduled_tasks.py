@@ -26,6 +26,9 @@ def _task_to_response(task) -> ScheduledTaskResponse:
         updated_at=task.updated_at.isoformat(),
         last_run_time=task.last_run_time.isoformat() if task.last_run_time else None,
         last_run_success=task.last_run_success,
+        last_run_status=task.last_run_status,
+        last_run_success_count=task.last_run_success_count,
+        last_run_total_count=task.last_run_total_count,
         last_run_message=task.last_run_message,
         next_run_time=next_run.isoformat() if next_run else None,
     )

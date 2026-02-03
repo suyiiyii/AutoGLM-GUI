@@ -905,6 +905,9 @@ export interface ScheduledTaskResponse {
   updated_at: string;
   last_run_time: string | null;
   last_run_success: boolean | null;
+  last_run_status?: 'success' | 'partial' | 'failure' | null;
+  last_run_success_count?: number | null;
+  last_run_total_count?: number | null;
   last_run_message: string | null;
   next_run_time: string | null;
 }

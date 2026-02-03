@@ -5,6 +5,25 @@ from datetime import datetime
 from uuid import uuid4
 
 
+def _normalize_device_serialnos(serialnos: object) -> list[str]:
+    if isinstance(serialnos, str):
+        serialnos = [serialnos]
+    if not isinstance(serialnos, list):
+        return []
+
+    normalized: list[str] = []
+    seen: set[str] = set()
+    for raw in serialnos:
+        if not isinstance(raw, str):
+            continue
+        s = raw.strip()
+        if not s or s in seen:
+            continue
+        normalized.append(s)
+        seen.add(s)
+    return normalized
+
+
 @dataclass
 class ScheduledTask:
     """定时任务定义."""
@@ -29,6 +48,10 @@ class ScheduledTask:
     # 最近执行信息（只记录最后一次）
     last_run_time: datetime | None = None
     last_run_success: bool | None = None
+    # success: 全部设备成功；partial: 部分成功；failure: 全部失败
+    last_run_status: str | None = None
+    last_run_success_count: int | None = None
+    last_run_total_count: int | None = None
     last_run_message: str | None = None
 
     def to_dict(self) -> dict:
@@ -46,6 +69,9 @@ class ScheduledTask:
             if self.last_run_time
             else None,
             "last_run_success": self.last_run_success,
+            "last_run_status": self.last_run_status,
+            "last_run_success_count": self.last_run_success_count,
+            "last_run_total_count": self.last_run_total_count,
             "last_run_message": self.last_run_message,
         }
 
@@ -53,12 +79,11 @@ class ScheduledTask:
     def from_dict(cls, data: dict) -> "ScheduledTask":
         """从字典创建实例，向后兼容旧数据格式."""
         # 处理设备序列号：支持旧格式的单字符串和新格式的列表
-        device_serialnos = data.get("device_serialnos", [])
+        device_serialnos = _normalize_device_serialnos(data.get("device_serialnos", []))
         if not device_serialnos:
             # 向后兼容：尝试读取旧字段 device_serialno
-            old_device = data.get("device_serialno", "")
-            if old_device:
-                device_serialnos = [old_device]
+            old_device = _normalize_device_serialnos(data.get("device_serialno", ""))
+            device_serialnos = old_device
 
         return cls(
             id=data.get("id", str(uuid4())),
@@ -77,5 +102,8 @@ class ScheduledTask:
             if data.get("last_run_time")
             else None,
             last_run_success=data.get("last_run_success"),
+            last_run_status=data.get("last_run_status"),
+            last_run_success_count=data.get("last_run_success_count"),
+            last_run_total_count=data.get("last_run_total_count"),
             last_run_message=data.get("last_run_message"),
         )

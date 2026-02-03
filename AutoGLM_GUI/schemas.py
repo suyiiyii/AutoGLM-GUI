@@ -779,9 +779,18 @@ class ScheduledTaskCreate(BaseModel):
     @field_validator("device_serialnos")
     @classmethod
     def validate_devices(cls, v: list[str]) -> list[str]:
-        if not v or len(v) == 0:
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in v or []:
+            s = raw.strip()
+            if not s or s in seen:
+                continue
+            normalized.append(s)
+            seen.add(s)
+
+        if len(normalized) == 0:
             raise ValueError("at least one device must be selected")
-        return v
+        return normalized
 
     @field_validator("cron_expression")
     @classmethod
@@ -808,9 +817,21 @@ class ScheduledTaskUpdate(BaseModel):
     @field_validator("device_serialnos")
     @classmethod
     def validate_devices(cls, v: list[str] | None) -> list[str] | None:
-        if v is not None and len(v) == 0:
+        if v is None:
+            return None
+
+        normalized: list[str] = []
+        seen: set[str] = set()
+        for raw in v:
+            s = raw.strip()
+            if not s or s in seen:
+                continue
+            normalized.append(s)
+            seen.add(s)
+
+        if len(normalized) == 0:
             raise ValueError("at least one device must be selected")
-        return v
+        return normalized
 
     @field_validator("cron_expression")
     @classmethod
@@ -840,6 +861,9 @@ class ScheduledTaskResponse(BaseModel):
     updated_at: str
     last_run_time: str | None
     last_run_success: bool | None
+    last_run_status: str | None = None
+    last_run_success_count: int | None = None
+    last_run_total_count: int | None = None
     last_run_message: str | None
     next_run_time: str | None = None
 
