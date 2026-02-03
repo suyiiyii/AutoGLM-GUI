@@ -14,7 +14,7 @@ from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.models.scheduled_task import ScheduledTask
 
 if TYPE_CHECKING:
-    from AutoGLM_GUI.models.history import ConversationRecord, MessageRecord
+    from AutoGLM_GUI.models.history import MessageRecord
 
 
 @dataclass
