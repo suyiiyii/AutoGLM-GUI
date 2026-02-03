@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from typing import Any
 
 from typing_extensions import NotRequired, TypedDict
 
@@ -12,6 +13,9 @@ import socketio
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.scrcpy_protocol import ScrcpyMediaStreamPacket
 from AutoGLM_GUI.scrcpy_stream import ScrcpyStreamer
+
+# Type alias for error info dict
+ErrorInfo = dict[str, str]
 
 
 class VideoPacketPayload(TypedDict):
@@ -22,14 +26,14 @@ class VideoPacketPayload(TypedDict):
     pts: NotRequired[int | None]
 
 
-sio = socketio.AsyncServer(
+sio: socketio.AsyncServer = socketio.AsyncServer(
     async_mode="asgi",
     cors_allowed_origins="*",
     server_kwargs={"socketio_path": "/socket.io"},
 )
 
 _socket_streamers: dict[str, ScrcpyStreamer] = {}
-_stream_tasks: dict[str, asyncio.Task] = {}
+_stream_tasks: dict[str, asyncio.Task[None]] = {}
 _device_locks: dict[
     str, asyncio.Lock
 ] = {}  # Lock per device to prevent concurrent connections
@@ -45,7 +49,7 @@ async def _stop_stream_for_sid(sid: str) -> None:
         streamer.stop()
 
 
-def _classify_error(exc: Exception) -> dict:
+def _classify_error(exc: Exception) -> ErrorInfo:
     """Classify error and return user-friendly message."""
     error_str = str(exc)
 
@@ -105,13 +109,13 @@ async def _stream_packets(sid: str, streamer: ScrcpyStreamer) -> None:
     try:
         async for packet in streamer.iter_packets():
             payload = _packet_to_payload(packet)
-            await sio.emit("video-data", payload, to=sid)
+            await sio.emit("video-data", payload, to=sid)  # type: ignore[misc]
     except asyncio.CancelledError:
         raise
     except Exception as exc:
         logger.exception("Video streaming failed: %s", exc)
         try:
-            await sio.emit("error", {"message": str(exc)}, to=sid)
+            await sio.emit("error", {"message": str(exc)}, to=sid)  # type: ignore[misc]
         except Exception:
             pass
     finally:
@@ -130,31 +134,31 @@ def _packet_to_payload(packet: ScrcpyMediaStreamPacket) -> VideoPacketPayload:
     return payload
 
 
-@sio.event
-async def connect(sid: str, environ: dict) -> None:
+@sio.event  # type: ignore[misc]
+async def connect(sid: str, environ: dict[str, Any]) -> None:
     logger.info("Socket.IO client connected: %s", sid)
 
 
-@sio.event
+@sio.event  # type: ignore[misc]
 async def disconnect(sid: str) -> None:
     logger.info("Socket.IO client disconnected: %s", sid)
     await _stop_stream_for_sid(sid)
 
 
 @sio.on("connect-device")  # type: ignore[misc]
-async def connect_device(sid: str, data: dict | None) -> None:
-    payload = data or {}
+async def connect_device(sid: str, data: dict[str, Any] | None) -> None:
+    payload: dict[str, Any] = data or {}
     device_id = payload.get("device_id") or payload.get("deviceId")
     if not device_id:
-        await sio.emit(
+        await sio.emit(  # type: ignore[misc]
             "error",
             {"message": "Device ID is required", "type": "invalid_request"},
             to=sid,
         )
         return
 
-    max_size = int(payload.get("maxSize") or 1280)
-    bit_rate = int(payload.get("bitRate") or 4_000_000)
+    max_size = int(payload.get("maxSize", 1280))
+    bit_rate = int(payload.get("bitRate", 4_000_000))
 
     # Stop any existing stream for this sid
     await _stop_stream_for_sid(sid)
@@ -188,7 +192,7 @@ async def connect_device(sid: str, data: dict | None) -> None:
         try:
             await streamer.start()  # ScrcpyStreamer has built-in retry logic
             metadata = await streamer.read_video_metadata()
-            await sio.emit(
+            await sio.emit(  # type: ignore[misc]
                 "video-metadata",
                 {
                     "deviceName": metadata.device_name,
@@ -206,5 +210,5 @@ async def connect_device(sid: str, data: dict | None) -> None:
             streamer.stop()
             logger.exception("Failed to start scrcpy stream: %s", exc)
             # Use unified error classification
-            error_info = _classify_error(exc)
-            await sio.emit("error", error_info, to=sid)
+            error_info: ErrorInfo = _classify_error(exc)
+            await sio.emit("error", error_info, to=sid)  # type: ignore[misc]

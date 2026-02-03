@@ -7,6 +7,9 @@ from AutoGLM_GUI.device_protocol import DeviceProtocol
 
 from .types import ActionResult
 
+# Type alias for action handler methods
+ActionHandlerMethod = Callable[["ActionHandler", dict[str, Any], int, int], ActionResult]
+
 
 class ActionHandler:
     def __init__(
@@ -25,8 +28,11 @@ class ActionHandler:
         action_type = action.get("_metadata")
 
         if action_type == "finish":
+            message = action.get("message")
             return ActionResult(
-                success=True, should_finish=True, message=action.get("message")
+                success=True,
+                should_finish=True,
+                message=str(message) if message is not None else None,
             )
 
         if action_type != "do":
@@ -60,8 +66,10 @@ class ActionHandler:
                 success=False, should_finish=False, message=f"Action failed: {e}"
             )
 
-    def _get_handler(self, action_name: str) -> Callable | None:
-        handlers = {
+    def _get_handler(
+        self, action_name: str
+    ) -> Callable[[dict[str, Any], int, int], ActionResult] | None:
+        handlers: dict[str, Callable[[dict[str, Any], int, int], ActionResult]] = {
             "Launch": self._handle_launch,
             "Tap": self._handle_tap,
             "Type": self._handle_type,
@@ -84,17 +92,21 @@ class ActionHandler:
         y = int(element[1] / 1000 * screen_height)
         return x, y
 
-    def _handle_launch(self, action: dict, width: int, height: int) -> ActionResult:
+    def _handle_launch(
+        self, action: dict[str, Any], width: int, height: int
+    ) -> ActionResult:
         app_name = action.get("app")
         if not app_name:
             return ActionResult(False, False, "No app name specified")
 
-        success = self.device.launch_app(app_name)
+        success = self.device.launch_app(str(app_name))
         if success:
             return ActionResult(True, False)
         return ActionResult(False, False, f"App not found: {app_name}")
 
-    def _handle_tap(self, action: dict, width: int, height: int) -> ActionResult:
+    def _handle_tap(
+        self, action: dict[str, Any], width: int, height: int
+    ) -> ActionResult:
         element = action.get("element")
         if not element:
             return ActionResult(False, False, "No element coordinates")
@@ -102,7 +114,8 @@ class ActionHandler:
         x, y = self._convert_relative_to_absolute(element, width, height)
 
         if "message" in action:
-            if not self.confirmation_callback(action["message"]):
+            message = action["message"]
+            if not self.confirmation_callback(str(message)):
                 return ActionResult(
                     success=False,
                     should_finish=True,
@@ -112,7 +125,9 @@ class ActionHandler:
         self.device.tap(x, y)
         return ActionResult(True, False)
 
-    def _handle_type(self, action: dict, width: int, height: int) -> ActionResult:
+    def _handle_type(
+        self, action: dict[str, Any], width: int, height: int
+    ) -> ActionResult:
         text = action.get("text", "")
 
         original_ime = self.device.detect_and_set_adb_keyboard()
@@ -121,7 +136,7 @@ class ActionHandler:
         self.device.clear_text()
         time.sleep(0.3)
 
-        self.device.type_text(text)
+        self.device.type_text(str(text))
         time.sleep(0.5)
 
         self.device.restore_keyboard(original_ime)
@@ -129,7 +144,9 @@ class ActionHandler:
 
         return ActionResult(True, False)
 
-    def _handle_swipe(self, action: dict, width: int, height: int) -> ActionResult:
+    def _handle_swipe(
+        self, action: dict[str, Any], width: int, height: int
+    ) -> ActionResult:
         start = action.get("start")
         end = action.get("end")
 
@@ -142,15 +159,21 @@ class ActionHandler:
         self.device.swipe(start_x, start_y, end_x, end_y)
         return ActionResult(True, False)
 
-    def _handle_back(self, action: dict, width: int, height: int) -> ActionResult:
+    def _handle_back(
+        self, action: dict[str, Any], width: int, height: int
+    ) -> ActionResult:
         self.device.back()
         return ActionResult(True, False)
 
-    def _handle_home(self, action: dict, width: int, height: int) -> ActionResult:
+    def _handle_home(
+        self, action: dict[str, Any], width: int, height: int
+    ) -> ActionResult:
         self.device.home()
         return ActionResult(True, False)
 
-    def _handle_double_tap(self, action: dict, width: int, height: int) -> ActionResult:
+    def _handle_double_tap(
+        self, action: dict[str, Any], width: int, height: int
+    ) -> ActionResult:
         element = action.get("element")
         if not element:
             return ActionResult(False, False, "No element coordinates")
@@ -159,7 +182,9 @@ class ActionHandler:
         self.device.double_tap(x, y)
         return ActionResult(True, False)
 
-    def _handle_long_press(self, action: dict, width: int, height: int) -> ActionResult:
+    def _handle_long_press(
+        self, action: dict[str, Any], width: int, height: int
+    ) -> ActionResult:
         element = action.get("element")
         if not element:
             return ActionResult(False, False, "No element coordinates")
@@ -168,22 +193,28 @@ class ActionHandler:
         self.device.long_press(x, y)
         return ActionResult(True, False)
 
-    def _handle_wait(self, action: dict, width: int, height: int) -> ActionResult:
+    def _handle_wait(
+        self, action: dict[str, Any], width: int, height: int
+    ) -> ActionResult:
         duration_str = action.get("duration", "1 seconds")
         try:
-            duration = float(duration_str.replace("seconds", "").strip())
+            duration = float(str(duration_str).replace("seconds", "").strip())
         except ValueError:
             duration = 1.0
 
         time.sleep(duration)
         return ActionResult(True, False)
 
-    def _handle_takeover(self, action: dict, width: int, height: int) -> ActionResult:
+    def _handle_takeover(
+        self, action: dict[str, Any], width: int, height: int
+    ) -> ActionResult:
         message = action.get("message", "User intervention required")
-        self.takeover_callback(message)
+        self.takeover_callback(str(message))
         return ActionResult(True, False)
 
-    def _handle_note(self, action: dict, width: int, height: int) -> ActionResult:
+    def _handle_note(
+        self, action: dict[str, Any], width: int, height: int
+    ) -> ActionResult:
         return ActionResult(True, False)
 
     @staticmethod

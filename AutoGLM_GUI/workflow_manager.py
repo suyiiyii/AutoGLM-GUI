@@ -11,52 +11,55 @@ Features:
 import json
 import uuid as uuid_lib
 from pathlib import Path
-from typing import Optional
+from typing import Any
 
 from AutoGLM_GUI.logger import logger
+
+# Type alias for workflow dict
+WorkflowDict = dict[str, Any]
 
 
 class WorkflowManager:
     """Workflow 管理器（单例模式）."""
 
-    _instance: Optional["WorkflowManager"] = None
+    _instance: "WorkflowManager | None" = None
 
-    def __new__(cls):
+    def __new__(cls) -> "WorkflowManager":
         """单例模式：确保只有一个实例."""
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self):
+    def __init__(self) -> None:
         """初始化管理器."""
         if hasattr(self, "_initialized"):
             return
         self._initialized = True
         self._workflows_path = Path.home() / ".config" / "autoglm" / "workflows.json"
-        self._file_cache: Optional[list[dict]] = None
-        self._file_mtime: Optional[float] = None
+        self._file_cache: list[WorkflowDict] | None = None
+        self._file_mtime: float | None = None
 
-    def list_workflows(self) -> list[dict]:
+    def list_workflows(self) -> list[WorkflowDict]:
         """获取所有 workflows.
 
         Returns:
-            list[dict]: Workflow 列表
+            list[WorkflowDict]: Workflow 列表
         """
         return self._load_workflows()
 
-    def get_workflow(self, uuid: str) -> dict | None:
+    def get_workflow(self, uuid: str) -> WorkflowDict | None:
         """根据 UUID 获取单个 workflow.
 
         Args:
             uuid: Workflow UUID
 
         Returns:
-            dict | None: Workflow 数据，如果不存在则返回 None
+            WorkflowDict | None: Workflow 数据，如果不存在则返回 None
         """
         workflows = self._load_workflows()
         return next((wf for wf in workflows if wf["uuid"] == uuid), None)
 
-    def create_workflow(self, name: str, text: str) -> dict:
+    def create_workflow(self, name: str, text: str) -> WorkflowDict:
         """创建新 workflow.
 
         Args:
@@ -64,10 +67,10 @@ class WorkflowManager:
             text: Workflow 任务内容
 
         Returns:
-            dict: 新创建的 workflow
+            WorkflowDict: 新创建的 workflow
         """
         workflows = self._load_workflows()
-        new_workflow = {
+        new_workflow: WorkflowDict = {
             "uuid": str(uuid_lib.uuid4()),
             "name": name,
             "text": text,
@@ -77,7 +80,7 @@ class WorkflowManager:
         logger.info(f"Created workflow: {name} (uuid={new_workflow['uuid']})")
         return new_workflow
 
-    def update_workflow(self, uuid: str, name: str, text: str) -> dict | None:
+    def update_workflow(self, uuid: str, name: str, text: str) -> WorkflowDict | None:
         """更新 workflow.
 
         Args:
@@ -86,7 +89,7 @@ class WorkflowManager:
             text: 新任务内容
 
         Returns:
-            dict | None: 更新后的 workflow，如果不存在则返回 None
+            WorkflowDict | None: 更新后的 workflow，如果不存在则返回 None
         """
         workflows = self._load_workflows()
         for wf in workflows:
@@ -118,11 +121,11 @@ class WorkflowManager:
         logger.warning(f"Workflow not found for deletion: uuid={uuid}")
         return False
 
-    def _load_workflows(self) -> list[dict]:
+    def _load_workflows(self) -> list[WorkflowDict]:
         """从文件加载（带 mtime 缓存）.
 
         Returns:
-            list[dict]: Workflow 列表
+            list[WorkflowDict]: Workflow 列表
         """
         if not self._workflows_path.exists():
             return []
@@ -134,9 +137,9 @@ class WorkflowManager:
 
         # 重新加载
         try:
-            with open(self._workflows_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-            workflows = data.get("workflows", [])
+            with open(self._workflows_path, encoding="utf-8") as f:
+                data: dict[str, Any] = json.load(f)
+            workflows: list[WorkflowDict] = data.get("workflows", [])
             self._file_cache = workflows
             self._file_mtime = current_mtime
             logger.debug(f"Loaded {len(workflows)} workflows from file")
@@ -145,7 +148,7 @@ class WorkflowManager:
             logger.warning(f"Failed to load workflows: {e}")
             return []
 
-    def _save_workflows(self, workflows: list[dict]) -> bool:
+    def _save_workflows(self, workflows: list[WorkflowDict]) -> bool:
         """原子写入文件.
 
         Args:
@@ -156,7 +159,7 @@ class WorkflowManager:
         """
         self._workflows_path.parent.mkdir(parents=True, exist_ok=True)
 
-        data = {"workflows": workflows}
+        data: dict[str, list[WorkflowDict]] = {"workflows": workflows}
 
         # 原子写入：临时文件 + rename
         temp_path = self._workflows_path.with_suffix(".tmp")

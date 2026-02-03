@@ -1,5 +1,7 @@
 """Workflow API 路由."""
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException
 
 from AutoGLM_GUI.schemas import (
@@ -61,7 +63,7 @@ def update_workflow(workflow_uuid: str, request: WorkflowUpdate) -> WorkflowResp
 
 
 @router.delete("/api/workflows/{workflow_uuid}")
-def delete_workflow(workflow_uuid: str) -> dict:
+def delete_workflow(workflow_uuid: str) -> dict[str, Any]:
     """删除 workflow."""
     from AutoGLM_GUI.workflow_manager import workflow_manager
 

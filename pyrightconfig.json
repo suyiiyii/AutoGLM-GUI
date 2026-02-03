@@ -11,7 +11,19 @@
     "**/dist",
     "**/build"
   ],
-  "typeCheckingMode": "standard",
+  "typeCheckingMode": "strict",
   "reportMissingImports": true,
-  "reportMissingTypeStubs": false
+  "reportMissingTypeStubs": false,
+
+  // 第三方库类型不完整的常见问题 - 降级为 warning
+  "reportUnknownMemberType": "warning",
+  "reportUnknownArgumentType": "warning",
+  "reportUnknownVariableType": "warning",
+  "reportUnknownParameterType": "warning",
+
+  // 私有成员访问 - 项目内部使用可接受
+  "reportPrivateUsage": "none",
+
+  // 常量重定义 - 某些模式下需要
+  "reportConstantRedefinition": "none"
 }

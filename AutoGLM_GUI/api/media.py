@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter
 
 from AutoGLM_GUI.adb_plus import capture_screenshot
@@ -14,7 +16,7 @@ router = APIRouter()
 
 
 @router.post("/api/video/reset")
-async def reset_video_stream(device_id: str | None = None) -> dict:
+async def reset_video_stream(device_id: str | None = None) -> dict[str, Any]:
     """Reset active scrcpy streams (Socket.IO)."""
     stop_streamers(device_id=device_id)
     if device_id:

@@ -5,6 +5,9 @@ from datetime import datetime
 from typing import Any, Literal
 from uuid import uuid4
 
+# Type alias for serializable dict
+SerializableDict = dict[str, Any]
+
 
 @dataclass
 class MessageRecord:
@@ -19,7 +22,7 @@ class MessageRecord:
     action: dict[str, Any] | None = None
     step: int | None = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> SerializableDict:
         """转换为可序列化的字典."""
         return {
             "role": self.role,
@@ -31,17 +34,23 @@ class MessageRecord:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "MessageRecord":
+    def from_dict(cls, data: SerializableDict) -> "MessageRecord":
         """从字典创建实例."""
+        role_value = data.get("role", "user")
+        # Ensure role is a valid literal
+        role: Literal["user", "assistant"] = (
+            "assistant" if role_value == "assistant" else "user"
+        )
+        timestamp_str = data.get("timestamp")
         return cls(
-            role=data.get("role", "user"),
-            content=data.get("content", ""),
-            timestamp=datetime.fromisoformat(data["timestamp"])
-            if data.get("timestamp")
+            role=role,
+            content=str(data.get("content", "")),
+            timestamp=datetime.fromisoformat(str(timestamp_str))
+            if timestamp_str
             else datetime.now(),
-            thinking=data.get("thinking"),
-            action=data.get("action"),
-            step=data.get("step"),
+            thinking=data.get("thinking"),  # type: ignore[arg-type]
+            action=data.get("action"),  # type: ignore[arg-type]
+            step=data.get("step"),  # type: ignore[arg-type]
         )
 
 
@@ -72,7 +81,7 @@ class ConversationRecord:
     # 完整对话消息列表
     messages: list[MessageRecord] = field(default_factory=list)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> SerializableDict:
         """转换为可序列化的字典."""
         return {
             "id": self.id,
@@ -90,25 +99,40 @@ class ConversationRecord:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ConversationRecord":
+    def from_dict(cls, data: SerializableDict) -> "ConversationRecord":
         """从字典创建实例."""
+        source_value = data.get("source", "chat")
+        # Ensure source is a valid literal
+        source: Literal["chat", "layered", "scheduled"] = (
+            "layered"
+            if source_value == "layered"
+            else "scheduled"
+            if source_value == "scheduled"
+            else "chat"
+        )
+        start_time_str = data.get("start_time")
+        end_time_str = data.get("end_time")
+        messages_data = data.get("messages", [])
         return cls(
-            id=data.get("id", str(uuid4())),
-            task_text=data.get("task_text", ""),
-            final_message=data.get("final_message", ""),
-            success=data.get("success", False),
-            steps=data.get("steps", 0),
-            start_time=datetime.fromisoformat(data["start_time"])
-            if data.get("start_time")
+            id=str(data.get("id", str(uuid4()))),
+            task_text=str(data.get("task_text", "")),
+            final_message=str(data.get("final_message", "")),
+            success=bool(data.get("success", False)),
+            steps=int(data.get("steps", 0)),
+            start_time=datetime.fromisoformat(str(start_time_str))
+            if start_time_str
             else datetime.now(),
-            end_time=datetime.fromisoformat(data["end_time"])
-            if data.get("end_time")
+            end_time=datetime.fromisoformat(str(end_time_str))
+            if end_time_str
             else None,
-            duration_ms=data.get("duration_ms", 0),
-            source=data.get("source", "chat"),
-            source_detail=data.get("source_detail", ""),
-            error_message=data.get("error_message"),
-            messages=[MessageRecord.from_dict(m) for m in data.get("messages", [])],
+            duration_ms=int(data.get("duration_ms", 0)),
+            source=source,
+            source_detail=str(data.get("source_detail", "")),
+            error_message=data.get("error_message"),  # type: ignore[arg-type]
+            messages=[
+                MessageRecord.from_dict(m)
+                for m in (messages_data if isinstance(messages_data, list) else [])
+            ],
         )
 
 
@@ -120,7 +144,7 @@ class DeviceHistory:
     records: list[ConversationRecord] = field(default_factory=list)
     last_updated: datetime = field(default_factory=datetime.now)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> SerializableDict:
         """转换为可序列化的字典."""
         return {
             "serialno": self.serialno,
@@ -129,12 +153,17 @@ class DeviceHistory:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "DeviceHistory":
+    def from_dict(cls, data: SerializableDict) -> "DeviceHistory":
         """从字典创建实例."""
+        last_updated_str = data.get("last_updated")
+        records_data = data.get("records", [])
         return cls(
-            serialno=data.get("serialno", ""),
-            records=[ConversationRecord.from_dict(r) for r in data.get("records", [])],
-            last_updated=datetime.fromisoformat(data["last_updated"])
-            if data.get("last_updated")
+            serialno=str(data.get("serialno", "")),
+            records=[
+                ConversationRecord.from_dict(r)
+                for r in (records_data if isinstance(records_data, list) else [])
+            ],
+            last_updated=datetime.fromisoformat(str(last_updated_str))
+            if last_updated_str
             else datetime.now(),
         )

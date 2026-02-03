@@ -50,7 +50,7 @@ class PairingSession:
     thread: Optional[threading.Thread] = None  # Listener thread
 
 
-def _pick_host_from_info(info) -> Optional[str]:
+def _pick_host_from_info(info: ServiceInfo) -> Optional[str]:
     """Extract preferred host from service info (IPv4 preferred)."""
     try:
         # Prefer IPv4 addresses

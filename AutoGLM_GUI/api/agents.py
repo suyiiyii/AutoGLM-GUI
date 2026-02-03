@@ -50,19 +50,21 @@ def _setup_adb_keyboard(device_id: str) -> None:
         logger.info(f"✓ Device {device_id}: ADB Keyboard ready")
 
 
-SSEPayload = dict[str, str | int | bool | None | dict]
+from typing import Any
+
+SSEPayload = dict[str, Any]
 
 
 def _create_sse_event(
     event_type: str, data: SSEPayload, role: str = "assistant"
 ) -> SSEPayload:
     """Create an SSE event with standardized fields including role."""
-    event_data = {"type": event_type, "role": role, **data}
+    event_data: SSEPayload = {"type": event_type, "role": role, **data}
     return event_data
 
 
 @router.post("/api/init", deprecated=True)
-def init_agent(request: InitRequest) -> dict:
+def init_agent(request: InitRequest) -> dict[str, Any]:
     """初始化 PhoneAgent（已废弃，多设备支持）。
 
     ⚠️ 此端点已废弃，将在未来版本移除。
@@ -417,7 +419,7 @@ def get_status(device_id: str | None = None) -> StatusResponse:
 
 
 @router.post("/api/reset")
-def reset_agent(request: ResetRequest) -> dict:
+def reset_agent(request: ResetRequest) -> dict[str, Any]:
     """重置 Agent 状态（多设备支持）。"""
     from AutoGLM_GUI.exceptions import AgentNotInitializedError
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
@@ -437,7 +439,7 @@ def reset_agent(request: ResetRequest) -> dict:
 
 
 @router.post("/api/chat/abort")
-async def abort_chat(request: AbortRequest) -> dict:
+async def abort_chat(request: AbortRequest) -> dict[str, Any]:
     """中断正在进行的对话流 (支持 AsyncAgent)。"""
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
@@ -495,7 +497,7 @@ def get_config_endpoint() -> ConfigResponse:
 
 
 @router.post("/api/config")
-def save_config_endpoint(request: ConfigSaveRequest) -> dict:
+def save_config_endpoint(request: ConfigSaveRequest) -> dict[str, Any]:
     """保存配置到文件.
 
     副作用：保存配置后会自动销毁所有已初始化的 Agent，
@@ -578,7 +580,7 @@ def save_config_endpoint(request: ConfigSaveRequest) -> dict:
 
 
 @router.delete("/api/config")
-def delete_config_endpoint() -> dict:
+def delete_config_endpoint() -> dict[str, Any]:
     """删除配置文件."""
     from AutoGLM_GUI.config_manager import config_manager
 

@@ -1,5 +1,7 @@
 """History API routes."""
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException
 
 from AutoGLM_GUI.history_manager import history_manager
@@ -91,7 +93,7 @@ def get_history_record(serialno: str, record_id: str) -> HistoryRecordResponse:
 
 
 @router.delete("/api/history/{serialno}/{record_id}")
-def delete_history_record(serialno: str, record_id: str) -> dict:
+def delete_history_record(serialno: str, record_id: str) -> dict[str, Any]:
     success = history_manager.delete_record(serialno, record_id)
     if not success:
         raise HTTPException(status_code=404, detail="Record not found")
@@ -99,6 +101,6 @@ def delete_history_record(serialno: str, record_id: str) -> dict:
 
 
 @router.delete("/api/history/{serialno}")
-def clear_history(serialno: str) -> dict:
+def clear_history(serialno: str) -> dict[str, Any]:
     history_manager.clear_device_history(serialno)
     return {"success": True, "message": f"History cleared for {serialno}"}

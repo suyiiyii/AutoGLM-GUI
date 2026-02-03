@@ -6,22 +6,28 @@ making it easy to add new agent types without modifying existing code.
 
 from __future__ import annotations
 
-from typing import Callable, Dict
+from typing import Callable
 
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
+from AutoGLM_GUI.device_protocol import DeviceProtocol
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.types import AgentSpecificConfig
 
 from .protocols import AsyncAgent, BaseAgent
 
+# Type alias for agent creator function
+AgentCreator = Callable[
+    ...,
+    AsyncAgent | BaseAgent,
+]
 
-# Agent registry: agent_type -> (creator_function, config_schema)
-AGENT_REGISTRY: Dict[str, Callable] = {}
+# Agent registry: agent_type -> creator_function
+AGENT_REGISTRY: dict[str, AgentCreator] = {}
 
 
 def register_agent(
     agent_type: str,
-    creator: Callable,
+    creator: AgentCreator,
 ) -> None:
     """
     Register a new agent type.
@@ -49,9 +55,9 @@ def create_agent(
     model_config: ModelConfig,
     agent_config: AgentConfig,
     agent_specific_config: AgentSpecificConfig,
-    device,
-    takeover_callback: Callable | None = None,
-    confirmation_callback: Callable | None = None,
+    device: DeviceProtocol,
+    takeover_callback: Callable[[str], None] | None = None,
+    confirmation_callback: Callable[[str], bool] | None = None,
 ) -> AsyncAgent | BaseAgent:
     """
     Create an agent instance using the factory pattern.
@@ -113,9 +119,9 @@ def _create_async_glm_agent(
     model_config: ModelConfig,
     agent_config: AgentConfig,
     agent_specific_config: AgentSpecificConfig,  # noqa: ARG001
-    device,
-    takeover_callback: Callable | None = None,
-    confirmation_callback: Callable | None = None,
+    device: DeviceProtocol,
+    takeover_callback: Callable[[str], None] | None = None,
+    confirmation_callback: Callable[[str], bool] | None = None,
 ) -> AsyncAgent:
     """Create AsyncGLMAgent instance.
 
@@ -145,9 +151,9 @@ def _create_glm_agent_sync(
     model_config: ModelConfig,
     agent_config: AgentConfig,
     agent_specific_config: AgentSpecificConfig,  # noqa: ARG001
-    device,
-    takeover_callback: Callable | None = None,
-    confirmation_callback: Callable | None = None,
+    device: DeviceProtocol,
+    takeover_callback: Callable[[str], None] | None = None,
+    confirmation_callback: Callable[[str], bool] | None = None,
 ) -> BaseAgent:
     """Create synchronous GLMAgent (legacy, for backward compatibility).
 
@@ -169,13 +175,13 @@ def _create_internal_mai_agent(
     model_config: ModelConfig,
     agent_config: AgentConfig,
     agent_specific_config: AgentSpecificConfig,
-    device,
-    takeover_callback: Callable | None = None,
-    confirmation_callback: Callable | None = None,
+    device: DeviceProtocol,
+    takeover_callback: Callable[[str], None] | None = None,
+    confirmation_callback: Callable[[str], bool] | None = None,
 ) -> BaseAgent:
     from .mai.agent import InternalMAIAgent
 
-    history_n = agent_specific_config.get("history_n", 3)
+    history_n: int = agent_specific_config.get("history_n", 3)  # type: ignore[assignment]
 
     return InternalMAIAgent(
         model_config=model_config,

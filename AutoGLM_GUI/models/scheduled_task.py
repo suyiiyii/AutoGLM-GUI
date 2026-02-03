@@ -2,7 +2,11 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 from uuid import uuid4
+
+# Type alias for serializable dict
+SerializableDict = dict[str, Any]
 
 
 def _normalize_device_serialnos(serialnos: object) -> list[str]:
@@ -54,7 +58,7 @@ class ScheduledTask:
     last_run_total_count: int | None = None
     last_run_message: str | None = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> SerializableDict:
         """转换为可序列化的字典."""
         return {
             "id": self.id,
@@ -76,7 +80,7 @@ class ScheduledTask:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ScheduledTask":
+    def from_dict(cls, data: SerializableDict) -> "ScheduledTask":
         """从字典创建实例，向后兼容旧数据格式."""
         # 处理设备序列号：支持旧格式的单字符串和新格式的列表
         device_serialnos = _normalize_device_serialnos(data.get("device_serialnos", []))
@@ -85,25 +89,44 @@ class ScheduledTask:
             old_device = _normalize_device_serialnos(data.get("device_serialno", ""))
             device_serialnos = old_device
 
+        created_at_str = data.get("created_at")
+        updated_at_str = data.get("updated_at")
+        last_run_time_str = data.get("last_run_time")
+        last_run_success_val = data.get("last_run_success")
+        last_run_success_count_val = data.get("last_run_success_count")
+        last_run_total_count_val = data.get("last_run_total_count")
+        last_run_status_val = data.get("last_run_status")
+        last_run_message_val = data.get("last_run_message")
+
         return cls(
-            id=data.get("id", str(uuid4())),
-            name=data.get("name", ""),
-            workflow_uuid=data.get("workflow_uuid", ""),
+            id=str(data.get("id", str(uuid4()))),
+            name=str(data.get("name", "")),
+            workflow_uuid=str(data.get("workflow_uuid", "")),
             device_serialnos=device_serialnos,
-            cron_expression=data.get("cron_expression", ""),
-            enabled=data.get("enabled", True),
-            created_at=datetime.fromisoformat(data["created_at"])
-            if data.get("created_at")
+            cron_expression=str(data.get("cron_expression", "")),
+            enabled=bool(data.get("enabled", True)),
+            created_at=datetime.fromisoformat(str(created_at_str))
+            if created_at_str
             else datetime.now(),
-            updated_at=datetime.fromisoformat(data["updated_at"])
-            if data.get("updated_at")
+            updated_at=datetime.fromisoformat(str(updated_at_str))
+            if updated_at_str
             else datetime.now(),
-            last_run_time=datetime.fromisoformat(data["last_run_time"])
-            if data.get("last_run_time")
+            last_run_time=datetime.fromisoformat(str(last_run_time_str))
+            if last_run_time_str
             else None,
-            last_run_success=data.get("last_run_success"),
-            last_run_status=data.get("last_run_status"),
-            last_run_success_count=data.get("last_run_success_count"),
-            last_run_total_count=data.get("last_run_total_count"),
-            last_run_message=data.get("last_run_message"),
+            last_run_success=bool(last_run_success_val)
+            if last_run_success_val is not None
+            else None,
+            last_run_status=str(last_run_status_val)
+            if last_run_status_val is not None
+            else None,
+            last_run_success_count=int(last_run_success_count_val)
+            if last_run_success_count_val is not None
+            else None,
+            last_run_total_count=int(last_run_total_count_val)
+            if last_run_total_count_val is not None
+            else None,
+            last_run_message=str(last_run_message_val)
+            if last_run_message_val is not None
+            else None,
         )

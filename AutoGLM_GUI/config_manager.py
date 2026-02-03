@@ -16,7 +16,7 @@ import os
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, field_validator
 
@@ -58,7 +58,7 @@ class ConfigModel(BaseModel):
 
     # Agent 类型配置
     agent_type: str = "glm"  # Agent type (e.g., "glm", "mai", "glm-sync")
-    agent_config_params: dict | None = None  # Agent-specific configuration
+    agent_config_params: dict[str, Any] | None = None  # Agent-specific configuration
 
     # Agent 执行配置
     default_max_steps: int = 100  # 单次任务最大执行步数
@@ -136,7 +136,7 @@ class ConfigLayer:
     api_key: Optional[str] = None
     # Agent 类型配置
     agent_type: Optional[str] = None
-    agent_config_params: Optional[dict] = None
+    agent_config_params: Optional[dict[str, Any]] = None
     # Agent 执行配置
     default_max_steps: Optional[int] = None
     layered_max_turns: Optional[int] = None
@@ -159,11 +159,11 @@ class ConfigLayer:
         value = getattr(self, key, None)
         return value is not None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典，排除 None 值.
 
         Returns:
-            dict: 配置字典
+            dict[str, Any]: 配置字典
         """
         return {
             k: v
@@ -248,7 +248,7 @@ class UnifiedConfigManager:
         )
 
         # 文件缓存（带修改时间戳）
-        self._file_cache: Optional[dict] = None
+        self._file_cache: Optional[dict[str, Any]] = None
         self._file_mtime: Optional[float] = None
 
         # 有效配置缓存
@@ -364,8 +364,8 @@ class UnifiedConfigManager:
                 return False
 
             # 读取并解析文件
-            with open(self._config_path, "r", encoding="utf-8") as f:
-                config_data = json.load(f)
+            with open(self._config_path, encoding="utf-8") as f:
+                config_data: dict[str, Any] = json.load(f)
 
             # 更新缓存
             self._file_cache = config_data
@@ -413,7 +413,7 @@ class UnifiedConfigManager:
         model_name: str,
         api_key: Optional[str] = None,
         agent_type: Optional[str] = None,
-        agent_config_params: Optional[dict] = None,
+        agent_config_params: Optional[dict[str, Any]] = None,
         default_max_steps: Optional[int] = None,
         layered_max_turns: Optional[int] = None,
         decision_base_url: Optional[str] = None,
@@ -472,8 +472,8 @@ class UnifiedConfigManager:
             # 合并模式：保留现有文件中未提供的字段
             if merge_mode and self._config_path.exists():
                 try:
-                    with open(self._config_path, "r", encoding="utf-8") as f:
-                        existing = json.load(f)
+                    with open(self._config_path, encoding="utf-8") as f:
+                        existing: dict[str, Any] = json.load(f)
 
                     # 保留未提供的字段
                     preserve_keys = [
@@ -562,7 +562,7 @@ class UnifiedConfigManager:
             return self._effective_config
 
         # 按优先级合并配置
-        merged = {}
+        merged: dict[str, Any] = {}
 
         # 所有配置字段
         config_keys = [
@@ -726,12 +726,12 @@ class UnifiedConfigManager:
         """
         return self._config_path
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """
         将有效配置转换为字典.
 
         Returns:
-            dict: 配置字典
+            dict[str, Any]: 配置字典
         """
         config = self.get_effective_config()
         return {

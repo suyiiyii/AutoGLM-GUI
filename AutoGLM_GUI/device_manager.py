@@ -292,6 +292,10 @@ class DeviceManager:
             else:
                 logger.info("DeviceManager polling stopped")
 
+    def is_polling_active(self) -> bool:
+        """Check if polling thread is running."""
+        return self._poll_thread is not None and self._poll_thread.is_alive()
+
     def get_devices(self) -> list[ManagedDevice]:
         """Get all cached devices (connected + available mDNS)."""
         with self._devices_lock:
