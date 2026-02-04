@@ -56,7 +56,9 @@ runs:
       with:
         node-version: ${{ inputs.node-version }}
         cache: "pnpm"
-        cache-dependency-path: "frontend/pnpm-lock.yaml"
+        cache-dependency-path: |
+          frontend/pnpm-lock.yaml
+          electron/pnpm-lock.yaml
 
     # Verify pnpm installation - Unix
     - name: Verify pnpm (Unix)

@@ -266,15 +266,15 @@ class ElectronBuilder:
         """构建 Electron 应用"""
         print_step("安装 Electron 依赖", 7, 6)
 
-        # 安装 Electron 依赖（使用 npm，electron-builder 要求）
-        if not run_command(["npm", "install"], cwd=self.electron_dir):
+        # 安装 Electron 依赖（使用 pnpm，electron-builder 26.x+ 已支持）
+        if not run_command(["pnpm", "install"], cwd=self.electron_dir):
             return False
 
         print_step("构建 Electron 应用", 7, 7)
 
         # 构建 Electron (明确指定不发布)
         if not run_command(
-            ["npm", "run", "build", "--", "--publish", "never"], cwd=self.electron_dir
+            ["pnpm", "run", "build", "--", "--publish", "never"], cwd=self.electron_dir
         ):
             if self.is_macos:
                 run_command(
@@ -290,7 +290,7 @@ class ElectronBuilder:
                     cwd=self.root_dir,
                 )
                 if not run_command(
-                    ["npm", "run", "build", "--", "--publish", "never"],
+                    ["pnpm", "run", "build", "--", "--publish", "never"],
                     cwd=self.electron_dir,
                 ):
                     return False

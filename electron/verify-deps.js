@@ -12,7 +12,7 @@ for (const dep of required) {
 
 if (missing.length > 0) {
   console.error('❌ Missing runtime dependencies:', missing.join(', '));
-  console.error('\nPlease run: npm install');
+  console.error('\nPlease run: pnpm install');
   process.exit(1);
 }
 
