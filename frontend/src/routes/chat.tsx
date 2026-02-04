@@ -15,6 +15,7 @@ import {
 import { DeviceSidebar } from '../components/DeviceSidebar';
 import { DevicePanel } from '../components/DevicePanel';
 import { ChatKitPanel } from '../components/ChatKitPanel';
+import { GroupManageDialog } from '../components/GroupManageDialog';
 import { Toast, type ToastType } from '../components/Toast';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -166,6 +167,7 @@ function ChatComponent() {
 
   const [config, setConfig] = useState<ConfigSaveRequest | null>(null);
   const [showConfig, setShowConfig] = useState(false);
+  const [showGroupManager, setShowGroupManager] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
   const [tempConfig, setTempConfig] = useState({
     base_url: VISION_PRESETS[0].config.base_url as string,
@@ -959,6 +961,7 @@ function ChatComponent() {
         currentDeviceId={currentDeviceId}
         onSelectDevice={setCurrentDeviceId}
         onOpenConfig={() => setShowConfig(true)}
+        onOpenGroupManager={() => setShowGroupManager(true)}
         onConnectWifi={handleConnectWifi}
         onDisconnectWifi={handleDisconnectWifi}
         onRefreshDevices={loadDevices}
@@ -1089,6 +1092,14 @@ function ChatComponent() {
           )}
         </div>
       </div>
+
+      {/* Group Manager Dialog */}
+      <GroupManageDialog
+        isOpen={showGroupManager}
+        onClose={() => setShowGroupManager(false)}
+        onGroupsChanged={loadDevices}
+        showToast={showToast}
+      />
     </div>
   );
 }

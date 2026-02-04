@@ -53,6 +53,7 @@ export interface Device {
   state: string;
   is_available_only: boolean;
   display_name: string | null; // Custom display name (null if not set)
+  group_id: string; // Device group ID (default: "default")
   agent: AgentStatus | null; // Agent runtime status (null if not initialized)
 }
 
@@ -899,6 +900,7 @@ export interface ScheduledTaskResponse {
   name: string;
   workflow_uuid: string;
   device_serialnos: string[];
+  device_group_id?: string | null;
   cron_expression: string;
   enabled: boolean;
   created_at: string;
@@ -919,7 +921,8 @@ export interface ScheduledTaskListResponse {
 export interface ScheduledTaskCreate {
   name: string;
   workflow_uuid: string;
-  device_serialnos: string[];
+  device_serialnos?: string[] | null;
+  device_group_id?: string | null;
   cron_expression: string;
   enabled?: boolean;
 }
@@ -927,7 +930,8 @@ export interface ScheduledTaskCreate {
 export interface ScheduledTaskUpdate {
   name?: string;
   workflow_uuid?: string;
-  device_serialnos?: string[];
+  device_serialnos?: string[] | null;
+  device_group_id?: string | null;
   cron_expression?: string;
   enabled?: boolean;
 }
@@ -1014,6 +1018,78 @@ export async function getDeviceName(
 ): Promise<DeviceNameResponse> {
   const res = await axios.get<DeviceNameResponse>(
     `/api/devices/${serial}/name`
+  );
+  return res.data;
+}
+
+// ==================== Device Group API ====================
+
+export interface DeviceGroup {
+  id: string;
+  name: string;
+  order: number;
+  created_at: string;
+  updated_at: string;
+  is_default: boolean;
+  device_count: number;
+}
+
+export interface DeviceGroupListResponse {
+  groups: DeviceGroup[];
+}
+
+export interface DeviceGroupOperationResponse {
+  success: boolean;
+  message: string;
+  error?: string;
+}
+
+export async function listDeviceGroups(): Promise<DeviceGroupListResponse> {
+  const res = await axios.get<DeviceGroupListResponse>('/api/device-groups');
+  return res.data;
+}
+
+export async function createDeviceGroup(name: string): Promise<DeviceGroup> {
+  const res = await axios.post<DeviceGroup>('/api/device-groups', { name });
+  return res.data;
+}
+
+export async function updateDeviceGroup(
+  groupId: string,
+  name: string
+): Promise<DeviceGroup> {
+  const res = await axios.put<DeviceGroup>(`/api/device-groups/${groupId}`, {
+    name,
+  });
+  return res.data;
+}
+
+export async function deleteDeviceGroup(
+  groupId: string
+): Promise<DeviceGroupOperationResponse> {
+  const res = await axios.delete<DeviceGroupOperationResponse>(
+    `/api/device-groups/${groupId}`
+  );
+  return res.data;
+}
+
+export async function reorderDeviceGroups(
+  groupIds: string[]
+): Promise<DeviceGroupOperationResponse> {
+  const res = await axios.put<DeviceGroupOperationResponse>(
+    '/api/device-groups/reorder',
+    { group_ids: groupIds }
+  );
+  return res.data;
+}
+
+export async function assignDeviceToGroup(
+  serial: string,
+  groupId: string
+): Promise<DeviceGroupOperationResponse> {
+  const res = await axios.put<DeviceGroupOperationResponse>(
+    `/api/devices/${serial}/group`,
+    { group_id: groupId }
   );
   return res.data;
 }

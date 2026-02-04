@@ -20,6 +20,7 @@ def _task_to_response(task) -> ScheduledTaskResponse:
         name=task.name,
         workflow_uuid=task.workflow_uuid,
         device_serialnos=task.device_serialnos,
+        device_group_id=task.device_group_id,
         cron_expression=task.cron_expression,
         enabled=task.enabled,
         created_at=task.created_at.isoformat(),
@@ -52,6 +53,7 @@ def create_scheduled_task(request: ScheduledTaskCreate) -> ScheduledTaskResponse
         name=request.name,
         workflow_uuid=request.workflow_uuid,
         device_serialnos=request.device_serialnos,
+        device_group_id=request.device_group_id,
         cron_expression=request.cron_expression,
         enabled=request.enabled,
     )

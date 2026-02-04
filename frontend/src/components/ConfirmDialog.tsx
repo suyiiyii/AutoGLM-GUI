@@ -8,6 +8,8 @@ interface ConfirmDialogProps {
   onCancel: () => void;
   confirmText?: string;
   cancelText?: string;
+  confirmVariant?: 'default' | 'destructive';
+  disabled?: boolean;
 }
 
 export function ConfirmDialog({
@@ -18,8 +20,15 @@ export function ConfirmDialog({
   onCancel,
   confirmText = '确认',
   cancelText = '取消',
+  confirmVariant = 'default',
+  disabled = false,
 }: ConfirmDialogProps) {
   if (!isOpen) return null;
+
+  const confirmButtonClass =
+    confirmVariant === 'destructive'
+      ? 'px-4 py-2 text-sm font-medium text-white bg-red-600 rounded-lg hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed'
+      : 'px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed';
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
@@ -41,7 +50,8 @@ export function ConfirmDialog({
               e.stopPropagation();
               onCancel();
             }}
-            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors"
+            disabled={disabled}
+            className="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-gray-500 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {cancelText}
           </button>
@@ -50,7 +60,8 @@ export function ConfirmDialog({
               e.stopPropagation();
               onConfirm();
             }}
-            className="px-4 py-2 text-sm font-medium text-white bg-blue-600 rounded-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+            disabled={disabled}
+            className={confirmButtonClass}
           >
             {confirmText}
           </button>

@@ -11,8 +11,9 @@ import {
   Loader2,
   CheckCircle,
   XCircle,
+  FolderCog,
 } from 'lucide-react';
-import { DeviceCard } from './DeviceCard';
+import { GroupedDeviceList } from './GroupedDeviceList';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import {
@@ -27,7 +28,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { QRCodeSVG } from 'qrcode.react';
-import type { Device, MdnsDevice, RemoteDeviceInfo } from '../api';
+import type { Device, DeviceGroup, MdnsDevice, RemoteDeviceInfo } from '../api';
 import {
   addRemoteDevice,
   cancelQRPairing,
@@ -36,6 +37,7 @@ import {
   discoverRemoteDevices,
   generateQRPairing,
   getQRPairingStatus,
+  listDeviceGroups,
   pairWifi,
 } from '../api';
 import { useTranslation } from '../lib/i18n-context';
@@ -81,6 +83,7 @@ interface DeviceSidebarProps {
   onConnectWifi: (deviceId: string) => void;
   onDisconnectWifi: (deviceId: string) => void;
   onRefreshDevices?: () => void;
+  onOpenGroupManager?: () => void;
   showToast?: (message: string, type: ToastType) => void;
 }
 
@@ -92,10 +95,33 @@ export function DeviceSidebar({
   onConnectWifi,
   onDisconnectWifi,
   onRefreshDevices,
+  onOpenGroupManager,
   showToast,
 }: DeviceSidebarProps) {
   const t = useTranslation();
   const [isCollapsed, setIsCollapsed] = useState(getInitialCollapsedState);
+
+  // Device groups state
+  const [groups, setGroups] = useState<DeviceGroup[]>([]);
+
+  // Fetch groups on mount and when devices change
+  const fetchGroups = useCallback(async () => {
+    try {
+      const response = await listDeviceGroups();
+      setGroups(response.groups);
+    } catch (error) {
+      console.error('Failed to fetch device groups:', error);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchGroups();
+  }, [fetchGroups]);
+
+  // Refresh groups when devices change (to update device counts)
+  useEffect(() => {
+    fetchGroups();
+  }, [devices, fetchGroups]);
 
   // Manual WiFi connection
   const [showManualConnect, setShowManualConnect] = useState(false);
@@ -635,32 +661,17 @@ export function DeviceSidebar({
               </p>
             </div>
           ) : (
-            devices.map(device => (
-              <DeviceCard
-                key={device.id}
-                id={device.id}
-                serial={device.serial}
-                model={device.model}
-                displayName={device.display_name}
-                status={device.status}
-                connectionType={device.connection_type}
-                agent={device.agent}
-                isActive={currentDeviceId === device.id}
-                onClick={() => onSelectDevice(device.id)}
-                onConnectWifi={async () => {
-                  await onConnectWifi(device.id);
-                }}
-                onDisconnectWifi={async () => {
-                  await onDisconnectWifi(device.id);
-                }}
-                onNameUpdated={() => {
-                  if (onRefreshDevices) {
-                    onRefreshDevices();
-                  }
-                }}
-                showToast={showToast}
-              />
-            ))
+            <GroupedDeviceList
+              devices={devices}
+              groups={groups}
+              currentDeviceId={currentDeviceId}
+              onSelectDevice={onSelectDevice}
+              onConnectWifi={onConnectWifi}
+              onDisconnectWifi={onDisconnectWifi}
+              onRefreshDevices={onRefreshDevices}
+              onRefreshGroups={fetchGroups}
+              showToast={showToast}
+            />
           )}
         </div>
 
@@ -676,6 +687,16 @@ export function DeviceSidebar({
             <Plus className="h-4 w-4" />
             {t.deviceSidebar.addDevice}
           </Button>
+          {onOpenGroupManager && (
+            <Button
+              variant="outline"
+              onClick={onOpenGroupManager}
+              className="w-full justify-start gap-2 rounded-full border-slate-200 dark:border-slate-700"
+            >
+              <FolderCog className="h-4 w-4" />
+              {t.deviceSidebar.manageGroups || '管理分组'}
+            </Button>
+          )}
           <Button
             variant="outline"
             onClick={onOpenConfig}

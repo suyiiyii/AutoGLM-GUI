@@ -9,9 +9,11 @@ import {
   disableScheduledTask,
   listWorkflows,
   getDevices,
+  listDeviceGroups,
   type ScheduledTaskResponse,
   type Workflow,
   type Device,
+  type DeviceGroup,
 } from '../api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -63,9 +65,12 @@ interface TaskFormData {
   name: string;
   workflow_uuid: string;
   device_serialnos: string[];
+  device_group_id: string | null;
   cron_expression: string;
   enabled: boolean;
 }
+
+type DeviceSelectionMode = 'devices' | 'group';
 
 const cronPresets = [
   { key: 'everyHour', cron: '0 * * * *' },
@@ -80,6 +85,7 @@ function ScheduledTasksComponent() {
   const [tasks, setTasks] = useState<ScheduledTaskResponse[]>([]);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [devices, setDevices] = useState<Device[]>([]);
+  const [groups, setGroups] = useState<DeviceGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
   const [editingTask, setEditingTask] = useState<ScheduledTaskResponse | null>(
@@ -89,9 +95,12 @@ function ScheduledTasksComponent() {
     name: '',
     workflow_uuid: '',
     device_serialnos: [],
+    device_group_id: null,
     cron_expression: '',
     enabled: true,
   });
+  const [deviceSelectionMode, setDeviceSelectionMode] =
+    useState<DeviceSelectionMode>('devices');
   const [saving, setSaving] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
@@ -104,14 +113,17 @@ function ScheduledTasksComponent() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [tasksData, workflowsData, devicesData] = await Promise.all([
-        listScheduledTasks(),
-        listWorkflows(),
-        getDevices(),
-      ]);
+      const [tasksData, workflowsData, devicesData, groupsData] =
+        await Promise.all([
+          listScheduledTasks(),
+          listWorkflows(),
+          getDevices(),
+          listDeviceGroups(),
+        ]);
       setTasks(tasksData.tasks);
       setWorkflows(workflowsData.workflows);
       setDevices(devicesData);
+      setGroups(groupsData.groups);
     } catch (error) {
       console.error('Failed to load data:', error);
     } finally {
@@ -125,9 +137,11 @@ function ScheduledTasksComponent() {
       name: '',
       workflow_uuid: '',
       device_serialnos: [],
+      device_group_id: null,
       cron_expression: '',
       enabled: true,
     });
+    setDeviceSelectionMode('devices');
     setShowDialog(true);
   };
 
@@ -137,19 +151,34 @@ function ScheduledTasksComponent() {
       name: task.name,
       workflow_uuid: task.workflow_uuid,
       device_serialnos: task.device_serialnos,
+      device_group_id: task.device_group_id || null,
       cron_expression: task.cron_expression,
       enabled: task.enabled,
     });
+    // Determine selection mode based on existing data
+    setDeviceSelectionMode(task.device_group_id ? 'group' : 'devices');
     setShowDialog(true);
   };
 
   const handleSave = async () => {
     try {
       setSaving(true);
+      // Prepare data based on selection mode
+      const saveData = {
+        name: formData.name,
+        workflow_uuid: formData.workflow_uuid,
+        cron_expression: formData.cron_expression,
+        enabled: formData.enabled,
+        device_serialnos:
+          deviceSelectionMode === 'devices' ? formData.device_serialnos : null,
+        device_group_id:
+          deviceSelectionMode === 'group' ? formData.device_group_id : null,
+      };
+
       if (editingTask) {
-        await updateScheduledTask(editingTask.id, formData);
+        await updateScheduledTask(editingTask.id, saveData);
       } else {
-        await createScheduledTask(formData);
+        await createScheduledTask(saveData);
       }
       setShowDialog(false);
       loadData();
@@ -195,7 +224,25 @@ function ScheduledTasksComponent() {
     return device?.model || serialno;
   };
 
-  const getDeviceNames = (serialnos: string[]): string => {
+  const getGroupName = (groupId: string): string => {
+    const group = groups.find(g => g.id === groupId);
+    return group?.name || groupId;
+  };
+
+  const getDeviceNames = (
+    serialnos: string[],
+    groupId: string | null | undefined
+  ): string => {
+    // If using group, show group name
+    if (groupId) {
+      const group = groups.find(g => g.id === groupId);
+      if (group) {
+        return `${group.name} (${group.device_count} ${t.scheduledTasks.groupDevices || 'devices'})`;
+      }
+      return getGroupName(groupId);
+    }
+
+    // Otherwise show device list
     if (serialnos.length === 0) return '-';
     if (serialnos.length === 1) return getDeviceName(serialnos[0]);
     const names = serialnos.map(s => getDeviceName(s));
@@ -227,7 +274,9 @@ function ScheduledTasksComponent() {
   const isFormValid =
     formData.name.trim() &&
     formData.workflow_uuid &&
-    formData.device_serialnos.length > 0 &&
+    ((deviceSelectionMode === 'devices' &&
+      formData.device_serialnos.length > 0) ||
+      (deviceSelectionMode === 'group' && formData.device_group_id)) &&
     formData.cron_expression.trim();
 
   return (
@@ -289,11 +338,18 @@ function ScheduledTasksComponent() {
                     </span>
                     <span
                       className="font-medium"
-                      title={task.device_serialnos
-                        .map(s => getDeviceName(s))
-                        .join(', ')}
+                      title={
+                        task.device_group_id
+                          ? getGroupName(task.device_group_id)
+                          : task.device_serialnos
+                              .map(s => getDeviceName(s))
+                              .join(', ')
+                      }
                     >
-                      {getDeviceNames(task.device_serialnos)}
+                      {getDeviceNames(
+                        task.device_serialnos,
+                        task.device_group_id
+                      )}
                     </span>
                   </div>
 
@@ -429,50 +485,115 @@ function ScheduledTasksComponent() {
 
             <div className="space-y-2">
               <Label>{t.scheduledTasks.device}</Label>
-              {devices.length === 0 ? (
+
+              {/* Selection mode tabs */}
+              <div className="flex gap-2 mb-2">
+                <Button
+                  type="button"
+                  variant={
+                    deviceSelectionMode === 'devices' ? 'default' : 'outline'
+                  }
+                  size="sm"
+                  onClick={() => {
+                    setDeviceSelectionMode('devices');
+                    setFormData(prev => ({ ...prev, device_group_id: null }));
+                  }}
+                >
+                  {t.scheduledTasks.selectDevice || '选择设备'}
+                </Button>
+                <Button
+                  type="button"
+                  variant={
+                    deviceSelectionMode === 'group' ? 'default' : 'outline'
+                  }
+                  size="sm"
+                  onClick={() => {
+                    setDeviceSelectionMode('group');
+                    setFormData(prev => ({ ...prev, device_serialnos: [] }));
+                  }}
+                >
+                  {t.scheduledTasks.selectGroup || '选择分组'}
+                </Button>
+              </div>
+
+              {deviceSelectionMode === 'devices' ? (
+                // Device selection
+                devices.length === 0 ? (
+                  <p className="text-sm text-amber-600 dark:text-amber-400">
+                    {t.scheduledTasks.noDevicesOnline}
+                  </p>
+                ) : (
+                  <>
+                    <div className="border rounded-md p-2 space-y-1 max-h-40 overflow-y-auto">
+                      {devices.map(device => (
+                        <label
+                          key={device.serial}
+                          className="flex items-center gap-2 p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={formData.device_serialnos.includes(
+                              device.serial
+                            )}
+                            onChange={e => {
+                              const checked = e.target.checked;
+                              setFormData(prev => ({
+                                ...prev,
+                                device_serialnos: checked
+                                  ? [...prev.device_serialnos, device.serial]
+                                  : prev.device_serialnos.filter(
+                                      s => s !== device.serial
+                                    ),
+                              }));
+                            }}
+                            className="rounded border-gray-300"
+                          />
+                          <span className="text-sm">
+                            {device.model || device.serial}
+                          </span>
+                          {device.state === 'online' && (
+                            <span className="ml-auto w-2 h-2 bg-green-500 rounded-full" />
+                          )}
+                        </label>
+                      ))}
+                    </div>
+                    {formData.device_serialnos.length > 0 && (
+                      <p className="text-xs text-slate-500">
+                        {formData.device_serialnos.length}{' '}
+                        {t.scheduledTasks.devicesSelected || 'devices selected'}
+                      </p>
+                    )}
+                  </>
+                )
+              ) : // Group selection
+              groups.length === 0 ? (
                 <p className="text-sm text-amber-600 dark:text-amber-400">
-                  {t.scheduledTasks.noDevicesOnline}
+                  暂无分组
                 </p>
               ) : (
-                <div className="border rounded-md p-2 space-y-1 max-h-40 overflow-y-auto">
-                  {devices.map(device => (
-                    <label
-                      key={device.serial}
-                      className="flex items-center gap-2 p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={formData.device_serialnos.includes(
-                          device.serial
-                        )}
-                        onChange={e => {
-                          const checked = e.target.checked;
-                          setFormData(prev => ({
-                            ...prev,
-                            device_serialnos: checked
-                              ? [...prev.device_serialnos, device.serial]
-                              : prev.device_serialnos.filter(
-                                  s => s !== device.serial
-                                ),
-                          }));
-                        }}
-                        className="rounded border-gray-300"
-                      />
-                      <span className="text-sm">
-                        {device.model || device.serial}
-                      </span>
-                      {device.state === 'online' && (
-                        <span className="ml-auto w-2 h-2 bg-green-500 rounded-full" />
-                      )}
-                    </label>
-                  ))}
-                </div>
-              )}
-              {formData.device_serialnos.length > 0 && (
-                <p className="text-xs text-slate-500">
-                  {formData.device_serialnos.length}{' '}
-                  {t.scheduledTasks.devicesSelected || 'devices selected'}
-                </p>
+                <Select
+                  value={formData.device_group_id || ''}
+                  onValueChange={(value: string) =>
+                    setFormData(prev => ({
+                      ...prev,
+                      device_group_id: value || null,
+                    }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue
+                      placeholder={t.scheduledTasks.selectGroup || '选择分组'}
+                    />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {groups.map(group => (
+                      <SelectItem key={group.id} value={group.id}>
+                        {group.name} ({group.device_count}{' '}
+                        {t.deviceGroups?.deviceCount || '台设备'})
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               )}
             </div>
 

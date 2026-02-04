@@ -277,6 +277,7 @@ class DeviceResponse(BaseModel):
     state: str
     is_available_only: bool
     display_name: str | None = None
+    group_id: str = "default"  # 所属分组 ID
     agent: AgentStatusResponse | None = None
 
 
@@ -765,7 +766,8 @@ class ScheduledTaskCreate(BaseModel):
 
     name: str
     workflow_uuid: str
-    device_serialnos: list[str]
+    device_serialnos: list[str] | None = None  # 直接指定设备列表
+    device_group_id: str | None = None  # 或指定设备分组
     cron_expression: str
     enabled: bool = True
 
@@ -778,7 +780,9 @@ class ScheduledTaskCreate(BaseModel):
 
     @field_validator("device_serialnos")
     @classmethod
-    def validate_devices(cls, v: list[str]) -> list[str]:
+    def validate_devices(cls, v: list[str] | None) -> list[str] | None:
+        if v is None:
+            return None
         normalized: list[str] = []
         seen: set[str] = set()
         for raw in v or []:
@@ -787,10 +791,7 @@ class ScheduledTaskCreate(BaseModel):
                 continue
             normalized.append(s)
             seen.add(s)
-
-        if len(normalized) == 0:
-            raise ValueError("at least one device must be selected")
-        return normalized
+        return normalized if normalized else None
 
     @field_validator("cron_expression")
     @classmethod
@@ -804,6 +805,13 @@ class ScheduledTaskCreate(BaseModel):
             )
         return v.strip()
 
+    def model_post_init(self, __context) -> None:
+        """验证必须指定 device_serialnos 或 device_group_id 之一."""
+        if not self.device_serialnos and not self.device_group_id:
+            raise ValueError(
+                "either device_serialnos or device_group_id must be specified"
+            )
+
 
 class ScheduledTaskUpdate(BaseModel):
     """更新定时任务请求."""
@@ -811,6 +819,7 @@ class ScheduledTaskUpdate(BaseModel):
     name: str | None = None
     workflow_uuid: str | None = None
     device_serialnos: list[str] | None = None
+    device_group_id: str | None = None
     cron_expression: str | None = None
     enabled: bool | None = None
 
@@ -829,9 +838,7 @@ class ScheduledTaskUpdate(BaseModel):
             normalized.append(s)
             seen.add(s)
 
-        if len(normalized) == 0:
-            raise ValueError("at least one device must be selected")
-        return normalized
+        return normalized if normalized else None
 
     @field_validator("cron_expression")
     @classmethod
@@ -855,6 +862,7 @@ class ScheduledTaskResponse(BaseModel):
     name: str
     workflow_uuid: str
     device_serialnos: list[str]
+    device_group_id: str | None = None
     cron_expression: str
     enabled: bool
     created_at: str
@@ -910,6 +918,105 @@ class EnableDisableResponse(BaseModel):
     message: str
     task_id: str
     enabled: bool
+
+
+# Device Group Models
+
+
+class DeviceGroupResponse(BaseModel):
+    """设备分组响应."""
+
+    id: str
+    name: str
+    order: int
+    created_at: str
+    updated_at: str
+    is_default: bool = False
+    device_count: int = 0  # 分组内设备数量
+
+
+class DeviceGroupListResponse(BaseModel):
+    """设备分组列表响应."""
+
+    groups: list[DeviceGroupResponse]
+
+
+class DeviceGroupCreateRequest(BaseModel):
+    """创建设备分组请求."""
+
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        """验证 name 非空."""
+        if not v or not v.strip():
+            raise ValueError("name cannot be empty")
+        v = v.strip()
+        if len(v) > 50:
+            raise ValueError("name too long (max 50 characters)")
+        return v
+
+
+class DeviceGroupUpdateRequest(BaseModel):
+    """更新设备分组请求."""
+
+    name: str
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str) -> str:
+        """验证 name 非空."""
+        if not v or not v.strip():
+            raise ValueError("name cannot be empty")
+        v = v.strip()
+        if len(v) > 50:
+            raise ValueError("name too long (max 50 characters)")
+        return v
+
+
+class DeviceGroupReorderRequest(BaseModel):
+    """调整设备分组顺序请求."""
+
+    group_ids: list[str]
+
+    @field_validator("group_ids")
+    @classmethod
+    def validate_group_ids(cls, v: list[str]) -> list[str]:
+        """验证 group_ids 非空且无重复."""
+        if not v:
+            raise ValueError("group_ids cannot be empty")
+        seen: set[str] = set()
+        result: list[str] = []
+        for gid in v:
+            gid = gid.strip()
+            if gid in seen:
+                raise ValueError(f"duplicate group_id: {gid}")
+            seen.add(gid)
+            result.append(gid)
+        return result
+
+
+class DeviceGroupAssignRequest(BaseModel):
+    """分配设备到分组请求."""
+
+    group_id: str
+
+    @field_validator("group_id")
+    @classmethod
+    def validate_group_id(cls, v: str) -> str:
+        """验证 group_id 非空."""
+        if not v or not v.strip():
+            raise ValueError("group_id cannot be empty")
+        return v.strip()
+
+
+class DeviceGroupOperationResponse(BaseModel):
+    """设备分组操作响应."""
+
+    success: bool
+    message: str
+    error: str | None = None
 
 
 # Device Name Models

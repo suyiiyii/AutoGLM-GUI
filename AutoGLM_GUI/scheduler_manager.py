@@ -58,14 +58,16 @@ class SchedulerManager:
         self,
         name: str,
         workflow_uuid: str,
-        device_serialnos: list[str],
+        device_serialnos: list[str] | None,
         cron_expression: str,
         enabled: bool = True,
+        device_group_id: str | None = None,
     ) -> ScheduledTask:
         task = ScheduledTask(
             name=name,
             workflow_uuid=workflow_uuid,
-            device_serialnos=device_serialnos,
+            device_serialnos=device_serialnos or [],
+            device_group_id=device_group_id,
             cron_expression=cron_expression,
             enabled=enabled,
         )
@@ -345,14 +347,48 @@ class SchedulerManager:
         finally:
             manager.release_device(device.primary_device_id)
 
+    def _resolve_device_serialnos(self, task: ScheduledTask) -> list[str]:
+        """解析任务的目标设备列表.
+
+        如果指定了 device_group_id，则从分组获取设备列表；
+        否则使用 device_serialnos 字段。
+        """
+        if task.device_group_id:
+            from AutoGLM_GUI.device_group_manager import device_group_manager
+            from AutoGLM_GUI.device_manager import DeviceManager
+
+            device_manager = DeviceManager.get_instance()
+
+            # 获取分组内的所有设备
+            if task.device_group_id == "default":
+                # 默认分组：获取所有未分配到其他分组的设备
+                assignments = device_group_manager.get_all_assignments()
+                assigned_serials = {
+                    s for s, gid in assignments.items() if gid != "default"
+                }
+                managed_devices = device_manager.get_devices()
+                return [
+                    d.serial
+                    for d in managed_devices
+                    if d.serial not in assigned_serials
+                ]
+            else:
+                # 其他分组：从分配中获取
+                return device_group_manager.get_devices_in_group(task.device_group_id)
+        else:
+            return task.device_serialnos
+
     def _execute_task(self, task_id: str) -> None:
         task = self._tasks.get(task_id)
         if not task:
             logger.warning(f"Task {task_id} not found for execution")
             return
 
+        # 解析目标设备列表
+        device_serialnos = self._resolve_device_serialnos(task)
+
         logger.info(
-            f"Executing scheduled task: {task.name} on {len(task.device_serialnos)} device(s)"
+            f"Executing scheduled task: {task.name} on {len(device_serialnos)} device(s)"
         )
 
         from AutoGLM_GUI.device_manager import DeviceManager
@@ -367,14 +403,14 @@ class SchedulerManager:
                 status="failure",
                 message="Workflow not found",
                 success_count=0,
-                total_count=len(task.device_serialnos),
+                total_count=len(device_serialnos),
             )
             return
 
         device_manager = DeviceManager.get_instance()
         manager = PhoneAgentManager.get_instance()
 
-        total_count = len(task.device_serialnos)
+        total_count = len(device_serialnos)
         if total_count == 0:
             self._record_run(
                 task=task,
@@ -386,7 +422,7 @@ class SchedulerManager:
             return
 
         results: list[DeviceExecutionResult] = []
-        for serialno in task.device_serialnos:
+        for serialno in device_serialnos:
             result = self._execute_single_device(
                 serialno=serialno,
                 workflow=workflow,

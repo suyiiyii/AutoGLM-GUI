@@ -36,6 +36,9 @@ class ScheduledTask:
     device_serialnos: list[str] = field(
         default_factory=list
     )  # 绑定的设备 serialno 列表
+    device_group_id: str | None = (
+        None  # 绑定的设备分组 ID（与 device_serialnos 二选一）
+    )
 
     # 调度配置
     cron_expression: str = ""  # Cron 表达式 (如 "0 8 * * *")
@@ -61,6 +64,7 @@ class ScheduledTask:
             "name": self.name,
             "workflow_uuid": self.workflow_uuid,
             "device_serialnos": self.device_serialnos,
+            "device_group_id": self.device_group_id,
             "cron_expression": self.cron_expression,
             "enabled": self.enabled,
             "created_at": self.created_at.isoformat(),
@@ -90,6 +94,7 @@ class ScheduledTask:
             name=data.get("name", ""),
             workflow_uuid=data.get("workflow_uuid", ""),
             device_serialnos=device_serialnos,
+            device_group_id=data.get("device_group_id"),
             cron_expression=data.get("cron_expression", ""),
             enabled=data.get("enabled", True),
             created_at=datetime.fromisoformat(data["created_at"])

@@ -14,6 +14,13 @@ from AutoGLM_GUI.adb_plus.qr_pair import qr_pairing_manager
 from AutoGLM_GUI.logger import logger
 
 from AutoGLM_GUI.schemas import (
+    DeviceGroupAssignRequest,
+    DeviceGroupCreateRequest,
+    DeviceGroupListResponse,
+    DeviceGroupOperationResponse,
+    DeviceGroupReorderRequest,
+    DeviceGroupResponse,
+    DeviceGroupUpdateRequest,
     DeviceListResponse,
     DeviceNameResponse,
     DeviceNameUpdateRequest,
@@ -49,8 +56,12 @@ def _build_device_response_with_agent(
     API 层负责协调 DeviceManager 和 PhoneAgentManager，
     通过遍历设备的所有连接来查找已初始化的 Agent。
     """
+    from AutoGLM_GUI.device_group_manager import device_group_manager
 
     response = device.to_dict()
+
+    # 添加分组信息
+    response["group_id"] = device_group_manager.get_device_group(device.serial)
 
     # 遍历设备的所有连接，查找已初始化的 Agent
     # 使用 device.connections 公开属性（ManagedDevice 提供）
@@ -525,4 +536,170 @@ def get_device_name(serial: str) -> DeviceNameResponse:
             success=False,
             serial=serial,
             error=f"Internal error: {str(e)}",
+        )
+
+
+# Device Group Routes
+
+
+@router.get("/api/device-groups", response_model=DeviceGroupListResponse)
+def list_device_groups() -> DeviceGroupListResponse:
+    """列出所有设备分组."""
+    from AutoGLM_GUI.device_group_manager import device_group_manager
+    from AutoGLM_GUI.device_manager import DeviceManager
+
+    groups = device_group_manager.list_groups()
+    device_manager = DeviceManager.get_instance()
+
+    # 获取当前所有设备的 serial 列表
+    managed_devices = device_manager.get_devices()
+    device_serials = {d.serial for d in managed_devices}
+
+    # 计算每个分组的设备数量
+    assignments = device_group_manager.get_all_assignments()
+
+    group_responses = []
+    for group in groups:
+        # 统计分配到该分组的设备数量（只计算当前在线/已知的设备）
+        if group.id == "default":
+            # 默认分组：包含未显式分配的设备
+            assigned_to_other = {
+                serial for serial, gid in assignments.items() if gid != "default"
+            }
+            device_count = len(device_serials - assigned_to_other)
+        else:
+            device_count = sum(
+                1
+                for serial, gid in assignments.items()
+                if gid == group.id and serial in device_serials
+            )
+
+        group_responses.append(
+            DeviceGroupResponse(
+                id=group.id,
+                name=group.name,
+                order=group.order,
+                created_at=group.created_at.isoformat(),
+                updated_at=group.updated_at.isoformat(),
+                is_default=group.is_default,
+                device_count=device_count,
+            )
+        )
+
+    return DeviceGroupListResponse(groups=group_responses)
+
+
+@router.post("/api/device-groups", response_model=DeviceGroupResponse)
+def create_device_group(request: DeviceGroupCreateRequest) -> DeviceGroupResponse:
+    """创建新的设备分组."""
+    from AutoGLM_GUI.device_group_manager import device_group_manager
+
+    group = device_group_manager.create_group(request.name)
+
+    return DeviceGroupResponse(
+        id=group.id,
+        name=group.name,
+        order=group.order,
+        created_at=group.created_at.isoformat(),
+        updated_at=group.updated_at.isoformat(),
+        is_default=group.is_default,
+        device_count=0,
+    )
+
+
+@router.put("/api/device-groups/{group_id}", response_model=DeviceGroupResponse)
+def update_device_group(
+    group_id: str, request: DeviceGroupUpdateRequest
+) -> DeviceGroupResponse:
+    """更新设备分组名称."""
+    from fastapi import HTTPException
+
+    from AutoGLM_GUI.device_group_manager import device_group_manager
+
+    group = device_group_manager.update_group(group_id, request.name)
+    if not group:
+        raise HTTPException(status_code=404, detail="Group not found")
+
+    return DeviceGroupResponse(
+        id=group.id,
+        name=group.name,
+        order=group.order,
+        created_at=group.created_at.isoformat(),
+        updated_at=group.updated_at.isoformat(),
+        is_default=group.is_default,
+        device_count=0,  # 不重新计算，前端可以刷新列表获取
+    )
+
+
+@router.delete(
+    "/api/device-groups/{group_id}", response_model=DeviceGroupOperationResponse
+)
+def delete_device_group(group_id: str) -> DeviceGroupOperationResponse:
+    """删除设备分组（设备移回默认分组）."""
+    from AutoGLM_GUI.device_group_manager import device_group_manager
+    from AutoGLM_GUI.models.device_group import DEFAULT_GROUP_ID
+
+    if group_id == DEFAULT_GROUP_ID:
+        return DeviceGroupOperationResponse(
+            success=False,
+            message="Cannot delete default group",
+            error="cannot_delete_default",
+        )
+
+    success = device_group_manager.delete_group(group_id)
+
+    if success:
+        return DeviceGroupOperationResponse(
+            success=True,
+            message="Group deleted, devices moved to default group",
+        )
+    else:
+        return DeviceGroupOperationResponse(
+            success=False,
+            message="Group not found",
+            error="group_not_found",
+        )
+
+
+@router.put("/api/device-groups/reorder", response_model=DeviceGroupOperationResponse)
+def reorder_device_groups(
+    request: DeviceGroupReorderRequest,
+) -> DeviceGroupOperationResponse:
+    """调整设备分组顺序."""
+    from AutoGLM_GUI.device_group_manager import device_group_manager
+
+    success = device_group_manager.reorder_groups(request.group_ids)
+
+    if success:
+        return DeviceGroupOperationResponse(
+            success=True,
+            message="Groups reordered successfully",
+        )
+    else:
+        return DeviceGroupOperationResponse(
+            success=False,
+            message="Failed to reorder groups",
+            error="reorder_failed",
+        )
+
+
+@router.put("/api/devices/{serial}/group", response_model=DeviceGroupOperationResponse)
+def assign_device_to_group(
+    serial: str, request: DeviceGroupAssignRequest
+) -> DeviceGroupOperationResponse:
+    """分配设备到指定分组."""
+    from AutoGLM_GUI.device_group_manager import device_group_manager
+
+    success = device_group_manager.assign_device(serial, request.group_id)
+
+    if success:
+        return DeviceGroupOperationResponse(
+            success=True,
+            message=f"Device assigned to group {request.group_id}",
+        )
+    else:
+        return DeviceGroupOperationResponse(
+            success=False,
+            message="Failed to assign device to group",
+            error="assignment_failed",
         )
