@@ -1,0 +1,11 @@
+# pnpm workspace configuration
+# See: https://pnpm.io/pnpm-workspace_yaml
+
+# Allow build scripts for these specific packages
+# Electron needs to download binaries during installation
+onlyBuiltDependencies:
+  - electron
+  - electron-winstaller
+
+# Enable pre/post scripts
+enablePrePostScripts: true
