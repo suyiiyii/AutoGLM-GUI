@@ -98,6 +98,20 @@ runs:
         restore-keys: |
           ${{ runner.os }}${{ inputs.cache-suffix && format('-{0}', inputs.cache-suffix) || '' }}-pnpm-store-
 
+    # Install frontend dependencies
+    - name: Install frontend dependencies
+      shell: bash
+      run: |
+        cd frontend
+        pnpm install --frozen-lockfile
+
+    # Install electron dependencies
+    - name: Install electron dependencies
+      shell: bash
+      run: |
+        cd electron
+        pnpm install --frozen-lockfile
+
     # uv cache
     - name: Cache uv
       uses: actions/cache@v4
