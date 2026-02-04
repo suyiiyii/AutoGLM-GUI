@@ -42,7 +42,6 @@ win:
     - nsis       # 安装包（推荐）
     - portable   # 便携版
   icon: icon.ico
-  publisherName: AutoGLM-GUI Team
 
 nsis:
   oneClick: false
