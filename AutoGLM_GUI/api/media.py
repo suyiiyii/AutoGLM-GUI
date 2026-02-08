@@ -59,7 +59,7 @@ def take_screenshot(request: ScreenshotRequest) -> ScreenshotResponse:
             )
 
         if serial:
-            managed = device_manager._devices.get(serial)
+            managed = device_manager.get_device_by_serial(serial)
             if managed and managed.connection_type.value == "remote":
                 remote_device = device_manager.get_remote_device_instance(serial)
 

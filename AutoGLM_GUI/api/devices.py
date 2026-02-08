@@ -99,7 +99,7 @@ def list_devices() -> DeviceListResponse:
     agent_manager = PhoneAgentManager.get_instance()
 
     # Fallback: 如果轮询未启动,执行同步获取
-    if not device_manager._poll_thread or not device_manager._poll_thread.is_alive():
+    if not device_manager.is_polling_active():
         logger.warning("Polling not started, performing synchronous device fetch")
         device_manager.force_refresh()
 

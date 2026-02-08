@@ -309,11 +309,25 @@ class DeviceManager:
             all_devices.extend(mdns_only)
             return all_devices
 
+    def get_connected_devices(self) -> list[ManagedDevice]:
+        """Get devices in primary cache (USB/WiFi/Remote, excludes mDNS-only)."""
+        with self._devices_lock:
+            return list(self._devices.values())
+
+    def get_device_by_serial(self, serial: str) -> Optional[ManagedDevice]:
+        """Get device by serial from primary cache."""
+        with self._devices_lock:
+            return self._devices.get(serial)
+
+    def is_polling_active(self) -> bool:
+        """Check whether background polling thread is running."""
+        with self._devices_lock:
+            return bool(self._poll_thread and self._poll_thread.is_alive())
+
     def get_device(self, device_id: str) -> Optional[ManagedDevice]:
         """Get single device info by ID (deprecated, use get_device_by_serial)."""
         # For backward compatibility, try to interpret as serial
-        with self._devices_lock:
-            return self._devices.get(device_id)
+        return self.get_device_by_serial(device_id)
 
     def get_device_by_device_id(self, device_id: str) -> Optional[ManagedDevice]:
         """Get device by any of its connection device_ids (backward compatibility).

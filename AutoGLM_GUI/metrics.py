@@ -95,9 +95,8 @@ class AutoGLMMetricsCollector(Collector):
             state = metadata.state
 
             # Get serial from DeviceManager
-            with device_manager._devices_lock:
-                device = device_manager.get_device_by_device_id(device_id)
-                serial = device.serial if device else "unknown"
+            device = device_manager.get_device_by_device_id(device_id)
+            serial = device.serial if device else "unknown"
 
             # Per-agent state (1 for actual state, 0 for others)
             for agent_state in AgentState:
@@ -175,8 +174,7 @@ class AutoGLMMetricsCollector(Collector):
         online_count = 0
         unauthorized_count = 0
 
-        with manager._devices_lock:
-            devices_snapshot = list(manager._devices.values())
+        devices_snapshot = manager.get_connected_devices()
 
         # Process connected devices
         for device in devices_snapshot:

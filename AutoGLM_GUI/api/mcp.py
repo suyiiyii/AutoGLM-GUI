@@ -124,7 +124,7 @@ def list_devices() -> list[DeviceResponse]:
     agent_manager = PhoneAgentManager.get_instance()
 
     # Fallback: 如果轮询未启动，执行同步刷新
-    if not device_manager._poll_thread or not device_manager._poll_thread.is_alive():
+    if not device_manager.is_polling_active():
         logger.warning("Polling not started, performing sync refresh")
         device_manager.force_refresh()
 
