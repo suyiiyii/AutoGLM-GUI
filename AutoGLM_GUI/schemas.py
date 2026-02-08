@@ -11,7 +11,7 @@ class InitRequest(BaseModel):
     device_id: str  # Device ID (required)
 
     # Agent configuration (factory pattern)
-    agent_type: str = "glm"  # Agent type to use (e.g., "glm", "mai")
+    agent_type: str = "glm-async"  # Agent type to use (e.g., "glm-async", "mai")
     agent_config_params: dict | None = None  # Agent-specific configuration parameters
 
     # Hot-reload support
@@ -294,7 +294,7 @@ class ConfigResponse(BaseModel):
     source: str  # "CLI arguments" | "environment variables" | "config file (...)" | "default"
 
     # Agent 类型配置
-    agent_type: str = "glm"  # Agent type (e.g., "glm", "mai")
+    agent_type: str = "glm-async"  # Agent type (e.g., "glm-async", "mai")
     agent_config_params: dict | None = None  # Agent-specific configuration
 
     # Agent 执行配置
@@ -319,7 +319,7 @@ class ConfigSaveRequest(BaseModel):
     api_key: str | None = None
 
     # Agent 类型配置
-    agent_type: str = "glm"  # Agent type to use (e.g., "glm", "mai")
+    agent_type: str = "glm-async"  # Agent type to use (e.g., "glm-async", "mai")
     agent_config_params: dict | None = None  # Agent-specific configuration parameters
 
     # Agent 执行配置

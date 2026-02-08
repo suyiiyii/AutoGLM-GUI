@@ -38,7 +38,7 @@ class AgentMetadata:
     state: AgentState
     model_config: ModelConfig
     agent_config: AgentConfig
-    agent_type: str = "glm"
+    agent_type: str = "glm-async"
     created_at: float = 0.0
     last_used: float = 0.0
     error_message: Optional[str] = None

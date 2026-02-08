@@ -4,6 +4,7 @@ This module provides the TestRunner that orchestrates the test execution,
 using the mock device via DeviceProtocol and running the Agent through test scenarios.
 """
 
+import asyncio
 from pathlib import Path
 from typing import Any
 
@@ -23,7 +24,7 @@ class TestRunner:
     The runner:
     1. Loads test case from YAML
     2. Creates MockDevice (DeviceProtocol implementation)
-    3. Creates GLMAgent with the mock device
+    3. Creates AsyncGLMAgent with the mock device
     4. Runs the Agent with the test instruction
     5. Verifies the final state
     """
@@ -78,7 +79,7 @@ class TestRunner:
         mock_device = self.mock_device
         instruction = self.instruction
         # Import here to avoid circular imports
-        from AutoGLM_GUI.agents.glm.agent import GLMAgent
+        from AutoGLM_GUI.agents.glm.async_agent import AsyncGLMAgent
 
         # Create configs if not provided
         if model_config is None:
@@ -112,13 +113,13 @@ class TestRunner:
 
         try:
             # Create and run agent with mock device
-            agent = GLMAgent(
+            agent = AsyncGLMAgent(
                 model_config=model_config,
                 agent_config=agent_config,
                 device=mock_device,
             )
 
-            result_message = agent.run(instruction)
+            result_message = asyncio.run(agent.run(instruction))
 
             if result_message == "Max steps reached":
                 state_machine.failure_reason = (

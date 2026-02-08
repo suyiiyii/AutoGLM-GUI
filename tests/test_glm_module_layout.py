@@ -1,7 +1,7 @@
 def test_glm_agent_module_path():
-    from AutoGLM_GUI.agents.glm.agent import GLMAgent
+    from AutoGLM_GUI.agents.glm.async_agent import AsyncGLMAgent
 
-    assert GLMAgent is not None
+    assert AsyncGLMAgent is not None
 
 
 def test_glm_parser_module_path():

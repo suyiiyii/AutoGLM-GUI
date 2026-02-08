@@ -57,7 +57,7 @@ class ConfigModel(BaseModel):
     api_key: str = "EMPTY"
 
     # Agent 类型配置
-    agent_type: str = "glm"  # Agent type (e.g., "glm", "mai", "glm-sync")
+    agent_type: str = "glm-async"  # Agent type (e.g., "glm-async", "mai")
     agent_config_params: dict | None = None  # Agent-specific configuration
 
     # Agent 执行配置
@@ -237,7 +237,7 @@ class UnifiedConfigManager:
             base_url="",
             model_name="autoglm-phone-9b",
             api_key="EMPTY",
-            agent_type="glm",
+            agent_type="glm-async",
             agent_config_params=None,
             default_max_steps=100,
             layered_max_turns=LAYERED_MAX_TURNS_DEFAULT,
@@ -371,14 +371,19 @@ class UnifiedConfigManager:
             self._file_cache = config_data
             self._file_mtime = current_mtime
 
+            raw_agent_type = config_data.get("agent_type", "glm-async")
+            if raw_agent_type == "glm":
+                logger.warning(
+                    "Deprecated agent_type 'glm' detected in config file, auto-migrating to 'glm-async'."
+                )
+                raw_agent_type = "glm-async"
+
             # 更新文件层
             self._file_layer = ConfigLayer(
                 base_url=config_data.get("base_url"),
                 model_name=config_data.get("model_name"),
                 api_key=config_data.get("api_key"),
-                agent_type=config_data.get(
-                    "agent_type", "glm"
-                ),  # 默认 'glm'，兼容旧配置
+                agent_type=raw_agent_type,
                 agent_config_params=config_data.get("agent_config_params"),
                 default_max_steps=config_data.get("default_max_steps"),
                 layered_max_turns=config_data.get("layered_max_turns"),
@@ -428,7 +433,7 @@ class UnifiedConfigManager:
             base_url: Base URL
             model_name: 模型名称
             api_key: API key（可选）
-            agent_type: Agent 类型（可选，如 "glm", "mai"）
+            agent_type: Agent 类型（可选，如 "glm-async", "mai"）
             agent_config_params: Agent 特定配置参数（可选）
             default_max_steps: 默认最大执行步数（可选）
             layered_max_turns: 分层代理最大轮数（可选）

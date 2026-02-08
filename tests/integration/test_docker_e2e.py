@@ -300,7 +300,7 @@ class TestDockerE2E:
         resp = httpx.post(
             f"{access_url}/api/init",
             json={
-                "agent_type": "glm",
+                "agent_type": "glm-async",
                 "device_id": registered_device_id,
                 "model_config": {
                     "base_url": llm_url + "/v1",

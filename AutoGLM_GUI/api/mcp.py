@@ -1,5 +1,6 @@
 """MCP (Model Context Protocol) tools for AutoGLM-GUI."""
 
+import asyncio
 from typing import Any
 
 from typing_extensions import TypedDict
@@ -25,7 +26,7 @@ MCP_MAX_STEPS = 5
 
 
 @mcp.tool()
-def chat(device_id: str, message: str) -> ChatResult:
+async def chat(device_id: str, message: str) -> ChatResult:
     """
     Send a task to the AutoGLM Phone Agent for execution.
 
@@ -43,47 +44,59 @@ def chat(device_id: str, message: str) -> ChatResult:
     logger.info(f"[MCP] chat tool called: device_id={device_id}")
 
     manager = PhoneAgentManager.get_instance()
+    acquired = False
 
-    # 使用上下文管理器获取 agent（自动管理锁，自动初始化）
     try:
-        with manager.use_agent(device_id, timeout=None) as agent:
-            # Temporarily override config for MCP (thread-safe within device lock)
-            original_max_steps = agent.agent_config.max_steps
-            original_system_prompt = agent.agent_config.system_prompt
+        acquired = await asyncio.to_thread(
+            manager.acquire_device, device_id, timeout=None, auto_initialize=True
+        )
+        agent = await asyncio.to_thread(
+            manager.get_agent_with_context,
+            device_id,
+            context="mcp",
+            agent_type="glm-async",
+        )
 
-            agent.agent_config.max_steps = MCP_MAX_STEPS
-            agent.agent_config.system_prompt = MCP_SYSTEM_PROMPT_ZH
+        # Temporarily override config for MCP (thread-safe within device lock)
+        original_max_steps = agent.agent_config.max_steps
+        original_system_prompt = agent.agent_config.system_prompt
 
-            try:
-                # Reset agent before each chat to ensure clean state
-                agent.reset()
+        agent.agent_config.max_steps = MCP_MAX_STEPS
+        agent.agent_config.system_prompt = MCP_SYSTEM_PROMPT_ZH
 
-                result = agent.run(message)  # type: ignore[misc]
-                steps = agent.step_count
+        try:
+            # Reset agent before each chat to ensure clean state
+            agent.reset()
 
-                # Check if MCP step limit was reached
-                if steps >= MCP_MAX_STEPS and result == "Max steps reached":
-                    return {  # type: ignore[return-value]
-                        "result": (
-                            f"已达到 MCP 最大步数限制（{MCP_MAX_STEPS}步）。任务可能未完成，"
-                            "建议将任务拆分为更小的子任务。"
-                        ),
-                        "steps": MCP_MAX_STEPS,
-                        "success": False,
-                    }
+            result = await agent.run(message)  # type: ignore[misc]
+            steps = agent.step_count
 
-                return {"result": result, "steps": steps, "success": True}  # type: ignore[return-value]
+            # Check if MCP step limit was reached
+            if steps >= MCP_MAX_STEPS and result == "Max steps reached":
+                return {
+                    "result": (
+                        f"已达到 MCP 最大步数限制（{MCP_MAX_STEPS}步）。任务可能未完成，"
+                        "建议将任务拆分为更小的子任务。"
+                    ),
+                    "steps": MCP_MAX_STEPS,
+                    "success": False,
+                }
 
-            finally:
-                # Restore original config
-                agent.agent_config.max_steps = original_max_steps
-                agent.agent_config.system_prompt = original_system_prompt
+            return {"result": result, "steps": steps, "success": True}
+
+        finally:
+            # Restore original config
+            agent.agent_config.max_steps = original_max_steps
+            agent.agent_config.system_prompt = original_system_prompt
 
     except DeviceBusyError:
         raise RuntimeError(f"Device {device_id} is busy. Please wait.")
     except Exception as e:
         logger.error(f"[MCP] chat tool error: {e}")
         return {"result": str(e), "steps": 0, "success": False}
+    finally:
+        if acquired:
+            await asyncio.to_thread(manager.release_device, device_id)
 
 
 @mcp.tool()

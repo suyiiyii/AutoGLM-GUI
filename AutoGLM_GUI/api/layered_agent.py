@@ -188,8 +188,24 @@ async def list_devices() -> str:
     return await asyncio.to_thread(_sync_list_devices)
 
 
-def _sync_chat(device_id: str, message: str) -> str:
-    """同步实现：向指定设备的 Phone Agent 发送子任务指令。"""
+@function_tool
+async def chat(device_id: str, message: str) -> str:
+    """
+    向指定设备的 Phone Agent 发送子任务指令。
+
+    Phone Agent 是一个视觉模型，能够看到手机屏幕并执行操作。
+    每次调用会执行一个原子化的子任务（最多 5 步操作）。
+
+    Args:
+        device_id: 设备标识符，从 list_devices 获取
+        message: 子任务指令，例如 "打开微信"、"点击搜索按钮"
+
+    Returns:
+        JSON 格式的执行结果，包含:
+        - result: 执行结果描述
+        - steps: 执行的步数
+        - success: 是否成功
+    """
     from AutoGLM_GUI.exceptions import DeviceBusyError
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
     from AutoGLM_GUI.prompts import MCP_SYSTEM_PROMPT_ZH
@@ -201,51 +217,58 @@ def _sync_chat(device_id: str, message: str) -> str:
     )
 
     manager = PhoneAgentManager.get_instance()
+    acquired = False
 
     try:
-        # use_agent 现在会自动初始化 agent（auto_initialize=True）
-        with manager.use_agent(device_id, timeout=None) as agent:
-            # 临时覆盖配置
-            original_max_steps = agent.agent_config.max_steps
-            original_system_prompt = agent.agent_config.system_prompt
+        acquired = await asyncio.to_thread(
+            manager.acquire_device, device_id, timeout=None, auto_initialize=True
+        )
+        agent = await asyncio.to_thread(
+            manager.get_agent_with_context,
+            device_id,
+            context="layered",
+            agent_type="glm-async",
+        )
 
-            agent.agent_config.max_steps = MCP_MAX_STEPS
-            agent.agent_config.system_prompt = MCP_SYSTEM_PROMPT_ZH
+        # 临时覆盖配置
+        original_max_steps = agent.agent_config.max_steps
+        original_system_prompt = agent.agent_config.system_prompt
 
-            try:
-                # 重置 agent 确保干净状态
-                agent.reset()
+        agent.agent_config.max_steps = MCP_MAX_STEPS
+        agent.agent_config.system_prompt = MCP_SYSTEM_PROMPT_ZH
 
-                result = agent.run(message)  # type: ignore[misc]
-                steps = agent.step_count
+        try:
+            # 重置 agent 确保干净状态
+            agent.reset()
 
-                # 检查是否达到步数限制
-                if steps >= MCP_MAX_STEPS and result == "Max steps reached":
-                    context_json = json.dumps(
-                        agent.context, ensure_ascii=False, indent=2
-                    )
-                    return json.dumps(
-                        {
-                            "result": f"⚠️ 已达到最大步数限制（{MCP_MAX_STEPS}步）。视觉模型可能遇到了困难，任务未完成。\n\n执行历史:\n{context_json}\n\n建议: 请重新规划任务或将其拆分为更小的子任务。",
-                            "steps": MCP_MAX_STEPS,
-                            "success": False,
-                        },
-                        ensure_ascii=False,
-                    )
+            result = await agent.run(message)  # type: ignore[misc]
+            steps = agent.step_count
 
+            # 检查是否达到步数限制
+            if steps >= MCP_MAX_STEPS and result == "Max steps reached":
+                context_json = json.dumps(agent.context, ensure_ascii=False, indent=2)
                 return json.dumps(
                     {
-                        "result": result,
-                        "steps": steps,
-                        "success": True,
+                        "result": f"⚠️ 已达到最大步数限制（{MCP_MAX_STEPS}步）。视觉模型可能遇到了困难，任务未完成。\n\n执行历史:\n{context_json}\n\n建议: 请重新规划任务或将其拆分为更小的子任务。",
+                        "steps": MCP_MAX_STEPS,
+                        "success": False,
                     },
                     ensure_ascii=False,
                 )
 
-            finally:
-                # 恢复原始配置
-                agent.agent_config.max_steps = original_max_steps
-                agent.agent_config.system_prompt = original_system_prompt
+            return json.dumps(
+                {
+                    "result": result,
+                    "steps": steps,
+                    "success": True,
+                },
+                ensure_ascii=False,
+            )
+
+        finally:
+            # 恢复原始配置
+            agent.agent_config.max_steps = original_max_steps
+            agent.agent_config.system_prompt = original_system_prompt
 
     except DeviceBusyError:
         return json.dumps(
@@ -266,27 +289,9 @@ def _sync_chat(device_id: str, message: str) -> str:
             },
             ensure_ascii=False,
         )
-
-
-@function_tool
-async def chat(device_id: str, message: str) -> str:
-    """
-    向指定设备的 Phone Agent 发送子任务指令。
-
-    Phone Agent 是一个视觉模型，能够看到手机屏幕并执行操作。
-    每次调用会执行一个原子化的子任务（最多 5 步操作）。
-
-    Args:
-        device_id: 设备标识符，从 list_devices 获取
-        message: 子任务指令，例如 "打开微信"、"点击搜索按钮"
-
-    Returns:
-        JSON 格式的执行结果，包含:
-        - result: 执行结果描述
-        - steps: 执行的步数
-        - success: 是否成功
-    """
-    return await asyncio.to_thread(_sync_chat, device_id, message)
+    finally:
+        if acquired:
+            await asyncio.to_thread(manager.release_device, device_id)
 
 
 # ==================== Agent 初始化 ====================

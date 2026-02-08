@@ -17,7 +17,7 @@ from AutoGLM_GUI.devices.remote_device import RemoteDevice
 
 class TestE2EWithAgent:
     """
-    End-to-end tests with GLMAgent using Mock LLM.
+    End-to-end tests with AsyncGLMAgent using Mock LLM.
 
     These tests use the mock LLM server and don't require real API credentials.
     """
@@ -31,7 +31,7 @@ class TestE2EWithAgent:
         sample_test_case,
     ):
         """Test that agent's tap commands are recorded by mock agent."""
-        from AutoGLM_GUI.agents.glm.agent import GLMAgent
+        from AutoGLM_GUI.agents.glm.async_agent import AsyncGLMAgent
         from AutoGLM_GUI.config import AgentConfig, ModelConfig
 
         test_client.load_scenario(str(sample_test_case))
@@ -51,13 +51,13 @@ class TestE2EWithAgent:
 
         remote_device = RemoteDevice("mock_device_001", mock_agent_server)
 
-        agent = GLMAgent(
+        agent = AsyncGLMAgent(
             model_config=model_config,
             agent_config=agent_config,
             device=remote_device,
         )
 
-        agent.run("点击屏幕下方的消息按钮")
+        asyncio.run(agent.run("点击屏幕下方的消息按钮"))
 
         # Verify mock LLM was called twice (tap + finish)
         mock_llm_client.assert_request_count(2)
@@ -131,7 +131,7 @@ class TestE2EWithMockLLM:
         sample_test_case,
     ):
         """Test agent with mock LLM and mock device - no credentials required."""
-        from AutoGLM_GUI.agents.glm.agent import GLMAgent
+        from AutoGLM_GUI.agents.glm.async_agent import AsyncGLMAgent
         from AutoGLM_GUI.config import AgentConfig, ModelConfig
 
         # Load test scenario
@@ -154,14 +154,14 @@ class TestE2EWithMockLLM:
         remote_device = RemoteDevice("mock_device_001", mock_agent_server)
 
         # Run agent with mock LLM and mock device
-        agent = GLMAgent(
+        agent = AsyncGLMAgent(
             model_config=model_config,
             agent_config=agent_config,
             device=remote_device,
         )
 
         # Execute task
-        agent.run("点击屏幕下方的消息按钮")
+        asyncio.run(agent.run("点击屏幕下方的消息按钮"))
 
         # Verify mock LLM was called twice (tap + finish)
         mock_llm_client.assert_request_count(2)
@@ -226,7 +226,7 @@ class TestMultiDeviceConcurrent:
             resp = httpx.post(
                 f"{access_url}/api/init",
                 json={
-                    "agent_type": "glm",
+                    "agent_type": "glm-async",
                     "device_id": serial,
                     "model_config": {
                         "base_url": llm_url + "/v1",
@@ -353,7 +353,7 @@ class TestMultiDeviceConcurrent:
         resp = httpx.post(
             f"{access_url}/api/init",
             json={
-                "agent_type": "glm",
+                "agent_type": "glm-async",
                 "device_id": serial,
                 "model_config": {
                     "base_url": llm_url + "/v1",

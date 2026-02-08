@@ -80,7 +80,7 @@ const VISION_PRESETS = [
 // Agent 类型预设配置
 const AGENT_PRESETS = [
   {
-    name: 'glm',
+    name: 'glm-async',
     displayName: 'GLM Agent',
     description: '基于 GLM 模型优化，成熟稳定，适合大多数任务',
     icon: Cpu,
@@ -173,7 +173,7 @@ function ChatComponent() {
     base_url: VISION_PRESETS[0].config.base_url as string,
     model_name: VISION_PRESETS[0].config.model_name as string,
     api_key: '',
-    agent_type: 'glm',
+    agent_type: 'glm-async',
     agent_config_params: {} as Record<string, unknown>,
     default_max_steps: 100,
     layered_max_turns: 50,
@@ -190,7 +190,7 @@ function ChatComponent() {
           base_url: data.base_url,
           model_name: data.model_name,
           api_key: data.api_key || undefined,
-          agent_type: data.agent_type || 'glm',
+          agent_type: data.agent_type || 'glm-async',
           agent_config_params: data.agent_config_params || undefined,
           default_max_steps: data.default_max_steps || 100,
           layered_max_turns: data.layered_max_turns || 50,
@@ -208,7 +208,7 @@ function ChatComponent() {
             ? VISION_PRESETS[0].config.model_name
             : data.model_name,
           api_key: data.api_key || '',
-          agent_type: data.agent_type || 'glm',
+          agent_type: data.agent_type || 'glm-async',
           agent_config_params: data.agent_config_params || {},
           default_max_steps: data.default_max_steps || 100,
           layered_max_turns: data.layered_max_turns || 50,
@@ -933,7 +933,7 @@ function ChatComponent() {
                     base_url: config.base_url,
                     model_name: config.model_name,
                     api_key: config.api_key || '',
-                    agent_type: config.agent_type || 'glm',
+                    agent_type: config.agent_type || 'glm-async',
                     agent_config_params: config.agent_config_params || {},
                     default_max_steps: config.default_max_steps || 100,
                     layered_max_turns: config.layered_max_turns || 50,
