@@ -7,6 +7,7 @@ from enum import Enum
 
 from AutoGLM_GUI.adb.timing import TIMING_CONFIG
 from AutoGLM_GUI.adb_plus.ip import get_wifi_ip
+from AutoGLM_GUI.logger import logger
 
 
 class ConnectionType(Enum):
@@ -171,7 +172,7 @@ class ADBConnection:
             return devices
 
         except Exception as e:
-            print(f"Error listing devices: {e}")
+            logger.error(f"Error listing devices: {e}")
             return []
 
     def get_device_info(self, device_id: str | None = None) -> DeviceInfo | None:

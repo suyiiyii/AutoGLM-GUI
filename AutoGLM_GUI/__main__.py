@@ -8,6 +8,7 @@ import time
 import webbrowser
 
 from AutoGLM_GUI import __version__
+from AutoGLM_GUI.logger import logger
 
 # Default configuration
 DEFAULT_MODEL_NAME = "autoglm-phone-9b"
@@ -68,7 +69,7 @@ def open_browser(
             webbrowser.open(url)
         except Exception as e:
             # Non-critical failure, just log it
-            print(f"Could not open browser automatically: {e}", file=sys.stderr)
+            logger.warning(f"Could not open browser automatically: {e}")
 
     thread = threading.Thread(target=_open, daemon=True)
     thread.start()
@@ -187,9 +188,9 @@ def main() -> None:
     if args.port is None:
         try:
             args.port = find_available_port(start_port=8000, host=args.host)
-            print(f"\nAuto-detected available port: {args.port}\n")
+            logger.info(f"\nAuto-detected available port: {args.port}\n")
         except RuntimeError as e:
-            print(f"\nError: {e}", file=sys.stderr)
+            logger.error(f"\nError: {e}")
             sys.exit(1)
 
     import uvicorn
@@ -227,33 +228,33 @@ def main() -> None:
     use_ssl = args.ssl_keyfile is not None and args.ssl_certfile is not None
 
     # Display startup banner
-    print()
-    print("=" * 50)
-    print("  AutoGLM-GUI - Phone Agent Web Interface")
-    print("=" * 50)
-    print(f"  Version:    {__version__}")
-    print()
+    logger.info("")
+    logger.info("=" * 50)
+    logger.info("  AutoGLM-GUI - Phone Agent Web Interface")
+    logger.info("=" * 50)
+    logger.info(f"  Version:    {__version__}")
+    logger.info("")
     protocol = "https" if use_ssl else "http"
-    print(f"  Server:     {protocol}://{args.host}:{args.port}")
-    print()
-    print("  Model Configuration:")
-    print(f"    Source:   {config_source.value}")
-    print(f"    Base URL: {effective_config.base_url or '(not set)'}")
-    print(f"    Model:    {effective_config.model_name}")
+    logger.info(f"  Server:     {protocol}://{args.host}:{args.port}")
+    logger.info("")
+    logger.info("  Model Configuration:")
+    logger.info(f"    Source:   {config_source.value}")
+    logger.info(f"    Base URL: {effective_config.base_url or '(not set)'}")
+    logger.info(f"    Model:    {effective_config.model_name}")
     if effective_config.api_key != "EMPTY":
-        print("    API Key:  (configured)")
-    print()
+        logger.info("    API Key:  (configured)")
+    logger.info("")
 
     # Warning if base_url is not configured
     if not effective_config.base_url:
-        print("  [!]  WARNING: base_url is not configured!")
-        print("     Please configure via frontend or use --base-url")
-        print()
+        logger.warning("  [!]  WARNING: base_url is not configured!")
+        logger.warning("     Please configure via frontend or use --base-url")
+        logger.warning("")
 
-    print("=" * 50)
-    print("  Press Ctrl+C to stop")
-    print("=" * 50)
-    print()
+    logger.info("=" * 50)
+    logger.info("  Press Ctrl+C to stop")
+    logger.info("=" * 50)
+    logger.info("")
 
     # Open browser automatically unless disabled
     if not args.no_browser:

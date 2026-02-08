@@ -26,12 +26,22 @@ jobs:
         with:
           node-version: "24"
 
+      - name: Install ast-grep
+        run: |
+          echo "📦 Installing ast-grep..."
+          npm install -g ast-grep
+
       - name: Install frontend dependencies
         run: |
           echo "📦 Installing frontend dependencies..."
           cd frontend
           pnpm install
           cd ..
+
+      - name: Run ast-grep code quality check
+        run: |
+          echo "🔍 Running ast-grep code quality check..."
+          uv run python scripts/ast_grep_check.py
 
       - name: Run unified lint script (check-only mode)
         run: |
@@ -105,6 +115,7 @@ jobs:
             ## 🚀 Lint & Format Check Results: ${status}
 
             ### What was checked:
+            - 🔍 **Code Quality**: ast-grep pattern matching (5 rules)
             - 🐍 **Backend**: Ruff linting + formatting
             - 📱 **Frontend**: ESLint + Prettier + TypeScript types
             - 🔧 **Unified**: Custom lint script validation
@@ -114,6 +125,7 @@ jobs:
             Your code follows the project's style guidelines.
 
             ### Checks performed:
+            - ast-grep code quality ✅
             - Backend Ruff lint ✅
             - Backend Ruff format ✅
             - Frontend ESLint ✅
@@ -139,7 +151,13 @@ jobs:
             3. The checks will run again automatically.
 
             #### Individual fix commands:
-            **Backend:**
+            **Code Quality (ast-grep):**
+            \`\`\`bash
+            uv run python scripts/ast_grep_check.py
+            # Review reported issues and fix manually
+            \`\`\`
+
+            **Backend (Ruff):**
             \`\`\`bash
             uv run ruff check --fix
             uv run ruff format
