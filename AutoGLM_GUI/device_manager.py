@@ -324,11 +324,6 @@ class DeviceManager:
         with self._devices_lock:
             return bool(self._poll_thread and self._poll_thread.is_alive())
 
-    def get_device(self, device_id: str) -> Optional[ManagedDevice]:
-        """Get single device info by ID (deprecated, use get_device_by_serial)."""
-        # For backward compatibility, try to interpret as serial
-        return self.get_device_by_serial(device_id)
-
     def get_device_by_device_id(self, device_id: str) -> Optional[ManagedDevice]:
         """Get device by any of its connection device_ids (backward compatibility).
 

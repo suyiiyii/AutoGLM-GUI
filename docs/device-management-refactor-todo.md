@@ -53,15 +53,15 @@
 
 ### Phase 2：清理低价值兼容入口（小步删除）
 
-- [ ] 删除 `DeviceManager.get_device()`（deprecated 且无调用）。
-- [ ] 评估并移除 `PhoneAgentManager.abort_streaming_chat()` 同步兼容口（前提：确认无外部依赖）。
-- [ ] 评估并清理 `AutoGLM_GUI/devices/__init__.py` 中未使用的全局 manager 入口。
+- [x] 删除 `DeviceManager.get_device()`（deprecated 且无调用）。
+- [x] 评估并移除 `PhoneAgentManager.abort_streaming_chat()` 同步兼容口（前提：确认无外部依赖）。
+- [x] 评估并清理 `AutoGLM_GUI/devices/__init__.py` 中未使用的全局 manager 入口。
 
 完成标准：
 
-- [ ] 全仓搜索无内部调用残留。
-- [ ] 测试与 lint 全绿。
-- [ ] 变更日志清楚说明移除项。
+- [x] 全仓搜索无内部调用残留。
+- [x] 测试与 lint 全绿。
+- [x] 变更日志清楚说明移除项。
 
 ### Phase 3：收敛设备标识与连接类型语义
 
@@ -106,6 +106,6 @@
 ## 6. 实施顺序建议（当前推荐）
 
 - [x] 先执行 Phase 1（降耦合，不改语义）。
-- [ ] 再执行 Phase 2（删除已确认低价值兼容入口）。
+- [x] 再执行 Phase 2（删除已确认低价值兼容入口）。
 - [ ] 然后执行 Phase 3（术语与类型收敛）。
 - [ ] 最后执行 Phase 4（`/api/init` 退役）。
