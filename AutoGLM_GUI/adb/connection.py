@@ -1,4 +1,4 @@
-"""ADB connection management for local and remote devices."""
+"""ADB connection management for local USB and ADB TCP/IP devices."""
 
 import subprocess
 import time
@@ -10,11 +10,28 @@ from AutoGLM_GUI.adb_plus.ip import get_wifi_ip
 
 
 class ConnectionType(Enum):
-    """Type of ADB connection."""
+    """Connection type reported by ``adb devices -l``.
+
+    Note:
+        ``REMOTE`` means an ADB TCP/IP endpoint (``host:port``), not an HTTP
+        remote device proxy.
+    """
 
     USB = "usb"
     WIFI = "wifi"
     REMOTE = "remote"
+
+
+def is_adb_tcpip_device_id(device_id: str) -> bool:
+    """Return True when ``device_id`` is an ADB TCP/IP endpoint."""
+    return ":" in device_id
+
+
+def infer_connection_type_from_device_id(device_id: str) -> ConnectionType:
+    """Infer ADB transport type from ``device_id`` text."""
+    if is_adb_tcpip_device_id(device_id):
+        return ConnectionType.REMOTE
+    return ConnectionType.USB
 
 
 @dataclass
@@ -145,12 +162,7 @@ class ADBConnection:
                     status = parts[1]
 
                     # Determine connection type
-                    if ":" in device_id:
-                        conn_type = ConnectionType.REMOTE
-                    elif "emulator" in device_id:
-                        conn_type = ConnectionType.USB  # Emulator via USB
-                    else:
-                        conn_type = ConnectionType.USB
+                    conn_type = infer_connection_type_from_device_id(device_id)
 
                     # Parse additional info
                     model = None

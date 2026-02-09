@@ -7,7 +7,7 @@ import time
 from collections import defaultdict
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import TYPE_CHECKING, Optional
+from typing import TYPE_CHECKING, Optional, TypeAlias
 
 from AutoGLM_GUI.adb import ADBConnection, ConnectionType, DeviceInfo
 from AutoGLM_GUI.logger import logger
@@ -17,20 +17,37 @@ if TYPE_CHECKING:
     from AutoGLM_GUI.device_protocol import DeviceProtocol
 
 
-def convert_connection_type(ct: ConnectionType) -> DeviceConnectionType:
-    """Convert phone_agent ConnectionType to DeviceConnectionType.
+# Identifier vocabulary:
+# - DeviceSerial: canonical device identity (ADB serial or synthetic remote serial)
+# - ConnectionDeviceID: one concrete transport endpoint (USB serial / ip:port / base_url|id)
+# - PrimaryDeviceID: currently selected ConnectionDeviceID used by API/agent operations
+DeviceSerial: TypeAlias = str
+ConnectionDeviceID: TypeAlias = str
+PrimaryDeviceID: TypeAlias = str
 
-    phone_agent.ConnectionType.REMOTE is actually WiFi ADB,
-    so we map it to DeviceConnectionType.WIFI.
+
+def map_adb_connection_type_to_device_connection_type(
+    adb_connection_type: ConnectionType,
+) -> DeviceConnectionType:
+    """Map ADB-layer ConnectionType to DeviceConnectionType.
+
+    In ``AutoGLM_GUI.adb.connection``, ``ConnectionType.REMOTE`` means an ADB
+    TCP/IP endpoint (``ip:port``), not an HTTP Remote Device agent. In
+    DeviceManager this is a local-network ADB transport, so it maps to WIFI.
     """
-    if ct == ConnectionType.USB:
+    if adb_connection_type == ConnectionType.USB:
         return DeviceConnectionType.USB
-    elif ct == ConnectionType.WIFI:
+    elif adb_connection_type == ConnectionType.WIFI:
         return DeviceConnectionType.WIFI
-    elif ct == ConnectionType.REMOTE:
+    elif adb_connection_type == ConnectionType.REMOTE:
         return DeviceConnectionType.WIFI
     else:
         return DeviceConnectionType.USB
+
+
+def convert_connection_type(ct: ConnectionType) -> DeviceConnectionType:
+    """Backward-compatible wrapper for connection type mapping."""
+    return map_adb_connection_type_to_device_connection_type(ct)
 
 
 class DeviceState(str, Enum):
@@ -46,7 +63,7 @@ class DeviceState(str, Enum):
 class DeviceConnection:
     """Single connection method for a device (USB, WiFi, mDNS, etc.)."""
 
-    device_id: str  # USB serial OR IP:port
+    device_id: ConnectionDeviceID  # USB serial / IP:port / remote endpoint key
     connection_type: DeviceConnectionType
     status: str  # "device" | "offline" | "unauthorized"
     last_seen: float = field(default_factory=time.time)
@@ -81,7 +98,7 @@ class ManagedDevice:
     """Device information aggregated by serial (multiple connections supported)."""
 
     # Core identity (indexed by serial now)
-    serial: str  # Hardware serial number (ro.serialno)
+    serial: DeviceSerial  # ADB serial or synthetic remote serial: remote:...
 
     # Connections (multiple connection methods)
     connections: list[DeviceConnection] = field(default_factory=list)
@@ -107,8 +124,8 @@ class ManagedDevice:
         return self.connections[self.primary_connection_idx]
 
     @property
-    def primary_device_id(self) -> str:
-        """Get the device_id of the primary connection (used in API)."""
+    def primary_device_id(self) -> PrimaryDeviceID:
+        """Get selected connection endpoint used by API/agent operations."""
         return self.primary_connection.device_id
 
     @property
@@ -167,13 +184,15 @@ def _is_mdns_connection(device_id: str) -> bool:
 
 
 def _create_managed_device(
-    serial: str, device_infos: list[DeviceInfo]
+    serial: DeviceSerial, device_infos: list[DeviceInfo]
 ) -> ManagedDevice:
     """Create ManagedDevice from DeviceInfo list."""
     connections = [
         DeviceConnection(
             device_id=d.device_id,
-            connection_type=convert_connection_type(d.connection_type),
+            connection_type=map_adb_connection_type_to_device_connection_type(
+                d.connection_type
+            ),
             status=d.status,
             last_seen=time.time(),
         )
@@ -217,11 +236,12 @@ class DeviceManager:
     def __init__(self, adb_path: str = "adb"):
         """Private constructor. Use get_instance() instead."""
         # Device state storage (indexed by serial now)
-        self._devices: dict[str, ManagedDevice] = {}  # Key: serial
+        self._devices: dict[DeviceSerial, ManagedDevice] = {}  # Key: serial
         self._devices_lock = threading.RLock()  # Reentrant for nested calls
 
-        # Reverse mapping for backward compatibility
-        self._device_id_to_serial: dict[str, str] = {}  # Key: device_id -> serial
+        # Reverse mapping from connection endpoint to canonical serial.
+        # Kept for backward compatibility with APIs that pass device_id.
+        self._device_id_to_serial: dict[ConnectionDeviceID, DeviceSerial] = {}
 
         # Polling thread control
         self._poll_thread: Optional[threading.Thread] = None
@@ -241,7 +261,7 @@ class DeviceManager:
 
         # mDNS discovery support
         self._mdns_supported: Optional[bool] = None  # Lazy check
-        self._mdns_devices: dict[str, ManagedDevice] = {}  # Key: serial
+        self._mdns_devices: dict[DeviceSerial, ManagedDevice] = {}  # Key: serial
         self._enable_mdns_discovery: bool = True  # Feature toggle
 
         self._remote_devices: dict[str, "DeviceProtocol"] = {}
@@ -314,7 +334,7 @@ class DeviceManager:
         with self._devices_lock:
             return list(self._devices.values())
 
-    def get_device_by_serial(self, serial: str) -> Optional[ManagedDevice]:
+    def get_device_by_serial(self, serial: DeviceSerial) -> Optional[ManagedDevice]:
         """Get device by serial from primary cache."""
         with self._devices_lock:
             return self._devices.get(serial)
@@ -324,12 +344,14 @@ class DeviceManager:
         with self._devices_lock:
             return bool(self._poll_thread and self._poll_thread.is_alive())
 
-    def get_device_by_device_id(self, device_id: str) -> Optional[ManagedDevice]:
-        """Get device by any of its connection device_ids (backward compatibility).
+    def get_device_by_device_id(
+        self, device_id: ConnectionDeviceID
+    ) -> Optional[ManagedDevice]:
+        """Get device by any known connection endpoint (backward compatibility).
 
         This method supports looking up devices by either:
-        - Serial number (direct lookup)
-        - Any device_id from any connection (reverse mapping)
+        - Canonical serial (`ManagedDevice.serial`)
+        - Any connection endpoint (`ManagedDevice.primary_device_id` or other connections)
         """
         with self._devices_lock:
             # First try direct serial lookup (if device_id IS a serial)
@@ -486,7 +508,9 @@ class DeviceManager:
                 new_connections = [
                     DeviceConnection(
                         device_id=d.device_id,
-                        connection_type=convert_connection_type(d.connection_type),
+                        connection_type=map_adb_connection_type_to_device_connection_type(
+                            d.connection_type
+                        ),
                         status=d.status,
                         last_seen=time.time(),
                     )
@@ -941,25 +965,27 @@ class DeviceManager:
         """
         return self._remote_devices.get(serial)
 
-    def get_serial_by_device_id(self, device_id: str) -> str | None:
-        """Get serial by device_id (reverse lookup).
+    def get_serial_by_device_id(
+        self, device_id: ConnectionDeviceID
+    ) -> DeviceSerial | None:
+        """Resolve canonical serial from a connection endpoint.
 
         Args:
-            device_id: Device ID from connections
+            device_id: One connection endpoint ID from managed connections.
 
         Returns:
-            Serial (synthetic or ADB) or None if not found
+            Canonical serial (ADB or synthetic remote serial) or None.
         """
         return self._device_id_to_serial.get(device_id)
 
-    def get_device_protocol(self, device_id: str) -> "DeviceProtocol":
+    def get_device_protocol(self, device_id: ConnectionDeviceID) -> "DeviceProtocol":
         """
         根据 device_id 获取 DeviceProtocol 实例（统一入口）.
 
         自动识别设备类型（ADB / Remote）并返回对应的实现。
 
         Args:
-            device_id: 设备标识符（USB serial / IP:port / remote_xxx）
+            device_id: 连接端点标识（USB serial / IP:port / base_url|device_id）
 
         Returns:
             DeviceProtocol 实例（ADBDevice 或 RemoteDevice）
