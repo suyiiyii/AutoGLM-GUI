@@ -1,13 +1,11 @@
-"""AutoGLM-GUI Backend API Server.
+from AutoGLM_GUI.scheduler import scheduler
 
-This module is kept for backward compatibility and development.
-For production use, run: autoglm-gui (or uvx autoglm-gui)
-"""
+def main():
+    scheduler_thread = threading.Thread(target=scheduler.run)
+    scheduler_thread.start()
 
-# Re-export app from the package
-from AutoGLM_GUI.server import app
+    # Example task
+    scheduler.add_task("Daily Sign-in", datetime.now() + timedelta(seconds=30))
 
 if __name__ == "__main__":
-    import uvicorn
-
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    main()
