@@ -15,32 +15,52 @@ import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
 const sidebars: SidebarsConfig = {
   tutorialSidebar: [
     'intro',
-    'installation',
-    'configuration',
-    'quick-start',
     {
       type: 'category',
-      label: '用户指南',
+      label: '快速开始',
       items: [
-        'user-guide/interface',
-        'user-guide/multi-device',
-        'user-guide/ai-modes',
-        'user-guide/workflow',
-        'user-guide/manual-control',
+        'getting-started/install',
+        'getting-started/first-run',
+        'getting-started/model-config',
+        'getting-started/device-connection',
       ],
     },
-    'development',
     {
       type: 'category',
-      label: '技术文档',
+      label: '功能说明',
       items: [
-        'layered-agent-analysis',
+        'features/chat-control',
+        'features/realtime-preview',
+        'features/direct-operation',
+        'features/workflow',
+        'features/scheduler',
+        'features/history',
+        'features/multi-device',
+        'features/interrupt',
+        'features/layered-agent',
+        'features/mcp',
+        'features/logs',
       ],
     },
-    'deployment',
-    'upgrade',
-    'release-notes-v1.5',
-    'license',
+    {
+      type: 'category',
+      label: '部署',
+      items: [
+        'deployment/docker',
+        'deployment/server',
+        'deployment/desktop',
+      ],
+    },
+    {
+      type: 'category',
+      label: '问题排查',
+      items: [
+        'troubleshooting/common-issues',
+        'troubleshooting/adb',
+        'troubleshooting/model-api',
+      ],
+    },
+    'faq',
   ],
 };
 
