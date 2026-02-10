@@ -99,8 +99,8 @@ class TestLocalE2E:
         registered_device_id = remote_devices[0]["id"]
         print(f"[Local E2E] Using remote device_id: {registered_device_id}")
 
-        # Initialize agent
-        print(f"[Local E2E] Initializing agent at {access_url}")
+        # Agent auto-initializes on first chat call
+        print(f"[Local E2E] Using auto-initialize path at {access_url}")
         print(f"[Local E2E] Using Mock LLM at: {llm_url}")
 
         # Delete existing config file to use environment variables
@@ -122,30 +122,6 @@ class TestLocalE2E:
         )
         assert resp.status_code == 200, f"Failed to save config: {resp.text}"
         print(f"[Local E2E] Saved new config: {resp.json()}")
-
-        resp = httpx.post(
-            f"{access_url}/api/init",
-            json={
-                "agent_type": "glm-async",
-                "device_id": registered_device_id,
-                "model_config": {
-                    "base_url": llm_url + "/v1",
-                    "api_key": "mock-key",
-                    "model_name": "mock-glm-model",
-                },
-                "agent_config": {
-                    "device_id": registered_device_id,
-                    "max_steps": 10,
-                    "verbose": True,
-                },
-            },
-            timeout=30,
-        )
-        if resp.status_code != 200:
-            print(f"[Local E2E] ERROR: Init failed with status {resp.status_code}")
-            print(f"[Local E2E] Response: {resp.text}")
-        assert resp.status_code == 200, f"Init failed: {resp.text}"
-        print(f"[Local E2E] Init response: {resp.json()}")
 
         # Send chat message
         instruction = "点击屏幕下方的消息按钮"
@@ -295,8 +271,8 @@ class TestLocalE2E:
         registered_device_id = remote_devices[0]["id"]
         print(f"[Local E2E] Using remote device_id: {registered_device_id}")
 
-        # Initialize agent
-        print(f"[Local E2E] Initializing agent at {access_url}")
+        # Agent auto-initializes on first chat call
+        print(f"[Local E2E] Using auto-initialize path at {access_url}")
         print(f"[Local E2E] Using Mock LLM at: {llm_url}")
 
         # Delete existing config file to use environment variables
@@ -318,30 +294,6 @@ class TestLocalE2E:
         )
         assert resp.status_code == 200, f"Failed to save config: {resp.text}"
         print(f"[Local E2E] Saved new config: {resp.json()}")
-
-        resp = httpx.post(
-            f"{access_url}/api/init",
-            json={
-                "agent_type": "glm-async",
-                "device_id": registered_device_id,
-                "model_config": {
-                    "base_url": llm_url + "/v1",
-                    "api_key": "mock-key",
-                    "model_name": "mock-glm-model",
-                },
-                "agent_config": {
-                    "device_id": registered_device_id,
-                    "max_steps": 15,  # Allow some buffer
-                    "verbose": True,
-                },
-            },
-            timeout=30,
-        )
-        if resp.status_code != 200:
-            print(f"[Local E2E] ERROR: Init failed with status {resp.status_code}")
-            print(f"[Local E2E] Response: {resp.text}")
-        assert resp.status_code == 200, f"Init failed: {resp.text}"
-        print(f"[Local E2E] Init response: {resp.json()}")
 
         # Configure Mock LLM with 10-step response sequence
         mock_llm_client.set_responses(

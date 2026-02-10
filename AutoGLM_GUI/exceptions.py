@@ -28,8 +28,8 @@ class AgentNotInitializedError(Exception):
             >>> with manager.use_agent(device_id, auto_initialize=False) as agent:
             >>>     result = agent.run("Open WeChat")
 
-        Option 3: Call /api/init endpoint (for REST API)
-            >>> POST /api/init {"device_id": "...", "model_config": {...}, "agent_config": {...}}
+        Option 3: Use API endpoints that auto-initialize agent
+            >>> POST /api/chat {"device_id": "...", "message": "..."}
     """
 
     pass

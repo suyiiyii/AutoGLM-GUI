@@ -236,7 +236,7 @@ class PhoneAgentManager:
         if not effective_config.base_url:
             raise AgentInitializationError(
                 f"Cannot auto-initialize agent for {agent_key}: base_url not configured. "
-                f"Please configure base_url via /api/config or call /api/init explicitly."
+                f"Please configure base_url via /api/config before sending tasks."
             )
 
         # 使用本地配置类型

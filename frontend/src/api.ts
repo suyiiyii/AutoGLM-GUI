@@ -73,13 +73,6 @@ export interface StatusResponse {
   step_count: number;
 }
 
-export interface InitRequest {
-  device_id: string; // Device ID (required)
-  agent_type?: string; // Agent type (default: "glm-async")
-  agent_config_params?: Record<string, unknown>; // Agent-specific configuration
-  force?: boolean; // Force re-initialization
-}
-
 export interface ScreenshotRequest {
   device_id?: string | null;
 }
@@ -379,13 +372,6 @@ export async function removeRemoteDevice(
     '/api/devices/remove_remote',
     { serial }
   );
-  return res.data;
-}
-
-export async function initAgent(
-  config?: InitRequest
-): Promise<{ success: boolean; message: string; device_id?: string }> {
-  const res = await axios.post('/api/init', config ?? {});
   return res.data;
 }
 

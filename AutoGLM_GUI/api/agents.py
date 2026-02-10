@@ -7,7 +7,6 @@ from fastapi import APIRouter, BackgroundTasks, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import ValidationError
 
-from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.schemas import (
     AbortRequest,
@@ -15,39 +14,12 @@ from AutoGLM_GUI.schemas import (
     ChatResponse,
     ConfigResponse,
     ConfigSaveRequest,
-    InitRequest,
     ResetRequest,
     StatusResponse,
-)
-from AutoGLM_GUI.state import (
-    non_blocking_takeover,
 )
 from AutoGLM_GUI.version import APP_VERSION
 
 router = APIRouter()
-
-
-def _setup_adb_keyboard(device_id: str) -> None:
-    """检查并自动安装 ADB Keyboard。
-
-    Args:
-        device_id: 设备 ID
-    """
-    from AutoGLM_GUI.adb_plus import ADBKeyboardInstaller
-
-    logger.info(f"Checking ADB Keyboard for device {device_id}...")
-    installer = ADBKeyboardInstaller(device_id=device_id)
-    status = installer.get_status()
-
-    if not (status["installed"] and status["enabled"]):
-        logger.info(f"Setting up ADB Keyboard for device {device_id}...")
-        success, message = installer.auto_setup()
-        if success:
-            logger.info(f"✓ Device {device_id}: {message}")
-        else:
-            logger.warning(f"✗ Device {device_id}: {message}")
-    else:
-        logger.info(f"✓ Device {device_id}: ADB Keyboard ready")
 
 
 SSEPayload = dict[str, str | int | bool | None | dict]
@@ -61,103 +33,11 @@ def _create_sse_event(
     return event_data
 
 
-@router.post("/api/init", deprecated=True)
-def init_agent(request: InitRequest) -> dict:
-    """初始化 PhoneAgent（已废弃，多设备支持）。
-
-    ⚠️ 此端点已废弃，将在未来版本移除。
-
-    Agent 现在会在首次使用时自动初始化，无需手动调用此端点。
-    如需修改配置，请使用 /api/config 端点或直接修改配置文件 ~/.config/autoglm/config.json。
-    配置保存后会自动销毁所有 Agent，确保下次使用时应用新配置。
-
-    配置完全由 ConfigManager 提供（CLI > ENV > FILE > DEFAULT），
-    不接受运行时覆盖。
-    """
-    from AutoGLM_GUI.config_manager import config_manager
-
-    device_id = request.device_id
-    if not device_id:
-        raise HTTPException(status_code=400, detail="device_id is required")
-
-    # 热重载配置文件（支持运行时手动修改）
-    config_manager.load_file_config()
-    config_manager.sync_to_env()
-
-    # 获取有效配置（CLI > ENV > FILE > DEFAULT）
-    effective_config = config_manager.get_effective_config()
-
-    if not effective_config.base_url:
-        raise HTTPException(
-            status_code=400,
-            detail="base_url is required. Please configure via Settings or start with --base-url",
-        )
-
-    # 直接使用有效配置构造 ModelConfig 和 AgentConfig
-    model_config = ModelConfig(
-        base_url=effective_config.base_url,
-        api_key=effective_config.api_key,
-        model_name=effective_config.model_name,
-        # max_tokens, temperature, top_p, frequency_penalty 使用 ModelConfig 默认值
-    )
-
-    agent_config = AgentConfig(
-        max_steps=effective_config.default_max_steps,
-        device_id=device_id,
-        # lang, system_prompt, verbose 使用 AgentConfig 默认值
-    )
-
-    # Initialize agent (includes ADB Keyboard setup)
-    try:
-        # Setup ADB Keyboard (common for all agents)
-        _setup_adb_keyboard(device_id)
-
-        # Use agent factory to create agent
-        from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
-
-        manager = PhoneAgentManager.get_instance()
-
-        # Initialize agent using factory pattern
-        from typing import cast
-
-        from AutoGLM_GUI.types import AgentSpecificConfig
-
-        agent_config_params = cast(
-            AgentSpecificConfig, request.agent_config_params or {}
-        )
-        manager.initialize_agent_with_factory(
-            device_id=device_id,
-            agent_type=request.agent_type,
-            model_config=model_config,
-            agent_config=agent_config,
-            agent_specific_config=agent_config_params,
-            takeover_callback=non_blocking_takeover,
-            force=request.force,
-        )
-
-        logger.warning(
-            f"/api/init is deprecated. Agent of type '{request.agent_type}' initialized for device {device_id}. "
-            f"Consider using auto-initialization instead."
-        )
-    except Exception as e:
-        logger.error(f"Failed to initialize agent: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-    return {
-        "success": True,
-        "device_id": device_id,
-        "message": f"Agent initialized for device {device_id} (⚠️ /api/init is deprecated)",
-        "agent_type": request.agent_type,
-        "deprecated": True,
-        "hint": "Agent 会在首次使用时自动初始化，无需手动调用此端点",
-    }
-
-
 @router.post("/api/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
     """发送任务给 Agent 并执行（支持 AsyncAgent）。
 
-    Agent 会在首次使用时自动初始化，无需手动调用 /api/init。
+    Agent 会在首次使用时自动初始化，无需手动预初始化。
     """
     from AutoGLM_GUI.exceptions import AgentInitializationError, DeviceBusyError
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
@@ -206,7 +86,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
 async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
     """发送任务给 Agent 并实时推送执行进度（SSE，多设备支持）。
 
-    Agent 会在首次使用时自动初始化，无需手动调用 /api/init。
+    Agent 会在首次使用时自动初始化，无需手动预初始化。
 
     Chat API 使用 AsyncAgent 实现原生 async streaming 和立即取消。
     """

@@ -208,7 +208,7 @@ class TestMultiDeviceConcurrent:
             register_result = resp.json()
             devices[device_id] = register_result["serial"]
 
-        # Set config via API (required before init)
+        # Set config via API (auto-init happens on first chat call)
         resp = httpx.delete(f"{access_url}/api/config", timeout=10)
         resp = httpx.post(
             f"{access_url}/api/config",
@@ -220,30 +220,6 @@ class TestMultiDeviceConcurrent:
             timeout=10,
         )
         assert resp.status_code == 200
-
-        # Initialize both devices' agents
-        for device_id, serial in devices.items():
-            resp = httpx.post(
-                f"{access_url}/api/init",
-                json={
-                    "agent_type": "glm-async",
-                    "device_id": serial,
-                    "model_config": {
-                        "base_url": llm_url + "/v1",
-                        "api_key": "mock-key",
-                        "model_name": "mock-glm-model",
-                    },
-                    "agent_config": {
-                        "device_id": serial,
-                        "max_steps": 5,
-                        "verbose": True,
-                    },
-                },
-                timeout=30,
-            )
-            if resp.status_code != 200:
-                print(f"[MultiDevice] Init failed for {device_id}: {resp.text}")
-            assert resp.status_code == 200
 
         # Configure mock LLM to return tap actions
         # Both devices will get tap actions due to round-robin
@@ -335,7 +311,7 @@ class TestMultiDeviceConcurrent:
         assert resp.status_code == 200
         serial = resp.json()["serial"]
 
-        # Set config via API (required before init)
+        # Set config via API (auto-init happens on first chat call)
         llm_url = local_server["llm_url"]
         resp = httpx.delete(f"{access_url}/api/config", timeout=10)
         resp = httpx.post(
@@ -346,26 +322,6 @@ class TestMultiDeviceConcurrent:
                 "api_key": "mock-key",
             },
             timeout=10,
-        )
-        assert resp.status_code == 200
-
-        # Initialize agent
-        resp = httpx.post(
-            f"{access_url}/api/init",
-            json={
-                "agent_type": "glm-async",
-                "device_id": serial,
-                "model_config": {
-                    "base_url": llm_url + "/v1",
-                    "api_key": "mock-key",
-                    "model_name": "mock-glm-model",
-                },
-                "agent_config": {
-                    "device_id": serial,
-                    "max_steps": 10,
-                },
-            },
-            timeout=30,
         )
         assert resp.status_code == 200
 

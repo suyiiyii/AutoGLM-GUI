@@ -274,7 +274,7 @@ class TestDockerE2E:
         registered_device_id = remote_devices[0]["id"]
         print(f"[Docker E2E] Using remote device_id: {registered_device_id}")
 
-        print(f"[Docker E2E] Initializing agent at {access_url}")
+        print(f"[Docker E2E] Using auto-initialize path at {access_url}")
         print(f"[Docker E2E] Using Mock LLM at: {llm_url}")
 
         # Delete existing config file to use environment variables
@@ -296,30 +296,6 @@ class TestDockerE2E:
         )
         assert resp.status_code == 200, f"Failed to save config: {resp.text}"
         print(f"[Docker E2E] Saved new config: {resp.json()}")
-
-        resp = httpx.post(
-            f"{access_url}/api/init",
-            json={
-                "agent_type": "glm-async",
-                "device_id": registered_device_id,
-                "model_config": {
-                    "base_url": llm_url + "/v1",
-                    "api_key": "mock-key",
-                    "model_name": "mock-glm-model",
-                },
-                "agent_config": {
-                    "device_id": registered_device_id,
-                    "max_steps": 10,
-                    "verbose": True,
-                },
-            },
-            timeout=30,
-        )
-        if resp.status_code != 200:
-            print(f"[Docker E2E] ERROR: Init failed with status {resp.status_code}")
-            print(f"[Docker E2E] Response: {resp.text}")
-        assert resp.status_code == 200, f"Init failed: {resp.text}"
-        print(f"[Docker E2E] Init response: {resp.json()}")
 
         instruction = "点击屏幕下方的消息按钮"
         print(f"[Docker E2E] Sending instruction: {instruction}")

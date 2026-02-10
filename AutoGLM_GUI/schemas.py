@@ -7,31 +7,6 @@ from pydantic import BaseModel, field_validator
 from AutoGLM_GUI.device_metadata_manager import DISPLAY_NAME_MAX_LENGTH
 
 
-class InitRequest(BaseModel):
-    device_id: str  # Device ID (required)
-
-    # Agent configuration (factory pattern)
-    agent_type: str = "glm-async"  # Agent type to use (e.g., "glm-async", "mai")
-    agent_config_params: dict | None = None  # Agent-specific configuration parameters
-
-    # Hot-reload support
-    force: bool = False  # Force re-initialization even if agent already exists
-
-    @field_validator("agent_type")
-    @classmethod
-    def validate_agent_type(cls, v: str) -> str:
-        """验证 agent_type 有效性."""
-        # Don't import at module level to avoid circular imports
-        from AutoGLM_GUI.agents import is_agent_type_registered
-
-        if not is_agent_type_registered(v):
-            raise ValueError(
-                f"Unknown agent_type: '{v}'. "
-                f"Please register the agent type first or use a known type."
-            )
-        return v
-
-
 class ChatRequest(BaseModel):
     message: str
     device_id: str  # 设备 ID（必填）
