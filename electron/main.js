@@ -9,8 +9,58 @@ const { autoUpdater } = require('electron-updater');
 const log = require('electron-log');
 
 // 配置日志
-log.transports.file.level = 'info';
+log.transports.file.level = 'debug';
 autoUpdater.logger = log;
+
+/**
+ * 将任意值转换为可写入日志的字符串
+ * @param {unknown} detail
+ * @returns {string}
+ */
+function normalizeLogDetail(detail) {
+  if (detail === undefined || detail === null) return '';
+  if (detail instanceof Error) {
+    return `${detail.name}: ${detail.message}${detail.stack ? `\n${detail.stack}` : ''}`;
+  }
+  if (typeof detail === 'string') return detail;
+  try {
+    return JSON.stringify(detail);
+  } catch {
+    return String(detail);
+  }
+}
+
+/**
+ * 裁剪超长日志，避免 main.log 被单条日志污染
+ * @param {string} text
+ * @param {number} maxLength
+ * @returns {string}
+ */
+function clipLogText(text, maxLength = 4000) {
+  if (text.length <= maxLength) return text;
+  return `${text.slice(0, maxLength)}... [truncated ${text.length - maxLength} chars]`;
+}
+
+/**
+ * 统一主进程日志输出到 electron-log
+ * @param {'debug' | 'info' | 'warn' | 'error'} level
+ * @param {string} message
+ * @param {unknown} detail
+ */
+function writeMainLog(level, message, detail) {
+  const suffix = detail !== undefined ? ` | ${clipLogText(normalizeLogDetail(detail))}` : '';
+  const text = `${message}${suffix}`;
+
+  if (level === 'debug') {
+    log.debug(text);
+  } else if (level === 'warn') {
+    log.warn(text);
+  } else if (level === 'error') {
+    log.error(text);
+  } else {
+    log.info(text);
+  }
+}
 
 // 配置自动更新
 autoUpdater.autoDownload = true;  // 自动下载更新
@@ -193,6 +243,7 @@ function isPortAvailable(port) {
  */
 async function waitForBackend(port, timeout = 30000) {
   perfMark('开始等待后端就绪');
+  writeMainLog('info', '[Backend] Waiting for health check', { port, timeoutMs: timeout });
   const startTime = Date.now();
   const checkInterval = 500; // 每500ms检查一次
   let checkCount = 0;
@@ -203,11 +254,29 @@ async function waitForBackend(port, timeout = 30000) {
       perfMark('后端服务就绪');
       perfDiff('开始等待后端就绪', '后端服务就绪');
       console.log(`✓ 后端服务已就绪 (http://127.0.0.1:${port}) - 健康检查次数: ${checkCount}`);
+      writeMainLog('info', '[Backend] Health check passed', {
+        port,
+        checkCount,
+        elapsedMs: Date.now() - startTime
+      });
       return true;
+    }
+
+    if (checkCount === 1 || checkCount % 10 === 0) {
+      writeMainLog('debug', '[Backend] Health check retry', {
+        port,
+        checkCount,
+        elapsedMs: Date.now() - startTime
+      });
     }
     await new Promise(resolve => setTimeout(resolve, checkInterval));
   }
 
+  writeMainLog('error', '[Backend] Health check timed out', {
+    port,
+    timeoutMs: timeout,
+    checkCount
+  });
   throw new Error(`后端服务启动超时 (${timeout}ms)`);
 }
 
@@ -306,6 +375,7 @@ function printLogLocation() {
 async function startBackend() {
   perfMark('开始启动后端进程');
   const isDev = process.argv.includes('--dev');
+  writeMainLog('info', '[Backend] Start requested', { isDev, backendPort });
 
   // 获取日志文件路径（开发模式使用控制台，打包模式使用文件）
   const logFilePath = getLogFilePath();
@@ -348,6 +418,7 @@ async function startBackend() {
       ];
     } catch (error) {
       console.error('创建日志目录失败，将使用控制台日志:', error);
+      writeMainLog('warn', '[Backend] Failed to create log directory, fallback to --no-log-file', error);
       // 回退到控制台日志
       args = [
         '--no-browser',
@@ -375,13 +446,20 @@ async function startBackend() {
     const adbDir = path.join(getResourcePath('adb'), platform, 'platform-tools');
     env.PATH = `${adbDir}${path.delimiter}${env.PATH}`;
     console.log(`✓ ADB 路径已添加: ${adbDir}`);
+    writeMainLog('info', '[Backend] ADB path injected', { adbDir });
   }
 
   console.log(`启动后端: ${backendExe} ${args.join(' ')}`);
+  writeMainLog('info', '[Backend] Spawn command prepared', {
+    backendExe,
+    args,
+    cwd: app.getPath('home')
+  });
 
   // 添加日志信息提示（仅生产模式）
   if (!isDev) {
     console.log(`日志文件: ${logFilePath}`);
+    writeMainLog('info', '[Backend] Backend file logging enabled', { logFilePath });
   }
 
   perfMark('准备启动后端进程');
@@ -392,6 +470,9 @@ async function startBackend() {
     cwd: app.getPath('home') // 设置工作目录为用户 home 目录
   });
   perfMark('后端进程已启动 (spawn完成)');
+  writeMainLog('info', '[Backend] Process spawned', {
+    pid: backendProcess?.pid ?? null
+  });
 
   // 收集错误输出
   let stderrOutput = '';
@@ -399,14 +480,26 @@ async function startBackend() {
     const text = data.toString();
     console.error('后端 stderr:', text);
     stderrOutput += text;
+    for (const line of text.split(/\r?\n/)) {
+      if (line.trim()) {
+        writeMainLog('warn', '[Backend][stderr]', line);
+      }
+    }
   });
 
   backendProcess.stdout.on('data', (data) => {
-    console.log('后端 stdout:', data.toString());
+    const text = data.toString();
+    console.log('后端 stdout:', text);
+    for (const line of text.split(/\r?\n/)) {
+      if (line.trim()) {
+        writeMainLog('debug', '[Backend][stdout]', line);
+      }
+    }
   });
 
   backendProcess.on('error', (error) => {
     console.error('后端进程启动失败:', error);
+    writeMainLog('error', '[Backend] Process error', error);
     dialog.showErrorBox('后端启动失败', `无法启动后端服务:\n${error.message}`);
     app.quit();
   });
@@ -415,6 +508,11 @@ async function startBackend() {
     if (code !== null && code !== 0) {
       console.error(`后端进程异常退出 (code: ${code}, signal: ${signal})`);
       console.error('stderr 输出:', stderrOutput);
+      writeMainLog('error', '[Backend] Process exited unexpectedly', {
+        code,
+        signal,
+        stderrTail: stderrOutput.slice(-2000)
+      });
       if (!app.isQuitting) {
         // 检测是否是 Windows 上缺少 VC++ 运行库的问题
         const isVCRedistError = process.platform === 'win32' && (
@@ -452,6 +550,8 @@ async function startBackend() {
         }
         app.quit();
       }
+    } else {
+      writeMainLog('info', '[Backend] Process exited normally', { code, signal });
     }
   });
 }
@@ -462,6 +562,9 @@ async function startBackend() {
 function stopBackend() {
   if (backendProcess) {
     console.log('正在停止后端进程...');
+    writeMainLog('info', '[Backend] Stopping backend process', {
+      pid: backendProcess?.pid ?? null
+    });
     backendProcess.kill('SIGTERM');
     backendProcess = null;
   }
@@ -474,6 +577,11 @@ function stopBackend() {
  */
 function createWindow() {
   perfMark('开始创建主窗口');
+  writeMainLog('info', '[Window] Creating main window', {
+    backendPort,
+    appIsPackaged: app.isPackaged,
+    platform: process.platform
+  });
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
@@ -488,17 +596,98 @@ function createWindow() {
     show: false // 先不显示，等加载完成后再显示
   });
   perfMark('BrowserWindow 创建完成');
+  writeMainLog('info', '[Window] BrowserWindow created');
+
+  const targetUrl = `http://127.0.0.1:${backendPort}`;
+  const webContents = mainWindow.webContents;
+
+  webContents.on('did-start-loading', () => {
+    writeMainLog('info', '[Renderer] did-start-loading', { url: webContents.getURL() });
+  });
+  webContents.on('dom-ready', () => {
+    writeMainLog('info', '[Renderer] dom-ready', { url: webContents.getURL() });
+  });
+  webContents.on('did-finish-load', () => {
+    writeMainLog('info', '[Renderer] did-finish-load', {
+      url: webContents.getURL(),
+      title: webContents.getTitle()
+    });
+  });
+  webContents.on('did-stop-loading', () => {
+    writeMainLog('debug', '[Renderer] did-stop-loading', { url: webContents.getURL() });
+  });
+  webContents.on('did-navigate', (event, url) => {
+    writeMainLog('info', '[Renderer] did-navigate', { url });
+  });
+  webContents.on('did-navigate-in-page', (event, url, isMainFrame) => {
+    writeMainLog('debug', '[Renderer] did-navigate-in-page', { url, isMainFrame });
+  });
+  webContents.on(
+    'did-fail-provisional-load',
+    (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      writeMainLog('error', '[Renderer] did-fail-provisional-load', {
+        errorCode,
+        errorDescription,
+        validatedURL,
+        isMainFrame
+      });
+    }
+  );
+  webContents.on('render-process-gone', (event, details) => {
+    writeMainLog('error', '[Renderer] render-process-gone', details);
+  });
+  webContents.on('preload-error', (event, preloadPath, error) => {
+    writeMainLog('error', '[Renderer] preload-error', {
+      preloadPath,
+      error: normalizeLogDetail(error)
+    });
+  });
+  webContents.on('console-message', (event, level, message, line, sourceId) => {
+    const rendererLog = { message, line, sourceId };
+    if (level === 2) {
+      writeMainLog('error', '[RendererConsole] error', rendererLog);
+    } else if (level === 1) {
+      writeMainLog('warn', '[RendererConsole] warn', rendererLog);
+    } else if (process.env.AUTOGLM_DEBUG_RENDERER === '1') {
+      writeMainLog('debug', '[RendererConsole] info', rendererLog);
+    }
+  });
+  mainWindow.on('unresponsive', () => {
+    writeMainLog('warn', '[Window] Main window became unresponsive');
+  });
+  mainWindow.on('responsive', () => {
+    writeMainLog('info', '[Window] Main window responsive again');
+  });
 
   // 加载后端服务
   perfMark('开始加载 URL');
-  mainWindow.loadURL(`http://127.0.0.1:${backendPort}`);
+  writeMainLog('info', '[Window] Loading URL', { targetUrl });
+  mainWindow.loadURL(targetUrl);
+
+  const readyToShowTimeoutMs = 15000;
+  let readyToShowFired = false;
+  const readyToShowTimer = setTimeout(() => {
+    if (!readyToShowFired && mainWindow && !mainWindow.isDestroyed()) {
+      writeMainLog('warn', '[Window] ready-to-show timeout', {
+        timeoutMs: readyToShowTimeoutMs,
+        targetUrl,
+        currentUrl: webContents.getURL(),
+        isLoading: webContents.isLoading(),
+      });
+    }
+  }, readyToShowTimeoutMs);
 
   // 等待页面加载完成后显示窗口
   mainWindow.once('ready-to-show', () => {
+    readyToShowFired = true;
+    clearTimeout(readyToShowTimer);
     perfMark('窗口准备显示');
     mainWindow.show();
     perfMark('窗口已显示');
     perfDiff('开始创建主窗口', '窗口已显示');
+    writeMainLog('info', '[Window] ready-to-show fired and window shown', {
+      currentUrl: webContents.getURL()
+    });
 
     // 打印完整的性能报告
     console.log('\n========== 性能分析报告 ==========');
@@ -576,12 +765,20 @@ function createWindow() {
   });
 
   mainWindow.on('closed', () => {
+    clearTimeout(readyToShowTimer);
+    writeMainLog('info', '[Window] Main window closed');
     mainWindow = null;
   });
 
   // 处理页面加载错误
-  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
     console.error(`页面加载失败: ${errorCode} - ${errorDescription}`);
+    writeMainLog('error', '[Renderer] did-fail-load', {
+      errorCode,
+      errorDescription,
+      validatedURL,
+      isMainFrame
+    });
   });
 }
 
@@ -677,40 +874,57 @@ app.whenReady().then(async () => {
     console.log(`Node 版本: ${process.versions.node}`);
     console.log(`平台: ${process.platform}`);
     console.log(`打包模式: ${app.isPackaged ? '是' : '否'}`);
+    writeMainLog('info', '[App] Startup begin', {
+      electron: process.versions.electron,
+      node: process.versions.node,
+      chrome: process.versions.chrome,
+      platform: process.platform,
+      appIsPackaged: app.isPackaged,
+      userData: app.getPath('userData')
+    });
 
     // 1. 查找可用端口
     backendPort = await findAvailablePort(38000);
     console.log(`✓ 已分配端口: ${backendPort}`);
+    writeMainLog('info', '[App] Backend port selected', { backendPort });
 
     // 2. 启动后端
     await startBackend();
+    writeMainLog('info', '[App] Backend process started');
 
     // 3. 等待后端就绪
     await waitForBackend(backendPort);
+    writeMainLog('info', '[App] Backend is ready');
 
     // 打印后端日志位置
     printLogLocation();
 
     // 4. 创建主窗口
     createWindow();
+    writeMainLog('info', '[App] Main window created');
 
     // 5. 创建自定义菜单
     createMenu();
+    writeMainLog('info', '[App] Application menu created');
 
     // 6. 检查更新（仅生产环境）
     if (app.isPackaged) {
       // 延迟 5 秒检查更新，避免干扰启动性能
       setTimeout(() => {
         log.info('[Updater] Starting update check...');
+        writeMainLog('info', '[Updater] Triggering checkForUpdatesAndNotify');
         autoUpdater.checkForUpdatesAndNotify().catch(err => {
           log.error('[Updater] Check failed:', err);
+          writeMainLog('error', '[Updater] checkForUpdatesAndNotify failed', err);
         });
       }, 5000);
     }
 
     console.log('✓ AutoGLM GUI 启动流程完成');
+    writeMainLog('info', '[App] Startup flow completed');
   } catch (error) {
     console.error('启动失败:', error);
+    writeMainLog('error', '[App] Startup failed', error);
     dialog.showErrorBox('启动失败', `应用启动失败:\n${error.message}`);
     app.quit();
   }
@@ -718,6 +932,7 @@ app.whenReady().then(async () => {
 
 // macOS: 点击 Dock 图标时重新创建窗口
 app.on('activate', () => {
+  writeMainLog('info', '[App] activate event received');
   if (BrowserWindow.getAllWindows().length === 0) {
     createWindow();
   }
@@ -725,6 +940,7 @@ app.on('activate', () => {
 
 // 所有窗口关闭时退出应用（Windows & Linux）
 app.on('window-all-closed', () => {
+  writeMainLog('info', '[App] window-all-closed event', { platform: process.platform });
   if (process.platform !== 'darwin') {
     app.quit();
   }
@@ -733,17 +949,31 @@ app.on('window-all-closed', () => {
 // 应用退出前清理
 app.on('before-quit', () => {
   app.isQuitting = true;
+  writeMainLog('info', '[App] before-quit event');
   stopBackend();
+});
+
+app.on('render-process-gone', (event, webContents, details) => {
+  writeMainLog('error', '[App] render-process-gone', {
+    details,
+    url: webContents?.getURL?.()
+  });
+});
+
+app.on('child-process-gone', (event, details) => {
+  writeMainLog('error', '[App] child-process-gone', details);
 });
 
 // 处理未捕获的异常
 process.on('uncaughtException', (error) => {
   console.error('未捕获的异常:', error);
+  writeMainLog('error', '[App] uncaughtException', error);
   dialog.showErrorBox('应用错误', `发生未预期的错误:\n${error.message}`);
 });
 
 process.on('unhandledRejection', (reason, promise) => {
   console.error('未处理的 Promise 拒绝:', reason);
+  writeMainLog('error', '[App] unhandledRejection', reason);
 });
 
 ipcMain.handle('get-logs-directory', () => {
@@ -778,6 +1008,7 @@ ipcMain.handle('list-log-files', async () => {
       .sort((a, b) => b.modified - a.modified);
   } catch (error) {
     console.error('读取日志目录失败:', error);
+    writeMainLog('error', '[IPC] list-log-files failed', error);
     return [];
   }
 });
@@ -807,6 +1038,10 @@ ipcMain.handle('read-log-file', async (event, filename) => {
     return fs.readFileSync(filePath, 'utf-8');
   } catch (error) {
     console.error('读取日志文件失败:', error);
+    writeMainLog('error', '[IPC] read-log-file failed', {
+      filename,
+      error: normalizeLogDetail(error)
+    });
     throw error;
   }
 });
@@ -828,6 +1063,7 @@ ipcMain.handle('open-logs-folder', async () => {
     return { success: true };
   } catch (error) {
     console.error('打开日志目录失败:', error);
+    writeMainLog('error', '[IPC] open-logs-folder failed', error);
     return { success: false, error: error.message };
   }
 });
