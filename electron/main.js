@@ -644,10 +644,14 @@ function createWindow() {
   });
   webContents.on('console-message', (event, level, message, line, sourceId) => {
     const rendererLog = { message, line, sourceId };
-    if (level === 2) {
+    // Electron console-message level mapping:
+    // 0=verbose, 1=info, 2=warning, 3=error
+    if (level === 3) {
       writeMainLog('error', '[RendererConsole] error', rendererLog);
-    } else if (level === 1) {
+    } else if (level === 2) {
       writeMainLog('warn', '[RendererConsole] warn', rendererLog);
+    } else if (level === 1) {
+      writeMainLog('info', '[RendererConsole] info', rendererLog);
     } else if (process.env.AUTOGLM_DEBUG_RENDERER === '1') {
       writeMainLog('debug', '[RendererConsole] info', rendererLog);
     }
