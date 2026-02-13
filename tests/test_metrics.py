@@ -5,6 +5,8 @@ from fastapi.testclient import TestClient
 
 from AutoGLM_GUI.api import create_app
 
+pytestmark = [pytest.mark.contract, pytest.mark.release_gate]
+
 
 @pytest.fixture
 def client():

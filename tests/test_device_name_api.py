@@ -9,6 +9,8 @@ from AutoGLM_GUI.device_metadata_manager import (
     DeviceMetadataManager,
 )
 
+pytestmark = [pytest.mark.contract, pytest.mark.release_gate]
+
 
 @pytest.fixture
 def client():

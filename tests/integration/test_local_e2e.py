@@ -14,9 +14,11 @@ import httpx
 import pytest
 
 
+@pytest.mark.integration
 class TestLocalE2E:
     """End-to-end tests with AutoGLM-GUI running locally (no Docker)."""
 
+    @pytest.mark.release_gate
     def test_meituan_message_scenario(
         self,
         local_server: dict,

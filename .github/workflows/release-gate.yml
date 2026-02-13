@@ -1,0 +1,48 @@
+name: Release Gate
+
+on:
+  pull_request:
+    branches: [main, dev]
+    paths:
+      - 'AutoGLM_GUI/**'
+      - 'tests/**'
+      - 'scripts/lint.py'
+      - 'pytest.ini'
+      - 'pyproject.toml'
+      - 'uv.lock'
+      - '.github/workflows/release-gate.yml'
+  workflow_dispatch:
+
+jobs:
+  release-gate:
+    name: Contract + Critical Integration Gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python & uv
+        uses: ./.github/actions/setup-python
+        with:
+          frozen: "true"
+
+      - name: Backend lint (check-only)
+        run: |
+          uv run python scripts/lint.py --backend --check-only
+
+      - name: Run release gate tests
+        run: |
+          uv run pytest -m "release_gate" -v
+
+      - name: Generate summary
+        if: always()
+        run: |
+          echo "## Release Gate Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [ "${{ job.status }}" = "success" ]; then
+            echo "✅ Release gate passed (contract + critical integration tests)." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "❌ Release gate failed. Check failing tests before release." >> $GITHUB_STEP_SUMMARY
+          fi
