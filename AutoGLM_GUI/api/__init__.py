@@ -55,6 +55,10 @@ _STATIC_MEDIA_TYPES: dict[str, str] = {
     ".map": "application/json",
     ".wasm": "application/wasm",
     ".svg": "image/svg+xml",
+    ".ico": "image/x-icon",
+    ".woff": "font/woff",
+    ".woff2": "font/woff2",
+    ".webp": "image/webp",
 }
 
 
