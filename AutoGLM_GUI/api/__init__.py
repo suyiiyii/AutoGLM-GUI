@@ -1,18 +1,23 @@
 """FastAPI application factory and route registration."""
 
 import asyncio
+import mimetypes
 import os
 import sys
 from contextlib import asynccontextmanager
 from importlib.resources import files
+from os import PathLike
 from pathlib import Path
-
 from typing import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.datastructures import Headers
+from starlette.responses import Response
+from starlette.staticfiles import NotModifiedResponse
+from starlette.types import Scope
 
 from AutoGLM_GUI.adb_plus.qr_pair import qr_pairing_manager
 from AutoGLM_GUI.version import APP_VERSION
@@ -38,6 +43,49 @@ def _get_cors_origins() -> list[str]:
     if cors_origins_str == "*":
         return ["*"]
     return [origin.strip() for origin in cors_origins_str.split(",") if origin.strip()]
+
+
+# Explicit MIME overrides for frontend assets.
+# Some runtime environments (e.g. packaged/minimal systems) may not ship a full mime db.
+_STATIC_MEDIA_TYPES: dict[str, str] = {
+    ".js": "application/javascript",
+    ".mjs": "application/javascript",
+    ".css": "text/css",
+    ".json": "application/json",
+    ".map": "application/json",
+    ".wasm": "application/wasm",
+    ".svg": "image/svg+xml",
+}
+
+
+def _guess_media_type(file_path: Path) -> str | None:
+    suffix = file_path.suffix.lower()
+    if suffix in _STATIC_MEDIA_TYPES:
+        return _STATIC_MEDIA_TYPES[suffix]
+    media_type, _ = mimetypes.guess_type(str(file_path), strict=False)
+    return media_type
+
+
+class _FrontendStaticFiles(StaticFiles):
+    """StaticFiles with deterministic MIME types for frontend assets."""
+
+    def file_response(
+        self,
+        full_path: str | PathLike[str],
+        stat_result: os.stat_result,
+        scope: Scope,
+        status_code: int = 200,
+    ) -> Response:
+        request_headers = Headers(scope=scope)
+        response = FileResponse(
+            full_path,
+            status_code=status_code,
+            stat_result=stat_result,
+            media_type=_guess_media_type(Path(str(full_path))),
+        )
+        if self.is_not_modified(response.headers, request_headers):
+            return NotModifiedResponse(response.headers)
+        return response
 
 
 def _get_static_dir() -> Path | None:
@@ -154,29 +202,17 @@ def create_app() -> FastAPI:
         assets_dir = static_dir / "assets"
         if assets_dir.exists():
             # Vite builds assets with content hashes, so we can cache them long-term
-            app.mount("/assets", StaticFiles(directory=assets_dir), name="assets")
+            app.mount(
+                "/assets", _FrontendStaticFiles(directory=assets_dir), name="assets"
+            )
 
         # Define SPA serving function
         async def serve_spa(full_path: str) -> FileResponse:
             file_path = static_dir / full_path
             if file_path.is_file():
-                # Explicitly set media_type for common file types to avoid MIME detection issues
-                # This is critical for PyInstaller environments where mimetypes module may fail
-                media_type = None
-                suffix = file_path.suffix.lower()
-                if suffix == ".js":
-                    media_type = "application/javascript"
-                elif suffix == ".css":
-                    media_type = "text/css"
-                elif suffix == ".json":
-                    media_type = "application/json"
-                elif suffix in (".png", ".jpg", ".jpeg", ".gif", ".svg", ".ico"):
-                    # Let FileResponse auto-detect image types (usually works)
-                    media_type = None
-
                 return FileResponse(
                     file_path,
-                    media_type=media_type,
+                    media_type=_guess_media_type(file_path),
                     headers={
                         "Cache-Control": "no-cache, no-store, must-revalidate",
                         "Pragma": "no-cache",
