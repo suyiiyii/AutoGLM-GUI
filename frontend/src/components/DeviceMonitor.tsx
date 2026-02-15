@@ -35,13 +35,13 @@ interface DeviceMonitorProps {
   className?: string;
 }
 
-export function DeviceMonitor({
+const DeviceMonitorBase = ({
   deviceId,
   serial: _serial,
   connectionType,
   isVisible = true,
   className = '',
-}: DeviceMonitorProps) {
+}: DeviceMonitorProps) => {
   const t = useTranslation();
 
   const isRemoteDevice = connectionType === 'remote';
@@ -465,4 +465,6 @@ export function DeviceMonitor({
       )}
     </Card>
   );
-}
+};
+
+export const DeviceMonitor = React.memo(DeviceMonitorBase);
