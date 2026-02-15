@@ -3,7 +3,7 @@
 import asyncio
 import json
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException
+from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import ValidationError
 
@@ -83,7 +83,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
 
 @router.post("/api/chat/stream")
-async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
+async def chat_stream(request: ChatRequest):
     """发送任务给 Agent 并实时推送执行进度（SSE，多设备支持）。
 
     Agent 会在首次使用时自动初始化，无需手动预初始化。
@@ -127,25 +127,6 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
         )
 
     logger.info(f"Device lock acquired for {device_id}")
-
-    # ===== 定义清理函数 =====
-    async def cleanup():
-        """Background task: 清理资源"""
-        try:
-            await asyncio.to_thread(manager.unregister_abort_handler, device_id)
-            logger.debug(f"Abort handler unregistered for {device_id}")
-        except Exception as e:
-            logger.warning(f"Failed to unregister abort handler for {device_id}: {e}")
-
-        if acquired:
-            try:
-                await asyncio.to_thread(manager.release_device, device_id)
-                logger.info(f"Device lock released for {device_id} (background task)")
-            except Exception as e:
-                logger.error(f"Failed to release device lock for {device_id}: {e}")
-
-    # ===== 注册 background task =====
-    background_tasks.add_task(cleanup)
 
     async def event_generator():
         start_time = datetime.now()
@@ -235,6 +216,20 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
             yield "event: error\n"
             yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
 
+        finally:
+            # ===== 无论 generator 如何结束都释放锁 =====
+            # 覆盖：正常完成、取消、异常、客户端断开(aclose)
+            try:
+                await asyncio.to_thread(manager.unregister_abort_handler, device_id)
+            except Exception:
+                pass
+            if acquired:
+                try:
+                    await asyncio.to_thread(manager.release_device, device_id)
+                    logger.info(f"Device lock released for {device_id}")
+                except Exception as e:
+                    logger.error(f"Failed to release device lock for {device_id}: {e}")
+
         # ===== 保存历史记录 =====
         device_manager = DeviceManager.get_instance()
         serialno = device_manager.get_serial_by_device_id(device_id)
@@ -253,8 +248,6 @@ async def chat_stream(request: ChatRequest, background_tasks: BackgroundTasks):
                 messages=messages,
             )
             history_manager.add_record(serialno, record)
-
-        # Generator 正常结束，cleanup 会在 background task 中执行
 
     return StreamingResponse(
         event_generator(),

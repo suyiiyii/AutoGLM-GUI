@@ -365,6 +365,10 @@ class PhoneAgentManager:
 
             logger.info(f"Agent reset for device {device_id}")
 
+        # 强制释放设备锁（防御性措施）
+        # 防止 streaming 清理未执行时锁永久卡死
+        self.release_device(device_id)
+
     def destroy_agent(self, device_id: str) -> None:
         """
         Destroy agent and clean up resources.
