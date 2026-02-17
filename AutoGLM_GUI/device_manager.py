@@ -267,6 +267,11 @@ class DeviceManager:
         self._remote_devices: dict[str, "DeviceProtocol"] = {}
         self._remote_device_configs: dict[str, dict] = {}
 
+        # ADB Keyboard setup state (process-local, best-effort)
+        self._adb_keyboard_attempted_serials: set[DeviceSerial] = set()
+        self._adb_keyboard_ready_serials: set[DeviceSerial] = set()
+        self._adb_keyboard_setup_lock = threading.Lock()
+
         from AutoGLM_GUI.device_metadata_manager import DeviceMetadataManager
 
         self._metadata_manager = DeviceMetadataManager.get_instance()
@@ -978,6 +983,43 @@ class DeviceManager:
         """
         return self._device_id_to_serial.get(device_id)
 
+    def _ensure_adb_keyboard_once(
+        self, device_id: ConnectionDeviceID, managed: ManagedDevice
+    ) -> None:
+        """Best-effort ADB Keyboard setup for local ADB devices (once per serial)."""
+        if managed.connection_type == DeviceConnectionType.REMOTE:
+            return
+
+        serial = managed.serial
+        with self._adb_keyboard_setup_lock:
+            if serial in self._adb_keyboard_attempted_serials:
+                return
+            self._adb_keyboard_attempted_serials.add(serial)
+
+        try:
+            from AutoGLM_GUI.adb_plus import ADBKeyboardInstaller
+
+            logger.info(f"Checking ADB Keyboard for device {device_id}...")
+            installer = ADBKeyboardInstaller(device_id=device_id)
+            status = installer.get_status()
+
+            if status.get("installed") and status.get("enabled"):
+                with self._adb_keyboard_setup_lock:
+                    self._adb_keyboard_ready_serials.add(serial)
+                logger.info(f"Device {device_id}: ADB Keyboard ready")
+                return
+
+            logger.info(f"Setting up ADB Keyboard for device {device_id}...")
+            success, message = installer.auto_setup()
+            if success:
+                with self._adb_keyboard_setup_lock:
+                    self._adb_keyboard_ready_serials.add(serial)
+                logger.info(f"Device {device_id}: {message}")
+            else:
+                logger.warning(f"Device {device_id}: {message}")
+        except Exception as e:
+            logger.warning(f"ADB Keyboard setup failed for {device_id}: {e}")
+
     def get_device_protocol(self, device_id: ConnectionDeviceID) -> "DeviceProtocol":
         """
         根据 device_id 获取 DeviceProtocol 实例（统一入口）.
@@ -1014,11 +1056,15 @@ class DeviceManager:
                     )
                 return remote_device  # type: ignore[return-value]
 
-            else:
-                # ADB device (USB / WiFi): 返回本地 ADB 包装
-                from AutoGLM_GUI.devices.adb_device import ADBDevice
+            # ADB device (USB / WiFi): 返回本地 ADB 包装
+            local_device_id = managed.primary_device_id
+            local_managed = managed
 
-                return ADBDevice(managed.primary_device_id)
+        self._ensure_adb_keyboard_once(local_device_id, local_managed)
+
+        from AutoGLM_GUI.devices.adb_device import ADBDevice
+
+        return ADBDevice(local_device_id)
 
     def set_device_display_name(self, serial: str, display_name: Optional[str]) -> None:
         """Set custom display name for device."""

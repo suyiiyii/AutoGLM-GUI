@@ -170,8 +170,6 @@ class PhoneAgentManager:
                     device_manager.force_refresh()
                     device = device_manager.get_device_protocol(actual_device_id)
 
-                self._prepare_adb_keyboard_if_needed(actual_device_id, device_manager)
-
                 agent = create_agent(
                     agent_type=agent_type,
                     model_config=model_config,
@@ -202,45 +200,6 @@ class PhoneAgentManager:
                 raise AgentInitializationError(
                     f"Failed to initialize agent: {str(e)}"
                 ) from e
-
-    def _prepare_adb_keyboard_if_needed(
-        self, actual_device_id: str, device_manager
-    ) -> None:
-        """Best-effort ADB Keyboard preparation for local ADB devices."""
-        from AutoGLM_GUI.adb_plus import ADBKeyboardInstaller
-
-        managed = device_manager.get_device_by_device_id(actual_device_id)
-        if not managed:
-            logger.warning(
-                f"Skipping ADB Keyboard setup: device {actual_device_id} not found in DeviceManager"
-            )
-            return
-
-        if managed.connection_type.value == "remote":
-            logger.debug(
-                f"Skipping ADB Keyboard setup for remote device {actual_device_id}"
-            )
-            return
-
-        try:
-            logger.info(f"Checking ADB Keyboard for device {actual_device_id}...")
-            installer = ADBKeyboardInstaller(device_id=actual_device_id)
-            status = installer.get_status()
-
-            if status.get("installed") and status.get("enabled"):
-                logger.info(f"Device {actual_device_id}: ADB Keyboard ready")
-                return
-
-            logger.info(f"Setting up ADB Keyboard for device {actual_device_id}...")
-            success, message = installer.auto_setup()
-            if success:
-                logger.info(f"Device {actual_device_id}: {message}")
-            else:
-                logger.warning(f"Device {actual_device_id}: {message}")
-        except Exception as e:
-            logger.warning(
-                f"ADB Keyboard preparation failed for {actual_device_id}: {e}"
-            )
 
     def _auto_initialize_agent(
         self, agent_key: str, actual_device_id: str, agent_type: str | None = None
