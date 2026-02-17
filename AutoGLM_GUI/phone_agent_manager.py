@@ -138,9 +138,23 @@ class PhoneAgentManager:
 
             device_lock = self._get_device_lock(device_id)
             if device_lock.locked():
-                raise DeviceBusyError(
-                    f"Device {device_id} is currently processing a request"
-                )
+                # Self-heal stale lock: lock is held but there is no active agent/metadata.
+                # This can happen after abrupt teardown paths (e.g. config-driven destroy).
+                metadata = self._metadata.get(device_id)
+                has_runtime_state = device_id in self._agents or metadata is not None
+                if not has_runtime_state:
+                    logger.warning(
+                        f"Detected stale lock for {device_id} during initialization, force releasing"
+                    )
+                    try:
+                        device_lock.release()
+                    except RuntimeError:
+                        # Lock state may have changed concurrently.
+                        pass
+                else:
+                    raise DeviceBusyError(
+                        f"Device {device_id} is currently processing a request"
+                    )
 
             self._metadata[device_id] = AgentMetadata(
                 device_id=device_id,
@@ -373,6 +387,10 @@ class PhoneAgentManager:
             device_id: Device identifier
         """
         with self._manager_lock:
+            # Best-effort lock cleanup to avoid stale busy state after teardown.
+            # This can safely release from a different thread for threading.Lock.
+            self.release_device(device_id)
+
             # Remove agent
             agent = self._agents.pop(device_id, None)
             if agent:
