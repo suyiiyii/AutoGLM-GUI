@@ -75,6 +75,25 @@ const getInitialCollapsedState = (): boolean => {
   }
 };
 
+const SIDEBAR_DEFAULT_WIDTH = 320;
+const SIDEBAR_MIN_WIDTH = 260;
+const SIDEBAR_MAX_WIDTH = 560;
+
+const getInitialSidebarWidth = (): number => {
+  try {
+    const saved = localStorage.getItem('sidebar-width');
+    if (saved !== null) {
+      const parsed = Number(saved);
+      if (!Number.isNaN(parsed)) {
+        return Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, parsed));
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to load sidebar width:', error);
+  }
+  return SIDEBAR_DEFAULT_WIDTH;
+};
+
 interface DeviceSidebarProps {
   devices: Device[];
   currentDeviceId: string;
@@ -100,6 +119,10 @@ export function DeviceSidebar({
 }: DeviceSidebarProps) {
   const t = useTranslation();
   const [isCollapsed, setIsCollapsed] = useState(getInitialCollapsedState);
+  const [sidebarWidth, setSidebarWidth] = useState(getInitialSidebarWidth);
+  const [isResizing, setIsResizing] = useState(false);
+  const dragStartX = useRef(0);
+  const dragStartWidth = useRef(sidebarWidth);
 
   // Device groups state
   const [groups, setGroups] = useState<DeviceGroup[]>([]);
@@ -180,6 +203,39 @@ export function DeviceSidebar({
   }, [isCollapsed]);
 
   useEffect(() => {
+    localStorage.setItem('sidebar-width', String(sidebarWidth));
+  }, [sidebarWidth]);
+
+  useEffect(() => {
+    if (!isResizing) return;
+
+    const handleMouseMove = (event: MouseEvent) => {
+      const delta = event.clientX - dragStartX.current;
+      const nextWidth = Math.min(
+        SIDEBAR_MAX_WIDTH,
+        Math.max(SIDEBAR_MIN_WIDTH, dragStartWidth.current + delta)
+      );
+      setSidebarWidth(nextWidth);
+    };
+
+    const handleMouseUp = () => {
+      setIsResizing(false);
+    };
+
+    document.body.style.userSelect = 'none';
+    document.body.style.cursor = 'col-resize';
+    window.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp);
+
+    return () => {
+      document.body.style.userSelect = '';
+      document.body.style.cursor = '';
+      window.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+
+  useEffect(() => {
     const handleKeyDown = (event: KeyboardEvent) => {
       if ((event.metaKey || event.ctrlKey) && event.key === 'b') {
         event.preventDefault();
@@ -192,6 +248,14 @@ export function DeviceSidebar({
 
   const toggleCollapse = () => {
     setIsCollapsed(!isCollapsed);
+  };
+
+  const handleResizeStart = (event: React.MouseEvent<HTMLDivElement>) => {
+    if (isCollapsed) return;
+    event.preventDefault();
+    dragStartX.current = event.clientX;
+    dragStartWidth.current = sidebarWidth;
+    setIsResizing(true);
   };
 
   // Validation helpers
@@ -608,15 +672,26 @@ export function DeviceSidebar({
       {/* Sidebar */}
       <div
         className={`
-          ${isCollapsed ? 'w-0 -ml-4 opacity-0' : 'w-80 opacity-100'}
-          transition-all duration-300 ease-in-out
+          ${isCollapsed ? 'w-0 -ml-4 opacity-0' : 'opacity-100'}
+          ${isResizing ? '' : 'transition-[width,opacity,margin] duration-300 ease-in-out'}
           h-full min-h-0
           bg-white dark:bg-slate-950
           border-r border-slate-200 dark:border-slate-800
-          flex flex-col
+          flex flex-col relative
           overflow-hidden
         `}
+        style={isCollapsed ? undefined : { width: `${sidebarWidth}px` }}
       >
+        {!isCollapsed && (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            onMouseDown={handleResizeStart}
+            className="absolute top-0 right-0 bottom-0 w-1.5 cursor-col-resize hover:bg-[#1d9bf0]/30 active:bg-[#1d9bf0]/40 z-20"
+            title="Drag to resize"
+          />
+        )}
+
         {/* Header */}
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-2">
