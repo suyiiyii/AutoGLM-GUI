@@ -8,6 +8,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   platform: process.platform,
 
+  app: {
+    relaunch: () => ipcRenderer.invoke('app-relaunch')
+  },
+
   logs: {
     getDirectory: () => ipcRenderer.invoke('get-logs-directory'),
     listFiles: () => ipcRenderer.invoke('list-log-files'),

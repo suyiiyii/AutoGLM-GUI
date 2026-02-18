@@ -371,11 +371,9 @@ def get_config_endpoint() -> ConfigResponse:
 def save_config_endpoint(request: ConfigSaveRequest) -> dict:
     """保存配置到文件.
 
-    副作用：保存配置后会自动销毁所有已初始化的 Agent，
-    确保下次使用时所有 Agent 都使用新配置。
+    配置保存后需重启应用以立即生效。
     """
     from AutoGLM_GUI.config_manager import ConfigModel, config_manager
-    from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
     try:
         # Validate incoming configuration
@@ -406,25 +404,13 @@ def save_config_endpoint(request: ConfigSaveRequest) -> dict:
         # 同步到环境变量
         config_manager.sync_to_env()
 
-        # 副作用：销毁所有已初始化的 Agent，确保下次使用新配置
-        manager = PhoneAgentManager.get_instance()
-        destroyed_agents = manager.list_agents()  # 获取需要销毁的 agent 列表
-
-        for device_id in destroyed_agents:
-            try:
-                manager.destroy_agent(device_id)
-                logger.info(f"Destroyed agent for {device_id} after config change")
-            except Exception as e:
-                logger.warning(f"Failed to destroy agent for {device_id}: {e}")
-
         # 检测冲突并返回警告
         conflicts = config_manager.detect_conflicts()
 
-        response_message = f"Configuration saved to {config_manager.get_config_path()}"
-        if destroyed_agents:
-            response_message += (
-                f". Destroyed {len(destroyed_agents)} agent(s) to apply new config."
-            )
+        response_message = (
+            f"Configuration saved to {config_manager.get_config_path()}."
+            " Restart required to apply new configuration immediately."
+        )
 
         if conflicts:
             warnings = [
@@ -435,13 +421,13 @@ def save_config_endpoint(request: ConfigSaveRequest) -> dict:
                 "success": True,
                 "message": response_message,
                 "warnings": warnings,
-                "destroyed_agents": len(destroyed_agents),
+                "restart_required": True,
             }
 
         return {
             "success": True,
             "message": response_message,
-            "destroyed_agents": len(destroyed_agents),
+            "restart_required": True,
         }
 
     except ValidationError as e:

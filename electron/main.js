@@ -1071,3 +1071,10 @@ ipcMain.handle('open-logs-folder', async () => {
     return { success: false, error: error.message };
   }
 });
+
+ipcMain.handle('app-relaunch', async () => {
+  writeMainLog('info', '[IPC] app-relaunch requested');
+  app.relaunch();
+  app.exit(0);
+  return { success: true };
+});

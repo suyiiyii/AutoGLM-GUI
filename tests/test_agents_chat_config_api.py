@@ -300,7 +300,7 @@ def test_get_config_masks_empty_api_key_and_maps_conflicts(
     ]
 
 
-def test_save_config_success_with_warnings_and_destroyed_agents(
+def test_save_config_success_with_warnings_and_restart_required(
     env: dict[str, Any],
 ) -> None:
     env["config_manager"].conflicts = [
@@ -311,8 +311,6 @@ def test_save_config_success_with_warnings_and_destroyed_agents(
             override_source=SimpleNamespace(value="CLI arguments"),
         )
     ]
-    env["phone_manager"].destroy_candidates = ["device-ok", "device-fail"]
-
     response = env["client"].post(
         "/api/config",
         json={
@@ -327,12 +325,12 @@ def test_save_config_success_with_warnings_and_destroyed_agents(
     assert response.status_code == 200
     payload = response.json()
     assert payload["success"] is True
-    assert payload["destroyed_agents"] == 2
+    assert payload["restart_required"] is True
     assert "warnings" in payload
     assert env["config_manager"].sync_called is True
     assert env["config_manager"].save_kwargs is not None
     assert env["config_manager"].save_kwargs["merge_mode"] is True
-    assert env["phone_manager"].destroy_calls == ["device-ok", "device-fail"]
+    assert env["phone_manager"].destroy_calls == []
 
 
 def test_save_config_returns_500_when_persist_fails(env: dict[str, Any]) -> None:

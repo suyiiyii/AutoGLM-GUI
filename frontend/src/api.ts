@@ -643,6 +643,13 @@ export interface ConfigSaveRequest {
   decision_api_key?: string;
 }
 
+export interface ConfigSaveResponse {
+  success: boolean;
+  message: string;
+  restart_required?: boolean;
+  warnings?: string[];
+}
+
 export async function getConfig(): Promise<ConfigResponse> {
   const res = await axios.get<ConfigResponse>('/api/config');
   return res.data;
@@ -650,8 +657,8 @@ export async function getConfig(): Promise<ConfigResponse> {
 
 export async function saveConfig(
   config: ConfigSaveRequest
-): Promise<{ success: boolean; message: string }> {
-  const res = await axios.post('/api/config', config);
+): Promise<ConfigSaveResponse> {
+  const res = await axios.post<ConfigSaveResponse>('/api/config', config);
   return res.data;
 }
 
