@@ -1075,6 +1075,6 @@ ipcMain.handle('open-logs-folder', async () => {
 ipcMain.handle('app-relaunch', async () => {
   writeMainLog('info', '[IPC] app-relaunch requested');
   app.relaunch();
-  app.exit(0);
+  app.quit();
   return { success: true };
 });
