@@ -267,12 +267,68 @@ class ElectronBuilder:
 
         return True
 
+    def _is_macos_electron_dist_valid(self) -> bool:
+        """校验 macOS Electron dist 是否保留 framework 的符号链接结构。"""
+        dist_dir = self.electron_dir / "node_modules" / "electron" / "dist"
+        framework_dir = (
+            dist_dir
+            / "Electron.app"
+            / "Contents"
+            / "Frameworks"
+            / "Electron Framework.framework"
+        )
+        required_paths = [
+            framework_dir / "Electron Framework",
+            framework_dir / "Helpers",
+            framework_dir / "Libraries",
+            framework_dir / "Resources",
+            framework_dir / "Versions" / "Current",
+        ]
+
+        return framework_dir.exists() and all(
+            path.is_symlink() for path in required_paths
+        )
+
+    def ensure_electron_dist_integrity(self) -> bool:
+        """必要时重置并重新下载 Electron dist，避免 framework symlink 被展开。"""
+        if not self.is_macos:
+            return True
+
+        dist_dir = self.electron_dir / "node_modules" / "electron" / "dist"
+        if self._is_macos_electron_dist_valid():
+            print_success("Electron dist 校验通过（framework symlink 结构正常）")
+            return True
+
+        print_warning(
+            "Electron dist 异常（缺失或 symlink 结构不正确），正在重新下载..."
+        )
+        if dist_dir.exists():
+            shutil.rmtree(dist_dir)
+            print_success("已清理异常的 Electron dist")
+
+        if not run_command(
+            ["node", "node_modules/electron/install.js"],
+            cwd=self.electron_dir,
+        ):
+            print_error("重新下载 Electron dist 失败")
+            return False
+
+        if not self._is_macos_electron_dist_valid():
+            print_error("Electron dist 重新下载后仍异常，请检查网络/缓存环境")
+            return False
+
+        print_success("Electron dist 修复完成（framework symlink 结构正常）")
+        return True
+
     def build_electron(self) -> bool:
         """构建 Electron 应用"""
         print_step("安装 Electron 依赖", 7, 6)
 
         # 安装 Electron 依赖（使用 pnpm，electron-builder 26.x+ 已支持）
         if not run_command(["pnpm", "install"], cwd=self.electron_dir):
+            return False
+
+        if not self.ensure_electron_dist_integrity():
             return False
 
         print_step("构建 Electron 应用", 7, 7)

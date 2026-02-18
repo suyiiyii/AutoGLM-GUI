@@ -66,6 +66,41 @@ jobs:
           node-version: ${{ inputs.node_version }}
           cache-suffix: ${{ inputs.platform == 'macos-x64' && 'x64' || '' }}
 
+      - name: Validate Electron dist symlinks (macOS)
+        if: startsWith(inputs.platform, 'macos')
+        shell: bash
+        run: |
+          DIST_DIR="electron/node_modules/electron/dist"
+          FRAMEWORK_DIR="$DIST_DIR/Electron.app/Contents/Frameworks/Electron Framework.framework"
+
+          check_dist() {
+            [ -d "$FRAMEWORK_DIR" ] || return 1
+            [ -L "$FRAMEWORK_DIR/Electron Framework" ] || return 1
+            [ -L "$FRAMEWORK_DIR/Helpers" ] || return 1
+            [ -L "$FRAMEWORK_DIR/Libraries" ] || return 1
+            [ -L "$FRAMEWORK_DIR/Resources" ] || return 1
+            [ -L "$FRAMEWORK_DIR/Versions/Current" ] || return 1
+          }
+
+          if check_dist; then
+            echo "Electron dist symlink structure is valid"
+          else
+            echo "Electron dist is invalid, reinstalling..."
+            rm -rf "$DIST_DIR"
+            (
+              cd electron
+              node node_modules/electron/install.js
+            )
+          fi
+
+          if ! check_dist; then
+            echo "Electron dist symlink structure is still invalid after reinstall"
+            exit 1
+          fi
+
+          symlink_count=$(find "$DIST_DIR/Electron.app" -type l | wc -l | tr -d ' ')
+          echo "Electron.app symlink count: $symlink_count"
+
       # Build with CI=false when not publishing (prevents implicit publish)
       - name: Build application (CI mode)
         if: inputs.publish_mode == 'never'
