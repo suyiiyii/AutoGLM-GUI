@@ -1,6 +1,6 @@
 [project]
 name = "autoglm-gui"
-version = "1.5.10"
+version = "1.5.11"
 description = "Web GUI for AutoGLM Phone Agent - AI-powered Android automation"
 readme = "README.md"
 requires-python = ">=3.10"

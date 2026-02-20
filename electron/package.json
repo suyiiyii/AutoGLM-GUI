@@ -1,6 +1,6 @@
 {
   "name": "autoglm-gui",
-  "version": "1.5.10",
+  "version": "1.5.11",
   "description": "AutoGLM GUI - AI-powered Android automation desktop app",
   "main": "main.js",
   "homepage": "https://github.com/suyiiyii/AutoGLM-GUI",
