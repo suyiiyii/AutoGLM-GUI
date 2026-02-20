@@ -41,7 +41,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Copy Python project files
 COPY pyproject.toml README.md ./
 COPY AutoGLM_GUI ./AutoGLM_GUI
-COPY scrcpy-server-v3.3.3 ./scrcpy-server-v3.3.3
 
 # Copy frontend build output from Stage 1 BEFORE pip install
 # This ensures static files are included in the Python package

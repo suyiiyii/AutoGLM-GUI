@@ -32,7 +32,7 @@ electron/node_modules/
 electron/dist/
 
 # Build resources
-resources/
+/resources/
 
 # Logs
 *.log

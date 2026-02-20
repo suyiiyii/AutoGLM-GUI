@@ -27,7 +27,7 @@ a = Analysis(
     # 二进制文件
     binaries=[
         # scrcpy-server 二进制文件（必需）
-        (str(ROOT_DIR / 'scrcpy-server-v3.3.3'), '.'),
+        (str(ROOT_DIR / 'AutoGLM_GUI' / 'resources' / 'scrcpy-server-v3.3.3'), 'AutoGLM_GUI/resources'),
     ],
 
     # 数据文件

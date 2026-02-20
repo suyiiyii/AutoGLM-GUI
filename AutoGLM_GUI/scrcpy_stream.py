@@ -155,14 +155,18 @@ class ScrcpyStreamer:
         # Priority 1: PyInstaller bundled path (for packaged executable)
         meipass = getattr(sys, "_MEIPASS", None)
         if meipass:
-            bundled_server = Path(meipass) / "scrcpy-server-v3.3.3"
+            bundled_server = (
+                Path(meipass) / "AutoGLM_GUI" / "resources" / "scrcpy-server-v3.3.3"
+            )
             if bundled_server.exists():
                 logger.info(f"Using bundled scrcpy-server: {bundled_server}")
                 return str(bundled_server)
 
-        # Priority 2: Project root directory (for repository version)
+        # Priority 2: Project resources directory (for repository version)
         project_root = Path(__file__).parent.parent
-        project_server = project_root / "scrcpy-server-v3.3.3"
+        project_server = (
+            project_root / "AutoGLM_GUI" / "resources" / "scrcpy-server-v3.3.3"
+        )
         if project_server.exists():
             logger.info(f"Using project scrcpy-server: {project_server}")
             return str(project_server)
@@ -186,7 +190,7 @@ class ScrcpyStreamer:
                 return path
 
         raise FileNotFoundError(
-            "scrcpy-server not found. Please put scrcpy-server-v3.3.3 in project root or set SCRCPY_SERVER_PATH."
+            "scrcpy-server not found. Please put scrcpy-server-v3.3.3 in AutoGLM_GUI/resources or set SCRCPY_SERVER_PATH."
         )
 
     async def start(self) -> None:

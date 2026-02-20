@@ -34,8 +34,6 @@ extraResources:
     to: backend
   - from: ../resources/adb
     to: adb
-  - from: ../scrcpy-server-v3.3.3
-    to: ./
 
 win:
   target:
