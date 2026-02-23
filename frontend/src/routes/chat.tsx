@@ -94,6 +94,13 @@ const AGENT_PRESETS = [
       history_n: 3,
     },
   },
+  {
+    name: 'gemini',
+    displayName: 'Gemini Agent',
+    description: '通用视觉模型，支持 Gemini/GPT-4o 等，使用 Function Calling',
+    icon: Sparkles,
+    defaultConfig: {},
+  },
 ] as const;
 
 // 决策模型预设配置（与视觉模型保持一致）

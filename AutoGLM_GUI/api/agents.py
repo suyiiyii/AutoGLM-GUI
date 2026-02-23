@@ -55,7 +55,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
             manager.get_agent_with_context,
             device_id,
             context="chat",
-            agent_type="glm-async",
+            agent_type=None,  # 使用配置中的 agent_type
         )
 
         # AsyncAgent is always used for chat context

@@ -227,7 +227,7 @@ async def chat(device_id: str, message: str) -> str:
             manager.get_agent_with_context,
             device_id,
             context="layered",
-            agent_type="glm-async",
+            agent_type=None,  # 使用配置中的 agent_type
         )
 
         # 临时覆盖配置

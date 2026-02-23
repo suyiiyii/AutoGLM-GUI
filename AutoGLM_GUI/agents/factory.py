@@ -6,7 +6,7 @@ making it easy to add new agent types without modifying existing code.
 
 from __future__ import annotations
 
-from typing import Callable, Dict
+from typing import Callable
 
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.logger import logger
@@ -16,7 +16,7 @@ from .protocols import AsyncAgent, BaseAgent
 
 
 # Agent registry: agent_type -> (creator_function, config_schema)
-AGENT_REGISTRY: Dict[str, Callable] = {}
+AGENT_REGISTRY: dict[str, Callable] = {}
 
 
 def register_agent(
@@ -160,6 +160,32 @@ def _create_internal_mai_agent(
     )
 
 
+def _create_async_gemini_agent(
+    model_config: ModelConfig,
+    agent_config: AgentConfig,
+    agent_specific_config: AgentSpecificConfig,  # noqa: ARG001
+    device,
+    takeover_callback: Callable | None = None,
+    confirmation_callback: Callable | None = None,
+) -> AsyncAgent:
+    """Create AsyncGeminiAgent instance.
+
+    Uses OpenAI-compatible function calling for general vision models
+    (Gemini, GPT-4o, Claude, etc.).
+    """
+    from .gemini.async_agent import AsyncGeminiAgent
+
+    return AsyncGeminiAgent(  # type: ignore[return-value]
+        model_config=model_config,
+        agent_config=agent_config,
+        device=device,
+        confirmation_callback=confirmation_callback,
+        takeover_callback=takeover_callback,
+    )
+
+
 register_agent("glm-async", _create_async_glm_agent)
 register_agent("async-glm", _create_async_glm_agent)  # 别名
 register_agent("mai", _create_internal_mai_agent)
+register_agent("gemini", _create_async_gemini_agent)
+register_agent("general-vision", _create_async_gemini_agent)  # 通用别名

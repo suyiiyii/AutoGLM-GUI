@@ -80,8 +80,10 @@ class ActionHandler:
     def _convert_relative_to_absolute(
         self, element: list[int], screen_width: int, screen_height: int
     ) -> tuple[int, int]:
-        x = int(element[0] / 1000 * screen_width)
-        y = int(element[1] / 1000 * screen_height)
+        clamped_x = max(0, min(element[0], 1000))
+        clamped_y = max(0, min(element[1], 1000))
+        x = int(clamped_x / 1000 * screen_width)
+        y = int(clamped_y / 1000 * screen_height)
         return x, y
 
     def _handle_launch(self, action: dict, width: int, height: int) -> ActionResult:
@@ -168,6 +170,8 @@ class ActionHandler:
         self.device.long_press(x, y)
         return ActionResult(True, False)
 
+    MAX_WAIT_SECONDS = 30
+
     def _handle_wait(self, action: dict, width: int, height: int) -> ActionResult:
         duration_str = action.get("duration", "1 seconds")
         try:
@@ -175,6 +179,7 @@ class ActionHandler:
         except ValueError:
             duration = 1.0
 
+        duration = min(duration, self.MAX_WAIT_SECONDS)
         time.sleep(duration)
         return ActionResult(True, False)
 

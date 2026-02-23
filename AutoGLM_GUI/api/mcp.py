@@ -54,7 +54,7 @@ async def chat(device_id: str, message: str) -> ChatResult:
             manager.get_agent_with_context,
             device_id,
             context="mcp",
-            agent_type="glm-async",
+            agent_type=None,  # 使用配置中的 agent_type
         )
 
         # Temporarily override config for MCP (thread-safe within device lock)
