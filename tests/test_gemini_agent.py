@@ -1,9 +1,5 @@
 """Tests for Gemini Agent components."""
 
-import json
-
-import pytest
-
 from AutoGLM_GUI.agents.gemini.action_mapper import tool_call_to_action
 from AutoGLM_GUI.agents.gemini.tools import DEVICE_TOOLS
 
@@ -23,9 +19,16 @@ class TestDeviceTools:
     def test_tool_names(self):
         names = {t["function"]["name"] for t in DEVICE_TOOLS}
         expected = {
-            "tap", "double_tap", "long_press", "swipe",
-            "type_text", "launch_app", "back", "home",
-            "wait", "finish",
+            "tap",
+            "double_tap",
+            "long_press",
+            "swipe",
+            "type_text",
+            "launch_app",
+            "back",
+            "home",
+            "wait",
+            "finish",
         }
         assert names == expected
 
@@ -37,20 +40,35 @@ class TestActionMapper:
 
     def test_double_tap(self):
         result = tool_call_to_action("double_tap", {"x": 100, "y": 200})
-        assert result == {"_metadata": "do", "action": "Double Tap", "element": [100, 200]}
+        assert result == {
+            "_metadata": "do",
+            "action": "Double Tap",
+            "element": [100, 200],
+        }
 
     def test_long_press(self):
         result = tool_call_to_action("long_press", {"x": 750, "y": 800})
-        assert result == {"_metadata": "do", "action": "Long Press", "element": [750, 800]}
+        assert result == {
+            "_metadata": "do",
+            "action": "Long Press",
+            "element": [750, 800],
+        }
 
     def test_swipe(self):
-        result = tool_call_to_action("swipe", {
-            "start_x": 500, "start_y": 700,
-            "end_x": 500, "end_y": 300,
-        })
+        result = tool_call_to_action(
+            "swipe",
+            {
+                "start_x": 500,
+                "start_y": 700,
+                "end_x": 500,
+                "end_y": 300,
+            },
+        )
         assert result == {
-            "_metadata": "do", "action": "Swipe",
-            "start": [500, 700], "end": [500, 300],
+            "_metadata": "do",
+            "action": "Swipe",
+            "start": [500, 700],
+            "end": [500, 300],
         }
 
     def test_type_text(self):
@@ -103,11 +121,13 @@ class TestActionMapper:
 class TestAgentRegistration:
     def test_gemini_registered(self):
         from AutoGLM_GUI.agents import is_agent_type_registered
+
         assert is_agent_type_registered("gemini")
         assert is_agent_type_registered("general-vision")
 
     def test_gemini_in_list(self):
         from AutoGLM_GUI.agents import list_agent_types
+
         types = list_agent_types()
         assert "gemini" in types
         assert "general-vision" in types
@@ -117,6 +137,7 @@ class TestEventTypes:
     def test_event_enum_matches_actual_events(self):
         """AgentEventType values must match the strings agents actually emit."""
         from AutoGLM_GUI.agents.events import AgentEventType
+
         assert AgentEventType.THINKING == "thinking"
         assert AgentEventType.STEP == "step"
         assert AgentEventType.DONE == "done"
@@ -127,6 +148,7 @@ class TestEventTypes:
 class TestCoordinateClamping:
     def test_clamp_negative_coordinates(self):
         from AutoGLM_GUI.actions.handler import ActionHandler
+
         handler = ActionHandler.__new__(ActionHandler)
         x, y = handler._convert_relative_to_absolute([-100, -50], 1080, 1920)
         assert x == 0
@@ -134,6 +156,7 @@ class TestCoordinateClamping:
 
     def test_clamp_overflow_coordinates(self):
         from AutoGLM_GUI.actions.handler import ActionHandler
+
         handler = ActionHandler.__new__(ActionHandler)
         x, y = handler._convert_relative_to_absolute([1500, 2000], 1080, 1920)
         assert x == 1080
@@ -141,6 +164,7 @@ class TestCoordinateClamping:
 
     def test_normal_coordinates_unchanged(self):
         from AutoGLM_GUI.actions.handler import ActionHandler
+
         handler = ActionHandler.__new__(ActionHandler)
         x, y = handler._convert_relative_to_absolute([500, 500], 1080, 1920)
         assert x == 540

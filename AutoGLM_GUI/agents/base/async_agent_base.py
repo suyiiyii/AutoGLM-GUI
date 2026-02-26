@@ -92,6 +92,7 @@ class AsyncAgentBase(ABC):
         子类必须实现为 async generator（使用 yield）。
         """
         raise NotImplementedError
+        yield  # pragma: no cover — make Pyright see this as async generator
 
     # ==================== 共享逻辑 ====================
 

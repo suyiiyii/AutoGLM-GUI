@@ -16,6 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 from unittest.mock import MagicMock
 
+
 from PIL import Image
 
 from AutoGLM_GUI.agents.gemini.async_agent import AsyncGeminiAgent
@@ -25,10 +26,12 @@ from AutoGLM_GUI.device_protocol import Screenshot
 
 # ===== Timing Recorder =====
 
+
 @dataclass
 class TimingRecord:
     phase: str
     duration_ms: float
+
 
 class TimingTracker:
     def __init__(self):
@@ -57,6 +60,7 @@ class TimingTracker:
 
 # ===== Mock Device =====
 
+
 def create_mock_device() -> MagicMock:
     """Create a mock device that returns a fake Android home screen screenshot."""
     device = MagicMock()
@@ -66,6 +70,7 @@ def create_mock_device() -> MagicMock:
     img = Image.new("RGB", (1080, 2400), color=(30, 30, 30))
     # Draw some colored rectangles to simulate app icons
     from PIL import ImageDraw
+
     draw = ImageDraw.Draw(img)
     # Row of "app icons"
     colors = [(66, 133, 244), (52, 168, 83), (234, 67, 53), (251, 188, 4)]
@@ -93,13 +98,16 @@ def create_mock_device() -> MagicMock:
     device.long_press.return_value = None
     device.double_tap.return_value = None
     device.clear_text.return_value = None
-    device.detect_and_set_adb_keyboard.return_value = "com.android.inputmethod.latin/.LatinIME"
+    device.detect_and_set_adb_keyboard.return_value = (
+        "com.android.inputmethod.latin/.LatinIME"
+    )
     device.restore_keyboard.return_value = None
 
     return device
 
 
 # ===== E2E Test =====
+
 
 async def run_e2e_test():
     tracker = TimingTracker()
@@ -163,14 +171,16 @@ async def run_e2e_test():
 
         elif event_type == "done":
             print(f"\n  🏁 Done: {event_data.get('message')}")
-            print(f"     Steps: {event_data.get('steps')}, Success: {event_data.get('success')}")
+            print(
+                f"     Steps: {event_data.get('steps')}, Success: {event_data.get('success')}"
+            )
 
         elif event_type == "error":
             print(f"  ❌ Error: {event_data.get('message')}")
 
         events.append(event)
 
-    total_stream_ms = tracker.stop()
+    tracker.stop()
 
     # 3. Verify results
     tracker.start("4. Verify results")
@@ -211,12 +221,9 @@ async def run_e2e_test():
     return tracker
 
 
-import pytest
-
-@pytest.mark.asyncio(loop_scope="function")
-async def test_gemini_e2e_launch_wechat():
+def test_gemini_e2e_launch_wechat():
     """E2E: Gemini Agent receives 'open WeChat' task, calls real API, executes on mock device."""
-    tracker = await run_e2e_test()
+    tracker = asyncio.run(run_e2e_test())
     assert len(tracker.records) >= 3, "Should have timing records for all phases"
 
 

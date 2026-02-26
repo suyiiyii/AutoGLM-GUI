@@ -13,8 +13,18 @@ DEVICE_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "x": {"type": "integer", "description": "X coordinate (0-1000)", "minimum": 0, "maximum": 1000},
-                    "y": {"type": "integer", "description": "Y coordinate (0-1000)", "minimum": 0, "maximum": 1000},
+                    "x": {
+                        "type": "integer",
+                        "description": "X coordinate (0-1000)",
+                        "minimum": 0,
+                        "maximum": 1000,
+                    },
+                    "y": {
+                        "type": "integer",
+                        "description": "Y coordinate (0-1000)",
+                        "minimum": 0,
+                        "maximum": 1000,
+                    },
                 },
                 "required": ["x", "y"],
             },
@@ -28,8 +38,18 @@ DEVICE_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "x": {"type": "integer", "description": "X coordinate (0-1000)", "minimum": 0, "maximum": 1000},
-                    "y": {"type": "integer", "description": "Y coordinate (0-1000)", "minimum": 0, "maximum": 1000},
+                    "x": {
+                        "type": "integer",
+                        "description": "X coordinate (0-1000)",
+                        "minimum": 0,
+                        "maximum": 1000,
+                    },
+                    "y": {
+                        "type": "integer",
+                        "description": "Y coordinate (0-1000)",
+                        "minimum": 0,
+                        "maximum": 1000,
+                    },
                 },
                 "required": ["x", "y"],
             },
@@ -43,8 +63,18 @@ DEVICE_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "x": {"type": "integer", "description": "X coordinate (0-1000)", "minimum": 0, "maximum": 1000},
-                    "y": {"type": "integer", "description": "Y coordinate (0-1000)", "minimum": 0, "maximum": 1000},
+                    "x": {
+                        "type": "integer",
+                        "description": "X coordinate (0-1000)",
+                        "minimum": 0,
+                        "maximum": 1000,
+                    },
+                    "y": {
+                        "type": "integer",
+                        "description": "Y coordinate (0-1000)",
+                        "minimum": 0,
+                        "maximum": 1000,
+                    },
                 },
                 "required": ["x", "y"],
             },
@@ -58,10 +88,30 @@ DEVICE_TOOLS = [
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "start_x": {"type": "integer", "description": "Start X (0-1000)", "minimum": 0, "maximum": 1000},
-                    "start_y": {"type": "integer", "description": "Start Y (0-1000)", "minimum": 0, "maximum": 1000},
-                    "end_x": {"type": "integer", "description": "End X (0-1000)", "minimum": 0, "maximum": 1000},
-                    "end_y": {"type": "integer", "description": "End Y (0-1000)", "minimum": 0, "maximum": 1000},
+                    "start_x": {
+                        "type": "integer",
+                        "description": "Start X (0-1000)",
+                        "minimum": 0,
+                        "maximum": 1000,
+                    },
+                    "start_y": {
+                        "type": "integer",
+                        "description": "Start Y (0-1000)",
+                        "minimum": 0,
+                        "maximum": 1000,
+                    },
+                    "end_x": {
+                        "type": "integer",
+                        "description": "End X (0-1000)",
+                        "minimum": 0,
+                        "maximum": 1000,
+                    },
+                    "end_y": {
+                        "type": "integer",
+                        "description": "End Y (0-1000)",
+                        "minimum": 0,
+                        "maximum": 1000,
+                    },
                 },
                 "required": ["start_x", "start_y", "end_x", "end_y"],
             },

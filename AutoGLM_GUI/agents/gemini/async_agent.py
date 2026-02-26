@@ -182,13 +182,13 @@ class AsyncGeminiAgent(AsyncAgentBase):
 
         if message.tool_calls and len(message.tool_calls) > 0:
             tool_call = message.tool_calls[0]
-            tool_name = tool_call.function.name
+            tool_name = tool_call.function.name  # type: ignore[union-attr]
             try:
-                tool_args = json.loads(tool_call.function.arguments)
+                tool_args = json.loads(tool_call.function.arguments)  # type: ignore[union-attr]
             except json.JSONDecodeError as e:
                 logger.warning(
                     f"Failed to parse tool arguments for {tool_name}: {e}. "
-                    f"Raw: {tool_call.function.arguments!r}"
+                    f"Raw: {tool_call.function.arguments!r}"  # type: ignore[union-attr]
                 )
                 tool_args = {}
             return thinking, tool_name, tool_args

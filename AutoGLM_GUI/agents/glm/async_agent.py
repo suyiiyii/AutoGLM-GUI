@@ -164,9 +164,7 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
             result = ActionResult(success=False, should_finish=True, message=str(e))
 
         # 6. 更新上下文
-        self._context[-1] = MessageBuilder.remove_images_from_message(
-            self._context[-1]
-        )
+        self._context[-1] = MessageBuilder.remove_images_from_message(self._context[-1])
         self._context.append(
             MessageBuilder.create_assistant_message(
                 f"<think>{thinking}</think><answer>{action_str}</answer>"
