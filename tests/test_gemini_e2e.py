@@ -16,7 +16,7 @@ from dataclasses import dataclass
 from typing import Any
 from unittest.mock import MagicMock
 
-
+import pytest
 from PIL import Image
 
 from AutoGLM_GUI.agents.gemini.async_agent import AsyncGeminiAgent
@@ -160,10 +160,11 @@ async def run_e2e_test():
         elif event_type == "step":
             step_count += 1
             step_time = (time.perf_counter() - stream_start) * 1000
-            action = event_data.get("action", {})
-            action_name = action.get("action", action.get("_metadata", "?"))
+            action = event_data.get("action")
+            action_dict = action if isinstance(action, dict) else {}
+            action_name = action_dict.get("action", action_dict.get("_metadata", "?"))
             print(f"  Step {step_count}: {action_name} (cumulative: {step_time:.0f}ms)")
-            print(f"    Action: {json.dumps(action, ensure_ascii=False)}")
+            print(f"    Action: {json.dumps(action_dict, ensure_ascii=False)}")
             print(f"    Success: {event_data.get('success')}")
 
             if event_data.get("finished"):
@@ -223,6 +224,19 @@ async def run_e2e_test():
 
 def test_gemini_e2e_launch_wechat():
     """E2E: Gemini Agent receives 'open WeChat' task, calls real API, executes on mock device."""
+    api_key = os.environ.get("OPENAI_API_KEY")
+    base_url = os.environ.get("OPENAI_BASE_URL", "")
+
+    if not api_key or api_key == "test-key":
+        pytest.skip(
+            "Skipping live Gemini E2E: OPENAI_API_KEY is not configured with a real key"
+        )
+
+    if "api.openai.com" in base_url and not api_key.startswith("sk-"):
+        pytest.skip(
+            "Skipping live Gemini E2E: OPENAI_BASE_URL points to OpenAI but key format looks invalid"
+        )
+
     tracker = asyncio.run(run_e2e_test())
     assert len(tracker.records) >= 3, "Should have timing records for all phases"
 
