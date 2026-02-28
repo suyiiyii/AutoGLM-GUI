@@ -39,6 +39,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
     Agent 会在首次使用时自动初始化，无需手动预初始化。
     """
+    from AutoGLM_GUI.agents.protocols import is_async_agent
     from AutoGLM_GUI.exceptions import AgentInitializationError, DeviceBusyError
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
@@ -58,8 +59,10 @@ async def chat(request: ChatRequest) -> ChatResponse:
             agent_type=None,  # 使用配置中的 agent_type
         )
 
-        # AsyncAgent is always used for chat context
-        result = await agent.run(request.message)  # type: ignore[misc]
+        if is_async_agent(agent):
+            result = await agent.run(request.message)  # type: ignore[misc]
+        else:
+            result = await asyncio.to_thread(agent.run, request.message)  # type: ignore[misc]
 
         steps = agent.step_count
         return ChatResponse(result=result, steps=steps, success=True)  # type: ignore[arg-type]
@@ -92,6 +95,7 @@ async def chat_stream(request: ChatRequest):
     """
     from datetime import datetime
 
+    from AutoGLM_GUI.agents.protocols import is_async_agent
     from AutoGLM_GUI.device_manager import DeviceManager
     from AutoGLM_GUI.exceptions import AgentInitializationError, DeviceBusyError
     from AutoGLM_GUI.history_manager import history_manager
@@ -146,13 +150,27 @@ async def chat_stream(request: ChatRequest):
         )
 
         try:
-            # 使用 chat context 获取 AsyncAgent
+            # 使用 chat context 获取 agent（可能是任意类型）
             agent = await asyncio.to_thread(
                 manager.get_agent_with_context,
                 device_id,
                 context="chat",
-                agent_type="glm-async",
+                agent_type=None,
             )
+
+            if not is_async_agent(agent):
+                error_data = _create_sse_event(
+                    "error",
+                    {
+                        "message": (
+                            "Current agent does not support streaming. "
+                            "Please switch to an async agent (e.g. glm-async or gemini)."
+                        )
+                    },
+                )
+                yield "event: error\n"
+                yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
+                return
 
             logger.info(f"Using AsyncAgent for device {device_id}")
 
@@ -195,7 +213,9 @@ async def chat_stream(request: ChatRequest):
         except asyncio.CancelledError:
             logger.info(f"AsyncAgent task cancelled for device {device_id}")
             yield "event: cancelled\n"
-            yield f"data: {json.dumps({'message': 'Task cancelled by user'})}\n\n"
+            yield (
+                f"data: {json.dumps(_create_sse_event('cancelled', {'message': 'Task cancelled by user'}), ensure_ascii=False)}\n\n"
+            )
             # ✅ 不再 raise，让 generator 正常结束
 
         except AgentInitializationError as e:

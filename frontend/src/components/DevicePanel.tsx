@@ -13,6 +13,7 @@ import {
 import { throttle } from 'lodash';
 import { DeviceMonitor } from './DeviceMonitor';
 import type {
+  AbortedEvent,
   ThinkingChunkEvent,
   StepEvent,
   DoneEvent,
@@ -399,7 +400,7 @@ export function DevicePanel({
         chatStreamRef.current = null;
         // 历史记录已由后端自动保存，无需前端保存
       },
-      (event: { type: 'aborted'; message: string }) => {
+      (event: AbortedEvent) => {
         // Clear any pending updates
         if (updateTimeoutId !== null) {
           clearTimeout(updateTimeoutId);

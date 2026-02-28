@@ -87,7 +87,7 @@ export interface ScreenshotResponse {
 }
 
 export interface ThinkingChunkEvent {
-  type: 'thinking_chunk';
+  type: 'thinking' | 'thinking_chunk';
   role: 'assistant';
   chunk: string;
 }
@@ -117,7 +117,7 @@ export interface ErrorEvent {
 }
 
 export interface AbortedEvent {
-  type: 'aborted';
+  type: 'aborted' | 'cancelled';
   role: 'assistant';
   message: string;
 }
@@ -439,8 +439,8 @@ export function sendMessageStream(
             try {
               const data = JSON.parse(line.slice(6));
 
-              if (eventType === 'thinking_chunk') {
-                console.log('[SSE] Received thinking_chunk event:', data);
+              if (eventType === 'thinking_chunk' || eventType === 'thinking') {
+                console.log(`[SSE] Received ${eventType} event:`, data);
                 onThinkingChunk(data as ThinkingChunkEvent);
               } else if (eventType === 'step') {
                 console.log('[SSE] Received step event:', data);
@@ -448,8 +448,8 @@ export function sendMessageStream(
               } else if (eventType === 'done') {
                 console.log('[SSE] Received done event:', data);
                 onDone(data as DoneEvent);
-              } else if (eventType === 'aborted') {
-                console.log('[SSE] Received aborted event:', data);
+              } else if (eventType === 'aborted' || eventType === 'cancelled') {
+                console.log(`[SSE] Received ${eventType} event:`, data);
                 if (onAborted) {
                   onAborted(data as AbortedEvent);
                 }

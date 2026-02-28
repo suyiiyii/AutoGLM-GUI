@@ -1,7 +1,7 @@
 """MCP (Model Context Protocol) tools for AutoGLM-GUI."""
 
 import asyncio
-from typing import Any
+from typing import Any, cast
 
 from typing_extensions import TypedDict
 
@@ -38,6 +38,7 @@ async def chat(device_id: str, message: str) -> ChatResult:
         device_id: Device identifier (e.g., "192.168.1.100:5555" or serial)
         message: Natural language task (e.g., "打开微信", "发送消息")
     """
+    from AutoGLM_GUI.agents.protocols import is_async_agent
     from AutoGLM_GUI.exceptions import DeviceBusyError
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
@@ -68,7 +69,13 @@ async def chat(device_id: str, message: str) -> ChatResult:
             # Reset agent before each chat to ensure clean state
             agent.reset()
 
-            result = await agent.run(message)  # type: ignore[misc]
+            if is_async_agent(agent):
+                result = cast(str, await agent.run(message))  # type: ignore[misc]
+            else:
+                result = cast(
+                    str,
+                    await asyncio.to_thread(agent.run, message),  # type: ignore[misc]
+                )
             steps = agent.step_count
 
             # Check if MCP step limit was reached
