@@ -9,7 +9,7 @@
 从个人助手到自动化中枢：支持 **定时执行**、**Docker 部署**、**对话历史**，打造你的 AI 自动化助手
 
 
-![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
+![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)
 [![PyPI](https://img.shields.io/pypi/v/autoglm-gui)](https://pypi.org/project/autoglm-gui/)
 

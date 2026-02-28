@@ -46,7 +46,7 @@
 
 确保你的环境中已安装：
 
-- **Python 3.10+**
+- **Python 3.11+**
 - **Node.js 18+** 和 **pnpm**
 - **uv**（Python 包管理器）- [安装教程](https://docs.astral.sh/uv/getting-started/installation/)
 - **ADB** (Android Debug Bridge) - 需要添加到系统 PATH
