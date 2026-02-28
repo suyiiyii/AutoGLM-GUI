@@ -70,6 +70,35 @@ interface DevicePanelProps {
   isVisible?: boolean; // ✅ 新增：控制视频流行为
 }
 
+function getStepSummary(thinking: string | undefined, action: unknown): string {
+  if (thinking && thinking.trim().length > 0) {
+    return thinking;
+  }
+
+  if (action && typeof action === 'object') {
+    const actionRecord = action as Record<string, unknown>;
+    const metadata = actionRecord['_metadata'];
+
+    if (metadata === 'finish') {
+      const finishMessage = actionRecord['message'];
+      if (
+        typeof finishMessage === 'string' &&
+        finishMessage.trim().length > 0
+      ) {
+        return `Finish: ${finishMessage}`;
+      }
+      return 'Finish task';
+    }
+
+    const actionName = actionRecord['action'];
+    if (typeof actionName === 'string' && actionName.trim().length > 0) {
+      return `Action: ${actionName}`;
+    }
+  }
+
+  return 'Action executed';
+}
+
 export function DevicePanel({
   deviceId,
   deviceSerial,
@@ -723,36 +752,53 @@ export function DevicePanel({
                 >
                   {message.role === 'assistant' ? (
                     <div className="max-w-[85%] space-y-3">
-                      {/* Thinking process */}
-                      {message.thinking?.map((think, idx) => (
-                        <div
-                          key={idx}
-                          className="bg-slate-100 dark:bg-slate-800 rounded-2xl rounded-tl-sm px-4 py-3"
-                        >
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#1d9bf0]/10">
-                              <Sparkles className="h-3 w-3 text-[#1d9bf0]" />
-                            </div>
-                            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                              Step {idx + 1}
-                            </span>
-                          </div>
-                          <p className="text-sm whitespace-pre-wrap text-slate-700 dark:text-slate-300">
-                            {think}
-                          </p>
+                      {/* Step process */}
+                      {Array.from(
+                        {
+                          length: Math.max(
+                            message.thinking?.length || 0,
+                            message.actions?.length || 0
+                          ),
+                        },
+                        (_, idx) => idx
+                      ).map(idx => {
+                        const stepThinking = message.thinking?.[idx];
+                        const stepAction = message.actions?.[idx];
+                        const stepSummary = getStepSummary(
+                          stepThinking,
+                          stepAction
+                        );
 
-                          {message.actions?.[idx] && (
-                            <details className="mt-2 text-xs">
-                              <summary className="cursor-pointer text-[#1d9bf0] hover:text-[#1a8cd8]">
-                                View action
-                              </summary>
-                              <pre className="mt-2 p-2 bg-slate-900 text-slate-200 rounded-lg overflow-x-auto text-xs">
-                                {JSON.stringify(message.actions[idx], null, 2)}
-                              </pre>
-                            </details>
-                          )}
-                        </div>
-                      ))}
+                        return (
+                          <div
+                            key={idx}
+                            className="bg-slate-100 dark:bg-slate-800 rounded-2xl rounded-tl-sm px-4 py-3"
+                          >
+                            <div className="flex items-center gap-2 mb-2">
+                              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#1d9bf0]/10">
+                                <Sparkles className="h-3 w-3 text-[#1d9bf0]" />
+                              </div>
+                              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                                Step {idx + 1}
+                              </span>
+                            </div>
+                            <p className="text-sm whitespace-pre-wrap text-slate-700 dark:text-slate-300">
+                              {stepSummary}
+                            </p>
+
+                            {stepAction && (
+                              <details className="mt-2 text-xs">
+                                <summary className="cursor-pointer text-[#1d9bf0] hover:text-[#1a8cd8]">
+                                  View action
+                                </summary>
+                                <pre className="mt-2 p-2 bg-slate-900 text-slate-200 rounded-lg overflow-x-auto text-xs">
+                                  {JSON.stringify(stepAction, null, 2)}
+                                </pre>
+                              </details>
+                            )}
+                          </div>
+                        );
+                      })}
 
                       {/* Current thinking being streamed */}
                       {message.currentThinking && (
