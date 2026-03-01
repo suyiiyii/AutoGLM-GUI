@@ -30,7 +30,7 @@ def _load_responses_after_startup(
     time.sleep(delay)
     try:
         # 读取响应文件
-        with open(responses_path, "r", encoding="utf-8") as f:
+        with open(responses_path, encoding="utf-8") as f:
             responses = json.load(f)
 
         if not isinstance(responses, list):

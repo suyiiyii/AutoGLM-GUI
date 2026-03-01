@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import re
-from typing import Optional
 from dataclasses import dataclass
 
 from AutoGLM_GUI.platform_utils import run_cmd_silently_sync
@@ -20,7 +19,7 @@ class MdnsDevice:
     port: int  # e.g., 34553
     has_pairing: bool  # True if device also advertises pairing service
     service_type: str  # "_adb-tls-connect._tcp" or "_adb-tls-pairing._tcp"
-    pairing_port: Optional[int] = None  # Pairing port if has_pairing is True
+    pairing_port: int | None = None  # Pairing port if has_pairing is True
 
 
 def _parse_mdns_line(line: str) -> tuple[str, str, str] | None:

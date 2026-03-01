@@ -41,9 +41,9 @@ class DeviceGroupManager:
         self._lock = RLock()
 
         # 缓存
-        self._groups_cache: Optional[list[DeviceGroup]] = None
-        self._assignments_cache: Optional[dict[str, str]] = None
-        self._file_mtime: Optional[float] = None
+        self._groups_cache: list[DeviceGroup] | None = None
+        self._assignments_cache: dict[str, str] | None = None
+        self._file_mtime: float | None = None
 
     def list_groups(self) -> list[DeviceGroup]:
         """获取所有分组（按 order 排序）.

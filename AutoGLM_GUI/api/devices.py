@@ -49,7 +49,7 @@ from AutoGLM_GUI.schemas import (
 
 
 def _build_device_response_with_agent(
-    device: "ManagedDevice", agent_manager: "PhoneAgentManager"
+    device: ManagedDevice, agent_manager: PhoneAgentManager
 ) -> DeviceResponse:
     """聚合设备信息和 Agent 状态（API 层职责）.
 

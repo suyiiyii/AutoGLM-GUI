@@ -131,19 +131,19 @@ class ConfigModel(BaseModel):
 class ConfigLayer:
     """单个配置层，带源追踪."""
 
-    base_url: Optional[str] = None
-    model_name: Optional[str] = None
-    api_key: Optional[str] = None
+    base_url: str | None = None
+    model_name: str | None = None
+    api_key: str | None = None
     # Agent 类型配置
-    agent_type: Optional[str] = None
-    agent_config_params: Optional[dict] = None
+    agent_type: str | None = None
+    agent_config_params: dict | None = None
     # Agent 执行配置
-    default_max_steps: Optional[int] = None
-    layered_max_turns: Optional[int] = None
+    default_max_steps: int | None = None
+    layered_max_turns: int | None = None
     # 决策模型配置
-    decision_base_url: Optional[str] = None
-    decision_model_name: Optional[str] = None
-    decision_api_key: Optional[str] = None
+    decision_base_url: str | None = None
+    decision_model_name: str | None = None
+    decision_api_key: str | None = None
 
     source: ConfigSource = ConfigSource.DEFAULT
 
@@ -191,7 +191,7 @@ class ConfigConflict:
     """配置冲突信息."""
 
     field: str  # 冲突的字段名
-    file_value: Optional[str]  # 配置文件中的值
+    file_value: str | None  # 配置文件中的值
     override_value: str  # 覆盖的值
     override_source: ConfigSource  # 覆盖来源（CLI 或 ENV）
 
@@ -248,11 +248,11 @@ class UnifiedConfigManager:
         )
 
         # 文件缓存（带修改时间戳）
-        self._file_cache: Optional[dict] = None
-        self._file_mtime: Optional[float] = None
+        self._file_cache: dict | None = None
+        self._file_mtime: float | None = None
 
         # 有效配置缓存
-        self._effective_config: Optional[ConfigModel] = None
+        self._effective_config: ConfigModel | None = None
 
         self._initialized = True
         logger.debug("UnifiedConfigManager initialized")
@@ -261,10 +261,10 @@ class UnifiedConfigManager:
 
     def set_cli_config(
         self,
-        base_url: Optional[str] = None,
-        model_name: Optional[str] = None,
-        api_key: Optional[str] = None,
-        layered_max_turns: Optional[int] = None,
+        base_url: str | None = None,
+        model_name: str | None = None,
+        api_key: str | None = None,
+        layered_max_turns: int | None = None,
     ) -> None:
         """
         设置 CLI 参数配置（最高优先级）.
@@ -364,7 +364,7 @@ class UnifiedConfigManager:
                 return False
 
             # 读取并解析文件
-            with open(self._config_path, "r", encoding="utf-8") as f:
+            with open(self._config_path, encoding="utf-8") as f:
                 config_data = json.load(f)
 
             # 更新缓存
@@ -416,14 +416,14 @@ class UnifiedConfigManager:
         self,
         base_url: str,
         model_name: str,
-        api_key: Optional[str] = None,
-        agent_type: Optional[str] = None,
-        agent_config_params: Optional[dict] = None,
-        default_max_steps: Optional[int] = None,
-        layered_max_turns: Optional[int] = None,
-        decision_base_url: Optional[str] = None,
-        decision_model_name: Optional[str] = None,
-        decision_api_key: Optional[str] = None,
+        api_key: str | None = None,
+        agent_type: str | None = None,
+        agent_config_params: dict | None = None,
+        default_max_steps: int | None = None,
+        layered_max_turns: int | None = None,
+        decision_base_url: str | None = None,
+        decision_model_name: str | None = None,
+        decision_api_key: str | None = None,
         merge_mode: bool = True,
     ) -> bool:
         """
@@ -477,7 +477,7 @@ class UnifiedConfigManager:
             # 合并模式：保留现有文件中未提供的字段
             if merge_mode and self._config_path.exists():
                 try:
-                    with open(self._config_path, "r", encoding="utf-8") as f:
+                    with open(self._config_path, encoding="utf-8") as f:
                         existing = json.load(f)
 
                     # 保留未提供的字段

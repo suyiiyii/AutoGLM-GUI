@@ -14,7 +14,7 @@ from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.models.scheduled_task import ScheduledTask
 
 if TYPE_CHECKING:
-    from AutoGLM_GUI.models.history import MessageRecord
+    pass
 
 
 @dataclass
@@ -40,7 +40,7 @@ class SchedulerManager:
         self._tasks_path = Path.home() / ".config" / "autoglm" / "scheduled_tasks.json"
         self._scheduler = BackgroundScheduler()
         self._tasks: dict[str, ScheduledTask] = {}
-        self._file_mtime: Optional[float] = None
+        self._file_mtime: float | None = None
 
     def start(self) -> None:
         self._load_tasks()
@@ -80,7 +80,7 @@ class SchedulerManager:
         logger.info(f"Created scheduled task: {name} (id={task.id})")
         return task
 
-    def update_task(self, task_id: str, **kwargs) -> Optional[ScheduledTask]:
+    def update_task(self, task_id: str, **kwargs) -> ScheduledTask | None:
         task = self._tasks.get(task_id)
         if not task:
             return None
@@ -119,7 +119,7 @@ class SchedulerManager:
     def list_tasks(self) -> list[ScheduledTask]:
         return list(self._tasks.values())
 
-    def get_task(self, task_id: str) -> Optional[ScheduledTask]:
+    def get_task(self, task_id: str) -> ScheduledTask | None:
         return self._tasks.get(task_id)
 
     def set_enabled(self, task_id: str, enabled: bool) -> bool:
@@ -142,7 +142,7 @@ class SchedulerManager:
         logger.info(f"{'Enabled' if enabled else 'Disabled'} task: {task.name}")
         return True
 
-    def get_next_run_time(self, task_id: str) -> Optional[datetime]:
+    def get_next_run_time(self, task_id: str) -> datetime | None:
         job = self._scheduler.get_job(task_id)
         if job and job.next_run_time:
             return job.next_run_time.replace(tzinfo=None)
@@ -223,7 +223,7 @@ class SchedulerManager:
             )
 
         start_time = datetime.now()
-        messages: list["MessageRecord"] = [
+        messages: list[MessageRecord] = [
             MessageRecord(
                 role="user",
                 content=workflow["text"],

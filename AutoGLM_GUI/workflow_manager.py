@@ -33,8 +33,8 @@ class WorkflowManager:
             return
         self._initialized = True
         self._workflows_path = Path.home() / ".config" / "autoglm" / "workflows.json"
-        self._file_cache: Optional[list[dict]] = None
-        self._file_mtime: Optional[float] = None
+        self._file_cache: list[dict] | None = None
+        self._file_mtime: float | None = None
 
     def list_workflows(self) -> list[dict]:
         """获取所有 workflows.
@@ -134,7 +134,7 @@ class WorkflowManager:
 
         # 重新加载
         try:
-            with open(self._workflows_path, "r", encoding="utf-8") as f:
+            with open(self._workflows_path, encoding="utf-8") as f:
                 data = json.load(f)
             workflows = data.get("workflows", [])
             self._file_cache = workflows

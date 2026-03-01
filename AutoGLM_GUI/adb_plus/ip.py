@@ -4,12 +4,11 @@ from __future__ import annotations
 
 import re
 import subprocess
-from typing import Optional
 
 __all__ = ["get_wifi_ip"]
 
 
-def _run(adb_path: str, device_id: Optional[str], cmd: list[str]) -> str:
+def _run(adb_path: str, device_id: str | None, cmd: list[str]) -> str:
     base_cmd = [adb_path]
     if device_id:
         base_cmd.extend(["-s", device_id])
@@ -19,7 +18,7 @@ def _run(adb_path: str, device_id: Optional[str], cmd: list[str]) -> str:
     return (result.stdout or "") + (result.stderr or "")
 
 
-def _extract_ip(text: str) -> Optional[str]:
+def _extract_ip(text: str) -> str | None:
     m = re.search(r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b", text)
     if not m:
         return None
@@ -29,9 +28,7 @@ def _extract_ip(text: str) -> Optional[str]:
     return ip
 
 
-def get_wifi_ip(
-    adb_path: str = "adb", device_id: Optional[str] = None
-) -> Optional[str]:
+def get_wifi_ip(adb_path: str = "adb", device_id: str | None = None) -> str | None:
     """
     Prefer WiFi IP when multiple interfaces exist.
 

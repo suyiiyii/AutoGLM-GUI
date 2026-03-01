@@ -4,7 +4,8 @@ import asyncio
 import json
 import traceback
 from collections.abc import AsyncGenerator
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from AutoGLM_GUI.agents.base import AsyncAgentBase
 from AutoGLM_GUI.agents.protocols import AsyncAgent

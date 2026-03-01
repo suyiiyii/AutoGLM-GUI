@@ -7,7 +7,6 @@ import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
 
 from AutoGLM_GUI.logger import logger
 
@@ -19,7 +18,7 @@ class DeviceMetadata:
     """Device user-defined metadata."""
 
     serial: str
-    display_name: Optional[str] = None
+    display_name: str | None = None
     last_updated: datetime = field(default_factory=datetime.now)
 
     def to_dict(self) -> dict:
@@ -31,7 +30,7 @@ class DeviceMetadata:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "DeviceMetadata":
+    def from_dict(cls, data: dict) -> DeviceMetadata:
         """Create instance from dict."""
         last_updated_str = data.get("last_updated")
         last_updated = (
@@ -54,10 +53,10 @@ class DeviceMetadataManager:
     Design: Lazy persistence - only save when metadata changes.
     """
 
-    _instance: Optional[DeviceMetadataManager] = None
+    _instance: DeviceMetadataManager | None = None
     _lock = threading.Lock()
 
-    def __init__(self, storage_dir: Optional[Path] = None):
+    def __init__(self, storage_dir: Path | None = None):
         """Private constructor. Use get_instance() instead."""
         if storage_dir is None:
             storage_dir = Path.home() / ".config" / "autoglm" / "devices"
@@ -72,7 +71,7 @@ class DeviceMetadataManager:
         self._load_metadata()
 
     @classmethod
-    def get_instance(cls, storage_dir: Optional[Path] = None) -> DeviceMetadataManager:
+    def get_instance(cls, storage_dir: Path | None = None) -> DeviceMetadataManager:
         """Get singleton instance (thread-safe)."""
         if cls._instance is None:
             with cls._lock:
@@ -132,13 +131,13 @@ class DeviceMetadataManager:
                 temp_path.unlink()
             raise
 
-    def get_display_name(self, serial: str) -> Optional[str]:
+    def get_display_name(self, serial: str) -> str | None:
         """Get device display name by serial."""
         with self._data_lock:
             metadata = self._metadata.get(serial)
             return metadata.display_name if metadata else None
 
-    def set_display_name(self, serial: str, display_name: Optional[str]) -> None:
+    def set_display_name(self, serial: str, display_name: str | None) -> None:
         """Set device display name. Empty string will be treated as None."""
         normalized_name = display_name.strip() if display_name else None
         normalized_name = normalized_name if normalized_name else None
@@ -163,7 +162,7 @@ class DeviceMetadataManager:
 
         logger.info(f"Updated display name for device {serial}: {normalized_name}")
 
-    def get_metadata(self, serial: str) -> Optional[DeviceMetadata]:
+    def get_metadata(self, serial: str) -> DeviceMetadata | None:
         """Get full device metadata."""
         with self._data_lock:
             return self._metadata.get(serial)

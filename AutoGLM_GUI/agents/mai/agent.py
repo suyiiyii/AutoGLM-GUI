@@ -13,7 +13,8 @@ import base64
 import time
 import traceback
 from io import BytesIO
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from openai import OpenAI
 from PIL import Image

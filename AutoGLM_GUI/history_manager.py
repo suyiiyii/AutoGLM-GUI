@@ -129,7 +129,7 @@ class HistoryManager:
         history = self._load_history(serialno)
         return history.records[offset : offset + limit]
 
-    def get_record(self, serialno: str, record_id: str) -> Optional[ConversationRecord]:
+    def get_record(self, serialno: str, record_id: str) -> ConversationRecord | None:
         history = self._load_history(serialno)
         return next((r for r in history.records if r.id == record_id), None)
 

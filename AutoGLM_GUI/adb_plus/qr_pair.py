@@ -13,7 +13,6 @@ import threading
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict, Optional, Set, Tuple
 
 from zeroconf import ServiceBrowser, ServiceListener, Zeroconf
 
@@ -41,16 +40,16 @@ class PairingSession:
     password: str  # Pairing password (P field in QR code)
     qr_payload: str  # Full QR code payload
     status: str  # Current status: "listening" | "pairing" | "paired" | "connecting" | "connected" | "timeout" | "error"
-    device_id: Optional[str] = None  # Device ID after connection (ip:port)
-    error_message: Optional[str] = None  # Error details if status is "error"
+    device_id: str | None = None  # Device ID after connection (ip:port)
+    error_message: str | None = None  # Error details if status is "error"
     created_at: float = field(default_factory=lambda: datetime.now().timestamp())
     expires_at: float = 0.0  # Unix timestamp when session expires
-    zeroconf: Optional[Zeroconf] = None  # Zeroconf instance
-    listener: Optional[QRPairingListener] = None  # Service listener
-    thread: Optional[threading.Thread] = None  # Listener thread
+    zeroconf: Zeroconf | None = None  # Zeroconf instance
+    listener: QRPairingListener | None = None  # Service listener
+    thread: threading.Thread | None = None  # Listener thread
 
 
-def _pick_host_from_info(info) -> Optional[str]:
+def _pick_host_from_info(info) -> str | None:
     """Extract preferred host from service info (IPv4 preferred)."""
     try:
         # Prefer IPv4 addresses
@@ -119,10 +118,10 @@ class QRPairingListener(ServiceListener):
         self.paired: bool = False
         self.connected: bool = False
 
-        self.attempted_pair: Set[Tuple[str, int]] = set()
-        self.attempted_connect: Set[Tuple[str, int]] = set()
+        self.attempted_pair: set[tuple[str, int]] = set()
+        self.attempted_connect: set[tuple[str, int]] = set()
 
-        self.last_paired_host: Optional[str] = None
+        self.last_paired_host: str | None = None
 
     def add_service(self, zc: Zeroconf, type_: str, name: str) -> None:
         """Handle new service discovery."""
@@ -199,7 +198,7 @@ class QRPairingManager:
     """Manages active QR pairing sessions."""
 
     def __init__(self):
-        self._sessions: Dict[str, PairingSession] = {}
+        self._sessions: dict[str, PairingSession] = {}
 
     def create_session(
         self, timeout: int = 90, adb_path: str = "adb"
@@ -300,7 +299,7 @@ class QRPairingManager:
             f"[QR Pair] Started listener thread for session {session.session_id}"
         )
 
-    def get_session(self, session_id: str) -> Optional[PairingSession]:
+    def get_session(self, session_id: str) -> PairingSession | None:
         """Get session by ID.
 
         Args:
