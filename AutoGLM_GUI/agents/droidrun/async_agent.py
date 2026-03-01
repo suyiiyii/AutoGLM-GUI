@@ -109,7 +109,8 @@ class DroidRunAgent:
             return
 
         # 执行并转换事件流
-        handler = agent.run()
+        # DroidAgent.run() 实际返回 WorkflowHandler，但类型标注为 Awaitable[ResultEvent]
+        handler: Any = agent.run()
         try:
             async for event in handler.stream_events():
                 if self._cancel_event.is_set():
