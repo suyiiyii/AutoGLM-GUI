@@ -314,7 +314,7 @@ class TestDeviceMetadataManagerValidation:
         metadata_file = manager.metadata_file
         backup_file = metadata_file.with_suffix(".json.bak")
 
-        with open(metadata_file, "r") as f:
+        with open(metadata_file) as f:
             data = json.load(f)
 
         data[serial2] = "this is not a dict"

@@ -1,12 +1,11 @@
 """Get device serial number using ADB."""
 
 import re
-from typing import Optional
 
 from AutoGLM_GUI.platform_utils import run_cmd_silently_sync
 
 
-def extract_serial_from_mdns(device_id: str) -> Optional[str]:
+def extract_serial_from_mdns(device_id: str) -> str | None:
     """
     Extract hardware serial number from mDNS device ID.
 

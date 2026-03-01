@@ -7,8 +7,8 @@ import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
-from enum import Enum
-from typing import Awaitable, Callable, Optional
+from enum import StrEnum
+from collections.abc import Awaitable, Callable
 
 from AutoGLM_GUI.agents.protocols import AsyncAgent, BaseAgent
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
@@ -21,7 +21,7 @@ from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.types import AgentSpecificConfig
 
 
-class AgentState(str, Enum):
+class AgentState(StrEnum):
     """Agent runtime state."""
 
     IDLE = "idle"  # Agent initialized, not processing
@@ -41,7 +41,7 @@ class AgentMetadata:
     agent_type: str = "glm-async"
     created_at: float = 0.0
     last_used: float = 0.0
-    error_message: Optional[str] = None
+    error_message: str | None = None
 
 
 @dataclass
@@ -77,7 +77,7 @@ class PhoneAgentManager:
         >>>     result = agent.run("Open WeChat")
     """
 
-    _instance: Optional[PhoneAgentManager] = None
+    _instance: PhoneAgentManager | None = None
     _instance_lock = threading.Lock()
 
     def __init__(self):
@@ -125,8 +125,8 @@ class PhoneAgentManager:
         model_config: ModelConfig,
         agent_config: AgentConfig,
         agent_specific_config: AgentSpecificConfig,
-        takeover_callback: Optional[Callable] = None,
-        confirmation_callback: Optional[Callable] = None,
+        takeover_callback: Callable | None = None,
+        confirmation_callback: Callable | None = None,
         force: bool = False,
     ) -> AsyncAgent | BaseAgent:
         from AutoGLM_GUI.agents import create_agent
@@ -379,7 +379,7 @@ class PhoneAgentManager:
     def acquire_device(
         self,
         device_id: str,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
         raise_on_timeout: bool = True,
         auto_initialize: bool = False,
     ) -> bool:
@@ -466,7 +466,7 @@ class PhoneAgentManager:
     def use_agent(
         self,
         device_id: str,
-        timeout: Optional[float] = None,
+        timeout: float | None = None,
         auto_initialize: bool = True,
     ):
         """
@@ -549,7 +549,7 @@ class PhoneAgentManager:
         with self._manager_lock:
             return list(self._agents.keys())
 
-    def get_metadata(self, device_id: str) -> Optional[AgentMetadata]:
+    def get_metadata(self, device_id: str) -> AgentMetadata | None:
         """Get agent metadata."""
         with self._manager_lock:
             return self._metadata.get(device_id)

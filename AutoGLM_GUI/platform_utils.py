@@ -4,7 +4,7 @@ import asyncio
 import platform
 import subprocess
 from asyncio.subprocess import Process as AsyncProcess
-from typing import Sequence
+from collections.abc import Sequence
 
 
 def is_windows() -> bool:

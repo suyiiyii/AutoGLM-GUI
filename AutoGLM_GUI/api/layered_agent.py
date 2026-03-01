@@ -7,7 +7,8 @@ a decision model for planning and autoglm-phone for execution.
 import asyncio
 import json
 import threading
-from typing import TYPE_CHECKING, Any, AsyncGenerator
+from typing import TYPE_CHECKING, Any
+from collections.abc import AsyncGenerator
 
 from agents import Agent, Runner, SQLiteSession, function_tool
 

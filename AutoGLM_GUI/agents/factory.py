@@ -6,7 +6,7 @@ making it easy to add new agent types without modifying existing code.
 
 from __future__ import annotations
 
-from typing import Callable
+from collections.abc import Callable
 
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.logger import logger

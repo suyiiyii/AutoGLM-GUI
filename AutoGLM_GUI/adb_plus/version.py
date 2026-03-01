@@ -1,13 +1,11 @@
 """ADB version detection and feature support checking."""
 
 import re
-from typing import Optional, Tuple
-
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.platform_utils import run_cmd_silently_sync
 
 
-def get_adb_version(adb_path: str = "adb") -> Optional[Tuple[int, int, int]]:
+def get_adb_version(adb_path: str = "adb") -> tuple[int, int, int] | None:
     """
     Get ADB version as (major, minor, patch) tuple.
 

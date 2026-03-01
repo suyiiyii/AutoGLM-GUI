@@ -4,6 +4,8 @@ This module provides a MockDevice that routes all operations through
 a state machine, enabling controlled testing without real devices.
 """
 
+from __future__ import annotations
+
 from typing import TYPE_CHECKING
 
 from AutoGLM_GUI.device_protocol import (
@@ -33,7 +35,7 @@ class MockDevice(DeviceProtocol):
         >>> device.tap(100, 200)  # State machine validates and transitions
     """
 
-    def __init__(self, device_id: str, state_machine: "StateMachine"):
+    def __init__(self, device_id: str, state_machine: StateMachine):
         """
         Initialize mock device.
 
@@ -50,7 +52,7 @@ class MockDevice(DeviceProtocol):
         return self._device_id
 
     @property
-    def state_machine(self) -> "StateMachine":
+    def state_machine(self) -> StateMachine:
         """Get the underlying state machine."""
         return self._state_machine
 
@@ -148,7 +150,7 @@ class MockDeviceManager(DeviceManagerProtocol):
 
     def __init__(
         self,
-        state_machine: "StateMachine",
+        state_machine: StateMachine,
         device_id: str = "mock_device_001",
     ):
         """

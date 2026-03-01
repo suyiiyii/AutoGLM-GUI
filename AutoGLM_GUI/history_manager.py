@@ -1,11 +1,13 @@
 """Conversation history manager with JSON file persistence."""
 
+from __future__ import annotations
+
 import hashlib
 import json
 import re
 from datetime import datetime
 from pathlib import Path
-from typing import Optional
+from typing import Self
 
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.models.history import ConversationRecord, DeviceHistory
@@ -20,9 +22,9 @@ _SERIALNO_PATTERN = re.compile(r"^[a-zA-Z0-9_\-:\.]+$")
 class HistoryManager:
     """对话历史管理器（单例模式）."""
 
-    _instance: Optional["HistoryManager"] = None
+    _instance: Self | None = None
 
-    def __new__(cls):
+    def __new__(cls: type[Self]) -> Self:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance
@@ -129,7 +131,7 @@ class HistoryManager:
         history = self._load_history(serialno)
         return history.records[offset : offset + limit]
 
-    def get_record(self, serialno: str, record_id: str) -> Optional[ConversationRecord]:
+    def get_record(self, serialno: str, record_id: str) -> ConversationRecord | None:
         history = self._load_history(serialno)
         return next((r for r in history.records if r.id == record_id), None)
 

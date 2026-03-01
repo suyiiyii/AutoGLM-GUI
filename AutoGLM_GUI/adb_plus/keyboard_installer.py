@@ -7,7 +7,6 @@ without requiring users to manually download and install APK.
 import asyncio
 import urllib.request
 from pathlib import Path
-from typing import Optional, Tuple
 
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.platform_utils import run_cmd_silently
@@ -26,7 +25,7 @@ USER_CACHE_APK_PATH = Path.home() / ".cache" / "autoglm" / ADB_KEYBOARD_APK_FILE
 class ADBKeyboardInstaller:
     """ADB Keyboard Auto-Installer."""
 
-    def __init__(self, device_id: Optional[str] = None):
+    def __init__(self, device_id: str | None = None):
         """
         Initialize the installer.
 
@@ -89,7 +88,7 @@ class ADBKeyboardInstaller:
             logger.error(f"Error checking keyboard enable status: {e}")
             return False
 
-    def get_apk_path(self) -> Optional[Path]:
+    def get_apk_path(self) -> Path | None:
         """
         Get APK file path.
 
@@ -176,7 +175,7 @@ class ADBKeyboardInstaller:
                 USER_CACHE_APK_PATH.unlink()
             return False
 
-    def install(self) -> Tuple[bool, str]:
+    def install(self) -> tuple[bool, str]:
         """
         Install ADB Keyboard APK.
 
@@ -209,7 +208,7 @@ class ADBKeyboardInstaller:
             logger.exception("Unexpected error during installation")
             return False, error_msg
 
-    def enable(self) -> Tuple[bool, str]:
+    def enable(self) -> tuple[bool, str]:
         """
         Enable ADB Keyboard (enable only, do not modify default input method).
 
@@ -248,7 +247,7 @@ class ADBKeyboardInstaller:
             logger.exception("Unexpected error during enable")
             return False, error_msg
 
-    def auto_setup(self) -> Tuple[bool, str]:
+    def auto_setup(self) -> tuple[bool, str]:
         """
         Automatically complete installation and enablement process.
 
@@ -354,7 +353,7 @@ class ADBKeyboardInstaller:
         }
 
 
-def auto_setup_adb_keyboard(device_id: Optional[str] = None) -> Tuple[bool, str]:
+def auto_setup_adb_keyboard(device_id: str | None = None) -> tuple[bool, str]:
     """
     Convenience function: One-click auto-install and enable ADB Keyboard.
 

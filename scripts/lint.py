@@ -9,7 +9,6 @@ import subprocess
 import sys
 import platform
 from pathlib import Path
-from typing import List, Optional
 
 
 class LintResult:
@@ -37,14 +36,14 @@ class AutoGLMLinter:
         self.backend_dir = root_dir
         self._platform = platform.system()
 
-    def _should_use_shell(self, cmd: List[str]) -> bool:
+    def _should_use_shell(self, cmd: list[str]) -> bool:
         """判断命令是否需要通过 shell 执行（Windows 平台的 Node.js 工具）"""
         return self._platform == "Windows" and cmd[0] in self._NODE_PACKAGE_MANAGERS
 
     def run_command(
         self,
-        cmd: List[str],
-        cwd: Optional[Path] = None,
+        cmd: list[str],
+        cwd: Path | None = None,
         capture_output: bool = True,
     ) -> LintResult:
         """执行命令并返回结果"""
@@ -251,7 +250,7 @@ class AutoGLMLinter:
 
     def lint_frontend(
         self, fix: bool = False, check_only: bool = False
-    ) -> List[LintResult]:
+    ) -> list[LintResult]:
         """运行前端所有检查"""
         print("\n📱 前端代码检查")
         print("=" * 50)
@@ -274,7 +273,7 @@ class AutoGLMLinter:
 
     def lint_backend(
         self, fix: bool = False, check_only: bool = False
-    ) -> List[LintResult]:
+    ) -> list[LintResult]:
         """运行后端所有检查"""
         print("\n🐍 后端代码检查")
         print("=" * 50)

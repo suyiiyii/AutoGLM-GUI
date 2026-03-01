@@ -8,7 +8,7 @@ from contextlib import asynccontextmanager
 from importlib.resources import files
 from os import PathLike
 from pathlib import Path
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware

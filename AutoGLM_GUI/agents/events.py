@@ -1,8 +1,8 @@
-from enum import Enum
+from enum import StrEnum
 from typing import Any, TypedDict
 
 
-class AgentEventType(str, Enum):
+class AgentEventType(StrEnum):
     """Agent 事件类型."""
 
     THINKING = "thinking"

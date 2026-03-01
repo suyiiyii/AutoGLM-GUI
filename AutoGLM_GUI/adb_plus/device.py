@@ -40,7 +40,7 @@ async def check_device_available(device_id: str | None = None) -> None:
 
         logger.debug(f"Device {device_id} is available (state: {state})")
 
-    except asyncio.TimeoutError:
+    except TimeoutError:
         raise DeviceNotAvailableError(f"Device {device_id} connection timed out")
     except FileNotFoundError:
         raise DeviceNotAvailableError("ADB executable not found")

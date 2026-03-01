@@ -9,7 +9,7 @@ import json
 import time
 import uuid
 from dataclasses import dataclass, field
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 import uvicorn
 from fastapi import FastAPI, HTTPException

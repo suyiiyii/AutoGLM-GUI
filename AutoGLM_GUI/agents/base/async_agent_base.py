@@ -10,7 +10,8 @@ import asyncio
 import copy
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
-from typing import Any, AsyncIterator, Callable
+from typing import Any
+from collections.abc import AsyncIterator, Callable
 
 from openai import AsyncOpenAI
 

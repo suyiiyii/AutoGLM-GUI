@@ -1,7 +1,8 @@
 """Action handler for executing phone operations."""
 
 import time
-from typing import Any, Callable
+from typing import Any
+from collections.abc import Callable
 
 from AutoGLM_GUI.device_protocol import DeviceProtocol
 

@@ -1,5 +1,7 @@
 """Device group data models."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from uuid import uuid4
@@ -34,7 +36,7 @@ class DeviceGroup:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "DeviceGroup":
+    def from_dict(cls, data: dict) -> DeviceGroup:
         """从字典创建实例."""
         return cls(
             id=data.get("id", str(uuid4())),
@@ -49,7 +51,7 @@ class DeviceGroup:
         )
 
     @classmethod
-    def create_default_group(cls) -> "DeviceGroup":
+    def create_default_group(cls) -> DeviceGroup:
         """创建默认分组."""
         return cls(
             id=DEFAULT_GROUP_ID,

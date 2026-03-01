@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Optional
 
 SCRCPY_CODEC_H264 = 0x68323634
 SCRCPY_CODEC_H265 = 0x68323635
@@ -23,9 +22,9 @@ PTS_KEYFRAME = 1 << 62
 
 @dataclass
 class ScrcpyVideoStreamMetadata:
-    device_name: Optional[str]
-    width: Optional[int]
-    height: Optional[int]
+    device_name: str | None
+    width: int | None
+    height: int | None
     codec: int
 
 
@@ -33,8 +32,8 @@ class ScrcpyVideoStreamMetadata:
 class ScrcpyMediaStreamPacket:
     type: str
     data: bytes
-    keyframe: Optional[bool] = None
-    pts: Optional[int] = None
+    keyframe: bool | None = None
+    pts: int | None = None
 
 
 @dataclass

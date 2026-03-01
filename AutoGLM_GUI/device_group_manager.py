@@ -8,11 +8,13 @@ Features:
 - 默认分组自动创建
 """
 
+from __future__ import annotations
+
 import json
 from datetime import datetime
 from pathlib import Path
 from threading import RLock
-from typing import Optional
+from typing import Self
 
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.models.device_group import (
@@ -24,9 +26,9 @@ from AutoGLM_GUI.models.device_group import (
 class DeviceGroupManager:
     """设备分组管理器（单例模式）."""
 
-    _instance: Optional["DeviceGroupManager"] = None
+    _instance: Self | None = None
 
-    def __new__(cls):
+    def __new__(cls: type[Self]) -> Self:
         """单例模式：确保只有一个实例."""
         if cls._instance is None:
             cls._instance = super().__new__(cls)
@@ -41,9 +43,9 @@ class DeviceGroupManager:
         self._lock = RLock()
 
         # 缓存
-        self._groups_cache: Optional[list[DeviceGroup]] = None
-        self._assignments_cache: Optional[dict[str, str]] = None
-        self._file_mtime: Optional[float] = None
+        self._groups_cache: list[DeviceGroup] | None = None
+        self._assignments_cache: dict[str, str] | None = None
+        self._file_mtime: float | None = None
 
     def list_groups(self) -> list[DeviceGroup]:
         """获取所有分组（按 order 排序）.

@@ -6,8 +6,8 @@ import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from enum import Enum
-from typing import TYPE_CHECKING, Optional, TypeAlias
+from enum import StrEnum
+from typing import TYPE_CHECKING, TypeAlias
 
 from AutoGLM_GUI.adb import ADBConnection, ConnectionType, DeviceInfo
 from AutoGLM_GUI.logger import logger
@@ -50,7 +50,7 @@ def convert_connection_type(ct: ConnectionType) -> DeviceConnectionType:
     return map_adb_connection_type_to_device_connection_type(ct)
 
 
-class DeviceState(str, Enum):
+class DeviceState(StrEnum):
     """Device availability state."""
 
     ONLINE = "online"  # Device connected and responsive
@@ -105,8 +105,8 @@ class ManagedDevice:
     primary_connection_idx: int = 0  # Index of primary connection
 
     # Device metadata
-    model: Optional[str] = None
-    display_name: Optional[str] = None  # User-defined custom name
+    model: str | None = None
+    display_name: str | None = None  # User-defined custom name
 
     # Device-level state
     state: DeviceState = DeviceState.ONLINE
@@ -230,7 +230,7 @@ class DeviceManager:
     - Integration with existing state.agents
     """
 
-    _instance: Optional[DeviceManager] = None
+    _instance: DeviceManager | None = None
     _lock = threading.Lock()
 
     def __init__(self, adb_path: str = "adb"):
@@ -244,7 +244,7 @@ class DeviceManager:
         self._device_id_to_serial: dict[ConnectionDeviceID, DeviceSerial] = {}
 
         # Polling thread control
-        self._poll_thread: Optional[threading.Thread] = None
+        self._poll_thread: threading.Thread | None = None
         self._stop_event = threading.Event()
         self._poll_interval = 10.0  # seconds
 
@@ -260,11 +260,11 @@ class DeviceManager:
         self._adb_conn = ADBConnection(adb_path=adb_path)
 
         # mDNS discovery support
-        self._mdns_supported: Optional[bool] = None  # Lazy check
+        self._mdns_supported: bool | None = None  # Lazy check
         self._mdns_devices: dict[DeviceSerial, ManagedDevice] = {}  # Key: serial
         self._enable_mdns_discovery: bool = True  # Feature toggle
 
-        self._remote_devices: dict[str, "DeviceProtocol"] = {}
+        self._remote_devices: dict[str, DeviceProtocol] = {}
         self._remote_device_configs: dict[str, dict] = {}
 
         # ADB Keyboard setup state (process-local, best-effort)
@@ -339,7 +339,7 @@ class DeviceManager:
         with self._devices_lock:
             return list(self._devices.values())
 
-    def get_device_by_serial(self, serial: DeviceSerial) -> Optional[ManagedDevice]:
+    def get_device_by_serial(self, serial: DeviceSerial) -> ManagedDevice | None:
         """Get device by serial from primary cache."""
         with self._devices_lock:
             return self._devices.get(serial)
@@ -351,7 +351,7 @@ class DeviceManager:
 
     def get_device_by_device_id(
         self, device_id: ConnectionDeviceID
-    ) -> Optional[ManagedDevice]:
+    ) -> ManagedDevice | None:
         """Get device by any known connection endpoint (backward compatibility).
 
         This method supports looking up devices by either:
@@ -654,7 +654,7 @@ class DeviceManager:
 
     def connect_wifi(
         self, device_id: str, port: int = 5555
-    ) -> tuple[bool, str, Optional[str]]:
+    ) -> tuple[bool, str, str | None]:
         """Connect to device over WiFi (from USB connection).
 
         Args:
@@ -723,9 +723,7 @@ class DeviceManager:
 
         return (ok, msg)
 
-    def connect_wifi_manual(
-        self, ip: str, port: int
-    ) -> tuple[bool, str, Optional[str]]:
+    def connect_wifi_manual(self, ip: str, port: int) -> tuple[bool, str, str | None]:
         """Manually connect to WiFi device (without USB).
 
         Args:
@@ -761,7 +759,7 @@ class DeviceManager:
 
     def pair_wifi(
         self, ip: str, pairing_port: int, pairing_code: str, connection_port: int
-    ) -> tuple[bool, str, Optional[str]]:
+    ) -> tuple[bool, str, str | None]:
         """Pair and connect to WiFi device using wireless debugging (Android 11+).
 
         Args:
@@ -959,7 +957,7 @@ class DeviceManager:
             logger.info(f"Remote device removed: {serial}")
             return (True, "Remote device removed successfully")
 
-    def get_remote_device_instance(self, serial: str) -> "DeviceProtocol | None":
+    def get_remote_device_instance(self, serial: str) -> DeviceProtocol | None:
         """Get RemoteDevice instance for device adapter injection.
 
         Args:
@@ -1020,7 +1018,7 @@ class DeviceManager:
         except Exception as e:
             logger.warning(f"ADB Keyboard setup failed for {device_id}: {e}")
 
-    def get_device_protocol(self, device_id: ConnectionDeviceID) -> "DeviceProtocol":
+    def get_device_protocol(self, device_id: ConnectionDeviceID) -> DeviceProtocol:
         """
         根据 device_id 获取 DeviceProtocol 实例（统一入口）.
 
@@ -1066,7 +1064,7 @@ class DeviceManager:
 
         return ADBDevice(local_device_id)
 
-    def set_device_display_name(self, serial: str, display_name: Optional[str]) -> None:
+    def set_device_display_name(self, serial: str, display_name: str | None) -> None:
         """Set custom display name for device."""
         self._metadata_manager.set_display_name(serial, display_name)
 
@@ -1075,7 +1073,7 @@ class DeviceManager:
                 self._devices[serial].display_name = display_name
                 logger.debug(f"Updated display name in memory for {serial}")
 
-    def get_device_display_name(self, serial: str) -> Optional[str]:
+    def get_device_display_name(self, serial: str) -> str | None:
         """Get custom display name for device."""
         with self._devices_lock:
             if serial in self._devices and self._devices[serial].display_name:

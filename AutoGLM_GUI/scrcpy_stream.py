@@ -9,7 +9,7 @@ import time
 from dataclasses import dataclass
 from pathlib import Path
 from asyncio.subprocess import Process as AsyncProcess
-from typing import AsyncGenerator
+from collections.abc import AsyncGenerator
 
 from AutoGLM_GUI.adb_plus import check_device_available
 from AutoGLM_GUI.logger import logger
