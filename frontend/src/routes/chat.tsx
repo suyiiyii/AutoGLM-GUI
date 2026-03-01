@@ -46,6 +46,7 @@ import {
   Sparkles,
   Cpu,
   Info,
+  Smartphone,
 } from 'lucide-react';
 import { useTranslation } from '../lib/i18n-context';
 
@@ -99,6 +100,13 @@ const AGENT_PRESETS = [
     displayName: 'Gemini Agent',
     description: '通用视觉模型，支持 Gemini/GPT-4o 等，使用 Function Calling',
     icon: Sparkles,
+    defaultConfig: {},
+  },
+  {
+    name: 'droidrun',
+    displayName: 'DroidRun Agent',
+    description: '基于 DroidRun 框架，需安装 Portal APK',
+    icon: Smartphone,
     defaultConfig: {},
   },
 ] as const;
