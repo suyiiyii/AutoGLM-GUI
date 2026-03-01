@@ -189,3 +189,31 @@ register_agent("async-glm", _create_async_glm_agent)  # 别名
 register_agent("mai", _create_internal_mai_agent)
 register_agent("gemini", _create_async_gemini_agent)
 register_agent("general-vision", _create_async_gemini_agent)  # 通用别名
+
+
+def _create_droidrun_agent(
+    model_config: ModelConfig,
+    agent_config: AgentConfig,
+    agent_specific_config: AgentSpecificConfig,  # noqa: ARG001
+    device,
+    takeover_callback: Callable | None = None,
+    confirmation_callback: Callable | None = None,
+) -> AsyncAgent:
+    """Create DroidRunAgent instance.
+
+    Wraps DroidRun's DroidAgent as an AsyncAgent.
+    DroidRun manages its own ADB connection independently.
+    Requires DroidRun Portal APK installed on the device.
+    """
+    from .droidrun.async_agent import DroidRunAgent
+
+    return DroidRunAgent(  # type: ignore[return-value]
+        model_config=model_config,
+        agent_config=agent_config,
+        device=device,
+        takeover_callback=takeover_callback,
+        confirmation_callback=confirmation_callback,
+    )
+
+
+register_agent("droidrun", _create_droidrun_agent)

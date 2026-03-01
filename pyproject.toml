@@ -39,6 +39,9 @@ dependencies = [
     "zeroconf>=0.148.0",
 ]
 
+[project.optional-dependencies]
+droidrun = ["droidrun>=0.4.0"]
+
 [project.urls]
 Homepage = "https://github.com/suyiiyii/AutoGLM-GUI"
 Repository = "https://github.com/suyiiyii/AutoGLM-GUI"
