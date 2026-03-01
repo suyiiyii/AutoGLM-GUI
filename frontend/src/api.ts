@@ -100,6 +100,7 @@ export interface StepEvent {
   action: Record<string, unknown>;
   success: boolean;
   finished: boolean;
+  screenshot?: string;
 }
 
 export interface DoneEvent {

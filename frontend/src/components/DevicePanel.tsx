@@ -48,6 +48,14 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 
+interface ActionPayload {
+  action?: string;
+  element?: [number, number];
+  start?: [number, number];
+  end?: [number, number];
+  [key: string]: unknown;
+}
+
 interface Message {
   id: string;
   role: 'user' | 'assistant';
@@ -57,6 +65,7 @@ interface Message {
   success?: boolean;
   thinking?: string[];
   actions?: Record<string, unknown>[];
+  screenshots?: (string | undefined)[];
   isStreaming?: boolean;
   currentThinking?: string; // Current thinking text being streamed
 }
@@ -206,11 +215,15 @@ export function DevicePanel({
     // Collect thinking and actions from assistant messages
     const thinkingList: string[] = [];
     const actionsList: Record<string, unknown>[] = [];
+    const screenshotsList: (string | undefined)[] = [];
     record.messages
       .filter(m => m.role === 'assistant')
       .forEach(m => {
         if (m.thinking) thinkingList.push(m.thinking);
         if (m.action) actionsList.push(m.action);
+        // Extract screenshot directly or from loosely typed object
+        const recordData = m as unknown as { screenshot?: string };
+        screenshotsList.push(recordData.screenshot);
       });
 
     // Create agent message
@@ -225,6 +238,7 @@ export function DevicePanel({
       success: record.success,
       thinking: thinkingList,
       actions: actionsList,
+      screenshots: screenshotsList,
       isStreaming: false,
     };
     newMessages.push(agentMessage);
@@ -292,6 +306,7 @@ export function DevicePanel({
 
     const thinkingList: string[] = [];
     const actionsList: Record<string, unknown>[] = [];
+    const screenshotsList: (string | undefined)[] = [];
     let currentThinkingText = '';
     // Use a ref to batch updates and reduce render frequency
     const thinkingChunksBuffer: string[] = [];
@@ -305,6 +320,7 @@ export function DevicePanel({
       timestamp: new Date(),
       thinking: [],
       actions: [],
+      screenshots: [],
       isStreaming: true,
       currentThinking: '',
     };
@@ -360,6 +376,7 @@ export function DevicePanel({
         }
         currentThinkingText = '';
         actionsList.push(event.action);
+        screenshotsList.push(event.screenshot);
 
         setMessages(prev =>
           prev.map(msg =>
@@ -368,6 +385,7 @@ export function DevicePanel({
                   ...msg,
                   thinking: [...thinkingList],
                   actions: [...actionsList],
+                  screenshots: [...screenshotsList],
                   steps: event.step,
                   currentThinking: '',
                 }
@@ -389,6 +407,7 @@ export function DevicePanel({
           steps: event.steps,
           thinking: [...thinkingList],
           actions: [...actionsList],
+          screenshots: [...screenshotsList],
           timestamp: new Date(),
           currentThinking: undefined,
         };
@@ -415,6 +434,7 @@ export function DevicePanel({
           isStreaming: false,
           thinking: [...thinkingList],
           actions: [...actionsList],
+          screenshots: [...screenshotsList],
           timestamp: new Date(),
           currentThinking: undefined,
         };
@@ -442,6 +462,7 @@ export function DevicePanel({
           isStreaming: false,
           thinking: [...thinkingList],
           actions: [...actionsList],
+          screenshots: [...screenshotsList],
           timestamp: new Date(),
           currentThinking: undefined,
         };
@@ -764,6 +785,7 @@ export function DevicePanel({
                       ).map(idx => {
                         const stepThinking = message.thinking?.[idx];
                         const stepAction = message.actions?.[idx];
+                        const stepScreenshot = message.screenshots?.[idx];
                         const stepSummary = getStepSummary(
                           stepThinking,
                           stepAction
@@ -786,12 +808,121 @@ export function DevicePanel({
                               {stepSummary}
                             </p>
 
+                            {stepScreenshot && (
+                              <div className="mt-3 relative inline-block border border-slate-200 dark:border-slate-700 rounded overflow-hidden shadow-sm">
+                                <img
+                                  src={`data:image/jpeg;base64,${stepScreenshot}`}
+                                  alt={`Step ${idx + 1}`}
+                                  className="max-h-[350px] w-auto block object-contain"
+                                />
+                                {stepAction &&
+                                  (() => {
+                                    const parsedAction =
+                                      stepAction as ActionPayload;
+                                    const actionName = parsedAction.action;
+
+                                    if (
+                                      actionName &&
+                                      [
+                                        'Tap',
+                                        'Double Tap',
+                                        'Long Press',
+                                      ].includes(actionName)
+                                    ) {
+                                      const element = parsedAction.element;
+                                      if (
+                                        Array.isArray(element) &&
+                                        element.length === 2
+                                      ) {
+                                        const left = `${(Math.max(0, Math.min(element[0], 1000)) / 1000) * 100}%`;
+                                        const top = `${(Math.max(0, Math.min(element[1], 1000)) / 1000) * 100}%`;
+                                        return (
+                                          <div
+                                            className="absolute w-8 h-8 rounded-full border-[3px] border-red-500 bg-red-500/20 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]"
+                                            style={{ left, top }}
+                                          />
+                                        );
+                                      }
+                                    }
+                                    if (actionName === 'Swipe') {
+                                      const start = parsedAction.start;
+                                      const end = parsedAction.end;
+                                      if (
+                                        Array.isArray(start) &&
+                                        start.length === 2 &&
+                                        Array.isArray(end) &&
+                                        end.length === 2
+                                      ) {
+                                        const x1 =
+                                          (Math.max(
+                                            0,
+                                            Math.min(start[0], 1000)
+                                          ) /
+                                            1000) *
+                                          100;
+                                        const y1 =
+                                          (Math.max(
+                                            0,
+                                            Math.min(start[1], 1000)
+                                          ) /
+                                            1000) *
+                                          100;
+                                        const x2 =
+                                          (Math.max(0, Math.min(end[0], 1000)) /
+                                            1000) *
+                                          100;
+                                        const y2 =
+                                          (Math.max(0, Math.min(end[1], 1000)) /
+                                            1000) *
+                                          100;
+                                        return (
+                                          <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
+                                            <defs>
+                                              <marker
+                                                id={`arrowhead-${idx}`}
+                                                markerWidth="6"
+                                                markerHeight="6"
+                                                refX="5"
+                                                refY="3"
+                                                orient="auto"
+                                              >
+                                                <polygon
+                                                  points="0,0 6,3 0,6"
+                                                  fill="rgba(239,68,68,0.9)"
+                                                />
+                                              </marker>
+                                            </defs>
+                                            <circle
+                                              cx={`${x1}%`}
+                                              cy={`${y1}%`}
+                                              r="4"
+                                              fill="rgba(239,68,68,0.9)"
+                                            />
+                                            <line
+                                              x1={`${x1}%`}
+                                              y1={`${y1}%`}
+                                              x2={`${x2}%`}
+                                              y2={`${y2}%`}
+                                              stroke="rgba(239,68,68,0.9)"
+                                              strokeWidth="3"
+                                              markerEnd={`url(#arrowhead-${idx})`}
+                                              strokeDasharray="5 3"
+                                            />
+                                          </svg>
+                                        );
+                                      }
+                                    }
+                                    return null;
+                                  })()}
+                              </div>
+                            )}
+
                             {stepAction && (
                               <details className="mt-2 text-xs">
-                                <summary className="cursor-pointer text-[#1d9bf0] hover:text-[#1a8cd8]">
+                                <summary className="cursor-pointer text-[#1d9bf0] hover:text-[#1a8cd8] transition-colors">
                                   View action
                                 </summary>
-                                <pre className="mt-2 p-2 bg-slate-900 text-slate-200 rounded-lg overflow-x-auto text-xs">
+                                <pre className="mt-2 p-2 bg-slate-900 text-slate-200 rounded-lg overflow-x-auto text-xs border border-slate-800">
                                   {JSON.stringify(stepAction, null, 2)}
                                 </pre>
                               </details>

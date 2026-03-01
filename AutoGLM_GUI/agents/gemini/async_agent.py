@@ -102,6 +102,7 @@ class AsyncGeminiAgent(AsyncAgentBase):
             logger.debug(f"   Action: {json.dumps(action, ensure_ascii=False)}")
 
         # 4. 执行 action
+        screenshot = None
         try:
             screenshot = await asyncio.to_thread(self.device.get_screenshot)
             result = await asyncio.to_thread(
@@ -158,6 +159,7 @@ class AsyncGeminiAgent(AsyncAgentBase):
                 "success": result.success,
                 "finished": finished,
                 "message": result.message or action.get("message"),
+                "screenshot": screenshot.base64_data if screenshot else None,
             },
         }
 
