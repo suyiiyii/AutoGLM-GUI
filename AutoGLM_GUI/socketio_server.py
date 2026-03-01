@@ -5,7 +5,8 @@ from __future__ import annotations
 import asyncio
 import time
 
-from typing_extensions import NotRequired, TypedDict
+from typing import NotRequired
+from typing_extensions import TypedDict
 
 import socketio
 

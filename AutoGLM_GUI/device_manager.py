@@ -6,7 +6,7 @@ import threading
 import time
 from collections import defaultdict
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from typing import TYPE_CHECKING, TypeAlias
 
 from AutoGLM_GUI.adb import ADBConnection, ConnectionType, DeviceInfo
@@ -50,7 +50,7 @@ def convert_connection_type(ct: ConnectionType) -> DeviceConnectionType:
     return map_adb_connection_type_to_device_connection_type(ct)
 
 
-class DeviceState(str, Enum):
+class DeviceState(StrEnum):
     """Device availability state."""
 
     ONLINE = "online"  # Device connected and responsive

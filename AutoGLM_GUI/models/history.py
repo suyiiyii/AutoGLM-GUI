@@ -1,5 +1,7 @@
 """Conversation history data models."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Literal
@@ -31,7 +33,7 @@ class MessageRecord:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "MessageRecord":
+    def from_dict(cls, data: dict) -> MessageRecord:
         """从字典创建实例."""
         return cls(
             role=data.get("role", "user"),
@@ -90,7 +92,7 @@ class ConversationRecord:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "ConversationRecord":
+    def from_dict(cls, data: dict) -> ConversationRecord:
         """从字典创建实例."""
         return cls(
             id=data.get("id", str(uuid4())),
@@ -129,7 +131,7 @@ class DeviceHistory:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> "DeviceHistory":
+    def from_dict(cls, data: dict) -> DeviceHistory:
         """从字典创建实例."""
         return cls(
             serialno=data.get("serialno", ""),

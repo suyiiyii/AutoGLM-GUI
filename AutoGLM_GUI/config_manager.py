@@ -16,7 +16,7 @@ from __future__ import annotations
 import json
 import os
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 from typing import Self
 
@@ -32,7 +32,7 @@ LAYERED_MAX_TURNS_MIN = 1
 # ==================== 配置源枚举 ====================
 
 
-class ConfigSource(str, Enum):
+class ConfigSource(StrEnum):
     """配置来源枚举（按优先级从高到低）."""
 
     CLI = "CLI arguments"
@@ -44,7 +44,7 @@ class ConfigSource(str, Enum):
 # ==================== 类型安全配置模型 ====================
 
 
-class ThinkingMode(str, Enum):
+class ThinkingMode(StrEnum):
     """思考模式枚举."""
 
     FAST = "fast"  # 快速响应模式 - 减少思考时间

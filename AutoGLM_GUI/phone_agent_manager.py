@@ -7,7 +7,7 @@ import threading
 import time
 from contextlib import contextmanager
 from dataclasses import dataclass
-from enum import Enum
+from enum import StrEnum
 from collections.abc import Awaitable, Callable
 
 from AutoGLM_GUI.agents.protocols import AsyncAgent, BaseAgent
@@ -21,7 +21,7 @@ from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.types import AgentSpecificConfig
 
 
-class AgentState(str, Enum):
+class AgentState(StrEnum):
     """Agent runtime state."""
 
     IDLE = "idle"  # Agent initialized, not processing
