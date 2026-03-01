@@ -174,9 +174,11 @@ class ElectronBuilder:
         return True
 
     def sync_python_deps(self) -> bool:
-        """同步 Python 开发依赖"""
+        """同步 Python 开发依赖（含 droidrun 可选依赖）"""
         print_step("同步 Python 开发依赖", 7, 2)
-        return run_command(["uv", "sync", "--dev"], cwd=self.root_dir)
+        return run_command(
+            ["uv", "sync", "--dev", "--extra", "droidrun"], cwd=self.root_dir
+        )
 
     def build_frontend(self) -> bool:
         """构建前端"""
