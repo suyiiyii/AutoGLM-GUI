@@ -28,6 +28,11 @@ jobs:
         with:
           frozen: "true"
 
+      - name: Install optional dependencies
+        run: |
+          echo "📦 Installing optional dependencies..."
+          uv pip install -e ".[droidrun]"
+
       - name: Backend lint (check-only)
         run: |
           uv run python scripts/lint.py --backend --check-only

@@ -56,16 +56,11 @@ class DroidRunAgent:
 
         # 延迟导入，未安装时给出友好提示
         try:
-            from droidrun.agent.codeact.events import (
-                CodeActResponseEvent,
-                FastAgentResponseEvent,
-                FastAgentToolCallEvent,
-            )
-            from droidrun.agent.common.events import ToolExecutionEvent
+            from droidrun.agent.codeact.events import CodeActResponseEvent
             from droidrun.agent.droid.droid_agent import DroidAgent
             from droidrun.agent.droid.events import (
+                CodeActResultEvent,
                 ExecutorResultEvent,
-                FastAgentResultEvent,
                 FinalizeEvent,
                 ManagerPlanEvent,
                 ResultEvent,
@@ -89,19 +84,13 @@ class DroidRunAgent:
         # 利用闭包将已导入的事件类型内联到转换函数中
         def convert_event(event: Any) -> dict[str, Any] | None:
             """将 DroidRun 事件转换为 AutoGLM-GUI 事件格式。"""
-            # ── CodeAct / FastAgent 内部逐步事件（reasoning=False 模式）──
-            if isinstance(event, (CodeActResponseEvent, FastAgentResponseEvent)):
+            # ── CodeAct 内部逐步事件（reasoning=False 模式）──
+            if isinstance(event, CodeActResponseEvent):
                 if event.thought:
                     return {"type": "thinking", "data": {"chunk": event.thought}}
                 return None
 
-            if isinstance(event, FastAgentToolCallEvent):
-                return {
-                    "type": "thinking",
-                    "data": {"chunk": f"[工具调用] {event.tool_calls_repr}"},
-                }
-
-            if isinstance(event, ToolExecutionEvent):
+            if isinstance(event, CodeActResultEvent):
                 self._step_count += 1
                 return {
                     "type": "step",
@@ -110,9 +99,11 @@ class DroidRunAgent:
                         "thinking": event.summary or "",
                         "action": {
                             "_metadata": "DroidRun",
-                            "description": f"{event.tool_name}({event.tool_args})",
+                            "description": str(event.action)
+                            if hasattr(event, "action")
+                            else "code execution",
                         },
-                        "success": event.success,
+                        "success": event.success if hasattr(event, "success") else True,
                         "finished": False,
                         "message": None,
                     },
@@ -143,12 +134,6 @@ class DroidRunAgent:
                 }
 
             # ── 最终结果事件 ──
-            if isinstance(event, FastAgentResultEvent):
-                return {
-                    "type": "thinking",
-                    "data": {"chunk": f"[完成] {event.reason}"},
-                }
-
             if isinstance(event, ResultEvent):
                 return {
                     "type": "done",

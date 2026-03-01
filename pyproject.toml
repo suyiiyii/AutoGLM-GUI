@@ -66,11 +66,6 @@ artifacts = ["AutoGLM_GUI/static/**/*"]
 [tool.hatch.metadata]
 allow-direct-references = true
 
-[tool.pyright]
-# 可选依赖的导入错误在 CI (frozen 模式) 中忽略
-# 这些模块在运行时通过 try/except 处理未安装的情况
-reportMissingImports = false
-
 [dependency-groups]
 dev = [
     "pyinstaller>=6.17.0",

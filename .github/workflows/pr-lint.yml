@@ -21,6 +21,11 @@ jobs:
       - name: Setup Python & uv
         uses: ./.github/actions/setup-python
 
+      - name: Install optional dependencies
+        run: |
+          echo "📦 Installing optional dependencies..."
+          uv pip install -e ".[droidrun]"
+
       - name: Setup Node.js & pnpm
         uses: ./.github/actions/setup-node
         with:
