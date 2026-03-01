@@ -811,7 +811,7 @@ export function DevicePanel({
                             {stepScreenshot && (
                               <div className="mt-3 relative inline-block border border-slate-200 dark:border-slate-700 rounded overflow-hidden shadow-sm">
                                 <img
-                                  src={`data:image/jpeg;base64,${stepScreenshot}`}
+                                  src={`data:image/png;base64,${stepScreenshot}`}
                                   alt={`Step ${idx + 1}`}
                                   className="max-h-[350px] w-auto block object-contain"
                                 />
