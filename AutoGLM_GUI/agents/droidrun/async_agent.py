@@ -56,6 +56,12 @@ class DroidRunAgent:
 
         # 延迟导入，未安装时给出友好提示
         try:
+            from droidrun.agent.codeact.events import (
+                CodeActResponseEvent,
+                FastAgentResponseEvent,
+                FastAgentToolCallEvent,
+            )
+            from droidrun.agent.common.events import ToolExecutionEvent
             from droidrun.agent.droid.droid_agent import DroidAgent
             from droidrun.agent.droid.events import (
                 ExecutorResultEvent,
@@ -79,6 +85,87 @@ class DroidRunAgent:
                 },
             }
             return
+
+        # 利用闭包将已导入的事件类型内联到转换函数中
+        def convert_event(event: Any) -> dict[str, Any] | None:
+            """将 DroidRun 事件转换为 AutoGLM-GUI 事件格式。"""
+            # ── CodeAct / FastAgent 内部逐步事件（reasoning=False 模式）──
+            if isinstance(event, (CodeActResponseEvent, FastAgentResponseEvent)):
+                if event.thought:
+                    return {"type": "thinking", "data": {"chunk": event.thought}}
+                return None
+
+            if isinstance(event, FastAgentToolCallEvent):
+                return {
+                    "type": "thinking",
+                    "data": {"chunk": f"[工具调用] {event.tool_calls_repr}"},
+                }
+
+            if isinstance(event, ToolExecutionEvent):
+                self._step_count += 1
+                return {
+                    "type": "step",
+                    "data": {
+                        "step": self._step_count,
+                        "thinking": event.summary or "",
+                        "action": {
+                            "_metadata": "DroidRun",
+                            "description": f"{event.tool_name}({event.tool_args})",
+                        },
+                        "success": event.success,
+                        "finished": False,
+                        "message": None,
+                    },
+                }
+
+            # ── Manager / Executor 事件（reasoning=True 模式）──
+            if isinstance(event, ManagerPlanEvent):
+                text = event.current_subgoal
+                if event.thought:
+                    text = f"{event.thought}\n[子目标] {event.current_subgoal}"
+                return {"type": "thinking", "data": {"chunk": text}}
+
+            if isinstance(event, ExecutorResultEvent):
+                self._step_count += 1
+                return {
+                    "type": "step",
+                    "data": {
+                        "step": self._step_count,
+                        "thinking": event.summary or "",
+                        "action": {
+                            "_metadata": "DroidRun",
+                            "description": str(event.action),
+                        },
+                        "success": event.outcome,
+                        "finished": False,
+                        "message": event.error if not event.outcome else None,
+                    },
+                }
+
+            # ── 最终结果事件 ──
+            if isinstance(event, FastAgentResultEvent):
+                return {
+                    "type": "thinking",
+                    "data": {"chunk": f"[完成] {event.reason}"},
+                }
+
+            if isinstance(event, ResultEvent):
+                return {
+                    "type": "done",
+                    "data": {
+                        "success": event.success,
+                        "message": event.reason,
+                        "steps": event.steps or self._step_count,
+                    },
+                }
+
+            if isinstance(event, FinalizeEvent):
+                return {
+                    "type": "thinking",
+                    "data": {"chunk": f"[完成中] {event.reason}"},
+                }
+
+            return None
 
         # 构建 DroidrunConfig（只需设备配置，LLM 直接传入）
         config = DroidrunConfig()
@@ -118,14 +205,7 @@ class DroidRunAgent:
                     yield {"type": "cancelled", "data": {"message": "任务已取消"}}
                     return
 
-                converted = self._convert_event(
-                    event,
-                    ExecutorResultEvent,
-                    FastAgentResultEvent,
-                    ManagerPlanEvent,
-                    ResultEvent,
-                    FinalizeEvent,
-                )
+                converted = convert_event(event)
                 if converted is not None:
                     yield converted
                     if converted["type"] == "done":
@@ -133,68 +213,6 @@ class DroidRunAgent:
         except Exception as e:
             logger.error(f"DroidRun 执行错误: {e}")
             yield {"type": "error", "data": {"message": f"执行错误：{e}"}}
-
-    def _convert_event(
-        self,
-        event: Any,
-        ExecutorResultEvent: type,
-        FastAgentResultEvent: type,
-        ManagerPlanEvent: type,
-        ResultEvent: type,
-        FinalizeEvent: type,
-    ) -> dict[str, Any] | None:
-        """将 DroidRun 事件转换为 AutoGLM-GUI 事件格式。"""
-        if isinstance(event, ManagerPlanEvent):
-            text = event.current_subgoal
-            if event.thought:
-                text = f"{event.thought}\n[子目标] {event.current_subgoal}"
-            return {"type": "thinking", "data": {"chunk": text}}
-
-        if isinstance(event, ExecutorResultEvent):
-            self._step_count += 1
-            return {
-                "type": "step",
-                "data": {
-                    "step": self._step_count,
-                    "thinking": event.summary or "",
-                    "action": {
-                        "_metadata": "DroidRun",
-                        "description": str(event.action),
-                    },
-                    "success": event.outcome,
-                    "finished": False,
-                    "message": event.error if not event.outcome else None,
-                },
-            }
-
-        if isinstance(event, FastAgentResultEvent):
-            self._step_count += 1
-            return {
-                "type": "step",
-                "data": {
-                    "step": self._step_count,
-                    "thinking": event.reason,
-                    "action": None,
-                    "success": event.success,
-                    "finished": True,
-                    "message": event.reason,
-                },
-            }
-
-        if isinstance(event, ResultEvent):
-            return {
-                "type": "done",
-                "data": {
-                    "success": event.success,
-                    "message": event.reason,
-                    "steps": event.steps or self._step_count,
-                },
-            }
-
-        if isinstance(event, FinalizeEvent):
-            return {"type": "thinking", "data": {"chunk": f"[完成中] {event.reason}"}}
-
-        return None
 
     async def cancel(self) -> None:
         """取消当前执行。"""
