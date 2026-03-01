@@ -8,7 +8,7 @@ Modern Web GUI for AutoGLM Phone Agent - AI-Powered Android Device Automation Ma
 
 **🎉 Android 11+ devices now support fully wireless pairing via QR code, no cable required! 🎉**
 
-![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
+![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)
 [![PyPI](https://img.shields.io/pypi/v/autoglm-gui)](https://pypi.org/project/autoglm-gui/)
 <br/>
@@ -134,7 +134,7 @@ autoglm-gui --base-url http://localhost:8000/v1 --model autoglm-phone-9b
 
 ### Prerequisites
 
-- Python 3.10+
+- Python 3.11+
 - Android device (Android 11+ supports fully wireless pairing, no cable needed)
 - ADB installed and added to system PATH (desktop version includes ADB)
 - An OpenAI-compatible API endpoint

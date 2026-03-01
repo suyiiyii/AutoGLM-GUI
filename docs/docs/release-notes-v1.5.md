@@ -291,7 +291,7 @@ description: AutoGLM-GUI v1.4.1 到 v1.5.5 的完整更新日志和特性说明
 #### 🧪 测试基础设施
 
 **Python 版本矩阵测试 (#151)**
-- ✅ 添加 Python 3.10+ 版本矩阵测试
+- ✅ 添加 Python 3.11+ 版本矩阵测试
 - 🔍 多版本兼容性验证
 - 🤖 自动化跨版本测试
 
@@ -384,7 +384,7 @@ AsyncGLMAgent 现在支持有状态的多轮对话：
 **测试基础设施改进**
 
 - 🐳 Docker E2E 测试
-- 🔄 Python 版本矩阵（3.10+）
+- 🔄 Python 版本矩阵（3.11+）
 - 🧪 集成测试优化
 - 📊 测试覆盖率提升
 
@@ -442,7 +442,7 @@ autoglm-gui --ssl-keyfile key.pem --ssl-certfile cert.pem
 - ✅ 移除所有 `Any` 类型
 - ✅ 移除 3 个第三方依赖
 - ✅ 标准化协议接口
-- ✅ Python 3.10+ 兼容性测试
+- ✅ Python 3.11+ 兼容性测试
 
 ### 功能覆盖
 - ✅ Web 应用部署

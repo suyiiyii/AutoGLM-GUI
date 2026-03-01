@@ -8,7 +8,7 @@
 - Tests are in `tests/` and `tests/integration/` (example: `tests/test_metrics.py`, `tests/integration/test_agent_integration.py`).
 
 ## Setup
-- Required Python: `>=3.10` (from `pyproject.toml`).
+- Required Python: `>=3.11` (from `pyproject.toml`).
 - Required Node/pnpm: Node.js `18+` and `pnpm` (from `CONTRIBUTING.md`); CI commonly runs Node `24` (from `.github/workflows/pr-lint.yml`).
 - Required tools: `uv` (dependency sync and task runner), `adb` in PATH (from `CONTRIBUTING.md`).
 - Install backend dependencies (repo root): `uv sync`

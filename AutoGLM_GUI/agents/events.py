@@ -5,11 +5,11 @@ from typing import Any, TypedDict
 class AgentEventType(str, Enum):
     """Agent 事件类型."""
 
-    THINKING = "thinking_chunk"
+    THINKING = "thinking"
     STEP = "step"
     DONE = "done"
     ERROR = "error"
-    ABORTED = "aborted"
+    CANCELLED = "cancelled"
 
 
 class AgentEvent(TypedDict):

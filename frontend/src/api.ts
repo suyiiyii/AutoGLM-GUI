@@ -86,8 +86,8 @@ export interface ScreenshotResponse {
   error?: string;
 }
 
-export interface ThinkingChunkEvent {
-  type: 'thinking_chunk';
+export interface ThinkingEvent {
+  type: 'thinking';
   role: 'assistant';
   chunk: string;
 }
@@ -116,18 +116,18 @@ export interface ErrorEvent {
   message: string;
 }
 
-export interface AbortedEvent {
-  type: 'aborted';
+export interface CancelledEvent {
+  type: 'cancelled';
   role: 'assistant';
   message: string;
 }
 
 export type StreamEvent =
-  | ThinkingChunkEvent
+  | ThinkingEvent
   | StepEvent
   | DoneEvent
   | ErrorEvent
-  | AbortedEvent;
+  | CancelledEvent;
 
 export interface TapRequest {
   x: number;
@@ -383,11 +383,11 @@ export async function sendMessage(message: string): Promise<ChatResponse> {
 export function sendMessageStream(
   message: string,
   deviceId: string,
-  onThinkingChunk: (event: ThinkingChunkEvent) => void,
+  onThinking: (event: ThinkingEvent) => void,
   onStep: (event: StepEvent) => void,
   onDone: (event: DoneEvent) => void,
   onError: (event: ErrorEvent) => void,
-  onAborted?: (event: AbortedEvent) => void
+  onCancelled?: (event: CancelledEvent) => void
 ): { close: () => void } {
   const controller = new AbortController();
 
@@ -439,19 +439,19 @@ export function sendMessageStream(
             try {
               const data = JSON.parse(line.slice(6));
 
-              if (eventType === 'thinking_chunk') {
-                console.log('[SSE] Received thinking_chunk event:', data);
-                onThinkingChunk(data as ThinkingChunkEvent);
+              if (eventType === 'thinking') {
+                console.log('[SSE] Received thinking event:', data);
+                onThinking(data as ThinkingEvent);
               } else if (eventType === 'step') {
                 console.log('[SSE] Received step event:', data);
                 onStep(data as StepEvent);
               } else if (eventType === 'done') {
                 console.log('[SSE] Received done event:', data);
                 onDone(data as DoneEvent);
-              } else if (eventType === 'aborted') {
-                console.log('[SSE] Received aborted event:', data);
-                if (onAborted) {
-                  onAborted(data as AbortedEvent);
+              } else if (eventType === 'cancelled') {
+                console.log('[SSE] Received cancelled event:', data);
+                if (onCancelled) {
+                  onCancelled(data as CancelledEvent);
                 }
               } else if (eventType === 'error') {
                 console.log('[SSE] Received error event:', data);
@@ -466,12 +466,12 @@ export function sendMessageStream(
     })
     .catch(error => {
       if (error.name === 'AbortError') {
-        // User manually aborted the connection
-        if (onAborted) {
-          onAborted({
-            type: 'aborted',
+        // User manually cancelled the connection
+        if (onCancelled) {
+          onCancelled({
+            type: 'cancelled',
             role: 'assistant',
-            message: 'Connection aborted by user',
+            message: 'Task cancelled by user',
           });
         }
       } else {

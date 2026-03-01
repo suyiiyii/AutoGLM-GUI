@@ -7,7 +7,7 @@ title: 快速开始
 
 ### 前置要求
 
-- Python 3.10+
+- Python 3.11+
 - Android 设备（Android 11+ 支持完全无线配对，无需数据线）
 - 已安装 ADB 并添加到系统 PATH（桌面版已内置）
 - 一个 OpenAI 兼容的 API 端点

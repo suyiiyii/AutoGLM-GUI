@@ -44,6 +44,19 @@ class FakeAsyncAgent:
         self.cancelled = True
 
 
+class FakeSyncAgent:
+    def __init__(self) -> None:
+        self.step_count = 1
+        self.run_result = "sync ok"
+        self.run_error: Exception | None = None
+
+    def run(self, message: str) -> str:
+        _ = message
+        if self.run_error is not None:
+            raise self.run_error
+        return self.run_result
+
+
 class FakePhoneAgentManager:
     def __init__(self) -> None:
         self.acquire_mode = "ok"
@@ -62,7 +75,7 @@ class FakePhoneAgentManager:
             raise AgentInitializationError("missing config")
         return True
 
-    def get_agent_with_context(self, device_id: str, **kwargs) -> FakeAsyncAgent:
+    def get_agent_with_context(self, device_id: str, **kwargs) -> Any:
         _ = (device_id, kwargs)
         return self.agent
 
@@ -217,6 +230,19 @@ def test_chat_unexpected_error_returns_success_false(env: dict[str, Any]) -> Non
     assert env["phone_manager"].release_calls == ["device-2"]
 
 
+def test_chat_supports_sync_agent(env: dict[str, Any]) -> None:
+    env["phone_manager"].agent = FakeSyncAgent()
+
+    response = env["client"].post(
+        "/api/chat",
+        json={"device_id": "device-sync", "message": "open settings"},
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {"result": "sync ok", "steps": 1, "success": True}
+    assert env["phone_manager"].release_calls == ["device-sync"]
+
+
 def test_chat_stream_returns_409_when_device_busy(env: dict[str, Any]) -> None:
     env["phone_manager"].acquire_mode = "busy"
 
@@ -270,6 +296,22 @@ def test_chat_stream_emits_sse_events(env: dict[str, Any]) -> None:
     assert '"type": "step"' in body
     assert "event: done" in body
     assert '"message": "finished"' in body
+
+
+def test_chat_stream_returns_error_for_non_async_agent(env: dict[str, Any]) -> None:
+    env["phone_manager"].agent = FakeSyncAgent()
+
+    response = env["client"].post(
+        "/api/chat/stream",
+        json={"device_id": "device-sync", "message": "open settings"},
+    )
+
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+
+    body = response.text
+    assert "event: error" in body
+    assert "does not support streaming" in body
 
 
 def test_get_config_masks_empty_api_key_and_maps_conflicts(

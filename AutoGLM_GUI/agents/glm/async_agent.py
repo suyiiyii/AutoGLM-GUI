@@ -1,37 +1,24 @@
-"""AsyncGLMAgent - 异步 GLM Agent 实现，支持原生流式输出和立即取消。"""
+"""AsyncGLMAgent - 异步 GLM Agent，使用流式文本解析。"""
 
 import asyncio
 import json
 import traceback
-from typing import Any, AsyncIterator, Callable
+from collections.abc import AsyncGenerator
+from typing import Any, Callable
 
-from openai import AsyncOpenAI
-
-from AutoGLM_GUI.actions import ActionHandler, ActionResult
+from AutoGLM_GUI.agents.base import AsyncAgentBase
 from AutoGLM_GUI.agents.protocols import AsyncAgent
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.device_protocol import DeviceProtocol
 from AutoGLM_GUI.logger import logger
+from AutoGLM_GUI.model import MessageBuilder
 from AutoGLM_GUI.prompt_config import get_messages, get_system_prompt
 
-from .message_builder import MessageBuilder
 from .parser import GLMParser
 
 
-class AsyncGLMAgent(AsyncAgent):
-    """异步 GLM Agent 实现。
-
-    核心特性:
-    - 使用 AsyncOpenAI 进行异步 LLM 调用
-    - 原生支持流式输出 (async for)
-    - 支持立即取消 (asyncio.CancelledError)
-    - 使用 asyncio.to_thread 包装同步的设备操作
-
-    与 GLMAgent 的区别:
-    - stream() 方法返回 AsyncIterator，不需要 worker 线程
-    - cancel() 可以立即中断 HTTP 请求
-    - 不需要 monkey-patch thinking_callback
-    """
+class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
+    """异步 GLM Agent，通过流式文本 + 自定义格式解析执行操作。"""
 
     def __init__(
         self,
@@ -41,156 +28,40 @@ class AsyncGLMAgent(AsyncAgent):
         confirmation_callback: Callable[[str], bool] | None = None,
         takeover_callback: Callable[[str], None] | None = None,
     ):
-        self.model_config = model_config
-        self.agent_config = agent_config
-
-        # 使用 AsyncOpenAI
-        self.openai_client = AsyncOpenAI(
-            base_url=model_config.base_url,
-            api_key=model_config.api_key,
-            timeout=120,
-        )
         self.parser = GLMParser()
-
-        self.device = device
-        self.action_handler = ActionHandler(
-            device=self.device,
+        super().__init__(
+            model_config=model_config,
+            agent_config=agent_config,
+            device=device,
             confirmation_callback=confirmation_callback,
             takeover_callback=takeover_callback,
         )
 
-        # 取消机制
-        self._cancel_event = asyncio.Event()
+    def _get_default_system_prompt(self, lang: str) -> str:
+        return get_system_prompt(lang)
 
-        # 初始化 system prompt（Agent 一创建就有"人格"）
-        system_prompt = self.agent_config.system_prompt
-        if system_prompt is None:
-            system_prompt = get_system_prompt(self.agent_config.lang)
-
-        # 保存初始 system message 用于 reset()
-        self._initial_system_message = MessageBuilder.create_system_message(
-            system_prompt
+    def _prepare_initial_context(
+        self, task: str, screenshot_base64: str, current_app: str
+    ) -> None:
+        screen_info = MessageBuilder.build_screen_info(current_app)
+        initial_message = f"{task}\n\n** Screen Info **\n\n{screen_info}"
+        self._context.append(
+            MessageBuilder.create_user_message(
+                text=initial_message, image_base64=screenshot_base64
+            )
         )
 
-        # 状态
-        self._context: list[dict[str, Any]] = [self._initial_system_message]
-        self._step_count = 0
-        self._is_running = False
-
-    async def stream(self, task: str) -> AsyncIterator[dict[str, Any]]:
-        """流式执行任务，支持取消。
-
-        Args:
-            task: 任务描述
-
-        Yields:
-            dict[str, Any]: 事件字典，格式为 {"type": str, "data": dict}
-
-        事件类型:
-        - "thinking": {"chunk": str}
-        - "step": {"step": int, "thinking": str, "action": dict, ...}
-        - "done": {"message": str, "steps": int, "success": bool}
-        - "cancelled": {"message": str}
-        - "error": {"message": str}
-        """
-        self._is_running = True
-        self._cancel_event.clear()
-
-        try:
-            # ===== 初始化阶段：添加首次用户输入 =====
-            try:
-                screenshot = await asyncio.to_thread(self.device.get_screenshot)
-                current_app = await asyncio.to_thread(self.device.get_current_app)
-            except Exception as e:
-                logger.error(f"Failed to get device info during initialization: {e}")
-                yield {
-                    "type": "error",
-                    "data": {"message": f"Device error: {e}"},
-                }
-                yield {
-                    "type": "done",
-                    "data": {
-                        "message": f"Device error: {e}",
-                        "steps": 0,
-                        "success": False,
-                    },
-                }
-                return
-
-            screen_info = MessageBuilder.build_screen_info(current_app)
-            initial_message = f"{task}\n\n** Screen Info **\n\n{screen_info}"
-
-            self._context.append(
-                MessageBuilder.create_user_message(
-                    text=initial_message, image_base64=screenshot.base64_data
-                )
-            )
-
-            # ===== 执行阶段：循环执行步骤 =====
-            while self._step_count < self.agent_config.max_steps and self._is_running:
-                # 检查取消
-                if self._cancel_event.is_set():
-                    raise asyncio.CancelledError()
-
-                async for event in self._execute_step_async():
-                    yield event
-
-                    # 检查是否完成
-                    if event["type"] == "step" and event["data"].get("finished"):
-                        yield {
-                            "type": "done",
-                            "data": {
-                                "message": event["data"].get(
-                                    "message", "Task completed"
-                                ),
-                                "steps": self._step_count,
-                                "success": event["data"].get("success", True),
-                            },
-                        }
-                        return
-
-            # 达到最大步数
-            yield {
-                "type": "done",
-                "data": {
-                    "message": "Max steps reached",
-                    "steps": self._step_count,
-                    "success": False,
-                },
-            }
-
-        except asyncio.CancelledError:
-            yield {
-                "type": "cancelled",
-                "data": {"message": "Task cancelled by user"},
-            }
-            raise
-
-        finally:
-            self._is_running = False
-
-    async def _execute_step_async(self) -> AsyncIterator[dict[str, Any]]:
-        """执行单步，支持流式输出和取消。
-
-        注意：不再需要 user_prompt 参数，因为：
-        - 首次用户输入已在 stream() 的初始化阶段添加
-        - 此方法只负责执行步骤：获取屏幕 → 调用 LLM → 执行动作
-
-        Yields:
-            dict[str, Any]: 事件字典
-        """
+    async def _execute_step(self) -> AsyncGenerator[dict[str, Any], None]:
+        """执行单步：获取截图 → 流式调用 LLM → 解析文本 → 执行动作。"""
         self._step_count += 1
 
-        # 1. 获取当前屏幕状态（使用线程池）
+        # 1. 获取当前屏幕状态
         try:
             screenshot = await asyncio.to_thread(self.device.get_screenshot)
             current_app = await asyncio.to_thread(self.device.get_current_app)
         except Exception as e:
             logger.error(f"Failed to get device info: {e}")
-            yield {
-                "type": "error",
-                "data": {"message": f"Device error: {e}"},
-            }
+            yield {"type": "error", "data": {"message": f"Device error: {e}"}}
             yield {
                 "type": "step",
                 "data": {
@@ -204,17 +75,16 @@ class AsyncGLMAgent(AsyncAgent):
             }
             return
 
-        # 2. 构建消息（统一格式：只有屏幕信息）
+        # 2. 构建消息
         screen_info = MessageBuilder.build_screen_info(current_app)
         text_content = f"** Screen Info **\n\n{screen_info}"
-
         self._context.append(
             MessageBuilder.create_user_message(
                 text=text_content, image_base64=screenshot.base64_data
             )
         )
 
-        # 3. 流式调用 OpenAI（真正的异步，可取消）
+        # 3. 流式调用 OpenAI
         try:
             if self.agent_config.verbose:
                 msgs = get_messages(self.agent_config.lang)
@@ -224,20 +94,15 @@ class AsyncGLMAgent(AsyncAgent):
             raw_content = ""
 
             async for chunk_data in self._stream_openai(self._context):
-                # 检查取消
                 if self._cancel_event.is_set():
                     raise asyncio.CancelledError()
 
                 if chunk_data["type"] == "thinking":
                     thinking_parts.append(chunk_data["content"])
-
-                    # Yield thinking event
                     yield {
                         "type": "thinking",
                         "data": {"chunk": chunk_data["content"]},
                     }
-
-                    # Verbose output
                     if self.agent_config.verbose:
                         logger.debug(chunk_data["content"])
 
@@ -254,11 +119,7 @@ class AsyncGLMAgent(AsyncAgent):
             logger.error(f"LLM error: {e}")
             if self.agent_config.verbose:
                 logger.debug(traceback.format_exc())
-
-            yield {
-                "type": "error",
-                "data": {"message": f"Model error: {e}"},
-            }
+            yield {"type": "error", "data": {"message": f"Model error: {e}"}}
             yield {
                 "type": "step",
                 "data": {
@@ -274,7 +135,6 @@ class AsyncGLMAgent(AsyncAgent):
 
         # 4. 解析 action
         _, action_str = self._parse_raw_response(raw_content)
-
         try:
             action = self.parser.parse(action_str)
         except ValueError as e:
@@ -287,33 +147,37 @@ class AsyncGLMAgent(AsyncAgent):
             logger.debug(f"🎯 {msgs['action']}:")
             logger.debug(json.dumps(action, ensure_ascii=False, indent=2))
 
-        # 5. 执行 action（使用线程池）
+        # 5. 执行 action
         try:
             result = await asyncio.to_thread(
-                self.action_handler.execute, action, screenshot.width, screenshot.height
+                self.action_handler.execute,
+                action,
+                screenshot.width,
+                screenshot.height,
             )
         except Exception as e:
             logger.error(f"Action execution error: {e}")
             if self.agent_config.verbose:
                 logger.debug(traceback.format_exc())
+            from AutoGLM_GUI.actions import ActionResult
+
             result = ActionResult(success=False, should_finish=True, message=str(e))
 
         # 6. 更新上下文
         self._context[-1] = MessageBuilder.remove_images_from_message(self._context[-1])
-
         self._context.append(
             MessageBuilder.create_assistant_message(
                 f"<think>{thinking}</think><answer>{action_str}</answer>"
             )
         )
 
-        # 7. 检查是否完成
+        # 7. 检查完成
         finished = action.get("_metadata") == "finish" or result.should_finish
-
         if finished and self.agent_config.verbose:
             msgs = get_messages(self.agent_config.lang)
             logger.debug(
-                f"✅ {msgs['task_completed']}: {result.message or action.get('message', msgs['done'])}"
+                f"✅ {msgs['task_completed']}: "
+                f"{result.message or action.get('message', msgs['done'])}"
             )
 
         # 8. 返回步骤结果
@@ -331,18 +195,8 @@ class AsyncGLMAgent(AsyncAgent):
 
     async def _stream_openai(
         self, messages: list[dict[str, Any]]
-    ) -> AsyncIterator[dict[str, str]]:
-        """流式调用 OpenAI，yield thinking chunks。
-
-        Args:
-            messages: 消息列表
-
-        Yields:
-            dict[str, str]: {"type": "thinking" | "raw", "content": str}
-
-        Raises:
-            asyncio.CancelledError: 任务被取消
-        """
+    ) -> AsyncGenerator[dict[str, str], None]:
+        """流式调用 OpenAI，yield thinking chunks。"""
         stream = await self.openai_client.chat.completions.create(
             messages=messages,  # type: ignore[arg-type]
             model=self.model_config.model_name,
@@ -360,9 +214,8 @@ class AsyncGLMAgent(AsyncAgent):
 
         try:
             async for chunk in stream:
-                # 检查取消
                 if self._cancel_event.is_set():
-                    await stream.close()  # 关键：关闭 HTTP 连接
+                    await stream.close()
                     raise asyncio.CancelledError()
 
                 if len(chunk.choices) == 0:
@@ -377,7 +230,6 @@ class AsyncGLMAgent(AsyncAgent):
 
                     buffer += content
 
-                    # 检查是否到达 action 标记
                     marker_found = False
                     for marker in action_markers:
                         if marker in buffer:
@@ -390,7 +242,6 @@ class AsyncGLMAgent(AsyncAgent):
                     if marker_found:
                         continue
 
-                    # 检查是否是潜在的 marker 前缀
                     is_potential_marker = False
                     for marker in action_markers:
                         for i in range(1, len(marker)):
@@ -405,17 +256,11 @@ class AsyncGLMAgent(AsyncAgent):
                         buffer = ""
 
         finally:
-            await stream.close()  # 确保资源释放
+            await stream.close()
 
-    def _parse_raw_response(self, content: str) -> tuple[str, str]:
-        """解析原始响应，提取 thinking 和 action。
-
-        Args:
-            content: 原始响应内容
-
-        Returns:
-            tuple[str, str]: (thinking, action)
-        """
+    @staticmethod
+    def _parse_raw_response(content: str) -> tuple[str, str]:
+        """解析原始响应，提取 thinking 和 action。"""
         if "finish(message=" in content:
             parts = content.split("finish(message=", 1)
             thinking = parts[0].strip()
@@ -435,46 +280,3 @@ class AsyncGLMAgent(AsyncAgent):
             return thinking, action
 
         return "", content
-
-    async def cancel(self) -> None:
-        """取消当前执行。
-
-        设置取消标志，中断正在进行的 HTTP 请求。
-        """
-        self._cancel_event.set()
-        self._is_running = False
-        logger.info("AsyncGLMAgent cancelled by user")
-
-    def reset(self) -> None:
-        """重置状态（恢复到初始状态，保留 system message）。"""
-        self._context = [self._initial_system_message]
-        self._step_count = 0
-        self._is_running = False
-        self._cancel_event.clear()
-
-    async def run(self, task: str) -> str:
-        """运行完整任务（兼容接口）。
-
-        Args:
-            task: 任务描述
-
-        Returns:
-            str: 最终结果消息
-        """
-        final_message = ""
-        async for event in self.stream(task):
-            if event["type"] == "done":
-                final_message = event["data"].get("message", "")
-        return final_message
-
-    @property
-    def step_count(self) -> int:
-        return self._step_count
-
-    @property
-    def context(self) -> list[dict[str, Any]]:
-        return self._context.copy()
-
-    @property
-    def is_running(self) -> bool:
-        return self._is_running

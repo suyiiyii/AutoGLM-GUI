@@ -4,7 +4,7 @@
 
 设计说明：
 - 从 mai_agent/unified_memory.py 迁移而来
-- 适配 Python 3.10+ 类型注解
+- 适配 Python 3.11+ 类型注解
 - 与 AutoGLM_GUI 架构集成
 """
 

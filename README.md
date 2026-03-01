@@ -9,7 +9,7 @@
 从个人助手到自动化中枢：支持 **定时执行**、**Docker 部署**、**对话历史**，打造你的 AI 自动化助手
 
 
-![Python](https://img.shields.io/badge/python-3.10+-blue.svg)
+![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)
 [![PyPI](https://img.shields.io/pypi/v/autoglm-gui)](https://pypi.org/project/autoglm-gui/)
 
@@ -31,7 +31,7 @@
 
 **核心场景**：部署到服务器 + 定时任务 = AI 自动化助手 7x24 小时为你工作
 
-📖 [查看完整更新日志](./RELEASE_NOTES_v1.4.1_to_v1.5.5.md) · [生产力场景示例](#-生产力场景示例)
+[生产力场景示例](#-生产力场景示例)
 
 ---
 
