@@ -133,7 +133,11 @@ const parseWorkflowTextToSteps = (text: string): WorkflowStep[] => {
   return parsed.map(step => createStep(step.title, step.description));
 };
 
-const buildWorkflowTextFromSteps = (steps: WorkflowStep[]): string => {
+const buildWorkflowTextFromSteps = (
+  steps: WorkflowStep[],
+  labels: { stepLabel: string; descriptionLabel: string }
+): string => {
+  const { stepLabel, descriptionLabel } = labels;
   return steps
     .map(step => ({
       title: step.title.trim(),
@@ -141,7 +145,8 @@ const buildWorkflowTextFromSteps = (steps: WorkflowStep[]): string => {
     }))
     .filter(step => step.title || step.description)
     .map((step, index) => {
-      const lines = [`${index + 1}. ${step.title.trim() || '未命名步骤'}`];
+      const fallbackTitle = `${stepLabel} ${index + 1}`;
+      const lines = [`${index + 1}. ${step.title.trim() || fallbackTitle}`];
       if (step.description) {
         const descriptionLines = step.description
           .split(/\r?\n/)
@@ -152,7 +157,7 @@ const buildWorkflowTextFromSteps = (steps: WorkflowStep[]): string => {
               (lineIndex > 0 && lineIndex < arr.length - 1)
           );
         if (descriptionLines.length > 0) {
-          lines.push('   描述:');
+          lines.push(`   ${descriptionLabel}:`);
         }
         for (const descriptionLine of descriptionLines) {
           lines.push(descriptionLine ? `   ${descriptionLine}` : '');
@@ -265,7 +270,10 @@ function WorkflowsComponent() {
       setSaving(true);
       const payload = {
         name: formData.name.trim(),
-        text: buildWorkflowTextFromSteps(formData.steps),
+        text: buildWorkflowTextFromSteps(formData.steps, {
+          stepLabel: t.workflows.stepLabel,
+          descriptionLabel: t.workflows.stepDescriptionLabel,
+        }),
       };
       if (editingWorkflow) {
         await updateWorkflow(editingWorkflow.uuid, payload);
