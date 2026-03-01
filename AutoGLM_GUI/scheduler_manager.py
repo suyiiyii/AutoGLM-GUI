@@ -1,11 +1,13 @@
 """Scheduled task manager with APScheduler."""
 
+from __future__ import annotations
+
 import asyncio
 import json
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import TYPE_CHECKING, Any, Optional
+from typing import TYPE_CHECKING, Any, Self
 
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -26,9 +28,9 @@ class DeviceExecutionResult:
 
 
 class SchedulerManager:
-    _instance: Optional["SchedulerManager"] = None
+    _instance: Self | None = None
 
-    def __new__(cls):
+    def __new__(cls: type[Self]) -> Self:
         if cls._instance is None:
             cls._instance = super().__new__(cls)
         return cls._instance

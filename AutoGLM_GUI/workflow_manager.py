@@ -8,10 +8,12 @@ Features:
 - UUID 生成
 """
 
+from __future__ import annotations
+
 import json
 import uuid as uuid_lib
 from pathlib import Path
-from typing import Optional
+from typing import Self
 
 from AutoGLM_GUI.logger import logger
 
@@ -19,9 +21,9 @@ from AutoGLM_GUI.logger import logger
 class WorkflowManager:
     """Workflow 管理器（单例模式）."""
 
-    _instance: Optional["WorkflowManager"] = None
+    _instance: Self | None = None
 
-    def __new__(cls):
+    def __new__(cls: type[Self]) -> Self:
         """单例模式：确保只有一个实例."""
         if cls._instance is None:
             cls._instance = super().__new__(cls)

@@ -11,12 +11,14 @@ Features:
 - 环境变量同步（支持 --reload 模式）
 """
 
+from __future__ import annotations
+
 import json
 import os
 from dataclasses import dataclass
 from enum import Enum
 from pathlib import Path
-from typing import Optional
+from typing import Self
 
 from pydantic import BaseModel, field_validator
 
@@ -214,10 +216,10 @@ class UnifiedConfigManager:
     - 环境变量同步（reload 模式）
     """
 
-    _instance: Optional["UnifiedConfigManager"] = None
+    _instance: Self | None = None
     _config_path: Path = Path.home() / ".config" / "autoglm" / "config.json"
 
-    def __new__(cls):
+    def __new__(cls: type[Self]) -> Self:
         """单例模式."""
         if cls._instance is None:
             cls._instance = super().__new__(cls)
