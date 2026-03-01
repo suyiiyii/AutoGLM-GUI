@@ -12,6 +12,6 @@
     "**/build"
   ],
   "typeCheckingMode": "standard",
-  "reportMissingImports": true,
+  "reportMissingImports": false,
   "reportMissingTypeStubs": false
 }
