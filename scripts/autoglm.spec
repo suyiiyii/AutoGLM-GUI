@@ -77,6 +77,9 @@ a = Analysis(
         'lupa.lua54',
 
         # 其他可能需要的模块
+        # droidrun 通过 importlib 动态加载，需显式收集
+        'llama_index.llms.openai_like',
+        'llama_index.llms.openai_like.base',
         'PIL._tkinter_finder',  # Pillow
     ],
 
