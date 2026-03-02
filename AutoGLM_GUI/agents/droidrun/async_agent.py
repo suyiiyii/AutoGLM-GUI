@@ -58,13 +58,7 @@ class DroidRunAgent:
         try:
             from droidrun.agent.codeact.events import CodeActResponseEvent
             from droidrun.agent.droid.droid_agent import DroidAgent
-            from droidrun.agent.droid.events import (
-                CodeActResultEvent,
-                ExecutorResultEvent,
-                FinalizeEvent,
-                ManagerPlanEvent,
-                ResultEvent,
-            )
+            from droidrun.agent.droid import events as droid_events
             from droidrun.agent.utils.llm_picker import load_llm
             from droidrun.config_manager.config_manager import (
                 DeviceConfig,
@@ -81,6 +75,16 @@ class DroidRunAgent:
             }
             return
 
+        # droidrun 0.4.x: CodeActResultEvent; 0.5.x: FastAgentResultEvent
+        codeact_result_event_cls = getattr(droid_events, "CodeActResultEvent", None)
+        fast_agent_result_event_cls = getattr(
+            droid_events, "FastAgentResultEvent", None
+        )
+        ExecutorResultEvent = droid_events.ExecutorResultEvent
+        FinalizeEvent = droid_events.FinalizeEvent
+        ManagerPlanEvent = droid_events.ManagerPlanEvent
+        ResultEvent = droid_events.ResultEvent
+
         # 利用闭包将已导入的事件类型内联到转换函数中
         def convert_event(event: Any) -> dict[str, Any] | None:
             """将 DroidRun 事件转换为 AutoGLM-GUI 事件格式。"""
@@ -90,20 +94,32 @@ class DroidRunAgent:
                     return {"type": "thinking", "data": {"chunk": event.thought}}
                 return None
 
-            if isinstance(event, CodeActResultEvent):
+            is_codeact_result = (
+                codeact_result_event_cls is not None
+                and isinstance(event, codeact_result_event_cls)
+            ) or (
+                fast_agent_result_event_cls is not None
+                and isinstance(event, fast_agent_result_event_cls)
+            )
+            if is_codeact_result:
+                summary = getattr(event, "summary", None) or getattr(
+                    event, "reason", ""
+                )
+                action = getattr(event, "action", None) or getattr(
+                    event, "instruction", "code execution"
+                )
+                success = getattr(event, "success", getattr(event, "outcome", True))
                 self._step_count += 1
                 return {
                     "type": "step",
                     "data": {
                         "step": self._step_count,
-                        "thinking": event.summary or "",
+                        "thinking": summary,
                         "action": {
                             "_metadata": "DroidRun",
-                            "description": str(event.action)
-                            if hasattr(event, "action")
-                            else "code execution",
+                            "description": str(action),
                         },
-                        "success": event.success if hasattr(event, "success") else True,
+                        "success": success,
                         "finished": False,
                         "message": None,
                     },
