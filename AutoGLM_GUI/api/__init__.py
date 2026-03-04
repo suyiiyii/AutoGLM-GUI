@@ -233,14 +233,41 @@ def create_app() -> FastAPI:
                 },
             )
 
-        # Add catch-all route for SPA (handles all non-API routes)
-        app.add_api_route(
-            "/{full_path:path}", serve_spa, methods=["GET"], include_in_schema=False
-        )
+        # Mount SPA handler at root with lower priority than MCP
+        # Use a custom ASGI app that only handles non-MCP requests
+        from typing import Any
 
-    # Mount MCP server at root (mcp_app already has /mcp path prefix)
-    # This must be AFTER static files to avoid intercepting them
-    app.mount("/", mcp_app)
+        from starlette.types import Receive, Scope, Send
+
+        class SPAApp:
+            """ASGI app that serves SPA, delegates to MCP for /mcp paths."""
+
+            def __init__(self, spa_dir: Path, mcp_app: Any):
+                self.spa_dir = spa_dir
+                self.mcp_app = mcp_app
+
+            async def __call__(self, scope: Scope, receive: Receive, send: Send):
+                # Only handle HTTP requests, pass everything else to MCP
+                if scope["type"] != "http":
+                    await self.mcp_app(scope, receive, send)
+                    return
+
+                path = scope["path"]
+                # Delegate /mcp and /mcp/* to MCP app
+                # MCP app's http_app(path="/mcp") expects the full path including /mcp prefix
+                if path == "/mcp" or path.startswith("/mcp/"):
+                    await self.mcp_app(scope, receive, send)
+                    return
+
+                # Handle SPA requests
+                full_path = path.lstrip("/")
+                response = await serve_spa(full_path)
+                await response(scope, receive, send)
+
+        app.mount("/", SPAApp(static_dir, mcp_app))
+    else:
+        # No static files, just mount MCP
+        app.mount("/", mcp_app)
 
     return app
 
