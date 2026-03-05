@@ -160,7 +160,8 @@ def create_app() -> FastAPI:
         from AutoGLM_GUI.device_manager import DeviceManager
         from AutoGLM_GUI.scheduler_manager import scheduler_manager
 
-        device_manager = DeviceManager.get_instance()
+        adb_path = os.environ.get("AUTOGLM_ADB_PATH", "adb")
+        device_manager = DeviceManager.get_instance(adb_path=adb_path)
         device_manager.start_polling()
 
         # Start scheduled task scheduler

@@ -255,6 +255,23 @@ def main() -> None:
     print("=" * 50)
     print()
 
+    # 确保 ADB 可用
+    from AutoGLM_GUI.adb_manager import ensure_adb
+
+    try:
+        adb_path = ensure_adb()
+    except RuntimeError as e:
+        print(f"\n[AutoGLM] WARNING: {e}", file=sys.stderr)
+        adb_path = "adb"  # 降级，让后续错误正常暴露
+
+    # 写入环境变量（供 --reload 模式的子进程使用）
+    os.environ["AUTOGLM_ADB_PATH"] = adb_path
+
+    # 预先创建 DeviceManager 单例（用正确的 adb_path）
+    from AutoGLM_GUI.device_manager import DeviceManager
+
+    DeviceManager.get_instance(adb_path=adb_path)
+
     # Open browser automatically unless disabled
     if not args.no_browser:
         open_browser(args.host, args.port, use_ssl=use_ssl)
