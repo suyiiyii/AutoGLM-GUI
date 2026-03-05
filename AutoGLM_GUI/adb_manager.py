@@ -60,7 +60,7 @@ def ensure_adb() -> str:
     # 3. Download
     platform_name = _platform_name()
     url = f"https://dl.google.com/android/repository/platform-tools-latest-{platform_name}.zip"
-    print(f"[AutoGLM] Downloading Android Platform Tools from Google (~12MB)...")
+    print("[AutoGLM] Downloading Android Platform Tools from Google (~12MB)...")
 
     try:
         data = _download_with_progress(url)
@@ -98,7 +98,9 @@ def ensure_adb() -> str:
 
     # Make executable on Unix
     if platform.system().lower() != "windows":
-        cached_adb.chmod(cached_adb.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
+        cached_adb.chmod(
+            cached_adb.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+        )
 
     print(f"[AutoGLM] ADB ready: {cached_adb}")
     return str(cached_adb)
@@ -106,15 +108,21 @@ def ensure_adb() -> str:
 
 def _download_with_progress(url: str) -> bytes:
     """Download *url* and return raw bytes, printing a simple progress indicator."""
-    chunks: list[bytes] = []
     downloaded = 0
 
     def _reporthook(block_num: int, block_size: int, total_size: int) -> None:
         nonlocal downloaded
-        downloaded = min(block_num * block_size, total_size if total_size > 0 else block_num * block_size)
+        downloaded = min(
+            block_num * block_size,
+            total_size if total_size > 0 else block_num * block_size,
+        )
         if total_size > 0:
             pct = downloaded * 100 // total_size
-            print(f"\r[AutoGLM] Downloading... {pct}% ({downloaded // 1024 // 1024}MB / {total_size // 1024 // 1024}MB)", end="", flush=True)
+            print(
+                f"\r[AutoGLM] Downloading... {pct}% ({downloaded // 1024 // 1024}MB / {total_size // 1024 // 1024}MB)",
+                end="",
+                flush=True,
+            )
 
     import tempfile
     import os
