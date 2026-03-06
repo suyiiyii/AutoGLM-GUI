@@ -360,17 +360,21 @@ class PhoneAgentManager:
         Args:
             device_id: Device identifier
             auto_initialize: Auto-initialize agent if not already initialized
-            **kwargs: Accepted for backward compatibility (``timeout``,
-                ``raise_on_timeout``) but ignored — the operation is non-blocking.
+            raise_on_timeout: If True (default), raise DeviceBusyError when
+                device is BUSY; if False, return False instead.
+            **kwargs: Accepted for backward compatibility (``timeout``).
 
         Returns:
-            bool: True if state was IDLE and is now BUSY
+            bool: True if state was IDLE and is now BUSY; False if device is
+                BUSY and raise_on_timeout=False.
 
         Raises:
-            DeviceBusyError: If device is already BUSY
+            DeviceBusyError: If device is already BUSY and raise_on_timeout=True
             AgentNotInitializedError: If agent not initialized AND auto_initialize=False
             AgentInitializationError: If auto_initialize=True and initialization fails
         """
+        raise_on_timeout = kwargs.get("raise_on_timeout", True)
+
         # Verify agent exists (with optional auto-initialization)
         if not self.is_initialized(device_id):
             if auto_initialize:
@@ -387,9 +391,11 @@ class PhoneAgentManager:
         with self._manager_lock:
             metadata = self._metadata.get(device_id)
             if metadata and metadata.state == AgentState.BUSY:
-                raise DeviceBusyError(
-                    f"Device {device_id} is busy, could not acquire lock"
-                )
+                if raise_on_timeout:
+                    raise DeviceBusyError(
+                        f"Device {device_id} is busy, could not acquire lock"
+                    )
+                return False
             if metadata:
                 metadata.state = AgentState.BUSY
                 metadata.last_used = time.time()
