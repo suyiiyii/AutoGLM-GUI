@@ -82,7 +82,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
         return ChatResponse(result=str(e), steps=0, success=False)
     finally:
         if acquired:
-            await asyncio.to_thread(manager.release_device, device_id)
+            manager.release_device(device_id)
 
 
 @router.post("/api/chat/stream")
@@ -178,9 +178,7 @@ async def chat_stream(request: ChatRequest):
             async def cancel_handler():
                 await agent.cancel()  # type: ignore[union-attr]
 
-            await asyncio.to_thread(
-                manager.register_abort_handler, device_id, cancel_handler
-            )
+            manager.register_abort_handler(device_id, cancel_handler)
 
             # 直接使用 agent.stream()
             async for event in agent.stream(request.message):  # type: ignore[union-attr]
@@ -239,15 +237,18 @@ async def chat_stream(request: ChatRequest):
         finally:
             # ===== 无论 generator 如何结束都释放锁 =====
             # 覆盖：正常完成、取消、异常、客户端断开(aclose)
+            # 注意：必须用 BaseException 而非 Exception，因为 CancelledError
+            # 是 BaseException 的子类（Python 3.9+），任务取消时 await 会抛出它
             try:
-                await asyncio.to_thread(manager.unregister_abort_handler, device_id)
-            except Exception:
+                manager.unregister_abort_handler(device_id)
+            except BaseException:
                 pass
             if acquired:
                 try:
-                    await asyncio.to_thread(manager.release_device, device_id)
+                    # 同步直接调用，避免 await 被 CancelledError 中断
+                    manager.release_device(device_id)
                     logger.info(f"Device lock released for {device_id}")
-                except Exception as e:
+                except BaseException as e:
                     logger.error(f"Failed to release device lock for {device_id}: {e}")
 
         # ===== 保存历史记录 =====

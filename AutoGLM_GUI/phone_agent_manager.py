@@ -42,13 +42,9 @@ class AgentMetadata:
     created_at: float = 0.0
     last_used: float = 0.0
     error_message: str | None = None
-
-
-@dataclass
-class StreamingAgentContext:
-    streaming_agent: BaseAgent
-    original_agent: BaseAgent
-    stop_event: threading.Event
+    abort_handler: (
+        threading.Event | Callable[[], None] | Callable[[], Awaitable[None]] | None
+    ) = None
 
 
 class PhoneAgentManager:
@@ -57,7 +53,7 @@ class PhoneAgentManager:
 
     Features:
     - Thread-safe agent creation/destruction
-    - Per-device locking (device-level concurrency control)
+    - Atomic state-machine concurrency (IDLE↔BUSY transitions)
     - State management (IDLE/BUSY/ERROR/INITIALIZING)
     - Integration with DeviceManager
     - Configuration hot-reload support
@@ -65,9 +61,9 @@ class PhoneAgentManager:
 
     Design Principles:
     - Uses state.agents and state.agent_configs as storage (backward compatible)
-    - Double-checked locking for device locks
-    - RLock for manager-level operations (supports reentrant calls)
-    - Context managers for automatic lock release
+    - Single RLock (_manager_lock) for all state transitions (microsecond hold time)
+    - No long-held per-device locks; acquire/release are instantaneous CAS operations
+    - Context managers for automatic state release
 
     Example:
         >>> manager = PhoneAgentManager.get_instance()
@@ -83,23 +79,14 @@ class PhoneAgentManager:
     def __init__(self):
         """Private constructor. Use get_instance() instead."""
         # Manager-level lock (protects internal state)
+        # All state transitions (IDLE↔BUSY) are guarded by this single lock.
+        # Each critical section holds it for microseconds only (atomic CAS),
+        # so no asyncio.to_thread() wrapper is needed for release/register/unregister.
         self._manager_lock = threading.RLock()
-
-        # Device-level locks (per-device concurrency control)
-        self._device_locks: dict[str, threading.Lock] = {}
-        self._device_locks_lock = threading.Lock()
 
         # Agent metadata (indexed by device_id)
         # State is stored in AgentMetadata.state (single source of truth)
         self._metadata: dict[str, AgentMetadata] = {}
-
-        # Streaming agent state (device_id -> StreamingAgentContext)
-        self._streaming_contexts: dict[str, StreamingAgentContext] = {}
-        self._streaming_contexts_lock = threading.Lock()
-
-        self._abort_events: dict[
-            str, threading.Event | Callable[[], None] | Callable[[], Awaitable[None]]
-        ] = {}
 
         # Agent storage (transition from global state to instance state)
         # Agents can be either AsyncAgent or BaseAgent depending on agent_type
@@ -136,8 +123,8 @@ class PhoneAgentManager:
                 logger.debug(f"Agent already initialized for {device_id}")
                 return self._agents[device_id]
 
-            device_lock = self._get_device_lock(device_id)
-            if device_lock.locked():
+            metadata = self._metadata.get(device_id)
+            if metadata and metadata.state == AgentState.BUSY:
                 raise DeviceBusyError(
                     f"Device {device_id} is currently processing a request"
                 )
@@ -355,55 +342,38 @@ class PhoneAgentManager:
 
     # ==================== Concurrency Control ====================
 
-    def _get_device_lock(self, device_id: str) -> threading.Lock:
-        """
-        Get or create device lock (double-checked locking pattern).
-
-        Args:
-            device_id: Device identifier
-
-        Returns:
-            threading.Lock: Device-specific lock
-        """
-        # Fast path: lock already exists
-        if device_id in self._device_locks:
-            return self._device_locks[device_id]
-
-        # Slow path: create lock
-        with self._device_locks_lock:
-            # Double-check inside lock
-            if device_id not in self._device_locks:
-                self._device_locks[device_id] = threading.Lock()
-            return self._device_locks[device_id]
-
     def acquire_device(
         self,
         device_id: str,
-        timeout: float | None = None,
-        raise_on_timeout: bool = True,
         auto_initialize: bool = False,
+        **kwargs,
     ) -> bool:
         """
-        Acquire device lock for exclusive access.
+        Atomically transition device state from IDLE to BUSY.
+
+        This is an instantaneous CAS (compare-and-swap) operation protected by
+        ``_manager_lock`` (held for microseconds). It is safe to call from both
+        sync and async contexts without ``asyncio.to_thread``, **except** when
+        ``auto_initialize=True`` — auto-initialization may perform I/O, so
+        callers should still wrap that case in ``asyncio.to_thread``.
 
         Args:
             device_id: Device identifier
-            timeout: Lock acquisition timeout (None = blocking, 0 = non-blocking)
-            raise_on_timeout: Raise DeviceBusyError on timeout
-            auto_initialize: Auto-initialize agent if not already initialized (default: False)
+            auto_initialize: Auto-initialize agent if not already initialized
+            **kwargs: Accepted for backward compatibility (``timeout``,
+                ``raise_on_timeout``) but ignored — the operation is non-blocking.
 
         Returns:
-            bool: True if acquired, False if timeout (when raise_on_timeout=False)
+            bool: True if state was IDLE and is now BUSY
 
         Raises:
-            DeviceBusyError: If timeout and raise_on_timeout=True
+            DeviceBusyError: If device is already BUSY
             AgentNotInitializedError: If agent not initialized AND auto_initialize=False
             AgentInitializationError: If auto_initialize=True and initialization fails
         """
         # Verify agent exists (with optional auto-initialization)
         if not self.is_initialized(device_id):
             if auto_initialize:
-                # Double-check locking pattern for thread safety
                 with self._manager_lock:
                     if not self.is_initialized(device_id):
                         self._auto_initialize_agent(device_id, device_id)
@@ -413,54 +383,38 @@ class PhoneAgentManager:
                     f"Use auto_initialize=True or call initialize_agent() first."
                 )
 
-        lock = self._get_device_lock(device_id)
-
-        # Try to acquire with timeout
-        if timeout is None:
-            # Blocking mode
-            acquired = lock.acquire(blocking=True)
-        elif timeout == 0:
-            # Non-blocking mode
-            acquired = lock.acquire(blocking=False)
-        else:
-            # Timeout mode
-            acquired = lock.acquire(blocking=True, timeout=timeout)
-
-        if acquired:
-            # Update state
-            with self._manager_lock:
-                if device_id in self._metadata:
-                    self._metadata[device_id].state = AgentState.BUSY
-                    self._metadata[device_id].last_used = time.time()
-
-            logger.debug(f"Device lock acquired for {device_id}")
-            return True
-        else:
-            if raise_on_timeout:
+        # Atomic CAS: IDLE → BUSY
+        with self._manager_lock:
+            metadata = self._metadata.get(device_id)
+            if metadata and metadata.state == AgentState.BUSY:
                 raise DeviceBusyError(
                     f"Device {device_id} is busy, could not acquire lock"
-                    + (f" within {timeout}s" if timeout else "")
                 )
-            return False
+            if metadata:
+                metadata.state = AgentState.BUSY
+                metadata.last_used = time.time()
+
+        logger.debug(f"Device lock acquired for {device_id}")
+        return True
 
     def release_device(self, device_id: str) -> None:
         """
-        Release device lock.
+        Atomically transition device state from BUSY to IDLE and clear abort handler.
+
+        This is an instantaneous operation (microsecond lock hold). Safe to call
+        directly from async ``finally`` blocks — no ``asyncio.to_thread`` needed,
+        so it cannot be interrupted by ``CancelledError``.
 
         Args:
             device_id: Device identifier
         """
-        lock = self._get_device_lock(device_id)
+        with self._manager_lock:
+            metadata = self._metadata.get(device_id)
+            if metadata:
+                metadata.state = AgentState.IDLE
+                metadata.abort_handler = None
 
-        if lock.locked():
-            lock.release()
-
-            # Update state
-            with self._manager_lock:
-                if device_id in self._metadata:
-                    self._metadata[device_id].state = AgentState.IDLE
-
-            logger.debug(f"Device lock released for {device_id}")
+        logger.debug(f"Device lock released for {device_id}")
 
     @contextmanager
     def use_agent(
@@ -563,21 +517,31 @@ class PhoneAgentManager:
     ) -> None:
         """注册取消处理器 (支持同步和异步处理器)。
 
+        Instantaneous operation (microsecond lock hold). Safe to call directly
+        from async contexts without ``asyncio.to_thread``.
+
         Args:
             device_id: 设备标识符
             abort_handler: 取消处理器 (Event / 同步函数 / 异步函数)
         """
-        with self._streaming_contexts_lock:
-            self._abort_events[device_id] = abort_handler
+        with self._manager_lock:
+            metadata = self._metadata.get(device_id)
+            if metadata:
+                metadata.abort_handler = abort_handler
 
     def unregister_abort_handler(self, device_id: str) -> None:
         """注销取消处理器。
 
+        Instantaneous operation (microsecond lock hold). Safe to call directly
+        from async ``finally`` blocks without ``asyncio.to_thread``.
+
         Args:
             device_id: 设备标识符
         """
-        with self._streaming_contexts_lock:
-            self._abort_events.pop(device_id, None)
+        with self._manager_lock:
+            metadata = self._metadata.get(device_id)
+            if metadata:
+                metadata.abort_handler = None
 
     async def abort_streaming_chat_async(self, device_id: str) -> bool:
         """异步中止流式对话 (支持 AsyncAgent)。
@@ -588,15 +552,16 @@ class PhoneAgentManager:
         Returns:
             bool: True 表示发送了中止信号，False 表示没有活跃会话
         """
-        with self._streaming_contexts_lock:
-            if device_id not in self._abort_events:
+        with self._manager_lock:
+            metadata = self._metadata.get(device_id)
+            if not metadata or metadata.abort_handler is None:
                 logger.warning(f"No active streaming chat for device {device_id}")
                 return False
 
             logger.info(f"Aborting async streaming chat for device {device_id}")
-            handler = self._abort_events[device_id]
+            handler = metadata.abort_handler
 
-        # 执行取消 (根据类型选择方式)
+        # 执行取消 (根据类型选择方式, 在锁外执行避免死锁)
         if isinstance(handler, threading.Event):
             handler.set()
         elif asyncio.iscoroutinefunction(handler):
@@ -611,5 +576,6 @@ class PhoneAgentManager:
 
     def is_streaming_active(self, device_id: str) -> bool:
         """检查设备是否有活跃的流式会话."""
-        with self._streaming_contexts_lock:
-            return device_id in self._abort_events
+        with self._manager_lock:
+            metadata = self._metadata.get(device_id)
+            return metadata is not None and metadata.abort_handler is not None

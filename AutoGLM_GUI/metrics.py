@@ -131,8 +131,10 @@ class AutoGLMMetricsCollector(Collector):
         metrics.append(busy_gauge)
 
         # Metric 3: autoglm_streaming_sessions_active
-        with manager._streaming_contexts_lock:
-            streaming_count = len(manager._streaming_contexts)
+        with manager._manager_lock:
+            streaming_count = sum(
+                1 for m in manager._metadata.values() if m.abort_handler is not None
+            )
 
         streaming_gauge = GaugeMetricFamily(
             "autoglm_streaming_sessions_active",

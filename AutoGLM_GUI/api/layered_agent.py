@@ -296,7 +296,10 @@ async def chat(device_id: str, message: str) -> str:
         )
     finally:
         if acquired:
-            await asyncio.to_thread(manager.release_device, device_id)
+            try:
+                manager.release_device(device_id)
+            except BaseException as e:
+                logger.error(f"Failed to release device lock for {device_id}: {e}")
 
 
 # ==================== Agent 初始化 ====================
