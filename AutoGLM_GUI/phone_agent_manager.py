@@ -454,8 +454,6 @@ class PhoneAgentManager:
         try:
             acquired = self.acquire_device(
                 device_id,
-                timeout,
-                raise_on_timeout=True,
                 auto_initialize=auto_initialize,
             )
             agent = self.get_agent(device_id)
