@@ -13,6 +13,7 @@ from __future__ import annotations
 import asyncio
 import os
 import shutil
+import subprocess
 import tempfile
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -56,7 +57,7 @@ class AsyncMidsceneAgent:
         self._cancel_event.clear()
 
         # --- Preflight: check npx availability ---
-        npx_path = shutil.which("npx")
+        npx_path = self._find_npx()
         if npx_path is None:
             yield {
                 "type": "error",
@@ -192,6 +193,46 @@ class AsyncMidsceneAgent:
     # Internals
     # ------------------------------------------------------------------
 
+    _shell_path_cache: str | None = None
+
+    @classmethod
+    def _get_shell_path(cls) -> str:
+        """Load the user's login shell PATH and cache the result.
+
+        On macOS, GUI apps (Electron / Finder / Dock) inherit a minimal
+        PATH (``/usr/bin:/bin:/usr/sbin:/sbin``) because shell profile
+        files (``.zshrc``, ``.bash_profile``) are never sourced.  This
+        method spawns a login shell once to retrieve the full PATH, then
+        caches it for the lifetime of the process.
+        """
+        if cls._shell_path_cache is not None:
+            return cls._shell_path_cache
+
+        current_path = os.environ.get("PATH", "")
+        try:
+            user_shell = os.environ.get("SHELL", "/bin/zsh")
+            result = subprocess.run(
+                [user_shell, "-l", "-c", "echo $PATH"],
+                capture_output=True,
+                text=True,
+                timeout=10,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                cls._shell_path_cache = result.stdout.strip()
+                logger.info(f"[Midscene] Loaded shell PATH from {user_shell}")
+                return cls._shell_path_cache
+        except Exception as e:
+            logger.warning(f"[Midscene] Failed to load shell PATH: {e}")
+
+        cls._shell_path_cache = current_path
+        return cls._shell_path_cache
+
+    @classmethod
+    def _find_npx(cls) -> str | None:
+        """Locate the ``npx`` binary using the user's full shell PATH."""
+        shell_path = cls._get_shell_path()
+        return shutil.which("npx", path=shell_path)
+
     def _get_device_id(self) -> str:
         """Extract device ID from device object."""
         if hasattr(self._device, "device_id"):
@@ -201,6 +242,9 @@ class AsyncMidsceneAgent:
     def _build_env(self) -> dict[str, str]:
         """Build environment variables for the Midscene subprocess."""
         env = os.environ.copy()
+        # Use the full shell PATH so the subprocess can find Node.js, npx,
+        # and other tools even when launched from a GUI (Electron / Finder).
+        env["PATH"] = self._get_shell_path()
         # Enable full debug output for parsing
         env["DEBUG"] = "midscene:*"
         # Disable color codes in debug output for cleaner parsing
@@ -217,9 +261,7 @@ class AsyncMidsceneAgent:
         if model_family:
             env["MIDSCENE_MODEL_FAMILY"] = model_family
         # Replanning cycle limit from max_steps
-        env["MIDSCENE_REPLANNING_CYCLE_LIMIT"] = str(
-            self.agent_config.max_steps
-        )
+        env["MIDSCENE_REPLANNING_CYCLE_LIMIT"] = str(self.agent_config.max_steps)
         # Ensure ANDROID_HOME is set (required by appium-adb inside Midscene)
         if not env.get("ANDROID_HOME"):
             android_home = self._detect_android_home()
