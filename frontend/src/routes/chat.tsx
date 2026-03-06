@@ -109,6 +109,15 @@ const AGENT_PRESETS = [
     icon: Smartphone,
     defaultConfig: {},
   },
+  {
+    name: 'midscene',
+    displayName: 'Midscene Agent',
+    description: '基于 Midscene.js 视觉驱动，需要 Node.js 环境',
+    icon: Eye,
+    defaultConfig: {
+      model_family: 'doubao-vision',
+    },
+  },
 ] as const;
 
 // 决策模型预设配置（与视觉模型保持一致）
@@ -717,6 +726,37 @@ function ChatComponent() {
                   />
                   <p className="text-xs text-slate-500 dark:text-slate-400">
                     {t.chat.history_n_hint || '包含的历史截图数量（1-10）'}
+                  </p>
+                </div>
+              )}
+
+              {/* Midscene Agent 特定配置 */}
+              {tempConfig.agent_type === 'midscene' && (
+                <div className="space-y-2">
+                  <Label htmlFor="model_family">模型家族 (Model Family)</Label>
+                  <Input
+                    id="model_family"
+                    type="text"
+                    placeholder="e.g. doubao-vision, gemini, qwen3.5"
+                    value={
+                      (tempConfig.agent_config_params?.model_family as
+                        | string
+                        | undefined) || 'doubao-vision'
+                    }
+                    onChange={e => {
+                      setTempConfig(prev => ({
+                        ...prev,
+                        agent_config_params: {
+                          ...prev.agent_config_params,
+                          model_family: e.target.value,
+                        },
+                      }));
+                    }}
+                    className="w-full"
+                  />
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Midscene
+                    视觉模型家族标识，常用：doubao-vision、doubao-seed、gemini、qwen3.5
                   </p>
                 </div>
               )}

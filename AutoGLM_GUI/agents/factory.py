@@ -217,3 +217,35 @@ def _create_droidrun_agent(
 
 
 register_agent("droidrun", _create_droidrun_agent)
+
+
+def _create_midscene_agent(
+    model_config: ModelConfig,
+    agent_config: AgentConfig,
+    agent_specific_config: AgentSpecificConfig,
+    device,
+    takeover_callback: Callable | None = None,
+    confirmation_callback: Callable | None = None,
+) -> AsyncAgent:
+    """Create AsyncMidsceneAgent instance.
+
+    Wraps Midscene.js CLI as an AsyncAgent.
+    Requires Node.js / npx in PATH and a vision model configured.
+    """
+    from .midscene.async_agent import AsyncMidsceneAgent
+
+    # Pass model_family through extra_body so the agent can set MIDSCENE_MODEL_FAMILY
+    model_family = agent_specific_config.get("model_family", "")
+    if model_family and "model_family" not in model_config.extra_body:
+        model_config.extra_body["model_family"] = model_family
+
+    return AsyncMidsceneAgent(  # type: ignore[return-value]
+        model_config=model_config,
+        agent_config=agent_config,
+        device=device,
+        takeover_callback=takeover_callback,
+        confirmation_callback=confirmation_callback,
+    )
+
+
+register_agent("midscene", _create_midscene_agent)
