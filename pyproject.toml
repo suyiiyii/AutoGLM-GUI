@@ -72,4 +72,18 @@ dev = [
     "pyright>=1.1.407",
     "pytest>=9.0.2",
     "ruff>=0.14.9",
+    "black>=24.0.0",
+    "isort>=5.13.0",
 ]
+
+[tool.black]
+line-length = 100
+target-version = ['py311', 'py312', 'py313']
+
+[tool.isort]
+profile = "black"
+line_length = 100
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"

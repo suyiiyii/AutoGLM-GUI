@@ -1,0 +1,19 @@
+{
+  "devDependencies": {
+    "husky": "^9.1.7",
+    "lint-staged": "^15.5.2"
+  },
+  "scripts": {
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "frontend/**/*.{js,ts,jsx,tsx,vue}": [
+      "cd frontend && pnpm lint"
+    ],
+    "*.py": [
+      "black",
+      "isort",
+      "ruff check --fix"
+    ]
+  }
+}
