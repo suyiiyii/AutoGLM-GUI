@@ -79,7 +79,7 @@ class FakePhoneAgentManager:
         _ = (device_id, kwargs)
         return self.agent
 
-    def release_device(self, device_id: str) -> None:
+    def release_device(self, device_id: str, **kwargs) -> None:
         self.release_calls.append(device_id)
 
     def register_abort_handler(self, device_id: str, handler: Any) -> None:

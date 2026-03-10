@@ -49,7 +49,10 @@ async def chat(request: ChatRequest) -> ChatResponse:
     acquired = False
     try:
         acquired = await asyncio.to_thread(
-            manager.acquire_device, device_id, timeout=None, auto_initialize=True
+            manager.acquire_device,
+            device_id,
+            auto_initialize=True,
+            context="chat",
         )
         # Use chat context with async agent
         agent = await asyncio.to_thread(
@@ -82,7 +85,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
         return ChatResponse(result=str(e), steps=0, success=False)
     finally:
         if acquired:
-            manager.release_device(device_id)
+            manager.release_device(device_id, context="chat")
 
 
 @router.post("/api/chat/stream")
@@ -111,9 +114,10 @@ async def chat_stream(request: ChatRequest):
         acquired = await asyncio.to_thread(
             manager.acquire_device,
             device_id,
+            auto_initialize=True,
             timeout=0,
             raise_on_timeout=True,
-            auto_initialize=True,
+            context="chat",
         )
     except DeviceBusyError:
         logger.warning(f"Device {device_id} is busy, returning 409")
@@ -246,7 +250,7 @@ async def chat_stream(request: ChatRequest):
             if acquired:
                 try:
                     # 同步直接调用，避免 await 被 CancelledError 中断
-                    manager.release_device(device_id)
+                    manager.release_device(device_id, context="chat")
                     logger.info(f"Device lock released for {device_id}")
                 except BaseException as e:
                     logger.error(f"Failed to release device lock for {device_id}: {e}")

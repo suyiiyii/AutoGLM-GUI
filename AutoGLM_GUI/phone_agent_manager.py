@@ -272,8 +272,7 @@ class PhoneAgentManager:
             Agent instance for this device+context combination
         """
         with self._manager_lock:
-            # Use composite key for context isolation (except for default)
-            agent_key = device_id if context == "default" else f"{device_id}:{context}"
+            agent_key = self._make_agent_key(device_id, context)
 
             if agent_key not in self._agents:
                 self._auto_initialize_agent(agent_key, device_id, agent_type=agent_type)
@@ -342,12 +341,17 @@ class PhoneAgentManager:
 
     # ==================== Concurrency Control ====================
 
+    def _make_agent_key(self, device_id: str, context: str = "default") -> str:
+        """Build composite key for device+context isolation."""
+        return device_id if context == "default" else f"{device_id}:{context}"
+
     def acquire_device(
         self,
         device_id: str,
         auto_initialize: bool = False,
         timeout: float | None = None,
         raise_on_timeout: bool = True,
+        context: str = "default",
     ) -> bool:
         """
         Atomically transition device state from IDLE to BUSY.
@@ -365,6 +369,8 @@ class PhoneAgentManager:
                 is non-blocking and completes instantly.
             raise_on_timeout: If True (default), raise DeviceBusyError when
                 device is BUSY. If False, return False instead.
+            context: Context identifier for key isolation (e.g., "mcp", "layered").
+                Defaults to "default" for backward compatibility.
 
         Returns:
             bool: True if state was IDLE and is now BUSY, False if device is
@@ -375,35 +381,37 @@ class PhoneAgentManager:
             AgentNotInitializedError: If agent not initialized AND auto_initialize=False
             AgentInitializationError: If auto_initialize=True and initialization fails
         """
+        agent_key = self._make_agent_key(device_id, context)
+
         # Verify agent exists (with optional auto-initialization)
-        if not self.is_initialized(device_id):
+        if not self.is_initialized(agent_key):
             if auto_initialize:
                 with self._manager_lock:
-                    if not self.is_initialized(device_id):
-                        self._auto_initialize_agent(device_id, device_id)
+                    if not self.is_initialized(agent_key):
+                        self._auto_initialize_agent(agent_key, device_id)
             else:
                 raise AgentNotInitializedError(
-                    f"Agent not initialized for device {device_id}. "
+                    f"Agent not initialized for device {agent_key}. "
                     f"Use auto_initialize=True or call initialize_agent() first."
                 )
 
         # Atomic CAS: IDLE → BUSY
         with self._manager_lock:
-            metadata = self._metadata.get(device_id)
+            metadata = self._metadata.get(agent_key)
             if metadata and metadata.state == AgentState.BUSY:
                 if raise_on_timeout:
                     raise DeviceBusyError(
-                        f"Device {device_id} is busy, could not acquire lock"
+                        f"Device {agent_key} is busy, could not acquire lock"
                     )
                 return False
             if metadata:
                 metadata.state = AgentState.BUSY
                 metadata.last_used = time.time()
 
-        logger.debug(f"Device lock acquired for {device_id}")
+        logger.debug(f"Device lock acquired for {agent_key}")
         return True
 
-    def release_device(self, device_id: str) -> None:
+    def release_device(self, device_id: str, context: str = "default") -> None:
         """
         Atomically transition device state from BUSY to IDLE and clear abort handler.
 
@@ -413,14 +421,16 @@ class PhoneAgentManager:
 
         Args:
             device_id: Device identifier
+            context: Context identifier, must match the one used in acquire_device.
         """
+        agent_key = self._make_agent_key(device_id, context)
         with self._manager_lock:
-            metadata = self._metadata.get(device_id)
+            metadata = self._metadata.get(agent_key)
             if metadata:
                 metadata.state = AgentState.IDLE
                 metadata.abort_handler = None
 
-        logger.debug(f"Device lock released for {device_id}")
+        logger.debug(f"Device lock released for {agent_key}")
 
     @contextmanager
     def use_agent(
