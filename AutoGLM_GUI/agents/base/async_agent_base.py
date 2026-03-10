@@ -100,6 +100,7 @@ class AsyncAgentBase(ABC):
     async def stream(self, task: str) -> AsyncIterator[dict[str, Any]]:
         """流式执行任务，支持取消。"""
         self._is_running = True
+        self._step_count = 0
         self._cancel_event.clear()
 
         try:
