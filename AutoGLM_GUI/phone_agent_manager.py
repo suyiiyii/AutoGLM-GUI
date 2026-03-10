@@ -375,8 +375,6 @@ class PhoneAgentManager:
             AgentNotInitializedError: If agent not initialized AND auto_initialize=False
             AgentInitializationError: If auto_initialize=True and initialization fails
         """
-        raise_on_timeout = kwargs.get("raise_on_timeout", True)
-
         # Verify agent exists (with optional auto-initialization)
         if not self.is_initialized(device_id):
             if auto_initialize:
