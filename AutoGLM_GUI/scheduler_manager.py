@@ -439,9 +439,7 @@ class SchedulerManager:
             )
             return result
 
-        with ThreadPoolExecutor(
-            max_workers=min(len(device_serialnos), 4)
-        ) as pool:
+        with ThreadPoolExecutor(max_workers=min(len(device_serialnos), 4)) as pool:
             results = list(pool.map(_run_device, device_serialnos))
 
         success_count = sum(1 for r in results if r.success)
