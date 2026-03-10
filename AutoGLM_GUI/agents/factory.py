@@ -138,19 +138,19 @@ def _create_async_glm_agent(
     )
 
 
-def _create_internal_mai_agent(
+def _create_async_mai_agent(
     model_config: ModelConfig,
     agent_config: AgentConfig,
     agent_specific_config: AgentSpecificConfig,
     device,
     takeover_callback: Callable | None = None,
     confirmation_callback: Callable | None = None,
-) -> BaseAgent:
-    from .mai.agent import InternalMAIAgent
+) -> AsyncAgent:
+    from .mai.async_agent import AsyncMAIAgent
 
     history_n = agent_specific_config.get("history_n", 3)
 
-    return InternalMAIAgent(
+    return AsyncMAIAgent(  # type: ignore[return-value]
         model_config=model_config,
         agent_config=agent_config,
         device=device,
@@ -186,7 +186,7 @@ def _create_async_gemini_agent(
 
 register_agent("glm-async", _create_async_glm_agent)
 register_agent("async-glm", _create_async_glm_agent)  # 别名
-register_agent("mai", _create_internal_mai_agent)
+register_agent("mai", _create_async_mai_agent)
 register_agent("gemini", _create_async_gemini_agent)
 register_agent("general-vision", _create_async_gemini_agent)  # 通用别名
 

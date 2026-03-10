@@ -14,11 +14,13 @@ Design notes:
 """
 
 from .agent import InternalMAIAgent
+from .async_agent import AsyncMAIAgent
 from .parser import MAIParser, MAIParseError
 from .prompts import MAI_MOBILE_SYSTEM_PROMPT
 from .traj_memory import TrajMemory, TrajStep
 
 __all__ = [
+    "AsyncMAIAgent",
     "InternalMAIAgent",
     "MAIParser",
     "MAIParseError",
