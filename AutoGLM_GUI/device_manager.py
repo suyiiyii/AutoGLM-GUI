@@ -5,6 +5,7 @@ from __future__ import annotations
 import threading
 import time
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import StrEnum
 from typing import TYPE_CHECKING, TypeAlias
@@ -430,14 +431,20 @@ class DeviceManager:
         """Poll ADB device list and update cache (serial-based aggregation)."""
         from AutoGLM_GUI.adb_plus import get_device_serial
 
-        # Step 1: Get ADB devices and fetch serials
+        # Step 1: Get ADB devices and fetch serials (in parallel)
         adb_devices = self._adb_conn.list_devices()
-        device_with_serials: list[tuple[DeviceInfo, str]] = []
 
-        for device_info in adb_devices:
-            # get_device_serial always returns a value (uses device_id as fallback)
-            serial = get_device_serial(device_info.device_id, self._adb_path)
-            device_with_serials.append((device_info, serial))
+        if adb_devices:
+            with ThreadPoolExecutor(max_workers=min(len(adb_devices), 8)) as pool:
+                serials = list(
+                    pool.map(
+                        lambda d: get_device_serial(d.device_id, self._adb_path),
+                        adb_devices,
+                    )
+                )
+            device_with_serials = list(zip(adb_devices, serials))
+        else:
+            device_with_serials = []
 
         # Step 2: Group devices by serial
         grouped_by_serial: dict[str, list[DeviceInfo]] = defaultdict(list)

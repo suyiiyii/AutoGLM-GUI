@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -423,8 +424,7 @@ class SchedulerManager:
             )
             return
 
-        results: list[DeviceExecutionResult] = []
-        for serialno in device_serialnos:
+        def _run_device(serialno: str) -> DeviceExecutionResult:
             result = self._execute_single_device(
                 serialno=serialno,
                 workflow=workflow,
@@ -433,11 +433,16 @@ class SchedulerManager:
                 device_manager=device_manager,
                 history_manager=history_manager,
             )
-            results.append(result)
             status_icon = "✓" if result.success else "✗"
             logger.info(
                 f"  {status_icon} {result.device_model or result.serialno}: {result.message[:50]}"
             )
+            return result
+
+        with ThreadPoolExecutor(
+            max_workers=min(len(device_serialnos), 4)
+        ) as pool:
+            results = list(pool.map(_run_device, device_serialnos))
 
         success_count = sum(1 for r in results if r.success)
         any_success = success_count > 0

@@ -66,9 +66,8 @@ def capture_screenshot(
         try:
             img = Image.open(BytesIO(data))
             width, height = img.size
-            buffered = BytesIO()
-            img.save(buffered, format="PNG")
-            base64_data = base64.b64encode(buffered.getvalue()).decode("utf-8")
+            # Use the raw PNG bytes directly instead of re-encoding through PIL
+            base64_data = base64.b64encode(data).decode("utf-8")
             return Screenshot(base64_data=base64_data, width=width, height=height)
         except Exception:
             # Try next attempt

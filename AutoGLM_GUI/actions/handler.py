@@ -115,11 +115,17 @@ class ActionHandler:
         self.device.tap(x, y)
         return ActionResult(True, False)
 
+    _ADB_IME = "com.android.adbkeyboard/.AdbIME"
+
     def _handle_type(self, action: dict, width: int, height: int) -> ActionResult:
         text = action.get("text", "")
 
         original_ime = self.device.detect_and_set_adb_keyboard()
-        time.sleep(0.5)
+        need_restore = self._ADB_IME not in original_ime
+
+        if need_restore:
+            # Only wait for IME switch when we actually changed it
+            time.sleep(0.5)
 
         self.device.clear_text()
         time.sleep(0.3)
@@ -127,8 +133,9 @@ class ActionHandler:
         self.device.type_text(text)
         time.sleep(0.5)
 
-        self.device.restore_keyboard(original_ime)
-        time.sleep(0.3)
+        if need_restore:
+            self.device.restore_keyboard(original_ime)
+            time.sleep(0.3)
 
         return ActionResult(True, False)
 
