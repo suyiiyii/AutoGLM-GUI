@@ -165,14 +165,14 @@ def create_app() -> FastAPI:
         device_manager.start_polling()
 
         # Start scheduled task scheduler
-        scheduler_manager.start()
+        await scheduler_manager.start()
 
         # Run MCP lifespan
         async with mcp_app.lifespan(app):
             yield
 
         # App shutdown
-        scheduler_manager.shutdown()
+        await scheduler_manager.shutdown()
 
     # Create FastAPI app with combined lifespan
     app = FastAPI(

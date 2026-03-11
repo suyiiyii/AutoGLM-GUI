@@ -4,13 +4,12 @@ from __future__ import annotations
 
 import asyncio
 import json
-from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self
 
-from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 
 from AutoGLM_GUI.logger import logger
@@ -41,11 +40,11 @@ class SchedulerManager:
             return
         self._initialized = True
         self._tasks_path = Path.home() / ".config" / "autoglm" / "scheduled_tasks.json"
-        self._scheduler = BackgroundScheduler()
+        self._scheduler = AsyncIOScheduler()
         self._tasks: dict[str, ScheduledTask] = {}
         self._file_mtime: float | None = None
 
-    def start(self) -> None:
+    async def start(self) -> None:
         self._load_tasks()
         for task in self._tasks.values():
             if task.enabled:
@@ -53,7 +52,7 @@ class SchedulerManager:
         self._scheduler.start()
         logger.info(f"SchedulerManager started with {len(self._tasks)} task(s)")
 
-    def shutdown(self) -> None:
+    async def shutdown(self) -> None:
         self._scheduler.shutdown(wait=False)
         logger.info("SchedulerManager shutdown")
 
@@ -185,7 +184,7 @@ class SchedulerManager:
         except Exception as e:
             logger.warning(f"Failed to remove job {task_id}: {e}")
 
-    def _execute_single_device(
+    async def _execute_single_device(
         self,
         serialno: str,
         workflow: dict[str, Any],
@@ -210,7 +209,8 @@ class SchedulerManager:
                 device_model="",
             )
 
-        acquired = manager.acquire_device(
+        acquired = await asyncio.to_thread(
+            manager.acquire_device,
             device.primary_device_id,
             timeout=0,
             raise_on_timeout=False,
@@ -244,37 +244,33 @@ class SchedulerManager:
             agent.reset()
 
             if is_async_agent(agent):
-
-                async def run_async():
-                    nonlocal result_message, task_success
-                    stream_gen = agent.stream(workflow["text"])
-                    async for event in stream_gen:
-                        step_data: dict[str, Any] = event.get("data", {})
-                        if event["type"] == "step":
-                            messages.append(
-                                MessageRecord(
-                                    role="assistant",
-                                    content="",
-                                    timestamp=datetime.now(),
-                                    thinking=step_data.get("thinking", ""),
-                                    action=step_data.get("action", {}),
-                                    step=step_data.get("step", 0),
-                                )
+                async for event in agent.stream(workflow["text"]):
+                    step_data: dict[str, Any] = event.get("data", {})
+                    if event["type"] == "step":
+                        messages.append(
+                            MessageRecord(
+                                role="assistant",
+                                content="",
+                                timestamp=datetime.now(),
+                                thinking=step_data.get("thinking", ""),
+                                action=step_data.get("action", {}),
+                                step=step_data.get("step", 0),
                             )
-                        elif event["type"] == "done":
-                            result_message = step_data.get("message", "Task completed")
-                            task_success = step_data.get("success", False)
-                            break
-                        elif event["type"] == "error":
-                            result_message = step_data.get("message", "Task failed")
-                            task_success = False
-                            break
-
-                asyncio.run(run_async())
+                        )
+                    elif event["type"] == "done":
+                        result_message = step_data.get("message", "Task completed")
+                        task_success = step_data.get("success", False)
+                        break
+                    elif event["type"] == "error":
+                        result_message = step_data.get("message", "Task failed")
+                        task_success = False
+                        break
             else:
                 is_first = True
                 while agent.step_count < agent.agent_config.max_steps:
-                    step_result = agent.step(workflow["text"] if is_first else None)
+                    step_result = await asyncio.to_thread(
+                        agent.step, workflow["text"] if is_first else None
+                    )
                     is_first = False
                     messages.append(
                         MessageRecord(
@@ -311,7 +307,7 @@ class SchedulerManager:
                 error_message=None if task_success else result_message,
                 messages=messages,
             )
-            history_manager.add_record(serialno, record)
+            await asyncio.to_thread(history_manager.add_record, serialno, record)
 
             return DeviceExecutionResult(
                 serialno=serialno,
@@ -338,7 +334,7 @@ class SchedulerManager:
                 error_message=error_msg,
                 messages=messages,
             )
-            history_manager.add_record(serialno, record)
+            await asyncio.to_thread(history_manager.add_record, serialno, record)
 
             return DeviceExecutionResult(
                 serialno=serialno,
@@ -381,7 +377,7 @@ class SchedulerManager:
         else:
             return task.device_serialnos
 
-    def _execute_task(self, task_id: str) -> None:
+    async def _execute_task(self, task_id: str) -> None:
         task = self._tasks.get(task_id)
         if not task:
             logger.warning(f"Task {task_id} not found for execution")
@@ -424,23 +420,41 @@ class SchedulerManager:
             )
             return
 
-        def _run_device(serialno: str) -> DeviceExecutionResult:
-            result = self._execute_single_device(
-                serialno=serialno,
-                workflow=workflow,
-                task_name=task.name,
-                manager=manager,
-                device_manager=device_manager,
-                history_manager=history_manager,
-            )
-            status_icon = "✓" if result.success else "✗"
-            logger.info(
-                f"  {status_icon} {result.device_model or result.serialno}: {result.message[:50]}"
-            )
-            return result
+        semaphore = asyncio.Semaphore(4)
 
-        with ThreadPoolExecutor(max_workers=min(len(device_serialnos), 4)) as pool:
-            results = list(pool.map(_run_device, device_serialnos))
+        async def _run_device(serialno: str) -> DeviceExecutionResult:
+            async with semaphore:
+                result = await self._execute_single_device(
+                    serialno=serialno,
+                    workflow=workflow,
+                    task_name=task.name,
+                    manager=manager,
+                    device_manager=device_manager,
+                    history_manager=history_manager,
+                )
+                status_icon = "✓" if result.success else "✗"
+                logger.info(
+                    f"  {status_icon} {result.device_model or result.serialno}: {result.message[:50]}"
+                )
+                return result
+
+        gather_results = await asyncio.gather(
+            *[_run_device(s) for s in device_serialnos], return_exceptions=True
+        )
+
+        results: list[DeviceExecutionResult] = []
+        for i, r in enumerate(gather_results):
+            if isinstance(r, BaseException):
+                logger.error(f"Device {device_serialnos[i]} raised exception: {r}")
+                results.append(
+                    DeviceExecutionResult(
+                        serialno=device_serialnos[i],
+                        success=False,
+                        message=str(r),
+                    )
+                )
+            else:
+                results.append(r)
 
         success_count = sum(1 for r in results if r.success)
         any_success = success_count > 0
