@@ -213,7 +213,13 @@ def create_app() -> FastAPI:
 
         # Define SPA serving function
         async def serve_spa(full_path: str) -> FileResponse:
-            file_path = static_dir / full_path
+            static_root = static_dir.resolve()
+            file_path = (static_dir / full_path).resolve()
+            try:
+                file_path.relative_to(static_root)
+            except ValueError:
+                file_path = static_dir / "index.html"
+
             if file_path.is_file():
                 return FileResponse(
                     file_path,

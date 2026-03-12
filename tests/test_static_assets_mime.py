@@ -89,3 +89,27 @@ def test_spa_favicon_mime_type_when_guess_type_fails(
 
     assert response.status_code == 200
     assert "image/x-icon" in response.headers["content-type"]
+
+
+def test_spa_path_traversal_does_not_escape_static_root(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    static_dir = tmp_path / "static"
+    static_dir.mkdir(parents=True)
+
+    (static_dir / "index.html").write_text(
+        "<!doctype html><html><body>index</body></html>", encoding="utf-8"
+    )
+    secret_file = tmp_path / "secret.txt"
+    secret_file.write_text("top-secret", encoding="utf-8")
+
+    monkeypatch.setattr(api_module, "_get_static_dir", lambda: static_dir)
+
+    app = api_module.create_app()
+    client = TestClient(app)
+
+    response = client.get("/../secret.txt")
+
+    assert response.status_code == 200
+    assert "index" in response.text
+    assert "top-secret" not in response.text
