@@ -28,21 +28,12 @@ runs:
       with:
         python-version: ${{ inputs.python-version }}
 
-    # uv installation - Unix
-    - name: Install uv (Unix)
-      if: runner.os != 'Windows'
-      shell: bash
-      run: |
-        curl -LsSf https://astral.sh/uv/install.sh | sh
-        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-
-    # uv installation - Windows
-    - name: Install uv (Windows)
-      if: runner.os == 'Windows'
-      shell: pwsh
-      run: |
-        irm https://astral.sh/uv/install.ps1 | iex
-        echo "$env:USERPROFILE\.cargo\bin" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+    # uv installation (pinned GitHub Action, avoids piping remote scripts)
+    - name: Install uv
+      uses: astral-sh/setup-uv@v4
+      with:
+        enable-cache: true
+        cache-dependency-glob: "uv.lock"
 
     # pnpm setup
     - name: Setup pnpm
