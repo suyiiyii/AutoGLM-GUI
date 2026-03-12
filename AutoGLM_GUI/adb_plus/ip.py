@@ -5,6 +5,8 @@ from __future__ import annotations
 import re
 import subprocess
 
+from AutoGLM_GUI.logger import logger
+
 __all__ = ["get_wifi_ip"]
 
 
@@ -48,20 +50,20 @@ def get_wifi_ip(adb_path: str = "adb", device_id: str | None = None) -> str | No
             if "dev" in parts:
                 try:
                     iface = parts[parts.index("dev") + 1]
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Failed to extract 'dev' interface: {e}")
             if "src" in parts:
                 try:
                     ip = parts[parts.index("src") + 1]
-                except Exception:
-                    pass
+                except Exception as e:
+                    logger.debug(f"Failed to extract 'src' IP: {e}")
             if not ip or ip == "0.0.0.0":
                 continue
             if iface and (iface.startswith("ccmni") or iface.startswith("rmnet")):
                 continue
             return ip
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to get route IP: {e}")
 
     # 2) wlan0 addr
     try:
@@ -69,7 +71,7 @@ def get_wifi_ip(adb_path: str = "adb", device_id: str | None = None) -> str | No
         ip = _extract_ip(addr_out)
         if ip:
             return ip
-    except Exception:
-        pass
+    except Exception as e:
+        logger.debug(f"Failed to get wlan0 IP: {e}")
 
     return None
