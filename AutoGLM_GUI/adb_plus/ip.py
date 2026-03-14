@@ -63,7 +63,7 @@ def get_wifi_ip(adb_path: str = "adb", device_id: str | None = None) -> str | No
                 continue
             return ip
     except Exception as e:
-        logger.debug(f"Failed to get route IP: {e}")
+        logger.debug(f"Failed to get IP from route: {e}")
 
     # 2) wlan0 addr
     try:
@@ -72,6 +72,6 @@ def get_wifi_ip(adb_path: str = "adb", device_id: str | None = None) -> str | No
         if ip:
             return ip
     except Exception as e:
-        logger.debug(f"Failed to get wlan0 IP: {e}")
+        logger.debug(f"Failed to get IP from wlan0: {e}")
 
     return None
