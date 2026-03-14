@@ -1,0 +1,15 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-api-subprocess
+message: API handlers should not spawn subprocesses directly; delegate shell work to lower-level services.
+severity: error
+language: Python
+files:
+  - AutoGLM_GUI/api/**/*.py
+rule:
+  any:
+    - pattern: subprocess.run($$$ARGS)
+    - pattern: subprocess.Popen($$$ARGS)
+    - pattern: subprocess.check_output($$$ARGS)
+    - pattern: subprocess.check_call($$$ARGS)
+note: Keep the API layer focused on request orchestration instead of process management.

@@ -1,0 +1,21 @@
+id: no-api-subprocess
+valid:
+  - |
+    def handler() -> None:
+        return None
+  - |
+    from AutoGLM_GUI.platform_utils import run_subprocess
+
+    def handler() -> None:
+        run_subprocess(["adb", "devices"])
+invalid:
+  - |
+    import subprocess
+
+    def handler() -> None:
+        subprocess.run(["adb", "devices"], check=True)
+  - |
+    import subprocess
+
+    def handler() -> None:
+        subprocess.Popen(["adb", "devices"])

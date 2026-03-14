@@ -1,0 +1,21 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: review-api-base-exception
+message: Review BaseException usage in API handlers; it should be reserved for cancellation or cleanup paths with a clear justification.
+severity: warning
+language: Python
+files:
+  - AutoGLM_GUI/api/**/*.py
+rule:
+  any:
+    - pattern: |
+        try:
+            $$$TRY
+        except BaseException:
+            $$$EXCEPT
+    - pattern: |
+        try:
+            $$$TRY
+        except BaseException as $ERR:
+            $$$EXCEPT
+note: Catching BaseException is broader than Exception and can hide cancellation and shutdown signals.

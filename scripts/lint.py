@@ -248,6 +248,78 @@ class AutoGLMLinter:
 
         return result
 
+    def lint_backend_ast_grep(self) -> LintResult:
+        """运行 ast-grep 结构化检查"""
+        if not (self.root_dir / "sgconfig.yml").exists():
+            return LintResult(
+                name="ast-grep 结构检查 (后端)",
+                success=True,
+                output="跳过: ast-grep 配置不存在",
+            )
+
+        cmd = [
+            "uv",
+            "run",
+            "ast-grep",
+            "scan",
+            "--config",
+            "sgconfig.yml",
+            "--report-style",
+            "medium",
+            "--color",
+            "never",
+            ".",
+        ]
+
+        print(f"🌳 运行: {' '.join(cmd)} (后端)")
+        result = self.run_command(cmd, self.backend_dir)
+
+        if result.success:
+            print("✅ ast-grep 结构检查通过")
+            if result.output.strip():
+                print(result.output[:2000])
+        else:
+            print("❌ ast-grep 结构检查失败")
+            if result.output:
+                print(f"发现的问题:\n{result.output[:2000]}")
+            if result.error:
+                print(f"错误: {result.error[:1000]}")
+
+        return result
+
+    def lint_backend_ast_grep_tests(self) -> LintResult:
+        """运行 ast-grep 规则测试"""
+        if not (self.root_dir / "sgconfig.yml").exists():
+            return LintResult(
+                name="ast-grep 规则测试 (后端)",
+                success=True,
+                output="跳过: ast-grep 配置不存在",
+            )
+
+        cmd = [
+            "uv",
+            "run",
+            "ast-grep",
+            "test",
+            "--config",
+            "sgconfig.yml",
+            "--skip-snapshot-tests",
+        ]
+
+        print(f"🧪 运行: {' '.join(cmd)} (后端)")
+        result = self.run_command(cmd, self.backend_dir)
+
+        if result.success:
+            print("✅ ast-grep 规则测试通过")
+        else:
+            print("❌ ast-grep 规则测试失败")
+            if result.output:
+                print(f"发现的问题:\n{result.output[:2000]}")
+            if result.error:
+                print(f"错误: {result.error[:1000]}")
+
+        return result
+
     def lint_frontend(
         self, fix: bool = False, check_only: bool = False
     ) -> list[LintResult]:
@@ -291,6 +363,12 @@ class AutoGLMLinter:
 
         # Pyright 类型检查 (Python 3.11 兼容性)
         results.append(self.lint_backend_types())
+
+        # ast-grep 结构化检查
+        results.append(self.lint_backend_ast_grep())
+
+        # ast-grep 规则测试
+        results.append(self.lint_backend_ast_grep_tests())
 
         return results
 

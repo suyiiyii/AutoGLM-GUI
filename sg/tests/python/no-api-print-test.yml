@@ -1,0 +1,14 @@
+id: no-api-print
+valid:
+  - |
+    from loguru import logger
+
+    def handler() -> None:
+        logger.info("request started")
+  - |
+    def handler() -> None:
+        return None
+invalid:
+  - |
+    def handler() -> None:
+        print("debug")
