@@ -20,6 +20,7 @@ from starlette.staticfiles import NotModifiedResponse
 from starlette.types import Scope
 
 from AutoGLM_GUI.adb_plus.qr_pair import qr_pairing_manager
+from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.version import APP_VERSION
 
 from . import (
@@ -109,8 +110,8 @@ def _get_static_dir() -> Path | None:
         filesystem_static = package_dir / "static"
         if filesystem_static.exists() and filesystem_static.is_dir():
             return filesystem_static
-    except (ImportError, AttributeError):
-        pass
+    except (ImportError, AttributeError) as e:
+        logger.debug(f"Failed to find static dir via filesystem: {e}")
 
     # Priority 3: importlib.resources (for installed package)
     try:
@@ -122,8 +123,8 @@ def _get_static_dir() -> Path | None:
         path = Path(str(static_dir))
         if path.exists():
             return path
-    except (TypeError, FileNotFoundError):
-        pass
+    except (TypeError, FileNotFoundError) as e:
+        logger.debug(f"Failed to find static dir via importlib: {e}")
 
     return None
 
