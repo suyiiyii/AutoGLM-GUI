@@ -75,6 +75,9 @@ class FakePhoneAgentManager:
             raise AgentInitializationError("missing config")
         return True
 
+    async def acquire_device_async(self, device_id: str, **kwargs) -> bool:
+        return self.acquire_device(device_id, **kwargs)
+
     def get_agent_with_context(self, device_id: str, **kwargs) -> Any:
         _ = (device_id, kwargs)
         return self.agent

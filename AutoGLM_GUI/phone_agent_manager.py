@@ -411,6 +411,50 @@ class PhoneAgentManager:
         logger.debug(f"Device lock acquired for {agent_key}")
         return True
 
+    async def acquire_device_async(
+        self,
+        device_id: str,
+        auto_initialize: bool = False,
+        timeout: float | None = None,
+        raise_on_timeout: bool = True,
+        context: str = "default",
+    ) -> bool:
+        """Acquire a device lock without leaking it if the awaiter is cancelled."""
+
+        acquire_task = asyncio.create_task(
+            asyncio.to_thread(
+                self.acquire_device,
+                device_id,
+                auto_initialize=auto_initialize,
+                timeout=timeout,
+                raise_on_timeout=raise_on_timeout,
+                context=context,
+            )
+        )
+
+        try:
+            return await asyncio.shield(acquire_task)
+        except asyncio.CancelledError:
+
+            def _cleanup_cancelled_acquire(task: asyncio.Task[bool]) -> None:
+                try:
+                    acquired = task.result()
+                except Exception:
+                    return
+
+                if not acquired:
+                    return
+
+                try:
+                    self.release_device(device_id, context=context)
+                except BaseException as e:
+                    logger.error(
+                        f"Failed to cleanup cancelled acquire for {device_id}: {e}"
+                    )
+
+            acquire_task.add_done_callback(_cleanup_cancelled_acquire)
+            raise
+
     def release_device(self, device_id: str, context: str = "default") -> None:
         """
         Atomically transition device state from BUSY to IDLE and clear abort handler.

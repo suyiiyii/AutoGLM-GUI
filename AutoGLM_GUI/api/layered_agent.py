@@ -222,8 +222,7 @@ async def chat(device_id: str, message: str) -> str:
     acquired = False
 
     try:
-        acquired = await asyncio.to_thread(
-            manager.acquire_device,
+        acquired = await manager.acquire_device_async(
             device_id,
             auto_initialize=True,
             context="layered",

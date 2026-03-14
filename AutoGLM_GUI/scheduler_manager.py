@@ -209,8 +209,7 @@ class SchedulerManager:
                 device_model="",
             )
 
-        acquired = await asyncio.to_thread(
-            manager.acquire_device,
+        acquired = await manager.acquire_device_async(
             device.primary_device_id,
             timeout=0,
             raise_on_timeout=False,

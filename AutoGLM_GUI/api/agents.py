@@ -48,8 +48,7 @@ async def chat(request: ChatRequest) -> ChatResponse:
 
     acquired = False
     try:
-        acquired = await asyncio.to_thread(
-            manager.acquire_device,
+        acquired = await manager.acquire_device_async(
             device_id,
             auto_initialize=True,
             context="chat",
@@ -111,8 +110,7 @@ async def chat_stream(request: ChatRequest):
     # ===== 在外层获取设备锁 =====
     acquired = False
     try:
-        acquired = await asyncio.to_thread(
-            manager.acquire_device,
+        acquired = await manager.acquire_device_async(
             device_id,
             auto_initialize=True,
             timeout=0,
