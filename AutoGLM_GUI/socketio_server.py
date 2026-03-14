@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import time
+from typing import Any
 
 from typing import NotRequired
 from typing_extensions import TypedDict
@@ -30,7 +31,7 @@ sio = socketio.AsyncServer(
 )
 
 _socket_streamers: dict[str, ScrcpyStreamer] = {}
-_stream_tasks: dict[str, asyncio.Task] = {}
+_stream_tasks: dict[str, asyncio.Task[None]] = {}
 _device_locks: dict[
     str, asyncio.Lock
 ] = {}  # Lock per device to prevent concurrent connections
@@ -46,7 +47,7 @@ async def _stop_stream_for_sid(sid: str) -> None:
         streamer.stop()
 
 
-def _classify_error(exc: Exception) -> dict:
+def _classify_error(exc: Exception) -> dict[str, Any]:
     """Classify error and return user-friendly message."""
     error_str = str(exc)
 
@@ -132,7 +133,7 @@ def _packet_to_payload(packet: ScrcpyMediaStreamPacket) -> VideoPacketPayload:
 
 
 @sio.event
-async def connect(sid: str, environ: dict) -> None:
+async def connect(sid: str, environ: dict[str, Any]) -> None:
     logger.info("Socket.IO client connected: %s", sid)
 
 
@@ -143,7 +144,7 @@ async def disconnect(sid: str) -> None:
 
 
 @sio.on("connect-device")  # type: ignore[misc]
-async def connect_device(sid: str, data: dict | None) -> None:
+async def connect_device(sid: str, data: dict[str, Any] | None) -> None:
     payload = data or {}
     device_id = payload.get("device_id") or payload.get("deviceId")
     if not device_id:

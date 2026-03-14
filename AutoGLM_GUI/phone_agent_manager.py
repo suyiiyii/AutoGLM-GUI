@@ -9,6 +9,7 @@ from collections.abc import Awaitable, Callable
 from contextlib import contextmanager
 from dataclasses import dataclass
 from enum import StrEnum
+from typing import Any
 
 from AutoGLM_GUI.agents.protocols import AsyncAgent, BaseAgent
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
@@ -112,8 +113,8 @@ class PhoneAgentManager:
         model_config: ModelConfig,
         agent_config: AgentConfig,
         agent_specific_config: AgentSpecificConfig,
-        takeover_callback: Callable | None = None,
-        confirmation_callback: Callable | None = None,
+        takeover_callback: Callable[..., Any] | None = None,
+        confirmation_callback: Callable[..., Any] | None = None,
         force: bool = False,
     ) -> AsyncAgent | BaseAgent:
         from AutoGLM_GUI.agents import create_agent

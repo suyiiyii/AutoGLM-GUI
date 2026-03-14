@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 from uuid import uuid4
 
 
@@ -59,7 +60,7 @@ class ScheduledTask:
     last_run_total_count: int | None = None
     last_run_message: str | None = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """转换为可序列化的字典."""
         return {
             "id": self.id,
@@ -82,7 +83,7 @@ class ScheduledTask:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> ScheduledTask:
+    def from_dict(cls, data: dict[str, Any]) -> ScheduledTask:
         """从字典创建实例，向后兼容旧数据格式."""
         # 处理设备序列号：支持旧格式的单字符串和新格式的列表
         device_serialnos = _normalize_device_serialnos(data.get("device_serialnos", []))

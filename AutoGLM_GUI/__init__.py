@@ -4,6 +4,7 @@ import subprocess
 import sys
 from functools import wraps
 from importlib import metadata
+from typing import Any
 
 from AutoGLM_GUI.config import AgentConfig, ModelConfig, StepResult
 from AutoGLM_GUI.logger import logger
@@ -28,7 +29,7 @@ _original_popen = subprocess.Popen
 
 
 @wraps(_original_run)
-def _patched_run(*args, **kwargs) -> subprocess.CompletedProcess:
+def _patched_run(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
     """Patched subprocess.run that defaults to UTF-8 encoding on Windows."""
     if sys.platform == "win32":
         # Add encoding='utf-8' if text=True is set but encoding is not specified
@@ -41,7 +42,7 @@ def _patched_run(*args, **kwargs) -> subprocess.CompletedProcess:
 class _PatchedPopen(_original_popen):
     """Patched subprocess.Popen that defaults to UTF-8 encoding on Windows."""
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any) -> None:
         if sys.platform == "win32":
             # Add encoding='utf-8' if text=True is set but encoding is not specified
             if kwargs.get("text") or kwargs.get("universal_newlines"):

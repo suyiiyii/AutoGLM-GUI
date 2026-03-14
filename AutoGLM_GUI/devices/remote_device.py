@@ -4,6 +4,9 @@ This module provides a RemoteDevice that connects to a Device Agent
 via HTTP, allowing remote control of devices.
 """
 
+from types import TracebackType
+from typing import Any, Self
+
 import httpx
 
 from AutoGLM_GUI.device_protocol import (
@@ -36,14 +39,16 @@ class RemoteDevice(DeviceProtocol):
     def device_id(self) -> str:
         return self._device_id
 
-    def _post(self, endpoint: str, json: dict | None = None) -> dict:
+    def _post(
+        self, endpoint: str, json: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """POST request helper."""
         url = f"{self._base_url}/device/{self._device_id}{endpoint}"
         resp = self._client.post(url, json=json or {})
         resp.raise_for_status()
         return resp.json()
 
-    def _get(self, endpoint: str) -> dict:
+    def _get(self, endpoint: str) -> dict[str, Any]:
         """GET request helper."""
         url = f"{self._base_url}/device/{self._device_id}{endpoint}"
         resp = self._client.get(url)
@@ -124,10 +129,15 @@ class RemoteDevice(DeviceProtocol):
         """Close the HTTP client."""
         self._client.close()
 
-    def __enter__(self):
+    def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, exc_type, exc_val, exc_tb):
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: TracebackType | None,
+    ) -> None:
         self.close()
 
 

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from typing import Any
 
 from AutoGLM_GUI.platform_utils import run_cmd_silently_sync
 
@@ -119,7 +120,7 @@ def discover_mdns_devices(adb_path: str = "adb") -> list[MdnsDevice]:
             return []
 
         # Parse devices by name (consolidate multiple service types)
-        devices_dict: dict[str, dict] = {}
+        devices_dict: dict[str, dict[str, Any]] = {}
 
         for line in output.splitlines():
             # Skip header line

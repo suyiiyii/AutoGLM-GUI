@@ -163,7 +163,7 @@ class AsyncGeminiAgent(AsyncAgentBase):
             },
         }
 
-    async def _call_llm_with_tools(self) -> tuple[str, str, dict]:
+    async def _call_llm_with_tools(self) -> tuple[str, str, dict[str, Any]]:
         """调用 LLM，返回 (thinking, tool_name, tool_args)。"""
         if self._cancel_event.is_set():
             raise asyncio.CancelledError()

@@ -105,7 +105,7 @@ def _try_capture(device_id: str | None, adb_path: str, timeout: int) -> bytes | 
                 )
             return None
         # stdout should hold the PNG data
-        return result.stdout if isinstance(result.stdout, (bytes, bytearray)) else None
+        return result.stdout
     except DeviceNotAvailableError:
         raise  # Re-raise to caller
     except Exception:

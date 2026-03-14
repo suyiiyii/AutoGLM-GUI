@@ -18,7 +18,7 @@ import os
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Self
+from typing import Any, Self
 
 from pydantic import BaseModel, field_validator
 
@@ -60,7 +60,7 @@ class ConfigModel(BaseModel):
 
     # Agent 类型配置
     agent_type: str = "glm-async"  # Agent type (e.g., "glm-async", "mai")
-    agent_config_params: dict | None = None  # Agent-specific configuration
+    agent_config_params: dict[str, Any] | None = None  # Agent-specific configuration
 
     # Agent 执行配置
     default_max_steps: int = 100  # 单次任务最大执行步数
@@ -138,7 +138,7 @@ class ConfigLayer:
     api_key: str | None = None
     # Agent 类型配置
     agent_type: str | None = None
-    agent_config_params: dict | None = None
+    agent_config_params: dict[str, Any] | None = None
     # Agent 执行配置
     default_max_steps: int | None = None
     layered_max_turns: int | None = None
@@ -161,11 +161,11 @@ class ConfigLayer:
         value = getattr(self, key, None)
         return value is not None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """转换为字典，排除 None 值.
 
         Returns:
-            dict: 配置字典
+            dict[str, Any]: 配置字典
         """
         return {
             k: v
@@ -250,7 +250,7 @@ class UnifiedConfigManager:
         )
 
         # 文件缓存（带修改时间戳）
-        self._file_cache: dict | None = None
+        self._file_cache: dict[str, Any] | None = None
         self._file_mtime: float | None = None
 
         # 有效配置缓存
@@ -420,7 +420,7 @@ class UnifiedConfigManager:
         model_name: str,
         api_key: str | None = None,
         agent_type: str | None = None,
-        agent_config_params: dict | None = None,
+        agent_config_params: dict[str, Any] | None = None,
         default_max_steps: int | None = None,
         layered_max_turns: int | None = None,
         decision_base_url: str | None = None,
@@ -452,7 +452,7 @@ class UnifiedConfigManager:
             self._config_path.parent.mkdir(parents=True, exist_ok=True)
 
             # 准备新配置
-            new_config: dict[str, str | bool | int | dict | None] = {
+            new_config: dict[str, str | bool | int | dict[str, Any] | None] = {
                 "base_url": base_url,
                 "model_name": model_name,
             }
@@ -733,12 +733,12 @@ class UnifiedConfigManager:
         """
         return self._config_path
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """
         将有效配置转换为字典.
 
         Returns:
-            dict: 配置字典
+            dict[str, Any]: 配置字典
         """
         config = self.get_effective_config()
         return {

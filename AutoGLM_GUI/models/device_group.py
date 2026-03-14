@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
+from typing import Any
 from uuid import uuid4
 
 # Default group ID - this group cannot be deleted
@@ -25,7 +26,7 @@ class DeviceGroup:
     created_at: datetime = field(default_factory=datetime.now)
     updated_at: datetime = field(default_factory=datetime.now)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """转换为可序列化的字典."""
         return {
             "id": self.id,
@@ -36,7 +37,7 @@ class DeviceGroup:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> DeviceGroup:
+    def from_dict(cls, data: dict[str, Any]) -> DeviceGroup:
         """从字典创建实例."""
         return cls(
             id=data.get("id", str(uuid4())),

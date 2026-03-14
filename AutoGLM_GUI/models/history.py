@@ -21,7 +21,7 @@ class MessageRecord:
     action: dict[str, Any] | None = None
     step: int | None = None
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """转换为可序列化的字典."""
         return {
             "role": self.role,
@@ -33,7 +33,7 @@ class MessageRecord:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> MessageRecord:
+    def from_dict(cls, data: dict[str, Any]) -> MessageRecord:
         """从字典创建实例."""
         return cls(
             role=data.get("role", "user"),
@@ -74,7 +74,7 @@ class ConversationRecord:
     # 完整对话消息列表
     messages: list[MessageRecord] = field(default_factory=list)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """转换为可序列化的字典."""
         return {
             "id": self.id,
@@ -92,7 +92,7 @@ class ConversationRecord:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> ConversationRecord:
+    def from_dict(cls, data: dict[str, Any]) -> ConversationRecord:
         """从字典创建实例."""
         return cls(
             id=data.get("id", str(uuid4())),
@@ -122,7 +122,7 @@ class DeviceHistory:
     records: list[ConversationRecord] = field(default_factory=list)
     last_updated: datetime = field(default_factory=datetime.now)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """转换为可序列化的字典."""
         return {
             "serialno": self.serialno,
@@ -131,7 +131,7 @@ class DeviceHistory:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> DeviceHistory:
+    def from_dict(cls, data: dict[str, Any]) -> DeviceHistory:
         """从字典创建实例."""
         return cls(
             serialno=data.get("serialno", ""),

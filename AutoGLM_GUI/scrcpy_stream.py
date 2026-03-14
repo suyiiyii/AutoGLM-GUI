@@ -353,7 +353,7 @@ class ScrcpyStreamer:
             # Check if process is still running
             error_msg = None
             proc = self.scrcpy_process
-            if proc is not None:
+            if proc:
                 if is_windows():
                     if proc.poll() is not None:  # type: ignore[union-attr]
                         stdout, stderr = proc.communicate()  # type: ignore[union-attr]

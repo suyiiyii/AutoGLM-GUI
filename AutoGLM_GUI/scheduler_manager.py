@@ -83,7 +83,7 @@ class SchedulerManager:
         logger.info(f"Created scheduled task: {name} (id={task.id})")
         return task
 
-    def update_task(self, task_id: str, **kwargs) -> ScheduledTask | None:
+    def update_task(self, task_id: str, **kwargs: Any) -> ScheduledTask | None:
         task = self._tasks.get(task_id)
         if not task:
             return None

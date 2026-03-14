@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+from typing import Any
 from collections.abc import Callable
 
 from .protocols import AsyncAgent, BaseAgent, is_async_agent
 
 
-def register_agent(agent_type: str, creator: Callable) -> None:
+def register_agent(agent_type: str, creator: Callable[..., Any]) -> None:
     from .factory import register_agent as _register_agent
 
     _register_agent(agent_type=agent_type, creator=creator)
@@ -13,13 +14,13 @@ def register_agent(agent_type: str, creator: Callable) -> None:
 
 def create_agent(
     agent_type: str,
-    model_config,
-    agent_config,
-    agent_specific_config,
-    device,
-    takeover_callback: Callable | None = None,
-    confirmation_callback: Callable | None = None,
-):
+    model_config: Any,
+    agent_config: Any,
+    agent_specific_config: Any,
+    device: Any,
+    takeover_callback: Callable[..., Any] | None = None,
+    confirmation_callback: Callable[..., Any] | None = None,
+) -> AsyncAgent | BaseAgent:
     from .factory import create_agent as _create_agent
 
     return _create_agent(

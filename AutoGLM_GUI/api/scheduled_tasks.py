@@ -1,7 +1,10 @@
 """Scheduled tasks API routes."""
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException
 
+from AutoGLM_GUI.models.scheduled_task import ScheduledTask
 from AutoGLM_GUI.scheduler_manager import scheduler_manager
 from AutoGLM_GUI.schemas import (
     ScheduledTaskCreate,
@@ -13,7 +16,7 @@ from AutoGLM_GUI.schemas import (
 router = APIRouter()
 
 
-def _task_to_response(task) -> ScheduledTaskResponse:
+def _task_to_response(task: ScheduledTask) -> ScheduledTaskResponse:
     next_run = scheduler_manager.get_next_run_time(task.id)
     return ScheduledTaskResponse(
         id=task.id,
@@ -80,7 +83,7 @@ def update_scheduled_task(
 
 
 @router.delete("/api/scheduled-tasks/{task_id}")
-def delete_scheduled_task(task_id: str) -> dict:
+def delete_scheduled_task(task_id: str) -> dict[str, Any]:
     success = scheduler_manager.delete_task(task_id)
     if not success:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -88,7 +91,7 @@ def delete_scheduled_task(task_id: str) -> dict:
 
 
 @router.post("/api/scheduled-tasks/{task_id}/enable")
-def enable_scheduled_task(task_id: str) -> dict:
+def enable_scheduled_task(task_id: str) -> dict[str, Any]:
     success = scheduler_manager.set_enabled(task_id, True)
     if not success:
         raise HTTPException(status_code=404, detail="Task not found")
@@ -96,7 +99,7 @@ def enable_scheduled_task(task_id: str) -> dict:
 
 
 @router.post("/api/scheduled-tasks/{task_id}/disable")
-def disable_scheduled_task(task_id: str) -> dict:
+def disable_scheduled_task(task_id: str) -> dict[str, Any]:
     success = scheduler_manager.set_enabled(task_id, False)
     if not success:
         raise HTTPException(status_code=404, detail="Task not found")

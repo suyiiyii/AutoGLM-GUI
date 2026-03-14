@@ -7,6 +7,7 @@ without requiring users to manually download and install APK.
 import asyncio
 import urllib.request
 from pathlib import Path
+from typing import Any
 
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.platform_utils import run_cmd_silently
@@ -315,7 +316,7 @@ class ADBKeyboardInstaller:
         logger.error(error_msg)
         return False, error_msg
 
-    def get_status(self) -> dict:
+    def get_status(self) -> dict[str, Any]:
         """
         Get detailed status of ADB Keyboard.
 

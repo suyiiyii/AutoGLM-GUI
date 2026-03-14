@@ -14,7 +14,7 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 
-from zeroconf import ServiceBrowser, ServiceListener, Zeroconf
+from zeroconf import ServiceBrowser, ServiceInfo, ServiceListener, Zeroconf
 
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.platform_utils import run_cmd_silently_sync
@@ -49,7 +49,7 @@ class PairingSession:
     thread: threading.Thread | None = None  # Listener thread
 
 
-def _pick_host_from_info(info) -> str | None:
+def _pick_host_from_info(info: ServiceInfo) -> str | None:
     """Extract preferred host from service info (IPv4 preferred)."""
     try:
         # Prefer IPv4 addresses

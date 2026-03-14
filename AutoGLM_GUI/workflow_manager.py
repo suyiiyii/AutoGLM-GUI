@@ -13,7 +13,7 @@ from __future__ import annotations
 import json
 import uuid as uuid_lib
 from pathlib import Path
-from typing import Self
+from typing import Any, Self
 
 from AutoGLM_GUI.logger import logger
 
@@ -35,10 +35,10 @@ class WorkflowManager:
             return
         self._initialized = True
         self._workflows_path = Path.home() / ".config" / "autoglm" / "workflows.json"
-        self._file_cache: list[dict] | None = None
+        self._file_cache: list[dict[str, Any]] | None = None
         self._file_mtime: float | None = None
 
-    def list_workflows(self) -> list[dict]:
+    def list_workflows(self) -> list[dict[str, Any]]:
         """获取所有 workflows.
 
         Returns:
@@ -46,7 +46,7 @@ class WorkflowManager:
         """
         return self._load_workflows()
 
-    def get_workflow(self, uuid: str) -> dict | None:
+    def get_workflow(self, uuid: str) -> dict[str, Any] | None:
         """根据 UUID 获取单个 workflow.
 
         Args:
@@ -58,7 +58,7 @@ class WorkflowManager:
         workflows = self._load_workflows()
         return next((wf for wf in workflows if wf["uuid"] == uuid), None)
 
-    def create_workflow(self, name: str, text: str) -> dict:
+    def create_workflow(self, name: str, text: str) -> dict[str, Any]:
         """创建新 workflow.
 
         Args:
@@ -79,7 +79,7 @@ class WorkflowManager:
         logger.info(f"Created workflow: {name} (uuid={new_workflow['uuid']})")
         return new_workflow
 
-    def update_workflow(self, uuid: str, name: str, text: str) -> dict | None:
+    def update_workflow(self, uuid: str, name: str, text: str) -> dict[str, Any] | None:
         """更新 workflow.
 
         Args:
@@ -120,7 +120,7 @@ class WorkflowManager:
         logger.warning(f"Workflow not found for deletion: uuid={uuid}")
         return False
 
-    def _load_workflows(self) -> list[dict]:
+    def _load_workflows(self) -> list[dict[str, Any]]:
         """从文件加载（带 mtime 缓存）.
 
         Returns:
@@ -147,7 +147,7 @@ class WorkflowManager:
             logger.warning(f"Failed to load workflows: {e}")
             return []
 
-    def _save_workflows(self, workflows: list[dict]) -> bool:
+    def _save_workflows(self, workflows: list[dict[str, Any]]) -> bool:
         """原子写入文件.
 
         Args:

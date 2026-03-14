@@ -13,5 +13,9 @@
   ],
   "typeCheckingMode": "standard",
   "reportMissingImports": true,
-  "reportMissingTypeStubs": false
+  "reportMissingTypeStubs": false,
+  "reportMissingTypeArgument": true,
+  "reportMissingParameterType": true,
+  "reportUnnecessaryIsInstance": true,
+  "reportUnnecessaryComparison": true
 }

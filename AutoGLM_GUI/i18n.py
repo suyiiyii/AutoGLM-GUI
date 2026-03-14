@@ -51,7 +51,7 @@ MESSAGES_EN = {
 }
 
 
-def get_messages(lang: str = "cn") -> dict:
+def get_messages(lang: str = "cn") -> dict[str, str]:
     """
     Get UI messages dictionary by language.
 

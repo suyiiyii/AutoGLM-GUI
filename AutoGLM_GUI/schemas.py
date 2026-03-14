@@ -1,6 +1,7 @@
 """Shared Pydantic models for the AutoGLM-GUI API."""
 
 import re
+from typing import Any
 
 from pydantic import BaseModel, field_validator
 
@@ -270,7 +271,7 @@ class ConfigResponse(BaseModel):
 
     # Agent 类型配置
     agent_type: str = "glm-async"  # Agent type (e.g., "glm-async", "mai")
-    agent_config_params: dict | None = None  # Agent-specific configuration
+    agent_config_params: dict[str, Any] | None = None  # Agent-specific configuration
 
     # Agent 执行配置
     default_max_steps: int = 100  # 单次任务最大执行步数
@@ -283,7 +284,7 @@ class ConfigResponse(BaseModel):
     decision_model_name: str | None = None
     decision_api_key: str | None = None
 
-    conflicts: list[dict] | None = None  # 配置冲突信息（可选）
+    conflicts: list[dict[str, Any]] | None = None  # 配置冲突信息（可选）
 
 
 class ConfigSaveRequest(BaseModel):
@@ -295,7 +296,9 @@ class ConfigSaveRequest(BaseModel):
 
     # Agent 类型配置
     agent_type: str = "glm-async"  # Agent type to use (e.g., "glm-async", "mai")
-    agent_config_params: dict | None = None  # Agent-specific configuration parameters
+    agent_config_params: dict[str, Any] | None = (
+        None  # Agent-specific configuration parameters
+    )
 
     # Agent 执行配置
     default_max_steps: int | None = None  # 单次任务最大执行步数
@@ -703,7 +706,7 @@ class MessageRecordResponse(BaseModel):
     content: str
     timestamp: str
     thinking: str | None = None
-    action: dict | None = None
+    action: dict[str, Any] | None = None
     step: int | None = None
 
 
@@ -780,7 +783,7 @@ class ScheduledTaskCreate(BaseModel):
             )
         return v.strip()
 
-    def model_post_init(self, __context) -> None:
+    def model_post_init(self, __context: Any) -> None:
         """验证必须指定 device_serialnos 或 device_group_id 之一."""
         if not self.device_serialnos and not self.device_group_id:
             raise ValueError(

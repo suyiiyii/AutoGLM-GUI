@@ -7,6 +7,7 @@ import threading
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
+from typing import Any
 
 from AutoGLM_GUI.logger import logger
 
@@ -21,7 +22,7 @@ class DeviceMetadata:
     display_name: str | None = None
     last_updated: datetime = field(default_factory=datetime.now)
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to serializable dict."""
         return {
             "serial": self.serial,
@@ -30,7 +31,7 @@ class DeviceMetadata:
         }
 
     @classmethod
-    def from_dict(cls, data: dict) -> DeviceMetadata:
+    def from_dict(cls, data: dict[str, Any]) -> DeviceMetadata:
         """Create instance from dict."""
         last_updated_str = data.get("last_updated")
         last_updated = (

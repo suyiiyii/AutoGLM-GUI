@@ -3,6 +3,8 @@
 import asyncio
 import json
 
+from typing import Any
+
 from fastapi import APIRouter, HTTPException
 from fastapi.responses import JSONResponse, StreamingResponse
 from pydantic import ValidationError
@@ -22,7 +24,7 @@ from AutoGLM_GUI.version import APP_VERSION
 router = APIRouter()
 
 
-SSEPayload = dict[str, str | int | bool | None | dict]
+SSEPayload = dict[str, str | int | bool | None | dict[str, Any]]
 
 
 def _create_sse_event(
@@ -315,7 +317,7 @@ def get_status(device_id: str | None = None) -> StatusResponse:
 
 
 @router.post("/api/reset")
-def reset_agent(request: ResetRequest) -> dict:
+def reset_agent(request: ResetRequest) -> dict[str, Any]:
     """重置 Agent 状态（多设备支持）。"""
     from AutoGLM_GUI.exceptions import AgentNotInitializedError
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
@@ -335,7 +337,7 @@ def reset_agent(request: ResetRequest) -> dict:
 
 
 @router.post("/api/chat/abort")
-async def abort_chat(request: AbortRequest) -> dict:
+async def abort_chat(request: AbortRequest) -> dict[str, Any]:
     """中断正在进行的对话流 (支持 AsyncAgent)。"""
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
@@ -393,7 +395,7 @@ def get_config_endpoint() -> ConfigResponse:
 
 
 @router.post("/api/config")
-def save_config_endpoint(request: ConfigSaveRequest) -> dict:
+def save_config_endpoint(request: ConfigSaveRequest) -> dict[str, Any]:
     """保存配置到文件.
 
     配置保存后需重启应用以立即生效。
@@ -462,7 +464,7 @@ def save_config_endpoint(request: ConfigSaveRequest) -> dict:
 
 
 @router.delete("/api/config")
-def delete_config_endpoint() -> dict:
+def delete_config_endpoint() -> dict[str, Any]:
     """删除配置文件."""
     from AutoGLM_GUI.config_manager import config_manager
 

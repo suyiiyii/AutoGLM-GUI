@@ -100,7 +100,7 @@ class GLMParser:
 
     def _parse_value(
         self, value_str: str
-    ) -> str | int | float | bool | list | dict | None:
+    ) -> str | int | float | bool | list[Any] | dict[str, Any] | None:
         value_str = value_str.strip()
 
         if not value_str:

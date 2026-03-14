@@ -8,7 +8,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TYPE_CHECKING, Any, TypeAlias
 
 from AutoGLM_GUI.adb import ADBConnection, ConnectionType, DeviceInfo
 from AutoGLM_GUI.logger import logger
@@ -153,11 +153,11 @@ class ManagedDevice:
 
         self.primary_connection_idx = sorted_conns[0][0]
 
-    def to_dict(self) -> dict:
+    def to_dict(self) -> dict[str, Any]:
         """转换为纯设备信息字典（不包含 Agent 状态）。
 
         Returns:
-            dict: 设备基础信息，匹配 DeviceResponse schema（无 agent 字段）
+            dict[str, Any]: 设备基础信息，匹配 DeviceResponse schema（无 agent 字段）
         """
         return {
             "id": self.primary_device_id,
@@ -266,7 +266,7 @@ class DeviceManager:
         self._enable_mdns_discovery: bool = True  # Feature toggle
 
         self._remote_devices: dict[str, DeviceProtocol] = {}
-        self._remote_device_configs: dict[str, dict] = {}
+        self._remote_device_configs: dict[str, dict[str, Any]] = {}
 
         # ADB Keyboard setup state (process-local, best-effort)
         self._adb_keyboard_attempted_serials: set[DeviceSerial] = set()
@@ -840,7 +840,7 @@ class DeviceManager:
 
     def discover_remote_devices(
         self, base_url: str, timeout: int = 5
-    ) -> tuple[bool, str, list[dict]]:
+    ) -> tuple[bool, str, list[dict[str, Any]]]:
         """Discover devices from a remote Device Agent Server.
 
         Args:
