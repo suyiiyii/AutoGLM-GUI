@@ -111,7 +111,7 @@ def _get_static_dir() -> Path | None:
         if filesystem_static.exists() and filesystem_static.is_dir():
             return filesystem_static
     except (ImportError, AttributeError) as e:
-        logger.debug(f"Failed to find static dir via filesystem: {e}")
+        logger.warning(f"Failed to find static dir via filesystem: {e}")
 
     # Priority 3: importlib.resources (for installed package)
     try:
@@ -124,7 +124,7 @@ def _get_static_dir() -> Path | None:
         if path.exists():
             return path
     except (TypeError, FileNotFoundError) as e:
-        logger.debug(f"Failed to find static dir via importlib: {e}")
+        logger.warning(f"Failed to find static dir via importlib: {e}")
 
     return None
 
