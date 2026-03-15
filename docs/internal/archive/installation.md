@@ -1,5 +1,4 @@
 ---
-id: installation
 title: 安装指南
 ---
 

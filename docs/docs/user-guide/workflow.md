@@ -7,6 +7,16 @@ title: Workflow 工作流
 
 将常用任务保存为 Workflow，实现一键快速执行：
 
+## 页面入口与常用按钮
+
+- 左侧导航栏：**「Workflows」**
+- 「新建 Workflow」
+- 「创建 Workflow」
+- 「编辑 Workflow」
+- 「确认删除此 Workflow？」
+- 「快速执行」
+- 「选择 Workflow」
+
 ### 创建和管理 Workflow
 
 1. **进入管理页面** - 点击左侧导航栏的 Workflows 图标（📋）
@@ -36,3 +46,11 @@ title: Workflow 工作流
 - 🎮 **游戏操作**：每日签到、领取奖励
 - 📧 **消息发送**：固定内容的消息群发
 - 🔄 **重复操作**：定期执行的维护任务
+
+## 管理流程回顾
+
+1. 点击「新建 Workflow」
+2. 输入「名称」与「任务内容」
+3. 点击「创建 Workflow」保存
+4. 需要修改时点击「编辑 Workflow」
+5. 删除时会弹出「确认删除此 Workflow？」

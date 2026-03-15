@@ -1,5 +1,4 @@
 ---
-id: layered-agent-analysis
 title: Layered Agent 架构分析
 ---
 

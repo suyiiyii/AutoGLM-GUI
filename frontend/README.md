@@ -1,44 +1,38 @@
-# TanStack Router - File-Based Quickstart Example
+# Frontend Workspace
 
-A quickstart example using file-based routing.
+This directory contains the React/TypeScript frontend, built with TanStack Router and Tailwind-style UI utilities.
 
-- [TanStack Router Docs](https://tanstack.com/router)
+## Setup
 
-## Start a new project based on this example
-
-To start a new project based on this example, run:
-
-```sh
-npx gitpick TanStack/router/tree/main/examples/react/quickstart-file-based quickstart-file-based
-```
-
-## Getting Started
-
-Install dependencies:
-
-```sh
+```bash
+cd frontend
 pnpm install
 ```
 
-Start the development server:
+## Development
 
-```sh
+```bash
+cd frontend
 pnpm dev
 ```
 
+The dev server proxies API requests to `http://localhost:8080` when the backend is running locally via `uv run autoglm-gui`.
+
+## Lint and type check
+
+```bash
+cd frontend
+pnpm lint
+pnpm type-check
+```
+
+Apply these before opening a PR to ensure ESLint and TypeScript are clean.
+
 ## Build
 
-Build for production:
-
-```sh
+```bash
+cd frontend
 pnpm build
 ```
 
-## About This Example
-
-This example demonstrates:
-
-- Quick setup with file-based routing
-- Automatic route generation
-- Minimal configuration
-- Type-safe routes
+The bundled assets are consumed by the backend and Electron packaging scripts.

@@ -1,4 +1,5 @@
 ---
+id: release-notes-v1.5
 sidebar_position: 42
 title: v1.5 发布说明
 description: AutoGLM-GUI v1.4.1 到 v1.5.5 的完整更新日志和特性说明

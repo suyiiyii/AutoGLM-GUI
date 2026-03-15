@@ -1,41 +1,39 @@
-# Website
+# Docs Workspace
 
-This website is built using [Docusaurus](https://docusaurus.io/), a modern static website generator.
+This directory hosts the Docusaurus site that powers the AutoGLM-GUI documentation portal.
 
-## Installation
-
-```bash
-yarn
-```
-
-## Local Development
+## Install
 
 ```bash
-yarn start
+cd docs
+pnpm install
 ```
 
-This command starts a local development server and opens up a browser window. Most changes are reflected live without having to restart the server.
+pnpm manages the Node toolchain for building, developing, and deploying the docs.
+
+## Development
+
+```bash
+cd docs
+pnpm start
+```
+
+The dev server runs locally and watches for MDX/TSX changes.
 
 ## Build
 
 ```bash
-yarn build
+cd docs
+pnpm build
 ```
 
-This command generates static content into the `build` directory and can be served using any static contents hosting service.
+The static output lands in `docs/build`.
 
 ## Deployment
 
-Using SSH:
-
 ```bash
-USE_SSH=true yarn deploy
+cd docs
+USE_SSH=true pnpm deploy
 ```
 
-Not using SSH:
-
-```bash
-GIT_USER=<Your GitHub username> yarn deploy
-```
-
-If you are using GitHub pages for hosting, this command is a convenient way to build the website and push to the `gh-pages` branch.
+Set `GIT_USER=<GitHub username>` instead if you deploy without SSH.

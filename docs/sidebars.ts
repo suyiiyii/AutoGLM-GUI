@@ -17,29 +17,47 @@ const sidebars: SidebarsConfig = {
     'intro',
     {
       type: 'category',
-      label: '快速开始',
+      label: '开始使用',
       items: [
         'getting-started/install',
         'getting-started/first-run',
         'getting-started/model-config',
         'getting-started/device-connection',
+        'quick-start',
       ],
     },
     {
       type: 'category',
-      label: '功能说明',
+      label: '使用指南',
       items: [
-        'features/chat-control',
-        'features/realtime-preview',
-        'features/direct-operation',
-        'features/workflow',
-        'features/scheduler',
-        'features/history',
-        'features/multi-device',
-        'features/interrupt',
-        'features/layered-agent',
-        'features/mcp',
-        'features/logs',
+        {
+          type: 'category',
+          label: '界面与 AI 模式',
+          items: [
+            'user-guide/interface',
+            'user-guide/ai-modes',
+          ],
+        },
+        {
+          type: 'category',
+          label: '操作与任务',
+          items: [
+            'user-guide/chat-control',
+            'user-guide/manual-control',
+            'user-guide/multi-device',
+            'user-guide/history',
+            'user-guide/interrupt',
+            'user-guide/logs',
+          ],
+        },
+        {
+          type: 'category',
+          label: '自动化与工作流',
+          items: [
+            'user-guide/workflow',
+            'user-guide/scheduler',
+          ],
+        },
       ],
     },
     {
@@ -53,6 +71,25 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: '开发者',
+      items: [
+        'developer/development',
+        'developer/mcp',
+      ],
+    },
+    {
+      type: 'category',
+      label: '参考',
+      items: [
+        'reference/configuration',
+        'reference/upgrade',
+        'reference/release-notes-v1.5',
+        'reference/faq',
+        'reference/license',
+      ],
+    },
+    {
+      type: 'category',
       label: '问题排查',
       items: [
         'troubleshooting/common-issues',
@@ -60,7 +97,6 @@ const sidebars: SidebarsConfig = {
         'troubleshooting/model-api',
       ],
     },
-    'faq',
   ],
 };
 
