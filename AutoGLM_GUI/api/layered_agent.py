@@ -22,6 +22,7 @@ from pydantic import BaseModel
 
 from AutoGLM_GUI.config_manager import config_manager
 from AutoGLM_GUI.logger import logger
+from AutoGLM_GUI.trace import create_trace_id, summarize_text, trace_context, trace_span
 
 router = APIRouter()
 
@@ -150,26 +151,22 @@ def _sync_list_devices() -> str:
     from AutoGLM_GUI.device_manager import DeviceManager
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
-    logger.info("[LayeredAgent] list_devices tool called")
+    with trace_span("layered.tool.list_devices"):
+        logger.info("[LayeredAgent] list_devices tool called")
 
-    device_manager = DeviceManager.get_instance()
-    agent_manager = PhoneAgentManager.get_instance()
+        device_manager = DeviceManager.get_instance()
+        agent_manager = PhoneAgentManager.get_instance()
 
-    # 如果轮询未启动，执行同步刷新
-    if not device_manager.is_polling_active():
-        logger.warning("Polling not started, performing sync refresh")
-        device_manager.force_refresh()
+        if not device_manager.is_polling_active():
+            logger.warning("Polling not started, performing sync refresh")
+            device_manager.force_refresh()
 
-    managed_devices = device_manager.get_devices()
-
-    # 构建设备响应
-    devices_with_agents = [
-        _build_device_response_with_agent(d, agent_manager) for d in managed_devices
-    ]
-
-    # Convert DeviceResponse Pydantic models to dicts before JSON serialization
-    devices_dict = [device.model_dump() for device in devices_with_agents]
-    return json.dumps(devices_dict, ensure_ascii=False, indent=2)
+        managed_devices = device_manager.get_devices()
+        devices_with_agents = [
+            _build_device_response_with_agent(d, agent_manager) for d in managed_devices
+        ]
+        devices_dict = [device.model_dump() for device in devices_with_agents]
+        return json.dumps(devices_dict, ensure_ascii=False, indent=2)
 
 
 @function_tool
@@ -214,94 +211,134 @@ async def chat(device_id: str, message: str) -> str:
 
     MCP_MAX_STEPS = 5
 
-    logger.info(
-        f"[LayeredAgent] chat tool called: device_id={device_id}, message={message}"
-    )
-
-    manager = PhoneAgentManager.get_instance()
-    acquired = False
-
-    try:
-        acquired = await manager.acquire_device_async(
-            device_id,
-            auto_initialize=True,
-            context="layered",
-        )
-        agent = await asyncio.to_thread(
-            manager.get_agent_with_context,
-            device_id,
-            context="layered",
-            agent_type=None,  # 使用配置中的 agent_type
+    with trace_span(
+        "layered.tool.chat",
+        attrs={
+            "device_id": device_id,
+            "task_preview": summarize_text(message) or "",
+            "task_length": len(message),
+        },
+    ) as tool_span:
+        logger.info(
+            f"[LayeredAgent] chat tool called: device_id={device_id}, message={message}"
         )
 
-        # 临时覆盖配置
-        original_max_steps = agent.agent_config.max_steps
-        original_system_prompt = agent.agent_config.system_prompt
-
-        agent.agent_config.max_steps = MCP_MAX_STEPS
-        agent.agent_config.system_prompt = MCP_SYSTEM_PROMPT_ZH
+        manager = PhoneAgentManager.get_instance()
+        acquired = False
 
         try:
-            # 重置 agent 确保干净状态
-            agent.reset()
+            with trace_span(
+                "layered.tool.chat.acquire_device",
+                attrs={"device_id": device_id},
+            ):
+                acquired = await manager.acquire_device_async(
+                    device_id,
+                    auto_initialize=True,
+                    context="layered",
+                )
+            with trace_span(
+                "layered.tool.chat.get_agent",
+                attrs={"device_id": device_id},
+            ):
+                agent = await asyncio.to_thread(
+                    manager.get_agent_with_context,
+                    device_id,
+                    context="layered",
+                    agent_type=None,
+                )
 
-            if is_async_agent(agent):
-                result = await agent.run(message)  # type: ignore[misc]
-            else:
-                result = await asyncio.to_thread(agent.run, message)  # type: ignore[misc]
-            steps = agent.step_count
+            original_max_steps = agent.agent_config.max_steps
+            original_system_prompt = agent.agent_config.system_prompt
 
-            # 检查是否达到步数限制
-            if steps >= MCP_MAX_STEPS and result == "Max steps reached":
-                context_json = json.dumps(agent.context, ensure_ascii=False, indent=2)
+            agent.agent_config.max_steps = MCP_MAX_STEPS
+            agent.agent_config.system_prompt = MCP_SYSTEM_PROMPT_ZH
+
+            try:
+                with trace_span(
+                    "layered.tool.chat.reset_agent",
+                    attrs={"device_id": device_id},
+                ):
+                    agent.reset()
+
+                with trace_span(
+                    "layered.tool.chat.run_agent",
+                    attrs={
+                        "device_id": device_id,
+                        "agent_type": agent.__class__.__name__,
+                        "is_async_agent": is_async_agent(agent),
+                    },
+                ):
+                    if is_async_agent(agent):
+                        result = await agent.run(message)  # type: ignore[misc]
+                    else:
+                        result = await asyncio.to_thread(agent.run, message)  # type: ignore[misc]
+                steps = agent.step_count
+
+                if steps >= MCP_MAX_STEPS and result == "Max steps reached":
+                    tool_span.set_attributes(
+                        {
+                            "success": False,
+                            "steps": MCP_MAX_STEPS,
+                            "error_kind": "max_steps",
+                        }
+                    )
+                    context_json = json.dumps(
+                        agent.context, ensure_ascii=False, indent=2
+                    )
+                    return json.dumps(
+                        {
+                            "result": f"⚠️ 已达到最大步数限制（{MCP_MAX_STEPS}步）。视觉模型可能遇到了困难，任务未完成。\n\n执行历史:\n{context_json}\n\n建议: 请重新规划任务或将其拆分为更小的子任务。",
+                            "steps": MCP_MAX_STEPS,
+                            "success": False,
+                        },
+                        ensure_ascii=False,
+                    )
+
+                tool_span.set_attributes({"success": True, "steps": steps})
                 return json.dumps(
                     {
-                        "result": f"⚠️ 已达到最大步数限制（{MCP_MAX_STEPS}步）。视觉模型可能遇到了困难，任务未完成。\n\n执行历史:\n{context_json}\n\n建议: 请重新规划任务或将其拆分为更小的子任务。",
-                        "steps": MCP_MAX_STEPS,
-                        "success": False,
+                        "result": result,
+                        "steps": steps,
+                        "success": True,
                     },
                     ensure_ascii=False,
                 )
 
+            finally:
+                agent.agent_config.max_steps = original_max_steps
+                agent.agent_config.system_prompt = original_system_prompt
+
+        except DeviceBusyError:
+            tool_span.set_attributes({"success": False, "error_kind": "busy"})
             return json.dumps(
                 {
-                    "result": result,
-                    "steps": steps,
-                    "success": True,
+                    "result": f"设备 {device_id} 正忙，请稍后再试。",
+                    "steps": 0,
+                    "success": False,
                 },
                 ensure_ascii=False,
             )
-
+        except Exception as e:
+            tool_span.set_attributes({"success": False, "error_kind": "unexpected"})
+            logger.error(f"[LayeredAgent] chat tool error: {e}")
+            return json.dumps(
+                {
+                    "result": str(e),
+                    "steps": 0,
+                    "success": False,
+                },
+                ensure_ascii=False,
+            )
         finally:
-            # 恢复原始配置
-            agent.agent_config.max_steps = original_max_steps
-            agent.agent_config.system_prompt = original_system_prompt
-
-    except DeviceBusyError:
-        return json.dumps(
-            {
-                "result": f"设备 {device_id} 正忙，请稍后再试。",
-                "steps": 0,
-                "success": False,
-            },
-            ensure_ascii=False,
-        )
-    except Exception as e:
-        logger.error(f"[LayeredAgent] chat tool error: {e}")
-        return json.dumps(
-            {
-                "result": str(e),
-                "steps": 0,
-                "success": False,
-            },
-            ensure_ascii=False,
-        )
-    finally:
-        if acquired:
-            try:
-                manager.release_device(device_id, context="layered")
-            except BaseException as e:
-                logger.error(f"Failed to release device lock for {device_id}: {e}")
+            if acquired:
+                try:
+                    with trace_span(
+                        "layered.tool.chat.release_device",
+                        attrs={"device_id": device_id},
+                    ):
+                        manager.release_device(device_id, context="layered")
+                except BaseException as e:
+                    logger.error(f"Failed to release device lock for {device_id}: {e}")
 
 
 # ==================== Agent 初始化 ====================
@@ -421,6 +458,8 @@ async def layered_agent_chat(request: LayeredAgentRequest) -> StreamingResponse:
 
     from AutoGLM_GUI.history_manager import history_manager
     from AutoGLM_GUI.models.history import ConversationRecord
+
+    trace_id = create_trace_id()
 
     async def event_generator() -> AsyncGenerator[str, None]:
         start_time = datetime.now()
@@ -661,8 +700,22 @@ async def layered_agent_chat(request: LayeredAgentRequest) -> StreamingResponse:
                     )
                     history_manager.add_record(serialno, record)
 
+    async def traced_event_generator() -> AsyncGenerator[str, None]:
+        with trace_context(trace_id):
+            with trace_span(
+                "api.layered_agent.chat",
+                attrs={
+                    "device_id": request.device_id,
+                    "session_id": request.session_id or request.device_id or "default",
+                    "task_preview": summarize_text(request.message) or "",
+                    "task_length": len(request.message),
+                },
+            ):
+                async for chunk in event_generator():
+                    yield chunk
+
     return StreamingResponse(
-        event_generator(),
+        traced_event_generator(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",

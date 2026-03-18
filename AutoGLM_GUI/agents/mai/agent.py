@@ -24,6 +24,7 @@ from AutoGLM_GUI.config import AgentConfig, ModelConfig, StepResult
 from AutoGLM_GUI.device_protocol import DeviceProtocol
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.model import MessageBuilder
+from AutoGLM_GUI.trace import summarize_text, trace_span
 
 from .traj_memory import TrajMemory, TrajStep
 from .parser import MAIParseError, MAIParser
@@ -73,21 +74,46 @@ class InternalMAIAgent:
         self._step_count = 0
         self._is_running = True
 
-        try:
-            result = self._execute_step(task, is_first=True)
-
-            if result.finished:
-                return result.message or "Task completed"
-
-            while self._step_count < self.agent_config.max_steps and self._is_running:
-                result = self._execute_step(is_first=False)
+        with trace_span(
+            "agent.run",
+            attrs={
+                "agent_type": self.__class__.__name__,
+                "device_id": self.device.device_id,
+                "model_name": self.model_config.model_name,
+                "max_steps": self.agent_config.max_steps,
+                "task_preview": summarize_text(task) or "",
+            },
+        ) as run_span:
+            try:
+                result = self._execute_step(task, is_first=True)
 
                 if result.finished:
+                    run_span.set_attributes(
+                        {"success": result.success, "steps": self._step_count}
+                    )
                     return result.message or "Task completed"
 
-            return "Max steps reached"
-        finally:
-            self._is_running = False
+                while (
+                    self._step_count < self.agent_config.max_steps and self._is_running
+                ):
+                    result = self._execute_step(is_first=False)
+
+                    if result.finished:
+                        run_span.set_attributes(
+                            {"success": result.success, "steps": self._step_count}
+                        )
+                        return result.message or "Task completed"
+
+                run_span.set_attributes(
+                    {
+                        "success": False,
+                        "steps": self._step_count,
+                        "error_kind": "max_steps",
+                    }
+                )
+                return "Max steps reached"
+            finally:
+                self._is_running = False
 
     def step(self, task: str | None = None) -> StepResult:
         is_first = len(self.traj_memory.steps) == 0
@@ -182,93 +208,137 @@ class InternalMAIAgent:
     ) -> StepResult:
         self._step_count += 1
 
-        screenshot = self.device.get_screenshot()
-        current_app = self.device.get_current_app()
+        with trace_span(
+            "agent.step",
+            attrs={
+                "agent_type": self.__class__.__name__,
+                "step": self._step_count,
+                "device_id": self.device.device_id,
+            },
+        ):
+            with trace_span(
+                "step.capture_screenshot",
+                attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
+            ):
+                screenshot = self.device.get_screenshot()
+            with trace_span(
+                "step.get_current_app",
+                attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
+            ):
+                current_app = self.device.get_current_app()
 
-        screenshot_bytes = base64.b64decode(screenshot.base64_data)
-        pil_image = Image.open(BytesIO(screenshot_bytes))
+            with trace_span(
+                "step.build_message",
+                attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
+            ):
+                screenshot_bytes = base64.b64decode(screenshot.base64_data)
+                pil_image = Image.open(BytesIO(screenshot_bytes))
 
-        if is_first:
-            instruction = user_prompt or self.traj_memory.task_goal
-        else:
-            instruction = self.traj_memory.task_goal
+                if is_first:
+                    instruction = user_prompt or self.traj_memory.task_goal
+                else:
+                    instruction = self.traj_memory.task_goal
 
-        screen_info = MessageBuilder.build_screen_info(current_app)
+                screen_info = MessageBuilder.build_screen_info(current_app)
 
-        messages = self._build_messages(
-            instruction=instruction,
-            screen_info=screen_info,
-            current_screenshot_base64=screenshot.base64_data,
-        )
+                messages = self._build_messages(
+                    instruction=instruction,
+                    screen_info=screen_info,
+                    current_screenshot_base64=screenshot.base64_data,
+                )
 
-        max_retries = 3
-        raw_content = ""
-        thinking = ""
-        raw_action = None
-        converted_action = None
+            max_retries = 3
+            raw_content = ""
+            thinking = ""
+            raw_action = None
+            converted_action = None
 
-        for attempt in range(max_retries):
-            try:
-                if self.agent_config.verbose:
-                    retry_info = (
-                        f" (尝试 {attempt + 1}/{max_retries})" if attempt > 0 else ""
-                    )
-                    print("\n" + "=" * 50)
-                    print(f"💭 步骤 {self._step_count}{retry_info} - 思考中...")
-                    print("-" * 50)
-
-                callback = self._thinking_callback
-                if callback is None and self.agent_config.verbose:
-
-                    def print_chunk(chunk: str) -> None:
-                        print(chunk, end="", flush=True)
-
-                    callback = print_chunk
-
-                llm_start = time.time()
-                raw_content = self._stream_request(messages, on_thinking_chunk=callback)
-                llm_time = time.time() - llm_start
-                self._total_llm_time += llm_time
-
-                if self.agent_config.verbose:
-                    print(f"\n⏱️  LLM 耗时: {llm_time:.2f}s")
-
-                parsed = self.parser.parse_with_thinking(raw_content)
-                thinking = parsed["thinking"]
-                raw_action = parsed["raw_action"]
-                converted_action = parsed["converted_action"]
-
-                break
-
-            except MAIParseError as e:
-                if self.agent_config.verbose:
-                    logger.warning(f"解析失败 (尝试 {attempt + 1}/{max_retries}): {e}")
-                if attempt == max_retries - 1:
-                    return StepResult(
-                        success=False,
-                        finished=True,
-                        action=None,
-                        thinking="",
-                        message=f"Parse error after {max_retries} retries: {e}",
-                    )
-                continue
-
-            except Exception as e:
-                if self.agent_config.verbose:
-                    logger.warning(
-                        f"模型调用失败 (尝试 {attempt + 1}/{max_retries}): {e}"
-                    )
-                if attempt == max_retries - 1:
+            for attempt in range(max_retries):
+                try:
                     if self.agent_config.verbose:
-                        traceback.print_exc()
-                    return StepResult(
-                        success=False,
-                        finished=True,
-                        action=None,
-                        thinking="",
-                        message=f"Model error after {max_retries} retries: {e}",
-                    )
-                continue
+                        retry_info = (
+                            f" (尝试 {attempt + 1}/{max_retries})"
+                            if attempt > 0
+                            else ""
+                        )
+                        print("\n" + "=" * 50)
+                        print(f"💭 步骤 {self._step_count}{retry_info} - 思考中...")
+                        print("-" * 50)
+
+                    callback = self._thinking_callback
+                    if callback is None and self.agent_config.verbose:
+
+                        def print_chunk(chunk: str) -> None:
+                            print(chunk, end="", flush=True)
+
+                        callback = print_chunk
+
+                    with trace_span(
+                        "step.llm",
+                        attrs={
+                            "step": self._step_count,
+                            "attempt": attempt + 1,
+                            "agent_type": self.__class__.__name__,
+                            "model_name": self.model_config.model_name,
+                            "message_count": len(messages),
+                        },
+                    ):
+                        llm_start = time.time()
+                        raw_content = self._stream_request(
+                            messages, on_thinking_chunk=callback
+                        )
+                        llm_time = time.time() - llm_start
+                        self._total_llm_time += llm_time
+
+                    if self.agent_config.verbose:
+                        print(f"\n⏱️  LLM 耗时: {llm_time:.2f}s")
+
+                    with trace_span(
+                        "step.parse_action",
+                        attrs={
+                            "step": self._step_count,
+                            "attempt": attempt + 1,
+                            "agent_type": self.__class__.__name__,
+                        },
+                    ):
+                        parsed = self.parser.parse_with_thinking(raw_content)
+                        thinking = parsed["thinking"]
+                        raw_action = parsed["raw_action"]
+                        converted_action = parsed["converted_action"]
+
+                    break
+
+                except MAIParseError as e:
+                    if self.agent_config.verbose:
+                        logger.warning(
+                            f"解析失败 (尝试 {attempt + 1}/{max_retries}): {e}"
+                        )
+                    if attempt == max_retries - 1:
+                        return StepResult(
+                            success=False,
+                            finished=True,
+                            action=None,
+                            thinking="",
+                            message=f"Parse error after {max_retries} retries: {e}",
+                        )
+                    continue
+
+                except Exception as e:
+                    if self.agent_config.verbose:
+                        logger.warning(
+                            f"模型调用失败 (尝试 {attempt + 1}/{max_retries}): {e}"
+                        )
+                    if attempt == max_retries - 1:
+                        if self.agent_config.verbose:
+                            traceback.print_exc()
+                        return StepResult(
+                            success=False,
+                            finished=True,
+                            action=None,
+                            thinking="",
+                            message=f"Model error after {max_retries} retries: {e}",
+                        )
+                    continue
 
         if not raw_content or raw_action is None or converted_action is None:
             return StepResult(
@@ -287,28 +357,41 @@ class InternalMAIAgent:
             print(f"  转换: {converted_action}")
             print("=" * 50 + "\n")
 
-        traj_step = TrajStep(
-            screenshot=pil_image,
-            accessibility_tree=None,
-            prediction=raw_content,
-            action=raw_action,
-            conclusion="",
-            thought=thinking,
-            step_index=self._step_count - 1,
-            agent_type="InternalMAIAgent",
-            model_name=self.model_config.model_name,
-            screenshot_bytes=screenshot_bytes,
-            structured_action={"action_json": raw_action},
-        )
-        self.traj_memory.add_step(traj_step)
+        with trace_span(
+            "step.update_context",
+            attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
+        ):
+            traj_step = TrajStep(
+                screenshot=pil_image,
+                accessibility_tree=None,
+                prediction=raw_content,
+                action=raw_action,
+                conclusion="",
+                thought=thinking,
+                step_index=self._step_count - 1,
+                agent_type="InternalMAIAgent",
+                model_name=self.model_config.model_name,
+                screenshot_bytes=screenshot_bytes,
+                structured_action={"action_json": raw_action},
+            )
+            self.traj_memory.add_step(traj_step)
 
         try:
-            action_start = time.time()
-            result = self.action_handler.execute(
-                converted_action, screenshot.width, screenshot.height
-            )
-            action_time = time.time() - action_start
-            self._total_action_time += action_time
+            with trace_span(
+                "step.execute_action",
+                attrs={
+                    "step": self._step_count,
+                    "agent_type": self.__class__.__name__,
+                    "action_name": converted_action.get("action"),
+                    "action_type": converted_action.get("_metadata"),
+                },
+            ):
+                action_start = time.time()
+                result = self.action_handler.execute(
+                    converted_action, screenshot.width, screenshot.height
+                )
+                action_time = time.time() - action_start
+                self._total_action_time += action_time
 
             if self.agent_config.verbose:
                 print(f"⚡ 动作执行耗时: {action_time:.2f}s")

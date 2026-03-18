@@ -19,6 +19,7 @@ from AutoGLM_GUI.exceptions import (
     DeviceBusyError,
 )
 from AutoGLM_GUI.logger import logger
+from AutoGLM_GUI.trace import trace_span
 from AutoGLM_GUI.types import AgentSpecificConfig
 
 
@@ -119,75 +120,99 @@ class PhoneAgentManager:
     ) -> AsyncAgent | BaseAgent:
         from AutoGLM_GUI.agents import create_agent
 
-        with self._manager_lock:
-            if device_id in self._agents and not force:
-                logger.debug(f"Agent already initialized for {device_id}")
-                return self._agents[device_id]
+        with trace_span(
+            "agent_manager.initialize_agent",
+            attrs={
+                "device_id": device_id,
+                "agent_type": agent_type,
+                "force": force,
+            },
+        ):
+            with self._manager_lock:
+                if device_id in self._agents and not force:
+                    logger.debug(f"Agent already initialized for {device_id}")
+                    return self._agents[device_id]
 
-            metadata = self._metadata.get(device_id)
-            if metadata and metadata.state == AgentState.BUSY:
-                raise DeviceBusyError(
-                    f"Device {device_id} is currently processing a request"
-                )
-
-            self._metadata[device_id] = AgentMetadata(
-                device_id=device_id,
-                state=AgentState.INITIALIZING,
-                model_config=model_config,
-                agent_config=agent_config,
-                agent_type=agent_type,
-                created_at=time.time(),
-                last_used=time.time(),
-            )
-
-            try:
-                from AutoGLM_GUI.device_manager import DeviceManager
-
-                device_manager = DeviceManager.get_instance()
-                # Use agent_config.device_id (actual device ID) instead of device_id (storage key)
-                # to get device protocol, as device_id may be a composite key like "device_id:context"
-                actual_device_id = agent_config.device_id
-                if not actual_device_id:
-                    raise AgentInitializationError(
-                        "agent_config.device_id is required but was None"
+                metadata = self._metadata.get(device_id)
+                if metadata and metadata.state == AgentState.BUSY:
+                    raise DeviceBusyError(
+                        f"Device {device_id} is currently processing a request"
                     )
-                try:
-                    device = device_manager.get_device_protocol(actual_device_id)
-                except ValueError:
-                    # Ensure cold starts refresh device cache before failing.
-                    device_manager.force_refresh()
-                    device = device_manager.get_device_protocol(actual_device_id)
 
-                agent = create_agent(
-                    agent_type=agent_type,
+                self._metadata[device_id] = AgentMetadata(
+                    device_id=device_id,
+                    state=AgentState.INITIALIZING,
                     model_config=model_config,
                     agent_config=agent_config,
-                    agent_specific_config=agent_specific_config,
-                    device=device,
-                    takeover_callback=takeover_callback,
-                    confirmation_callback=confirmation_callback,
+                    agent_type=agent_type,
+                    created_at=time.time(),
+                    last_used=time.time(),
                 )
 
-                self._agents[device_id] = agent
-                self._agent_configs[device_id] = (model_config, agent_config)
+                try:
+                    from AutoGLM_GUI.device_manager import DeviceManager
 
-                self._metadata[device_id].state = AgentState.IDLE
+                    device_manager = DeviceManager.get_instance()
+                    actual_device_id = agent_config.device_id
+                    if not actual_device_id:
+                        raise AgentInitializationError(
+                            "agent_config.device_id is required but was None"
+                        )
+                    try:
+                        with trace_span(
+                            "agent_manager.get_device_protocol",
+                            attrs={"device_id": actual_device_id},
+                        ):
+                            device = device_manager.get_device_protocol(
+                                actual_device_id
+                            )
+                    except ValueError:
+                        device_manager.force_refresh()
+                        with trace_span(
+                            "agent_manager.get_device_protocol",
+                            attrs={
+                                "device_id": actual_device_id,
+                                "after_refresh": True,
+                            },
+                        ):
+                            device = device_manager.get_device_protocol(
+                                actual_device_id
+                            )
 
-                logger.info(
-                    f"Agent of type '{agent_type}' initialized for device {device_id}"
-                )
-                return agent
+                    with trace_span(
+                        "agent_manager.create_agent",
+                        attrs={"device_id": device_id, "agent_type": agent_type},
+                    ):
+                        agent = create_agent(
+                            agent_type=agent_type,
+                            model_config=model_config,
+                            agent_config=agent_config,
+                            agent_specific_config=agent_specific_config,
+                            device=device,
+                            takeover_callback=takeover_callback,
+                            confirmation_callback=confirmation_callback,
+                        )
 
-            except Exception as e:
-                self._agents.pop(device_id, None)
-                self._agent_configs.pop(device_id, None)
-                self._metadata[device_id].state = AgentState.ERROR
-                self._metadata[device_id].error_message = str(e)
+                    self._agents[device_id] = agent
+                    self._agent_configs[device_id] = (model_config, agent_config)
 
-                logger.error(f"Failed to initialize agent for {device_id}: {e}")
-                raise AgentInitializationError(
-                    f"Failed to initialize agent: {str(e)}"
-                ) from e
+                    self._metadata[device_id].state = AgentState.IDLE
+
+                    logger.info(
+                        f"Agent of type '{agent_type}' initialized for device {device_id}"
+                    )
+                    return agent
+
+                except Exception as e:
+                    self._agents.pop(device_id, None)
+                    self._agent_configs.pop(device_id, None)
+                    self._metadata[device_id].state = AgentState.ERROR
+                    self._metadata[device_id].error_message = str(e)
+
+                    logger.error(f"Failed to initialize agent for {device_id}: {e}")
+                    raise AgentInitializationError(
+                        f"Failed to initialize agent: {str(e)}"
+                    ) from e
 
     def _auto_initialize_agent(
         self, agent_key: str, actual_device_id: str, agent_type: str | None = None

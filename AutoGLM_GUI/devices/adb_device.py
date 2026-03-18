@@ -8,6 +8,7 @@ from AutoGLM_GUI.device_protocol import (
     DeviceProtocol,
     Screenshot,
 )
+from AutoGLM_GUI.trace import trace_span
 
 
 class ADBDevice(DeviceProtocol):
@@ -41,28 +42,55 @@ class ADBDevice(DeviceProtocol):
     # === Screenshot ===
     def get_screenshot(self, timeout: int = 10) -> Screenshot:
         """Capture current screen."""
-        result = adb.get_screenshot(self._device_id, timeout)
-        return Screenshot(
-            base64_data=result.base64_data,
-            width=result.width,
-            height=result.height,
-            is_sensitive=result.is_sensitive,
-        )
+        with trace_span(
+            "device.get_screenshot",
+            attrs={
+                "device_id": self._device_id,
+                "device_impl": "adb",
+                "timeout": timeout,
+            },
+        ) as span:
+            result = adb.get_screenshot(self._device_id, timeout)
+            span.set_attributes({"width": result.width, "height": result.height})
+            return Screenshot(
+                base64_data=result.base64_data,
+                width=result.width,
+                height=result.height,
+                is_sensitive=result.is_sensitive,
+            )
 
     # === Input Operations ===
     def tap(self, x: int, y: int, delay: float | None = None) -> None:
         """Tap at specified coordinates."""
-        adb.tap(x, y, self._device_id, delay)
+        with trace_span(
+            "device.tap",
+            attrs={"device_id": self._device_id, "device_impl": "adb", "x": x, "y": y},
+        ):
+            adb.tap(x, y, self._device_id, delay)
 
     def double_tap(self, x: int, y: int, delay: float | None = None) -> None:
         """Double tap at specified coordinates."""
-        adb.double_tap(x, y, self._device_id, delay)
+        with trace_span(
+            "device.double_tap",
+            attrs={"device_id": self._device_id, "device_impl": "adb", "x": x, "y": y},
+        ):
+            adb.double_tap(x, y, self._device_id, delay)
 
     def long_press(
         self, x: int, y: int, duration_ms: int = 3000, delay: float | None = None
     ) -> None:
         """Long press at specified coordinates."""
-        adb.long_press(x, y, duration_ms, self._device_id, delay)
+        with trace_span(
+            "device.long_press",
+            attrs={
+                "device_id": self._device_id,
+                "device_impl": "adb",
+                "x": x,
+                "y": y,
+                "duration_ms": duration_ms,
+            },
+        ):
+            adb.long_press(x, y, duration_ms, self._device_id, delay)
 
     def swipe(
         self,
@@ -74,42 +102,100 @@ class ADBDevice(DeviceProtocol):
         delay: float | None = None,
     ) -> None:
         """Swipe from start to end coordinates."""
-        adb.swipe(start_x, start_y, end_x, end_y, duration_ms, self._device_id, delay)
+        with trace_span(
+            "device.swipe",
+            attrs={
+                "device_id": self._device_id,
+                "device_impl": "adb",
+                "start_x": start_x,
+                "start_y": start_y,
+                "end_x": end_x,
+                "end_y": end_y,
+                "duration_ms": duration_ms,
+            },
+        ):
+            adb.swipe(
+                start_x, start_y, end_x, end_y, duration_ms, self._device_id, delay
+            )
 
     def type_text(self, text: str) -> None:
         """Type text into the currently focused input field."""
-        adb.type_text(text, self._device_id)
+        with trace_span(
+            "device.type_text",
+            attrs={
+                "device_id": self._device_id,
+                "device_impl": "adb",
+                "text_length": len(text),
+            },
+        ):
+            adb.type_text(text, self._device_id)
 
     def clear_text(self) -> None:
         """Clear text in the currently focused input field."""
-        adb.clear_text(self._device_id)
+        with trace_span(
+            "device.clear_text",
+            attrs={"device_id": self._device_id, "device_impl": "adb"},
+        ):
+            adb.clear_text(self._device_id)
 
     # === Navigation ===
     def back(self, delay: float | None = None) -> None:
         """Press the back button."""
-        adb.back(self._device_id, delay)
+        with trace_span(
+            "device.back",
+            attrs={"device_id": self._device_id, "device_impl": "adb"},
+        ):
+            adb.back(self._device_id, delay)
 
     def home(self, delay: float | None = None) -> None:
         """Press the home button."""
-        adb.home(self._device_id, delay)
+        with trace_span(
+            "device.home",
+            attrs={"device_id": self._device_id, "device_impl": "adb"},
+        ):
+            adb.home(self._device_id, delay)
 
     def launch_app(self, app_name: str, delay: float | None = None) -> bool:
         """Launch an app by name."""
-        return adb.launch_app(app_name, self._device_id, delay)
+        with trace_span(
+            "device.launch_app",
+            attrs={
+                "device_id": self._device_id,
+                "device_impl": "adb",
+                "app_name": app_name,
+            },
+        ) as span:
+            success = adb.launch_app(app_name, self._device_id, delay)
+            span.set_attribute("success", success)
+            return success
 
     # === State Query ===
     def get_current_app(self) -> str:
         """Get the currently focused app name."""
-        return adb.get_current_app(self._device_id)
+        with trace_span(
+            "device.get_current_app",
+            attrs={"device_id": self._device_id, "device_impl": "adb"},
+        ) as span:
+            current_app = adb.get_current_app(self._device_id)
+            span.set_attribute("current_app", current_app)
+            return current_app
 
     # === Keyboard Management ===
     def detect_and_set_adb_keyboard(self) -> str:
         """Detect current keyboard and switch to ADB Keyboard if needed."""
-        return adb.detect_and_set_adb_keyboard(self._device_id)
+        with trace_span(
+            "device.detect_and_set_adb_keyboard",
+            attrs={"device_id": self._device_id, "device_impl": "adb"},
+        ):
+            return adb.detect_and_set_adb_keyboard(self._device_id)
 
     def restore_keyboard(self, ime: str) -> None:
         """Restore the original keyboard IME."""
-        adb.restore_keyboard(ime, self._device_id)
+        with trace_span(
+            "device.restore_keyboard",
+            attrs={"device_id": self._device_id, "device_impl": "adb"},
+        ):
+            adb.restore_keyboard(ime, self._device_id)
 
 
 # Verify ADBDevice implements DeviceProtocol

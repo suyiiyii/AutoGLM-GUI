@@ -1,10 +1,11 @@
 """Action handler for executing phone operations."""
 
-import time
 from typing import Any
 from collections.abc import Callable
 
+from AutoGLM_GUI.adb.timing import TIMING_CONFIG
 from AutoGLM_GUI.device_protocol import DeviceProtocol
+from AutoGLM_GUI.trace import trace_sleep, trace_span
 
 from .types import ActionResult
 
@@ -24,42 +25,92 @@ class ActionHandler:
         self, action: dict[str, Any], screen_width: int, screen_height: int
     ) -> ActionResult:
         action_type = action.get("_metadata")
-
-        if action_type == "finish":
-            return ActionResult(
-                success=True, should_finish=True, message=action.get("message")
-            )
-
-        if action_type != "do":
-            return ActionResult(
-                success=False,
-                should_finish=True,
-                message=f"Unknown action type: {action_type}",
-            )
-
         action_name = action.get("action")
-        if not isinstance(action_name, str) or not action_name:
-            return ActionResult(
-                success=False,
-                should_finish=False,
-                message=f"Unknown action: {action_name}",
-            )
+        with trace_span(
+            "action.execute",
+            attrs={
+                "action_type": action_type,
+                "action_name": action_name,
+                "screen_width": screen_width,
+                "screen_height": screen_height,
+            },
+        ) as span:
+            if action_type == "finish":
+                result = ActionResult(
+                    success=True, should_finish=True, message=action.get("message")
+                )
+                span.set_attributes(
+                    {
+                        "success": result.success,
+                        "should_finish": result.should_finish,
+                    }
+                )
+                return result
 
-        handler_method = self._get_handler(action_name)
+            if action_type != "do":
+                result = ActionResult(
+                    success=False,
+                    should_finish=True,
+                    message=f"Unknown action type: {action_type}",
+                )
+                span.set_attributes(
+                    {
+                        "success": result.success,
+                        "should_finish": result.should_finish,
+                    }
+                )
+                return result
 
-        if handler_method is None:
-            return ActionResult(
-                success=False,
-                should_finish=False,
-                message=f"Unknown action: {action_name}",
-            )
+            if not isinstance(action_name, str) or not action_name:
+                result = ActionResult(
+                    success=False,
+                    should_finish=False,
+                    message=f"Unknown action: {action_name}",
+                )
+                span.set_attributes(
+                    {
+                        "success": result.success,
+                        "should_finish": result.should_finish,
+                    }
+                )
+                return result
 
-        try:
-            return handler_method(action, screen_width, screen_height)
-        except Exception as e:
-            return ActionResult(
-                success=False, should_finish=False, message=f"Action failed: {e}"
-            )
+            handler_method = self._get_handler(action_name)
+
+            if handler_method is None:
+                result = ActionResult(
+                    success=False,
+                    should_finish=False,
+                    message=f"Unknown action: {action_name}",
+                )
+                span.set_attributes(
+                    {
+                        "success": result.success,
+                        "should_finish": result.should_finish,
+                    }
+                )
+                return result
+
+            try:
+                result = handler_method(action, screen_width, screen_height)
+                span.set_attributes(
+                    {
+                        "success": result.success,
+                        "should_finish": result.should_finish,
+                    }
+                )
+                return result
+            except Exception as e:
+                result = ActionResult(
+                    success=False, should_finish=False, message=f"Action failed: {e}"
+                )
+                span.set_attributes(
+                    {
+                        "success": result.success,
+                        "should_finish": result.should_finish,
+                    }
+                )
+                return result
 
     def _get_handler(
         self, action_name: str
@@ -132,18 +183,33 @@ class ActionHandler:
         need_restore = self._ADB_IME not in original_ime
 
         if need_restore:
-            # Only wait for IME switch when we actually changed it
-            time.sleep(0.5)
+            trace_sleep(
+                TIMING_CONFIG.action.keyboard_switch_delay,
+                name="sleep.keyboard_switch",
+                attrs={"action_name": "Type"},
+            )
 
         self.device.clear_text()
-        time.sleep(0.3)
+        trace_sleep(
+            TIMING_CONFIG.action.text_clear_delay,
+            name="sleep.text_clear_delay",
+            attrs={"action_name": "Type"},
+        )
 
         self.device.type_text(text)
-        time.sleep(0.5)
+        trace_sleep(
+            TIMING_CONFIG.action.text_input_delay,
+            name="sleep.text_input_delay",
+            attrs={"action_name": "Type", "text_length": len(text)},
+        )
 
         if need_restore:
             self.device.restore_keyboard(original_ime)
-            time.sleep(0.3)
+            trace_sleep(
+                TIMING_CONFIG.action.keyboard_restore_delay,
+                name="sleep.keyboard_restore_delay",
+                attrs={"action_name": "Type"},
+            )
 
         return ActionResult(True, False)
 
@@ -208,7 +274,11 @@ class ActionHandler:
             duration = 1.0
 
         duration = min(duration, self.MAX_WAIT_SECONDS)
-        time.sleep(duration)
+        trace_sleep(
+            duration,
+            name="sleep.wait_action",
+            attrs={"action_name": "Wait"},
+        )
         return ActionResult(True, False)
 
     def _handle_takeover(

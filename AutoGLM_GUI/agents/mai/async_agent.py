@@ -24,6 +24,7 @@ from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.device_protocol import DeviceProtocol
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.model import MessageBuilder
+from AutoGLM_GUI.trace import trace_span
 
 from .parser import MAIParseError, MAIParser
 from .prompts import MAI_MOBILE_SYSTEM_PROMPT
@@ -78,8 +79,16 @@ class AsyncMAIAgent(AsyncAgentBase):
 
         # 1. 获取当前屏幕状态
         try:
-            screenshot = await asyncio.to_thread(self.device.get_screenshot)
-            current_app = await asyncio.to_thread(self.device.get_current_app)
+            with trace_span(
+                "step.capture_screenshot",
+                attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
+            ):
+                screenshot = await asyncio.to_thread(self.device.get_screenshot)
+            with trace_span(
+                "step.get_current_app",
+                attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
+            ):
+                current_app = await asyncio.to_thread(self.device.get_current_app)
         except Exception as e:
             logger.error(f"Failed to get device info: {e}")
             yield {"type": "error", "data": {"message": f"Device error: {e}"}}
@@ -96,16 +105,19 @@ class AsyncMAIAgent(AsyncAgentBase):
             }
             return
 
-        screenshot_bytes = base64.b64decode(screenshot.base64_data)
-        pil_image = Image.open(BytesIO(screenshot_bytes))
-        screen_info = MessageBuilder.build_screen_info(current_app)
+        with trace_span(
+            "step.build_message",
+            attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
+        ):
+            screenshot_bytes = base64.b64decode(screenshot.base64_data)
+            pil_image = Image.open(BytesIO(screenshot_bytes))
+            screen_info = MessageBuilder.build_screen_info(current_app)
 
-        # 2. 构建多图历史消息
-        messages = self._build_messages(
-            instruction=self.traj_memory.task_goal,
-            screen_info=screen_info,
-            current_screenshot_base64=screenshot.base64_data,
-        )
+            messages = self._build_messages(
+                instruction=self.traj_memory.task_goal,
+                screen_info=screen_info,
+                current_screenshot_base64=screenshot.base64_data,
+            )
 
         # 3. 带重试的 LLM 调用 + 解析
         max_retries = 3
@@ -122,25 +134,43 @@ class AsyncMAIAgent(AsyncAgentBase):
                 thinking_parts: list[str] = []
                 raw_content = ""
 
-                async for chunk_data in self._stream_openai(messages):
-                    if self._cancel_event.is_set():
-                        raise asyncio.CancelledError()
+                with trace_span(
+                    "step.llm",
+                    attrs={
+                        "step": self._step_count,
+                        "attempt": attempt + 1,
+                        "agent_type": self.__class__.__name__,
+                        "model_name": self.model_config.model_name,
+                        "message_count": len(messages),
+                    },
+                ):
+                    async for chunk_data in self._stream_openai(messages):
+                        if self._cancel_event.is_set():
+                            raise asyncio.CancelledError()
 
-                    if chunk_data["type"] == "thinking":
-                        thinking_parts.append(chunk_data["content"])
-                        yield {
-                            "type": "thinking",
-                            "data": {"chunk": chunk_data["content"]},
-                        }
-                    elif chunk_data["type"] == "raw":
-                        raw_content += chunk_data["content"]
+                        if chunk_data["type"] == "thinking":
+                            thinking_parts.append(chunk_data["content"])
+                            yield {
+                                "type": "thinking",
+                                "data": {"chunk": chunk_data["content"]},
+                            }
+                        elif chunk_data["type"] == "raw":
+                            raw_content += chunk_data["content"]
 
                 thinking = "".join(thinking_parts)
 
-                parsed = self.parser.parse_with_thinking(raw_content)
-                thinking = parsed["thinking"]
-                raw_action = parsed["raw_action"]
-                converted_action = parsed["converted_action"]
+                with trace_span(
+                    "step.parse_action",
+                    attrs={
+                        "step": self._step_count,
+                        "attempt": attempt + 1,
+                        "agent_type": self.__class__.__name__,
+                    },
+                ):
+                    parsed = self.parser.parse_with_thinking(raw_content)
+                    thinking = parsed["thinking"]
+                    raw_action = parsed["raw_action"]
+                    converted_action = parsed["converted_action"]
                 break
 
             except asyncio.CancelledError:
@@ -205,29 +235,42 @@ class AsyncMAIAgent(AsyncAgentBase):
             logger.debug(f"Step {self._step_count} action: {converted_action}")
 
         # 4. 记录轨迹
-        traj_step = TrajStep(
-            screenshot=pil_image,
-            accessibility_tree=None,
-            prediction=raw_content,
-            action=raw_action,
-            conclusion="",
-            thought=thinking,
-            step_index=self._step_count - 1,
-            agent_type="AsyncMAIAgent",
-            model_name=self.model_config.model_name,
-            screenshot_bytes=screenshot_bytes,
-            structured_action={"action_json": raw_action},
-        )
-        self.traj_memory.add_step(traj_step)
+        with trace_span(
+            "step.update_context",
+            attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
+        ):
+            traj_step = TrajStep(
+                screenshot=pil_image,
+                accessibility_tree=None,
+                prediction=raw_content,
+                action=raw_action,
+                conclusion="",
+                thought=thinking,
+                step_index=self._step_count - 1,
+                agent_type="AsyncMAIAgent",
+                model_name=self.model_config.model_name,
+                screenshot_bytes=screenshot_bytes,
+                structured_action={"action_json": raw_action},
+            )
+            self.traj_memory.add_step(traj_step)
 
         # 5. 执行动作
         try:
-            result = await asyncio.to_thread(
-                self.action_handler.execute,
-                converted_action,
-                screenshot.width,
-                screenshot.height,
-            )
+            with trace_span(
+                "step.execute_action",
+                attrs={
+                    "step": self._step_count,
+                    "agent_type": self.__class__.__name__,
+                    "action_name": converted_action.get("action"),
+                    "action_type": converted_action.get("_metadata"),
+                },
+            ):
+                result = await asyncio.to_thread(
+                    self.action_handler.execute,
+                    converted_action,
+                    screenshot.width,
+                    screenshot.height,
+                )
         except Exception as e:
             logger.error(f"Action execution error: {e}")
             if self.agent_config.verbose:

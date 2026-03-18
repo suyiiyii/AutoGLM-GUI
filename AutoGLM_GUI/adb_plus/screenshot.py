@@ -14,6 +14,7 @@ from io import BytesIO
 from PIL import Image
 
 from AutoGLM_GUI.exceptions import DeviceNotAvailableError
+from AutoGLM_GUI.trace import trace_span
 
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -50,30 +51,37 @@ def capture_screenshot(
     Raises:
         DeviceNotAvailableError: When device is not found or offline.
     """
-    attempts = max(1, retries + 1)
-    for _ in range(attempts):
-        # _try_capture may raise DeviceNotAvailableError, let it propagate
-        data = _try_capture(device_id=device_id, adb_path=adb_path, timeout=timeout)
-        if not data:
-            continue
+    with trace_span(
+        "adb.capture_screenshot",
+        attrs={"device_id": device_id, "timeout": timeout, "retries": retries},
+    ) as span:
+        attempts = max(1, retries + 1)
+        for attempt in range(attempts):
+            data = _try_capture(device_id=device_id, adb_path=adb_path, timeout=timeout)
+            if not data:
+                continue
 
-        # NOTE: Do NOT do CRLF normalization for binary PNG data from exec-out
-        # The PNG signature contains \r\n bytes that must be preserved
+            if not _is_valid_png(data):
+                continue
 
-        if not _is_valid_png(data):
-            continue
+            try:
+                img = Image.open(BytesIO(data))
+                width, height = img.size
+                base64_data = base64.b64encode(data).decode("utf-8")
+                span.set_attributes(
+                    {
+                        "success": True,
+                        "attempt": attempt + 1,
+                        "width": width,
+                        "height": height,
+                    }
+                )
+                return Screenshot(base64_data=base64_data, width=width, height=height)
+            except Exception:
+                continue
 
-        try:
-            img = Image.open(BytesIO(data))
-            width, height = img.size
-            # Use the raw PNG bytes directly instead of re-encoding through PIL
-            base64_data = base64.b64encode(data).decode("utf-8")
-            return Screenshot(base64_data=base64_data, width=width, height=height)
-        except Exception:
-            # Try next attempt
-            continue
-
-    return _fallback_screenshot()
+        span.set_attributes({"success": False, "fallback": True})
+        return _fallback_screenshot()
 
 
 def _try_capture(device_id: str | None, adb_path: str, timeout: int) -> bytes | None:
@@ -88,11 +96,15 @@ def _try_capture(device_id: str | None, adb_path: str, timeout: int) -> bytes | 
     cmd.extend(["exec-out", "screencap", "-p"])
 
     try:
-        result = subprocess.run(
-            cmd,
-            capture_output=True,
-            timeout=timeout,
-        )
+        with trace_span(
+            "adb.exec_out_screencap",
+            attrs={"device_id": device_id, "timeout": timeout},
+        ):
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                timeout=timeout,
+            )
         if result.returncode != 0:
             # Check for device not found or offline errors
             stderr = (

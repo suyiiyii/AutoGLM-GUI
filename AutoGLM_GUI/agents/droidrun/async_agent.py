@@ -56,11 +56,19 @@ class DroidRunAgent:
 
         # 延迟导入，未安装时给出友好提示
         try:
-            from droidrun.agent.codeact.events import CodeActResponseEvent
-            from droidrun.agent.droid.droid_agent import DroidAgent
-            from droidrun.agent.droid import events as droid_events
-            from droidrun.agent.utils.llm_picker import load_llm
-            from droidrun.config_manager.config_manager import (
+            from droidrun.agent.codeact.events import (  # pyright: ignore[reportMissingImports]
+                CodeActResponseEvent,
+            )
+            from droidrun.agent.droid.droid_agent import (  # pyright: ignore[reportMissingImports]
+                DroidAgent,
+            )
+            from droidrun.agent.droid import (  # pyright: ignore[reportMissingImports]
+                events as droid_events,
+            )
+            from droidrun.agent.utils.llm_picker import (  # pyright: ignore[reportMissingImports]
+                load_llm,
+            )
+            from droidrun.config_manager.config_manager import (  # pyright: ignore[reportMissingImports]
                 DeviceConfig,
                 DroidrunConfig,
             )

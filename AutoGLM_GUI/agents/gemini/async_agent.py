@@ -14,6 +14,7 @@ from AutoGLM_GUI.actions import ActionResult
 from AutoGLM_GUI.agents.base import AsyncAgentBase
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.model import MessageBuilder
+from AutoGLM_GUI.trace import trace_span
 
 from .action_mapper import tool_call_to_action
 from .prompts import get_system_prompt
@@ -43,8 +44,22 @@ class AsyncGeminiAgent(AsyncAgentBase):
         # 1. 获取截图（非首步）
         if self._step_count > 1:
             try:
-                screenshot = await asyncio.to_thread(self.device.get_screenshot)
-                current_app = await asyncio.to_thread(self.device.get_current_app)
+                with trace_span(
+                    "step.capture_screenshot",
+                    attrs={
+                        "step": self._step_count,
+                        "agent_type": self.__class__.__name__,
+                    },
+                ):
+                    screenshot = await asyncio.to_thread(self.device.get_screenshot)
+                with trace_span(
+                    "step.get_current_app",
+                    attrs={
+                        "step": self._step_count,
+                        "agent_type": self.__class__.__name__,
+                    },
+                ):
+                    current_app = await asyncio.to_thread(self.device.get_current_app)
             except Exception as e:
                 logger.error(f"Failed to get device info: {e}")
                 yield {"type": "error", "data": {"message": f"Device error: {e}"}}
@@ -61,16 +76,29 @@ class AsyncGeminiAgent(AsyncAgentBase):
                 }
                 return
 
-            self._context.append(
-                MessageBuilder.create_user_message(
-                    text=f"Current app: {current_app}",
-                    image_base64=screenshot.base64_data,
+            with trace_span(
+                "step.build_message",
+                attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
+            ):
+                self._context.append(
+                    MessageBuilder.create_user_message(
+                        text=f"Current app: {current_app}",
+                        image_base64=screenshot.base64_data,
+                    )
                 )
-            )
 
         # 2. 调用 LLM with tools
         try:
-            thinking, tool_name, tool_args = await self._call_llm_with_tools()
+            with trace_span(
+                "step.llm",
+                attrs={
+                    "step": self._step_count,
+                    "agent_type": self.__class__.__name__,
+                    "model_name": self.model_config.model_name,
+                    "message_count": len(self._context),
+                },
+            ):
+                thinking, tool_name, tool_args = await self._call_llm_with_tools()
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -95,7 +123,11 @@ class AsyncGeminiAgent(AsyncAgentBase):
             yield {"type": "thinking", "data": {"chunk": thinking}}
 
         # 3. 转换 tool call → action
-        action = tool_call_to_action(tool_name, tool_args)
+        with trace_span(
+            "step.parse_action",
+            attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
+        ):
+            action = tool_call_to_action(tool_name, tool_args)
 
         if self.agent_config.verbose:
             logger.debug(f"🎯 Tool call: {tool_name}({tool_args})")
@@ -104,48 +136,69 @@ class AsyncGeminiAgent(AsyncAgentBase):
         # 4. 执行 action
         screenshot = None
         try:
-            screenshot = await asyncio.to_thread(self.device.get_screenshot)
-            result = await asyncio.to_thread(
-                self.action_handler.execute,
-                action,
-                screenshot.width,
-                screenshot.height,
-            )
+            with trace_span(
+                "step.capture_screenshot",
+                attrs={
+                    "step": self._step_count,
+                    "agent_type": self.__class__.__name__,
+                    "purpose": "pre_action",
+                },
+            ):
+                screenshot = await asyncio.to_thread(self.device.get_screenshot)
+            with trace_span(
+                "step.execute_action",
+                attrs={
+                    "step": self._step_count,
+                    "agent_type": self.__class__.__name__,
+                    "action_name": action.get("action"),
+                    "action_type": action.get("_metadata"),
+                },
+            ):
+                result = await asyncio.to_thread(
+                    self.action_handler.execute,
+                    action,
+                    screenshot.width,
+                    screenshot.height,
+                )
         except Exception as e:
             logger.error(f"Action execution error: {e}")
             result = ActionResult(success=False, should_finish=True, message=str(e))
 
         # 5. 更新上下文
-        if len(self._context) > 1:
-            self._context[-1] = MessageBuilder.remove_images_from_message(
-                self._context[-1]
-            )
+        with trace_span(
+            "step.update_context",
+            attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
+        ):
+            if len(self._context) > 1:
+                self._context[-1] = MessageBuilder.remove_images_from_message(
+                    self._context[-1]
+                )
 
-        self._context.append(
-            {
-                "role": "assistant",
-                "content": thinking or "",
-                "tool_calls": [
-                    {
-                        "id": f"call_{self._step_count}",
-                        "type": "function",
-                        "function": {
-                            "name": tool_name,
-                            "arguments": json.dumps(tool_args),
-                        },
-                    }
-                ],
-            }
-        )
-        self._context.append(
-            {
-                "role": "tool",
-                "tool_call_id": f"call_{self._step_count}",
-                "content": json.dumps(
-                    {"success": result.success, "message": result.message or "OK"}
-                ),
-            }
-        )
+            self._context.append(
+                {
+                    "role": "assistant",
+                    "content": thinking or "",
+                    "tool_calls": [
+                        {
+                            "id": f"call_{self._step_count}",
+                            "type": "function",
+                            "function": {
+                                "name": tool_name,
+                                "arguments": json.dumps(tool_args),
+                            },
+                        }
+                    ],
+                }
+            )
+            self._context.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": f"call_{self._step_count}",
+                    "content": json.dumps(
+                        {"success": result.success, "message": result.message or "OK"}
+                    ),
+                }
+            )
 
         # 6. 检查完成
         finished = action.get("_metadata") == "finish" or result.should_finish

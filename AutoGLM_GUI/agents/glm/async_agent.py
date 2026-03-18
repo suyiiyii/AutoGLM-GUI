@@ -14,6 +14,7 @@ from AutoGLM_GUI.device_protocol import DeviceProtocol
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.model import MessageBuilder
 from AutoGLM_GUI.prompt_config import get_messages, get_system_prompt
+from AutoGLM_GUI.trace import trace_span
 
 from .parser import GLMParser
 
@@ -58,8 +59,16 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
 
         # 1. 获取当前屏幕状态
         try:
-            screenshot = await asyncio.to_thread(self.device.get_screenshot)
-            current_app = await asyncio.to_thread(self.device.get_current_app)
+            with trace_span(
+                "step.capture_screenshot",
+                attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
+            ):
+                screenshot = await asyncio.to_thread(self.device.get_screenshot)
+            with trace_span(
+                "step.get_current_app",
+                attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
+            ):
+                current_app = await asyncio.to_thread(self.device.get_current_app)
         except Exception as e:
             logger.error(f"Failed to get device info: {e}")
             yield {"type": "error", "data": {"message": f"Device error: {e}"}}
@@ -77,13 +86,17 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
             return
 
         # 2. 构建消息
-        screen_info = MessageBuilder.build_screen_info(current_app)
-        text_content = f"** Screen Info **\n\n{screen_info}"
-        self._context.append(
-            MessageBuilder.create_user_message(
-                text=text_content, image_base64=screenshot.base64_data
+        with trace_span(
+            "step.build_message",
+            attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
+        ):
+            screen_info = MessageBuilder.build_screen_info(current_app)
+            text_content = f"** Screen Info **\n\n{screen_info}"
+            self._context.append(
+                MessageBuilder.create_user_message(
+                    text=text_content, image_base64=screenshot.base64_data
+                )
             )
-        )
 
         # 3. 流式调用 OpenAI
         try:
@@ -94,21 +107,30 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
             thinking_parts = []
             raw_content = ""
 
-            async for chunk_data in self._stream_openai(self._context):
-                if self._cancel_event.is_set():
-                    raise asyncio.CancelledError()
+            with trace_span(
+                "step.llm",
+                attrs={
+                    "step": self._step_count,
+                    "agent_type": self.__class__.__name__,
+                    "model_name": self.model_config.model_name,
+                    "message_count": len(self._context),
+                },
+            ):
+                async for chunk_data in self._stream_openai(self._context):
+                    if self._cancel_event.is_set():
+                        raise asyncio.CancelledError()
 
-                if chunk_data["type"] == "thinking":
-                    thinking_parts.append(chunk_data["content"])
-                    yield {
-                        "type": "thinking",
-                        "data": {"chunk": chunk_data["content"]},
-                    }
-                    if self.agent_config.verbose:
-                        logger.debug(chunk_data["content"])
+                    if chunk_data["type"] == "thinking":
+                        thinking_parts.append(chunk_data["content"])
+                        yield {
+                            "type": "thinking",
+                            "data": {"chunk": chunk_data["content"]},
+                        }
+                        if self.agent_config.verbose:
+                            logger.debug(chunk_data["content"])
 
-                elif chunk_data["type"] == "raw":
-                    raw_content += chunk_data["content"]
+                    elif chunk_data["type"] == "raw":
+                        raw_content += chunk_data["content"]
 
             thinking = "".join(thinking_parts)
 
@@ -135,13 +157,17 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
             return
 
         # 4. 解析 action
-        _, action_str = self._parse_raw_response(raw_content)
-        try:
-            action = self.parser.parse(action_str)
-        except ValueError as e:
-            if self.agent_config.verbose:
-                logger.warning(f"Failed to parse action: {e}, treating as finish")
-            action = {"_metadata": "finish", "message": action_str}
+        with trace_span(
+            "step.parse_action",
+            attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
+        ):
+            _, action_str = self._parse_raw_response(raw_content)
+            try:
+                action = self.parser.parse(action_str)
+            except ValueError as e:
+                if self.agent_config.verbose:
+                    logger.warning(f"Failed to parse action: {e}, treating as finish")
+                action = {"_metadata": "finish", "message": action_str}
 
         if self.agent_config.verbose:
             msgs = get_messages(self.agent_config.lang)
@@ -150,12 +176,21 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
 
         # 5. 执行 action
         try:
-            result = await asyncio.to_thread(
-                self.action_handler.execute,
-                action,
-                screenshot.width,
-                screenshot.height,
-            )
+            with trace_span(
+                "step.execute_action",
+                attrs={
+                    "step": self._step_count,
+                    "agent_type": self.__class__.__name__,
+                    "action_name": action.get("action"),
+                    "action_type": action.get("_metadata"),
+                },
+            ):
+                result = await asyncio.to_thread(
+                    self.action_handler.execute,
+                    action,
+                    screenshot.width,
+                    screenshot.height,
+                )
         except Exception as e:
             logger.error(f"Action execution error: {e}")
             if self.agent_config.verbose:
@@ -165,12 +200,18 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
             result = ActionResult(success=False, should_finish=True, message=str(e))
 
         # 6. 更新上下文
-        self._context[-1] = MessageBuilder.remove_images_from_message(self._context[-1])
-        self._context.append(
-            MessageBuilder.create_assistant_message(
-                f"<think>{thinking}</think><answer>{action_str}</answer>"
+        with trace_span(
+            "step.update_context",
+            attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
+        ):
+            self._context[-1] = MessageBuilder.remove_images_from_message(
+                self._context[-1]
             )
-        )
+            self._context.append(
+                MessageBuilder.create_assistant_message(
+                    f"<think>{thinking}</think><answer>{action_str}</answer>"
+                )
+            )
 
         # 7. 检查完成
         finished = action.get("_metadata") == "finish" or result.should_finish

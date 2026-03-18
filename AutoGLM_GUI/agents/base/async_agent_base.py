@@ -20,6 +20,7 @@ from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.device_protocol import DeviceProtocol
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.model import MessageBuilder
+from AutoGLM_GUI.trace import summarize_text, trace_span
 
 
 class AsyncAgentBase(ABC):
@@ -103,63 +104,135 @@ class AsyncAgentBase(ABC):
         self._step_count = 0
         self._cancel_event.clear()
 
-        try:
-            # 初始化：获取首屏截图
+        with trace_span(
+            "agent.stream",
+            attrs={
+                "agent_type": self.__class__.__name__,
+                "device_id": self.device.device_id,
+                "model_name": self.model_config.model_name,
+                "max_steps": self.agent_config.max_steps,
+                "task_preview": summarize_text(task) or "",
+            },
+        ) as stream_span:
             try:
-                screenshot = await asyncio.to_thread(self.device.get_screenshot)
-                current_app = await asyncio.to_thread(self.device.get_current_app)
-            except Exception as e:
-                logger.error(f"Failed to get device info: {e}")
-                yield {"type": "error", "data": {"message": f"Device error: {e}"}}
+                try:
+                    with trace_span(
+                        "agent.prepare_initial_state",
+                        attrs={
+                            "agent_type": self.__class__.__name__,
+                            "device_id": self.device.device_id,
+                        },
+                    ):
+                        screenshot = await asyncio.to_thread(self.device.get_screenshot)
+                        current_app = await asyncio.to_thread(
+                            self.device.get_current_app
+                        )
+                except Exception as e:
+                    logger.error(f"Failed to get device info: {e}")
+                    stream_span.set_attributes(
+                        {"success": False, "error_kind": "initial_device_state"}
+                    )
+                    yield {"type": "error", "data": {"message": f"Device error: {e}"}}
+                    yield {
+                        "type": "done",
+                        "data": {
+                            "message": f"Device error: {e}",
+                            "steps": 0,
+                            "success": False,
+                        },
+                    }
+                    return
+
+                with trace_span(
+                    "agent.prepare_initial_context",
+                    attrs={"agent_type": self.__class__.__name__},
+                ):
+                    self._prepare_initial_context(
+                        task, screenshot.base64_data, current_app
+                    )
+
+                while (
+                    self._step_count < self.agent_config.max_steps and self._is_running
+                ):
+                    if self._cancel_event.is_set():
+                        raise asyncio.CancelledError()
+
+                    step_number = self._step_count + 1
+                    with trace_span(
+                        "agent.step",
+                        attrs={
+                            "agent_type": self.__class__.__name__,
+                            "step": step_number,
+                            "device_id": self.device.device_id,
+                        },
+                    ) as step_span:
+                        async for event in self._execute_step():
+                            if event["type"] == "step":
+                                step_span.set_attributes(
+                                    {
+                                        "success": event["data"].get("success"),
+                                        "finished": event["data"].get("finished"),
+                                        "action_name": (
+                                            event["data"].get("action") or {}
+                                        ).get("action"),
+                                    }
+                                )
+                            yield event
+
+                            if event["type"] == "step" and event["data"].get(
+                                "finished"
+                            ):
+                                success = event["data"].get("success", True)
+                                stream_span.set_attributes(
+                                    {
+                                        "success": success,
+                                        "steps": self._step_count,
+                                    }
+                                )
+                                yield {
+                                    "type": "done",
+                                    "data": {
+                                        "message": event["data"].get(
+                                            "message", "Task completed"
+                                        ),
+                                        "steps": self._step_count,
+                                        "success": success,
+                                    },
+                                }
+                                return
+
+                stream_span.set_attributes(
+                    {
+                        "success": False,
+                        "steps": self._step_count,
+                        "error_kind": "max_steps",
+                    }
+                )
                 yield {
                     "type": "done",
                     "data": {
-                        "message": f"Device error: {e}",
-                        "steps": 0,
+                        "message": "Max steps reached",
+                        "steps": self._step_count,
                         "success": False,
                     },
                 }
-                return
 
-            # 子类构建首条消息
-            self._prepare_initial_context(task, screenshot.base64_data, current_app)
+            except asyncio.CancelledError:
+                stream_span.set_attributes(
+                    {
+                        "success": False,
+                        "steps": self._step_count,
+                        "error_kind": "cancelled",
+                    }
+                )
+                yield {
+                    "type": "cancelled",
+                    "data": {"message": "Task cancelled by user"},
+                }
+                raise
 
-            # 执行循环
-            while self._step_count < self.agent_config.max_steps and self._is_running:
-                if self._cancel_event.is_set():
-                    raise asyncio.CancelledError()
-
-                async for event in self._execute_step():
-                    yield event
-
-                    if event["type"] == "step" and event["data"].get("finished"):
-                        yield {
-                            "type": "done",
-                            "data": {
-                                "message": event["data"].get(
-                                    "message", "Task completed"
-                                ),
-                                "steps": self._step_count,
-                                "success": event["data"].get("success", True),
-                            },
-                        }
-                        return
-
-            yield {
-                "type": "done",
-                "data": {
-                    "message": "Max steps reached",
-                    "steps": self._step_count,
-                    "success": False,
-                },
-            }
-
-        except asyncio.CancelledError:
-            yield {"type": "cancelled", "data": {"message": "Task cancelled by user"}}
-            raise
-
-        finally:
-            self._is_running = False
+            finally:
+                self._is_running = False
 
     async def cancel(self) -> None:
         """取消当前执行。"""

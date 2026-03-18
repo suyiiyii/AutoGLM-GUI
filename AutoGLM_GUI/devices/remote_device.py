@@ -15,6 +15,7 @@ from AutoGLM_GUI.device_protocol import (
     DeviceProtocol,
     Screenshot,
 )
+from AutoGLM_GUI.trace import trace_span
 
 
 class RemoteDevice(DeviceProtocol):
@@ -44,16 +45,34 @@ class RemoteDevice(DeviceProtocol):
     ) -> dict[str, Any]:
         """POST request helper."""
         url = f"{self._base_url}/device/{self._device_id}{endpoint}"
-        resp = self._client.post(url, json=json or {})
-        resp.raise_for_status()
-        return resp.json()
+        with trace_span(
+            "remote_device.post",
+            attrs={
+                "device_id": self._device_id,
+                "base_url": self._base_url,
+                "endpoint": endpoint,
+            },
+        ) as span:
+            resp = self._client.post(url, json=json or {})
+            span.set_attribute("status_code", resp.status_code)
+            resp.raise_for_status()
+            return resp.json()
 
     def _get(self, endpoint: str) -> dict[str, Any]:
         """GET request helper."""
         url = f"{self._base_url}/device/{self._device_id}{endpoint}"
-        resp = self._client.get(url)
-        resp.raise_for_status()
-        return resp.json()
+        with trace_span(
+            "remote_device.get",
+            attrs={
+                "device_id": self._device_id,
+                "base_url": self._base_url,
+                "endpoint": endpoint,
+            },
+        ) as span:
+            resp = self._client.get(url)
+            span.set_attribute("status_code", resp.status_code)
+            resp.raise_for_status()
+            return resp.json()
 
     def get_screenshot(self, timeout: int = 10) -> Screenshot:
         data = self._post("/screenshot", {"timeout": timeout})
