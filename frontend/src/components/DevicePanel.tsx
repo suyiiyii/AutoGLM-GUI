@@ -48,6 +48,7 @@ import {
   TooltipContent,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
+import { ImagePreview } from '@/components/ui/image-preview';
 
 interface ActionPayload {
   action?: string;
@@ -884,111 +885,112 @@ export function DevicePanel({
                             )}
 
                             {stepScreenshot && (
-                              <div className="mt-3 relative inline-block border border-slate-200 dark:border-slate-700 rounded overflow-hidden shadow-sm">
-                                <img
+                              <div className="mt-3">
+                                <ImagePreview
                                   src={`data:image/png;base64,${stepScreenshot}`}
                                   alt={`Step ${idx + 1}`}
-                                  className="max-h-[350px] w-auto block object-contain"
-                                />
-                                {stepAction &&
-                                  (() => {
-                                    const parsedAction =
-                                      stepAction as ActionPayload;
-                                    const actionName = parsedAction.action;
+                                  maxHeight="350px"
+                                >
+                                  {stepAction &&
+                                    (() => {
+                                      const parsedAction =
+                                        stepAction as ActionPayload;
+                                      const actionName = parsedAction.action;
 
-                                    if (
-                                      actionName &&
-                                      [
-                                        'Tap',
-                                        'Double Tap',
-                                        'Long Press',
-                                      ].includes(actionName)
-                                    ) {
-                                      const element = parsedAction.element;
                                       if (
-                                        Array.isArray(element) &&
-                                        element.length === 2
+                                        actionName &&
+                                        [
+                                          'Tap',
+                                          'Double Tap',
+                                          'Long Press',
+                                        ].includes(actionName)
                                       ) {
-                                        const left = `${(Math.max(0, Math.min(element[0], 1000)) / 1000) * 100}%`;
-                                        const top = `${(Math.max(0, Math.min(element[1], 1000)) / 1000) * 100}%`;
-                                        return (
-                                          <div
-                                            className="absolute w-8 h-8 rounded-full border-[3px] border-red-500 bg-red-500/20 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]"
-                                            style={{ left, top }}
-                                          />
-                                        );
-                                      }
-                                    }
-                                    if (actionName === 'Swipe') {
-                                      const start = parsedAction.start;
-                                      const end = parsedAction.end;
-                                      if (
-                                        Array.isArray(start) &&
-                                        start.length === 2 &&
-                                        Array.isArray(end) &&
-                                        end.length === 2
-                                      ) {
-                                        const x1 =
-                                          (Math.max(
-                                            0,
-                                            Math.min(start[0], 1000)
-                                          ) /
-                                            1000) *
-                                          100;
-                                        const y1 =
-                                          (Math.max(
-                                            0,
-                                            Math.min(start[1], 1000)
-                                          ) /
-                                            1000) *
-                                          100;
-                                        const x2 =
-                                          (Math.max(0, Math.min(end[0], 1000)) /
-                                            1000) *
-                                          100;
-                                        const y2 =
-                                          (Math.max(0, Math.min(end[1], 1000)) /
-                                            1000) *
-                                          100;
-                                        return (
-                                          <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
-                                            <defs>
-                                              <marker
-                                                id={`arrowhead-${idx}`}
-                                                markerWidth="6"
-                                                markerHeight="6"
-                                                refX="5"
-                                                refY="3"
-                                                orient="auto"
-                                              >
-                                                <polygon
-                                                  points="0,0 6,3 0,6"
-                                                  fill="rgba(239,68,68,0.9)"
-                                                />
-                                              </marker>
-                                            </defs>
-                                            <circle
-                                              cx={`${x1}%`}
-                                              cy={`${y1}%`}
-                                              r="4"
-                                              fill="rgba(239,68,68,0.9)"
+                                        const element = parsedAction.element;
+                                        if (
+                                          Array.isArray(element) &&
+                                          element.length === 2
+                                        ) {
+                                          const left = `${(Math.max(0, Math.min(element[0], 1000)) / 1000) * 100}%`;
+                                          const top = `${(Math.max(0, Math.min(element[1], 1000)) / 1000) * 100}%`;
+                                          return (
+                                            <div
+                                              className="absolute w-8 h-8 rounded-full border-[3px] border-red-500 bg-red-500/20 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]"
+                                              style={{ left, top }}
                                             />
-                                            <line
-                                              x1={`${x1}%`}
-                                              y1={`${y1}%`}
-                                              x2={`${x2}%`}
-                                              y2={`${y2}%`}
-                                              stroke="rgba(239,68,68,0.9)"
-                                              strokeWidth="3"
-                                              markerEnd={`url(#arrowhead-${idx})`}
-                                              strokeDasharray="5 3"
-                                            />
-                                          </svg>
-                                        );
+                                          );
+                                        }
                                       }
-                                    }
-                                    return null;
-                                  })()}
+                                      if (actionName === 'Swipe') {
+                                        const start = parsedAction.start;
+                                        const end = parsedAction.end;
+                                        if (
+                                          Array.isArray(start) &&
+                                          start.length === 2 &&
+                                          Array.isArray(end) &&
+                                          end.length === 2
+                                        ) {
+                                          const x1 =
+                                            (Math.max(
+                                              0,
+                                              Math.min(start[0], 1000)
+                                            ) /
+                                              1000) *
+                                            100;
+                                          const y1 =
+                                            (Math.max(
+                                              0,
+                                              Math.min(start[1], 1000)
+                                            ) /
+                                              1000) *
+                                            100;
+                                          const x2 =
+                                            (Math.max(0, Math.min(end[0], 1000)) /
+                                              1000) *
+                                            100;
+                                          const y2 =
+                                            (Math.max(0, Math.min(end[1], 1000)) /
+                                              1000) *
+                                            100;
+                                          return (
+                                            <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
+                                              <defs>
+                                                <marker
+                                                  id={`arrowhead-${idx}`}
+                                                  markerWidth="6"
+                                                  markerHeight="6"
+                                                  refX="5"
+                                                  refY="3"
+                                                  orient="auto"
+                                                >
+                                                  <polygon
+                                                    points="0,0 6,3 0,6"
+                                                    fill="rgba(239,68,68,0.9)"
+                                                  />
+                                                </marker>
+                                              </defs>
+                                              <circle
+                                                cx={`${x1}%`}
+                                                cy={`${y1}%`}
+                                                r="4"
+                                                fill="rgba(239,68,68,0.9)"
+                                              />
+                                              <line
+                                                x1={`${x1}%`}
+                                                y1={`${y1}%`}
+                                                x2={`${x2}%`}
+                                                y2={`${y2}%`}
+                                                stroke="rgba(239,68,68,0.9)"
+                                                strokeWidth="3"
+                                                markerEnd={`url(#arrowhead-${idx})`}
+                                                strokeDasharray="5 3"
+                                              />
+                                            </svg>
+                                          );
+                                        }
+                                      }
+                                      return null;
+                                    })()}
+                                </ImagePreview>
                               </div>
                             )}
 
