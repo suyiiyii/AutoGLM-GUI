@@ -688,6 +688,7 @@ async def layered_agent_chat(request: LayeredAgentRequest) -> StreamingResponse:
         finally:
             if request.device_id and final_output:
                 from AutoGLM_GUI.device_manager import DeviceManager
+                from AutoGLM_GUI.metrics import record_trace_latency_metrics
 
                 device_manager = DeviceManager.get_instance()
                 serialno = device_manager.get_serial_by_device_id(request.device_id)
@@ -699,6 +700,11 @@ async def layered_agent_chat(request: LayeredAgentRequest) -> StreamingResponse:
                     trace_summary_dict = get_trace_timing_summary(
                         trace_id=trace_id,
                         total_duration_ms=duration_ms,
+                    )
+                    record_trace_latency_metrics(
+                        source="layered",
+                        trace_summary=trace_summary_dict,
+                        step_summaries=[],
                     )
                     record = ConversationRecord(
                         task_text=request.message,

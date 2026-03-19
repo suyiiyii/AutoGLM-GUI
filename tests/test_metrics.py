@@ -80,6 +80,62 @@ def test_metrics_no_errors(client):
     )
 
 
+def test_metrics_capture_trace_latency_histograms():
+    """Test that trace latency summaries are exported as Prometheus histograms."""
+    from AutoGLM_GUI.metrics import (
+        get_metrics_registry,
+        record_trace_latency_metrics,
+        reset_trace_latency_metrics,
+    )
+    from prometheus_client import generate_latest
+
+    reset_trace_latency_metrics()
+
+    try:
+        record_trace_latency_metrics(
+            source="chat",
+            trace_summary={
+                "trace_id": "trace-1",
+                "steps": 2,
+                "total_duration_ms": 4200.0,
+            },
+            step_summaries=[
+                {
+                    "step": 1,
+                    "trace_id": "trace-1",
+                    "total_duration_ms": 1800.0,
+                    "llm_duration_ms": 1200.0,
+                    "screenshot_duration_ms": 200.0,
+                    "current_app_duration_ms": 50.0,
+                    "execute_action_duration_ms": 150.0,
+                    "adb_duration_ms": 120.0,
+                    "sleep_duration_ms": 80.0,
+                },
+                {
+                    "step": 2,
+                    "trace_id": "trace-1",
+                    "total_duration_ms": 1600.0,
+                    "llm_duration_ms": 900.0,
+                    "execute_action_duration_ms": 250.0,
+                    "sleep_duration_ms": 100.0,
+                },
+            ],
+        )
+
+        registry = get_metrics_registry()
+        output = generate_latest(registry).decode("utf-8")
+
+        assert "autoglm_trace_task_duration_seconds_bucket" in output
+        assert 'autoglm_trace_task_duration_seconds_count{source="chat"} 1.0' in output
+        assert "autoglm_trace_step_duration_seconds_bucket" in output
+        assert 'autoglm_trace_step_duration_seconds_count{source="chat"} 2.0' in output
+        assert "autoglm_trace_component_duration_seconds_bucket" in output
+        assert 'component="llm"' in output
+        assert 'component="sleep"' in output
+    finally:
+        reset_trace_latency_metrics()
+
+
 def test_metrics_capture_failed_agents():
     """Test that failed agent initialization is captured in metrics."""
     from AutoGLM_GUI.phone_agent_manager import (

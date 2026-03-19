@@ -3,9 +3,15 @@
 from __future__ import annotations
 
 import sys
+import threading
+from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
 
-from prometheus_client.core import CollectorRegistry, GaugeMetricFamily
+from prometheus_client.core import (
+    CollectorRegistry,
+    GaugeMetricFamily,
+    HistogramMetricFamily,
+)
 from prometheus_client.registry import Collector
 
 if TYPE_CHECKING:
@@ -13,6 +19,161 @@ if TYPE_CHECKING:
 
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.version import APP_VERSION
+
+
+_TASK_DURATION_BUCKETS = (0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0, 120.0)
+_STEP_DURATION_BUCKETS = (0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0)
+_COMPONENT_DURATION_BUCKETS = (
+    0.01,
+    0.05,
+    0.1,
+    0.25,
+    0.5,
+    1.0,
+    2.0,
+    5.0,
+    10.0,
+    30.0,
+)
+_TRACE_COMPONENT_FIELDS = {
+    "screenshot": "screenshot_duration_ms",
+    "current_app": "current_app_duration_ms",
+    "llm": "llm_duration_ms",
+    "parse_action": "parse_action_duration_ms",
+    "execute_action": "execute_action_duration_ms",
+    "update_context": "update_context_duration_ms",
+    "adb": "adb_duration_ms",
+    "sleep": "sleep_duration_ms",
+    "other": "other_duration_ms",
+}
+
+
+@dataclass
+class _HistogramAggregate:
+    bucket_bounds: tuple[float, ...]
+    bucket_counts: list[int] = field(init=False)
+    count: int = 0
+    sum_value: float = 0.0
+
+    def __post_init__(self) -> None:
+        self.bucket_counts = [0 for _ in self.bucket_bounds]
+
+    def observe(self, value: float) -> None:
+        safe_value = max(value, 0.0)
+        self.count += 1
+        self.sum_value += safe_value
+
+        for index, upper_bound in enumerate(self.bucket_bounds):
+            if safe_value <= upper_bound:
+                self.bucket_counts[index] += 1
+                return
+
+    def to_prometheus_buckets(self) -> list[tuple[str, float]]:
+        cumulative = 0.0
+        buckets: list[tuple[str, float]] = []
+        for upper_bound, bucket_count in zip(self.bucket_bounds, self.bucket_counts):
+            cumulative += bucket_count
+            buckets.append((str(upper_bound), cumulative))
+
+        buckets.append(("+Inf", float(self.count)))
+        return buckets
+
+
+class _TraceLatencyStore:
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+        self._task_histograms: dict[tuple[str], _HistogramAggregate] = {}
+        self._step_histograms: dict[tuple[str], _HistogramAggregate] = {}
+        self._component_histograms: dict[tuple[str, str], _HistogramAggregate] = {}
+
+    def record_trace_metrics(
+        self,
+        *,
+        source: str,
+        trace_summary: dict[str, object] | None,
+        step_summaries: list[dict[str, object]],
+    ) -> None:
+        with self._lock:
+            if trace_summary is not None:
+                total_duration_seconds = (
+                    _coerce_to_float(trace_summary.get("total_duration_ms")) / 1000.0
+                )
+                if total_duration_seconds > 0:
+                    self._get_task_histogram((source,)).observe(total_duration_seconds)
+
+            for step_summary in step_summaries:
+                step_duration_seconds = (
+                    _coerce_to_float(step_summary.get("total_duration_ms")) / 1000.0
+                )
+                if step_duration_seconds > 0:
+                    self._get_step_histogram((source,)).observe(step_duration_seconds)
+
+                for component, field_name in _TRACE_COMPONENT_FIELDS.items():
+                    component_duration_seconds = (
+                        _coerce_to_float(step_summary.get(field_name)) / 1000.0
+                    )
+                    if component_duration_seconds <= 0:
+                        continue
+                    self._get_component_histogram((source, component)).observe(
+                        component_duration_seconds
+                    )
+
+    def reset(self) -> None:
+        with self._lock:
+            self._task_histograms.clear()
+            self._step_histograms.clear()
+            self._component_histograms.clear()
+
+    def snapshot(
+        self,
+    ) -> tuple[
+        dict[tuple[str], _HistogramAggregate],
+        dict[tuple[str], _HistogramAggregate],
+        dict[tuple[str, str], _HistogramAggregate],
+    ]:
+        with self._lock:
+            return (
+                dict(self._task_histograms),
+                dict(self._step_histograms),
+                dict(self._component_histograms),
+            )
+
+    def _get_task_histogram(self, key: tuple[str]) -> _HistogramAggregate:
+        histogram = self._task_histograms.get(key)
+        if histogram is None:
+            histogram = _HistogramAggregate(_TASK_DURATION_BUCKETS)
+            self._task_histograms[key] = histogram
+        return histogram
+
+    def _get_step_histogram(self, key: tuple[str]) -> _HistogramAggregate:
+        histogram = self._step_histograms.get(key)
+        if histogram is None:
+            histogram = _HistogramAggregate(_STEP_DURATION_BUCKETS)
+            self._step_histograms[key] = histogram
+        return histogram
+
+    def _get_component_histogram(self, key: tuple[str, str]) -> _HistogramAggregate:
+        histogram = self._component_histograms.get(key)
+        if histogram is None:
+            histogram = _HistogramAggregate(_COMPONENT_DURATION_BUCKETS)
+            self._component_histograms[key] = histogram
+        return histogram
+
+
+_trace_latency_store = _TraceLatencyStore()
+
+
+def _coerce_to_float(value: object) -> float:
+    if isinstance(value, bool):
+        return float(int(value))
+    if isinstance(value, (int, float)):
+        return float(value)
+    if isinstance(value, str):
+        try:
+            return float(value)
+        except ValueError:
+            return 0.0
+    return 0.0
 
 
 class AutoGLMMetricsCollector(Collector):
@@ -45,6 +206,9 @@ class AutoGLMMetricsCollector(Collector):
 
             # Device metrics
             metrics.extend(self._collect_device_metrics())
+
+            # Trace latency metrics
+            metrics.extend(self._collect_trace_latency_metrics())
 
             # Build info
             metrics.append(self._collect_build_info())
@@ -252,6 +416,54 @@ class AutoGLMMetricsCollector(Collector):
 
         return build_info
 
+    def _collect_trace_latency_metrics(self) -> list[Metric]:
+        """Collect aggregated trace latency metrics."""
+        metrics = []
+        task_snapshot, step_snapshot, component_snapshot = (
+            _trace_latency_store.snapshot()
+        )
+
+        task_histogram = HistogramMetricFamily(
+            "autoglm_trace_task_duration_seconds",
+            "Task execution duration aggregated from trace summaries",
+            labels=["source"],
+        )
+        for labels, histogram in task_snapshot.items():
+            task_histogram.add_metric(
+                labels,
+                histogram.to_prometheus_buckets(),
+                histogram.sum_value,
+            )
+        metrics.append(task_histogram)
+
+        step_histogram = HistogramMetricFamily(
+            "autoglm_trace_step_duration_seconds",
+            "Per-step execution duration aggregated from trace summaries",
+            labels=["source"],
+        )
+        for labels, histogram in step_snapshot.items():
+            step_histogram.add_metric(
+                labels,
+                histogram.to_prometheus_buckets(),
+                histogram.sum_value,
+            )
+        metrics.append(step_histogram)
+
+        component_histogram = HistogramMetricFamily(
+            "autoglm_trace_component_duration_seconds",
+            "Trace component duration aggregated from per-step summaries",
+            labels=["source", "component"],
+        )
+        for labels, histogram in component_snapshot.items():
+            component_histogram.add_metric(
+                labels,
+                histogram.to_prometheus_buckets(),
+                histogram.sum_value,
+            )
+        metrics.append(component_histogram)
+
+        return metrics
+
 
 # Global collector instance (registered once)
 _collector_registry: CollectorRegistry | None = None
@@ -274,3 +486,22 @@ def get_metrics_registry() -> CollectorRegistry:
         logger.info("Prometheus metrics collector registered")
 
     return _collector_registry
+
+
+def record_trace_latency_metrics(
+    *,
+    source: str,
+    trace_summary: dict[str, object] | None,
+    step_summaries: list[dict[str, object]],
+) -> None:
+    """Record aggregated trace timings for Prometheus export."""
+    _trace_latency_store.record_trace_metrics(
+        source=source,
+        trace_summary=trace_summary,
+        step_summaries=step_summaries,
+    )
+
+
+def reset_trace_latency_metrics() -> None:
+    """Reset in-memory trace latency metrics. Used by tests."""
+    _trace_latency_store.reset()

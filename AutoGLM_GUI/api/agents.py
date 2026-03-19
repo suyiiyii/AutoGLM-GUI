@@ -153,6 +153,7 @@ async def chat_stream(request: ChatRequest):
     from AutoGLM_GUI.device_manager import DeviceManager
     from AutoGLM_GUI.exceptions import AgentInitializationError, DeviceBusyError
     from AutoGLM_GUI.history_manager import history_manager
+    from AutoGLM_GUI.metrics import record_trace_latency_metrics
     from AutoGLM_GUI.models.history import (
         ConversationRecord,
         MessageRecord,
@@ -372,6 +373,11 @@ async def chat_stream(request: ChatRequest):
                     trace_id=trace_id,
                     total_duration_ms=duration_ms,
                     steps=final_steps,
+                )
+                record_trace_latency_metrics(
+                    source="chat",
+                    trace_summary=trace_summary_dict,
+                    step_summaries=[item.to_dict() for item in step_timings],
                 )
                 record = ConversationRecord(
                     task_text=request.message,
