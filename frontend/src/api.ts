@@ -92,6 +92,36 @@ export interface ThinkingEvent {
   chunk: string;
 }
 
+export interface StepTimingSummary {
+  step: number;
+  trace_id: string;
+  total_duration_ms: number;
+  screenshot_duration_ms: number;
+  current_app_duration_ms: number;
+  llm_duration_ms: number;
+  parse_action_duration_ms: number;
+  execute_action_duration_ms: number;
+  update_context_duration_ms: number;
+  adb_duration_ms: number;
+  sleep_duration_ms: number;
+  other_duration_ms: number;
+}
+
+export interface TraceTimingSummary {
+  trace_id: string;
+  steps: number;
+  total_duration_ms: number;
+  screenshot_duration_ms: number;
+  current_app_duration_ms: number;
+  llm_duration_ms: number;
+  parse_action_duration_ms: number;
+  execute_action_duration_ms: number;
+  update_context_duration_ms: number;
+  adb_duration_ms: number;
+  sleep_duration_ms: number;
+  other_duration_ms: number;
+}
+
 export interface StepEvent {
   type: 'step';
   role: 'assistant';
@@ -101,6 +131,7 @@ export interface StepEvent {
   success: boolean;
   finished: boolean;
   screenshot?: string;
+  timings?: StepTimingSummary;
 }
 
 export interface DoneEvent {
@@ -845,6 +876,9 @@ export interface HistoryRecordResponse {
   source: 'chat' | 'layered' | 'scheduled';
   source_detail: string;
   error_message: string | null;
+  trace_id?: string | null;
+  step_timings: StepTimingSummary[];
+  trace_summary?: TraceTimingSummary | null;
   messages: MessageRecordResponse[];
 }
 

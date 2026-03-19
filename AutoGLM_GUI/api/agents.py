@@ -19,13 +19,22 @@ from AutoGLM_GUI.schemas import (
     ResetRequest,
     StatusResponse,
 )
-from AutoGLM_GUI.trace import create_trace_id, summarize_text, trace_context, trace_span
+from AutoGLM_GUI.trace import (
+    clear_trace_data,
+    create_trace_id,
+    get_step_timing_summary,
+    get_trace_timing_summary,
+    list_step_timing_summaries,
+    summarize_text,
+    trace_context,
+    trace_span,
+)
 from AutoGLM_GUI.version import APP_VERSION
 
 router = APIRouter()
 
 
-SSEPayload = dict[str, str | int | bool | None | dict[str, Any]]
+SSEPayload = dict[str, Any]
 
 
 def _build_chat_trace_attrs(
@@ -144,7 +153,12 @@ async def chat_stream(request: ChatRequest):
     from AutoGLM_GUI.device_manager import DeviceManager
     from AutoGLM_GUI.exceptions import AgentInitializationError, DeviceBusyError
     from AutoGLM_GUI.history_manager import history_manager
-    from AutoGLM_GUI.models.history import ConversationRecord, MessageRecord
+    from AutoGLM_GUI.models.history import (
+        ConversationRecord,
+        MessageRecord,
+        StepTimingRecord,
+        TraceSummaryRecord,
+    )
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
     device_id = request.device_id
@@ -255,6 +269,18 @@ async def chat_stream(request: ChatRequest):
                             event_data_dict = event["data"]
 
                             if event_type == "step":
+                                step_number = event_data_dict.get("step")
+                                if isinstance(step_number, int):
+                                    step_timing = get_step_timing_summary(
+                                        step_number,
+                                        trace_id=trace_id,
+                                    )
+                                    if step_timing is not None:
+                                        event_data_dict = {
+                                            **event_data_dict,
+                                            "timings": step_timing,
+                                        }
+
                                 messages.append(
                                     MessageRecord(
                                         role="assistant",
@@ -332,23 +358,41 @@ async def chat_stream(request: ChatRequest):
                             )
 
         # ===== 保存历史记录 =====
-        device_manager = DeviceManager.get_instance()
-        serialno = device_manager.get_serial_by_device_id(device_id)
-        if serialno and final_message:
-            end_time = datetime.now()
-            record = ConversationRecord(
-                task_text=request.message,
-                final_message=final_message,
-                success=final_success,
-                steps=final_steps,
-                start_time=start_time,
-                end_time=end_time,
-                duration_ms=int((end_time - start_time).total_seconds() * 1000),
-                source="chat",
-                error_message=None if final_success else final_message,
-                messages=messages,
-            )
-            history_manager.add_record(serialno, record)
+        try:
+            device_manager = DeviceManager.get_instance()
+            serialno = device_manager.get_serial_by_device_id(device_id)
+            if serialno and final_message:
+                end_time = datetime.now()
+                duration_ms = int((end_time - start_time).total_seconds() * 1000)
+                step_timings = [
+                    StepTimingRecord.from_dict(item)
+                    for item in list_step_timing_summaries(trace_id=trace_id)
+                ]
+                trace_summary_dict = get_trace_timing_summary(
+                    trace_id=trace_id,
+                    total_duration_ms=duration_ms,
+                    steps=final_steps,
+                )
+                record = ConversationRecord(
+                    task_text=request.message,
+                    final_message=final_message,
+                    success=final_success,
+                    steps=final_steps,
+                    start_time=start_time,
+                    end_time=end_time,
+                    duration_ms=duration_ms,
+                    source="chat",
+                    error_message=None if final_success else final_message,
+                    trace_id=trace_id,
+                    step_timings=step_timings,
+                    trace_summary=TraceSummaryRecord.from_dict(trace_summary_dict)
+                    if trace_summary_dict
+                    else None,
+                    messages=messages,
+                )
+                history_manager.add_record(serialno, record)
+        finally:
+            clear_trace_data(trace_id)
 
     return StreamingResponse(
         event_generator(),

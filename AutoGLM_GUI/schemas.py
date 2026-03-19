@@ -710,6 +710,40 @@ class MessageRecordResponse(BaseModel):
     step: int | None = None
 
 
+class StepTimingSummaryResponse(BaseModel):
+    """Step-level timing summary response."""
+
+    step: int
+    trace_id: str
+    total_duration_ms: float
+    screenshot_duration_ms: float
+    current_app_duration_ms: float
+    llm_duration_ms: float
+    parse_action_duration_ms: float
+    execute_action_duration_ms: float
+    update_context_duration_ms: float
+    adb_duration_ms: float
+    sleep_duration_ms: float
+    other_duration_ms: float
+
+
+class TraceSummaryResponse(BaseModel):
+    """Task-level timing summary response."""
+
+    trace_id: str
+    steps: int
+    total_duration_ms: float
+    screenshot_duration_ms: float
+    current_app_duration_ms: float
+    llm_duration_ms: float
+    parse_action_duration_ms: float
+    execute_action_duration_ms: float
+    update_context_duration_ms: float
+    adb_duration_ms: float
+    sleep_duration_ms: float
+    other_duration_ms: float
+
+
 class HistoryRecordResponse(BaseModel):
     """历史记录条目响应."""
 
@@ -724,6 +758,9 @@ class HistoryRecordResponse(BaseModel):
     source: str
     source_detail: str
     error_message: str | None
+    trace_id: str | None = None
+    step_timings: list[StepTimingSummaryResponse] = []
+    trace_summary: TraceSummaryResponse | None = None
     messages: list[MessageRecordResponse] = []
 
 

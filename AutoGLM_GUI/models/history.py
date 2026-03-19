@@ -48,6 +48,120 @@ class MessageRecord:
 
 
 @dataclass
+class StepTimingRecord:
+    """Step-level timing summary derived from trace spans."""
+
+    step: int
+    trace_id: str
+    total_duration_ms: float = 0.0
+    screenshot_duration_ms: float = 0.0
+    current_app_duration_ms: float = 0.0
+    llm_duration_ms: float = 0.0
+    parse_action_duration_ms: float = 0.0
+    execute_action_duration_ms: float = 0.0
+    update_context_duration_ms: float = 0.0
+    adb_duration_ms: float = 0.0
+    sleep_duration_ms: float = 0.0
+    other_duration_ms: float = 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to a serializable dictionary."""
+        return {
+            "step": self.step,
+            "trace_id": self.trace_id,
+            "total_duration_ms": self.total_duration_ms,
+            "screenshot_duration_ms": self.screenshot_duration_ms,
+            "current_app_duration_ms": self.current_app_duration_ms,
+            "llm_duration_ms": self.llm_duration_ms,
+            "parse_action_duration_ms": self.parse_action_duration_ms,
+            "execute_action_duration_ms": self.execute_action_duration_ms,
+            "update_context_duration_ms": self.update_context_duration_ms,
+            "adb_duration_ms": self.adb_duration_ms,
+            "sleep_duration_ms": self.sleep_duration_ms,
+            "other_duration_ms": self.other_duration_ms,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> StepTimingRecord:
+        """Create an instance from a dictionary."""
+        return cls(
+            step=int(data.get("step", 0)),
+            trace_id=str(data.get("trace_id", "")),
+            total_duration_ms=float(data.get("total_duration_ms", 0.0)),
+            screenshot_duration_ms=float(data.get("screenshot_duration_ms", 0.0)),
+            current_app_duration_ms=float(data.get("current_app_duration_ms", 0.0)),
+            llm_duration_ms=float(data.get("llm_duration_ms", 0.0)),
+            parse_action_duration_ms=float(data.get("parse_action_duration_ms", 0.0)),
+            execute_action_duration_ms=float(
+                data.get("execute_action_duration_ms", 0.0)
+            ),
+            update_context_duration_ms=float(
+                data.get("update_context_duration_ms", 0.0)
+            ),
+            adb_duration_ms=float(data.get("adb_duration_ms", 0.0)),
+            sleep_duration_ms=float(data.get("sleep_duration_ms", 0.0)),
+            other_duration_ms=float(data.get("other_duration_ms", 0.0)),
+        )
+
+
+@dataclass
+class TraceSummaryRecord:
+    """Task-level timing summary derived from trace spans."""
+
+    trace_id: str
+    steps: int = 0
+    total_duration_ms: float = 0.0
+    screenshot_duration_ms: float = 0.0
+    current_app_duration_ms: float = 0.0
+    llm_duration_ms: float = 0.0
+    parse_action_duration_ms: float = 0.0
+    execute_action_duration_ms: float = 0.0
+    update_context_duration_ms: float = 0.0
+    adb_duration_ms: float = 0.0
+    sleep_duration_ms: float = 0.0
+    other_duration_ms: float = 0.0
+
+    def to_dict(self) -> dict[str, Any]:
+        """Convert to a serializable dictionary."""
+        return {
+            "trace_id": self.trace_id,
+            "steps": self.steps,
+            "total_duration_ms": self.total_duration_ms,
+            "screenshot_duration_ms": self.screenshot_duration_ms,
+            "current_app_duration_ms": self.current_app_duration_ms,
+            "llm_duration_ms": self.llm_duration_ms,
+            "parse_action_duration_ms": self.parse_action_duration_ms,
+            "execute_action_duration_ms": self.execute_action_duration_ms,
+            "update_context_duration_ms": self.update_context_duration_ms,
+            "adb_duration_ms": self.adb_duration_ms,
+            "sleep_duration_ms": self.sleep_duration_ms,
+            "other_duration_ms": self.other_duration_ms,
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> TraceSummaryRecord:
+        """Create an instance from a dictionary."""
+        return cls(
+            trace_id=str(data.get("trace_id", "")),
+            steps=int(data.get("steps", 0)),
+            total_duration_ms=float(data.get("total_duration_ms", 0.0)),
+            screenshot_duration_ms=float(data.get("screenshot_duration_ms", 0.0)),
+            current_app_duration_ms=float(data.get("current_app_duration_ms", 0.0)),
+            llm_duration_ms=float(data.get("llm_duration_ms", 0.0)),
+            parse_action_duration_ms=float(data.get("parse_action_duration_ms", 0.0)),
+            execute_action_duration_ms=float(
+                data.get("execute_action_duration_ms", 0.0)
+            ),
+            update_context_duration_ms=float(
+                data.get("update_context_duration_ms", 0.0)
+            ),
+            adb_duration_ms=float(data.get("adb_duration_ms", 0.0)),
+            sleep_duration_ms=float(data.get("sleep_duration_ms", 0.0)),
+            other_duration_ms=float(data.get("other_duration_ms", 0.0)),
+        )
+
+
+@dataclass
 class ConversationRecord:
     """单条对话记录."""
 
@@ -71,6 +185,11 @@ class ConversationRecord:
     # 错误信息
     error_message: str | None = None
 
+    # Trace 信息
+    trace_id: str | None = None
+    step_timings: list[StepTimingRecord] = field(default_factory=list)
+    trace_summary: TraceSummaryRecord | None = None
+
     # 完整对话消息列表
     messages: list[MessageRecord] = field(default_factory=list)
 
@@ -88,6 +207,11 @@ class ConversationRecord:
             "source": self.source,
             "source_detail": self.source_detail,
             "error_message": self.error_message,
+            "trace_id": self.trace_id,
+            "step_timings": [timing.to_dict() for timing in self.step_timings],
+            "trace_summary": (
+                self.trace_summary.to_dict() if self.trace_summary else None
+            ),
             "messages": [m.to_dict() for m in self.messages],
         }
 
@@ -110,6 +234,14 @@ class ConversationRecord:
             source=data.get("source", "chat"),
             source_detail=data.get("source_detail", ""),
             error_message=data.get("error_message"),
+            trace_id=data.get("trace_id"),
+            step_timings=[
+                StepTimingRecord.from_dict(item)
+                for item in data.get("step_timings", [])
+            ],
+            trace_summary=TraceSummaryRecord.from_dict(data["trace_summary"])
+            if data.get("trace_summary")
+            else None,
             messages=[MessageRecord.from_dict(m) for m in data.get("messages", [])],
         )
 

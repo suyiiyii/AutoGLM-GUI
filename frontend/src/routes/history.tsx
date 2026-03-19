@@ -7,6 +7,7 @@ import {
   getDevices,
   type HistoryRecordResponse,
   type Device,
+  type StepTimingSummary,
 } from '../api';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
@@ -236,6 +237,51 @@ function HistoryComponent() {
       default:
         return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
     }
+  };
+
+  const getStepTiming = (
+    record: HistoryRecordResponse,
+    step: number
+  ): StepTimingSummary | undefined =>
+    record.step_timings.find(item => item.step === step);
+
+  const getTimingChips = (
+    timings: StepTimingSummary
+  ): Array<{ label: string; value: string }> => {
+    const chips = [
+      { label: 'Total', value: formatDuration(timings.total_duration_ms) },
+      { label: 'LLM', value: formatDuration(timings.llm_duration_ms) },
+    ];
+
+    if (timings.screenshot_duration_ms > 0) {
+      chips.push({
+        label: 'Shot',
+        value: formatDuration(timings.screenshot_duration_ms),
+      });
+    }
+
+    if (timings.current_app_duration_ms > 0) {
+      chips.push({
+        label: 'App',
+        value: formatDuration(timings.current_app_duration_ms),
+      });
+    }
+
+    if (timings.execute_action_duration_ms > 0) {
+      chips.push({
+        label: 'Action',
+        value: formatDuration(timings.execute_action_duration_ms),
+      });
+    }
+
+    if (timings.sleep_duration_ms > 0) {
+      chips.push({
+        label: 'Sleep',
+        value: formatDuration(timings.sleep_duration_ms),
+      });
+    }
+
+    return chips;
   };
 
   return (
@@ -500,22 +546,47 @@ function HistoryComponent() {
                             <div className="flex-1 space-y-2">
                               {/* Step header */}
                               {msg.step !== null && msg.step !== undefined && (
-                                <button
-                                  className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                                  onClick={() =>
-                                    toggleStepExpanded(msg.step as number)
-                                  }
-                                >
-                                  {expandedSteps.has(msg.step) ? (
-                                    <ChevronDown className="w-3 h-3" />
-                                  ) : (
-                                    <ChevronRight className="w-3 h-3" />
-                                  )}
-                                  {t.historyPage.stepLabel?.replace(
-                                    '{step}',
-                                    String(msg.step)
-                                  ) || `步骤 ${msg.step}`}
-                                </button>
+                                <div className="space-y-2">
+                                  <button
+                                    className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
+                                    onClick={() =>
+                                      toggleStepExpanded(msg.step as number)
+                                    }
+                                  >
+                                    {expandedSteps.has(msg.step) ? (
+                                      <ChevronDown className="w-3 h-3" />
+                                    ) : (
+                                      <ChevronRight className="w-3 h-3" />
+                                    )}
+                                    {t.historyPage.stepLabel?.replace(
+                                      '{step}',
+                                      String(msg.step)
+                                    ) || `步骤 ${msg.step}`}
+                                  </button>
+
+                                  {expandedSteps.has(msg.step) &&
+                                    getStepTiming(
+                                      selectedRecord,
+                                      msg.step as number
+                                    ) && (
+                                      <div className="flex flex-wrap gap-2">
+                                        {getTimingChips(
+                                          getStepTiming(
+                                            selectedRecord,
+                                            msg.step as number
+                                          ) as StepTimingSummary
+                                        ).map(chip => (
+                                          <Badge
+                                            key={`${msg.step}-${chip.label}`}
+                                            variant="secondary"
+                                            className="font-mono text-[11px]"
+                                          >
+                                            {chip.label} {chip.value}
+                                          </Badge>
+                                        ))}
+                                      </div>
+                                    )}
+                                </div>
                               )}
 
                               {/* Thinking */}

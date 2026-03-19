@@ -9,7 +9,12 @@ from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
 import AutoGLM_GUI.api.history as history_api
-from AutoGLM_GUI.models.history import ConversationRecord, MessageRecord
+from AutoGLM_GUI.models.history import (
+    ConversationRecord,
+    MessageRecord,
+    StepTimingRecord,
+    TraceSummaryRecord,
+)
 
 pytestmark = [pytest.mark.contract, pytest.mark.release_gate]
 
@@ -27,6 +32,25 @@ class FakeHistoryManager:
             duration_ms=2000,
             source="chat",
             source_detail="",
+            trace_id="trace-1",
+            step_timings=[
+                StepTimingRecord(
+                    step=1,
+                    trace_id="trace-1",
+                    total_duration_ms=1200.0,
+                    llm_duration_ms=800.0,
+                    execute_action_duration_ms=200.0,
+                    sleep_duration_ms=50.0,
+                )
+            ],
+            trace_summary=TraceSummaryRecord(
+                trace_id="trace-1",
+                steps=2,
+                total_duration_ms=2000.0,
+                llm_duration_ms=1200.0,
+                execute_action_duration_ms=300.0,
+                sleep_duration_ms=80.0,
+            ),
             messages=[
                 MessageRecord(
                     role="user",
@@ -123,6 +147,8 @@ def test_list_history_returns_paginated_data(client: TestClient) -> None:
     assert data["offset"] == 0
     assert len(data["records"]) == 1
     assert data["records"][0]["id"] == "rec-1"
+    assert data["records"][0]["trace_id"] == "trace-1"
+    assert data["records"][0]["step_timings"][0]["llm_duration_ms"] == 800.0
 
 
 def test_list_history_validates_limit_and_offset(client: TestClient) -> None:
@@ -143,6 +169,7 @@ def test_get_history_record_success(client: TestClient) -> None:
     assert data["id"] == "rec-1"
     assert data["messages"][1]["thinking"] == "先点底部按钮"
     assert data["messages"][1]["action"] == {"action": "Tap", "element": [100, 200]}
+    assert data["trace_summary"]["trace_id"] == "trace-1"
 
 
 def test_get_history_record_not_found(client: TestClient) -> None:

@@ -16,6 +16,7 @@ import type {
   CancelledEvent,
   ThinkingEvent,
   StepEvent,
+  StepTimingSummary,
   DoneEvent,
   ErrorEvent,
   Workflow,
@@ -66,6 +67,7 @@ interface Message {
   thinking?: string[];
   actions?: Record<string, unknown>[];
   screenshots?: (string | undefined)[];
+  stepTimings?: (StepTimingSummary | undefined)[];
   isStreaming?: boolean;
   currentThinking?: string; // Current thinking text being streamed
 }
@@ -106,6 +108,56 @@ function getStepSummary(thinking: string | undefined, action: unknown): string {
   }
 
   return 'Action executed';
+}
+
+function formatDuration(ms: number): string {
+  if (ms < 1000) {
+    return `${Math.round(ms)}ms`;
+  }
+  return `${(ms / 1000).toFixed(1)}s`;
+}
+
+function getTimingChips(
+  timings: StepTimingSummary | undefined
+): Array<{ label: string; value: string }> {
+  if (!timings) {
+    return [];
+  }
+
+  const chips = [
+    { label: 'Total', value: formatDuration(timings.total_duration_ms) },
+    { label: 'LLM', value: formatDuration(timings.llm_duration_ms) },
+  ];
+
+  if (timings.screenshot_duration_ms > 0) {
+    chips.push({
+      label: 'Shot',
+      value: formatDuration(timings.screenshot_duration_ms),
+    });
+  }
+
+  if (timings.current_app_duration_ms > 0) {
+    chips.push({
+      label: 'App',
+      value: formatDuration(timings.current_app_duration_ms),
+    });
+  }
+
+  if (timings.execute_action_duration_ms > 0) {
+    chips.push({
+      label: 'Action',
+      value: formatDuration(timings.execute_action_duration_ms),
+    });
+  }
+
+  if (timings.sleep_duration_ms > 0) {
+    chips.push({
+      label: 'Sleep',
+      value: formatDuration(timings.sleep_duration_ms),
+    });
+  }
+
+  return chips;
 }
 
 export function DevicePanel({
@@ -239,6 +291,7 @@ export function DevicePanel({
       thinking: thinkingList,
       actions: actionsList,
       screenshots: screenshotsList,
+      stepTimings: record.step_timings,
       isStreaming: false,
     };
     newMessages.push(agentMessage);
@@ -307,6 +360,7 @@ export function DevicePanel({
     const thinkingList: string[] = [];
     const actionsList: Record<string, unknown>[] = [];
     const screenshotsList: (string | undefined)[] = [];
+    const stepTimingsList: (StepTimingSummary | undefined)[] = [];
     let currentThinkingText = '';
     // Use a ref to batch updates and reduce render frequency
     const thinkingChunksBuffer: string[] = [];
@@ -321,6 +375,7 @@ export function DevicePanel({
       thinking: [],
       actions: [],
       screenshots: [],
+      stepTimings: [],
       isStreaming: true,
       currentThinking: '',
     };
@@ -377,6 +432,7 @@ export function DevicePanel({
         currentThinkingText = '';
         actionsList.push(event.action);
         screenshotsList.push(event.screenshot);
+        stepTimingsList.push(event.timings);
 
         setMessages(prev =>
           prev.map(msg =>
@@ -386,6 +442,7 @@ export function DevicePanel({
                   thinking: [...thinkingList],
                   actions: [...actionsList],
                   screenshots: [...screenshotsList],
+                  stepTimings: [...stepTimingsList],
                   steps: event.step,
                   currentThinking: '',
                 }
@@ -408,6 +465,7 @@ export function DevicePanel({
           thinking: [...thinkingList],
           actions: [...actionsList],
           screenshots: [...screenshotsList],
+          stepTimings: [...stepTimingsList],
           timestamp: new Date(),
           currentThinking: undefined,
         };
@@ -435,6 +493,7 @@ export function DevicePanel({
           thinking: [...thinkingList],
           actions: [...actionsList],
           screenshots: [...screenshotsList],
+          stepTimings: [...stepTimingsList],
           timestamp: new Date(),
           currentThinking: undefined,
         };
@@ -463,6 +522,7 @@ export function DevicePanel({
           thinking: [...thinkingList],
           actions: [...actionsList],
           screenshots: [...screenshotsList],
+          stepTimings: [...stepTimingsList],
           timestamp: new Date(),
           currentThinking: undefined,
         };
@@ -786,6 +846,7 @@ export function DevicePanel({
                         const stepThinking = message.thinking?.[idx];
                         const stepAction = message.actions?.[idx];
                         const stepScreenshot = message.screenshots?.[idx];
+                        const stepTimings = message.stepTimings?.[idx];
                         const stepSummary = getStepSummary(
                           stepThinking,
                           stepAction
@@ -807,6 +868,20 @@ export function DevicePanel({
                             <p className="text-sm whitespace-pre-wrap text-slate-700 dark:text-slate-300">
                               {stepSummary}
                             </p>
+
+                            {stepTimings && (
+                              <div className="mt-3 flex flex-wrap gap-2">
+                                {getTimingChips(stepTimings).map(chip => (
+                                  <Badge
+                                    key={`${idx}-${chip.label}`}
+                                    variant="secondary"
+                                    className="font-mono text-[11px]"
+                                  >
+                                    {chip.label} {chip.value}
+                                  </Badge>
+                                ))}
+                              </div>
+                            )}
 
                             {stepScreenshot && (
                               <div className="mt-3 relative inline-block border border-slate-200 dark:border-slate-700 rounded overflow-hidden shadow-sm">

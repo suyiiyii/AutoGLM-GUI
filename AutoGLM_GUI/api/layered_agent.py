@@ -22,7 +22,14 @@ from pydantic import BaseModel
 
 from AutoGLM_GUI.config_manager import config_manager
 from AutoGLM_GUI.logger import logger
-from AutoGLM_GUI.trace import create_trace_id, summarize_text, trace_context, trace_span
+from AutoGLM_GUI.trace import (
+    clear_trace_data,
+    create_trace_id,
+    get_trace_timing_summary,
+    summarize_text,
+    trace_context,
+    trace_span,
+)
 
 router = APIRouter()
 
@@ -685,7 +692,14 @@ async def layered_agent_chat(request: LayeredAgentRequest) -> StreamingResponse:
                 device_manager = DeviceManager.get_instance()
                 serialno = device_manager.get_serial_by_device_id(request.device_id)
                 if serialno:
+                    from AutoGLM_GUI.models.history import TraceSummaryRecord
+
                     end_time = datetime.now()
+                    duration_ms = int((end_time - start_time).total_seconds() * 1000)
+                    trace_summary_dict = get_trace_timing_summary(
+                        trace_id=trace_id,
+                        total_duration_ms=duration_ms,
+                    )
                     record = ConversationRecord(
                         task_text=request.message,
                         final_message=final_output,
@@ -693,12 +707,17 @@ async def layered_agent_chat(request: LayeredAgentRequest) -> StreamingResponse:
                         steps=0,
                         start_time=start_time,
                         end_time=end_time,
-                        duration_ms=int((end_time - start_time).total_seconds() * 1000),
+                        duration_ms=duration_ms,
                         source="layered",
                         source_detail=request.session_id or "",
                         error_message=None if final_success else final_output,
+                        trace_id=trace_id,
+                        trace_summary=TraceSummaryRecord.from_dict(trace_summary_dict)
+                        if trace_summary_dict
+                        else None,
                     )
                     history_manager.add_record(serialno, record)
+            clear_trace_data(trace_id)
 
     async def traced_event_generator() -> AsyncGenerator[str, None]:
         with trace_context(trace_id):

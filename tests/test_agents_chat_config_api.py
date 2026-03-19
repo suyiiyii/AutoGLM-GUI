@@ -9,10 +9,10 @@ import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
 
+import AutoGLM_GUI.api.agents as agents_api
 import AutoGLM_GUI.config_manager as config_manager_module
 import AutoGLM_GUI.device_manager as device_manager_module
 import AutoGLM_GUI.phone_agent_manager as phone_agent_manager_module
-from AutoGLM_GUI.api.agents import router as agents_router
 from AutoGLM_GUI.exceptions import AgentInitializationError, DeviceBusyError
 
 pytestmark = [pytest.mark.contract, pytest.mark.release_gate]
@@ -173,7 +173,7 @@ def env(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     )
 
     app = FastAPI()
-    app.include_router(agents_router)
+    app.include_router(agents_api.router)
 
     return {
         "client": TestClient(app),
@@ -270,7 +270,27 @@ def test_chat_stream_returns_500_on_initialization_error(env: dict[str, Any]) ->
     assert "初始化失败" in response.json()["detail"]
 
 
-def test_chat_stream_emits_sse_events(env: dict[str, Any]) -> None:
+def test_chat_stream_emits_sse_events(
+    env: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(
+        agents_api,
+        "get_step_timing_summary",
+        lambda step, **kwargs: {
+            "step": step,
+            "trace_id": "trace-1",
+            "total_duration_ms": 1234.0,
+            "screenshot_duration_ms": 100.0,
+            "current_app_duration_ms": 50.0,
+            "llm_duration_ms": 800.0,
+            "parse_action_duration_ms": 20.0,
+            "execute_action_duration_ms": 200.0,
+            "update_context_duration_ms": 10.0,
+            "adb_duration_ms": 40.0,
+            "sleep_duration_ms": 30.0,
+            "other_duration_ms": 24.0,
+        },
+    )
     env["phone_manager"].agent.stream_events = [
         {
             "type": "step",
@@ -297,6 +317,7 @@ def test_chat_stream_emits_sse_events(env: dict[str, Any]) -> None:
     body = response.text
     assert "event: step" in body
     assert '"type": "step"' in body
+    assert '"timings": {' in body
     assert "event: done" in body
     assert '"message": "finished"' in body
 
