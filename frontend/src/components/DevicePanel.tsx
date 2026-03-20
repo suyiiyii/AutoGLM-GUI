@@ -944,11 +944,17 @@ export function DevicePanel({
                                               1000) *
                                             100;
                                           const x2 =
-                                            (Math.max(0, Math.min(end[0], 1000)) /
+                                            (Math.max(
+                                              0,
+                                              Math.min(end[0], 1000)
+                                            ) /
                                               1000) *
                                             100;
                                           const y2 =
-                                            (Math.max(0, Math.min(end[1], 1000)) /
+                                            (Math.max(
+                                              0,
+                                              Math.min(end[1], 1000)
+                                            ) /
                                               1000) *
                                             100;
                                           return (
