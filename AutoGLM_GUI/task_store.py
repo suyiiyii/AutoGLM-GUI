@@ -671,8 +671,18 @@ class TaskStore:
         with self._lock:
             assert self._conn is not None
             cursor = self._conn.execute(
-                "DELETE FROM task_runs WHERE device_serial = ?",
-                (device_serial,),
+                """
+                DELETE FROM task_runs
+                WHERE device_serial = ?
+                  AND status IN (?, ?, ?, ?)
+                """,
+                (
+                    device_serial,
+                    TaskStatus.SUCCEEDED.value,
+                    TaskStatus.FAILED.value,
+                    TaskStatus.CANCELLED.value,
+                    TaskStatus.INTERRUPTED.value,
+                ),
             )
             self._conn.commit()
             return cursor.rowcount

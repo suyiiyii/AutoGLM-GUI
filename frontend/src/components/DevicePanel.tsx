@@ -79,6 +79,60 @@ function isTaskActive(status: TaskStatus): boolean {
   return status === 'QUEUED' || status === 'RUNNING';
 }
 
+function applyTaskEventToTask(
+  task: TaskRunResponse,
+  event: TaskEventRecordResponse
+): TaskRunResponse {
+  const nextTask = { ...task };
+  const payload = event.payload;
+
+  if (event.event_type === 'status') {
+    if (typeof payload.status === 'string') {
+      nextTask.status = payload.status as TaskStatus;
+      if (!isTaskActive(nextTask.status) && !nextTask.finished_at) {
+        nextTask.finished_at = event.created_at;
+      }
+    }
+  } else if (event.event_type === 'done') {
+    nextTask.status = 'SUCCEEDED';
+    nextTask.final_message =
+      typeof payload.message === 'string' ? payload.message : null;
+    nextTask.error_message = null;
+    nextTask.finished_at = event.created_at;
+    if (typeof payload.steps === 'number') {
+      nextTask.step_count = payload.steps;
+    }
+  } else if (event.event_type === 'error') {
+    nextTask.status = 'FAILED';
+    nextTask.final_message =
+      typeof payload.message === 'string' ? payload.message : null;
+    nextTask.error_message =
+      typeof payload.message === 'string' ? payload.message : null;
+    nextTask.finished_at = event.created_at;
+  } else if (event.event_type === 'cancelled') {
+    nextTask.status = 'CANCELLED';
+    nextTask.final_message =
+      typeof payload.message === 'string' ? payload.message : null;
+    nextTask.error_message =
+      typeof payload.message === 'string' ? payload.message : null;
+    nextTask.finished_at = event.created_at;
+  } else if (event.event_type === 'step' && typeof payload.step === 'number') {
+    nextTask.step_count = Math.max(nextTask.step_count, payload.step);
+  }
+
+  return nextTask;
+}
+
+function reconcileTaskRun(
+  task: TaskRunResponse,
+  events: TaskEventRecordResponse[]
+): TaskRunResponse {
+  return events.reduce(
+    (currentTask, event) => applyTaskEventToTask(currentTask, event),
+    { ...task }
+  );
+}
+
 function buildAssistantMessage(
   task: TaskRunResponse,
   events: TaskEventRecordResponse[]
@@ -510,44 +564,7 @@ export function DevicePanel({
         event,
       ];
 
-      const nextTask = { ...currentTask };
-      const payload = event.payload;
-      if (event.event_type === 'status') {
-        if (typeof payload.status === 'string') {
-          nextTask.status = payload.status as TaskStatus;
-          if (!isTaskActive(nextTask.status) && !nextTask.finished_at) {
-            nextTask.finished_at = event.created_at;
-          }
-        }
-      } else if (event.event_type === 'done') {
-        nextTask.status = 'SUCCEEDED';
-        nextTask.final_message =
-          typeof payload.message === 'string' ? payload.message : null;
-        nextTask.error_message = null;
-        nextTask.finished_at = event.created_at;
-        if (typeof payload.steps === 'number') {
-          nextTask.step_count = payload.steps;
-        }
-      } else if (event.event_type === 'error') {
-        nextTask.status = 'FAILED';
-        nextTask.final_message =
-          typeof payload.message === 'string' ? payload.message : null;
-        nextTask.error_message =
-          typeof payload.message === 'string' ? payload.message : null;
-        nextTask.finished_at = event.created_at;
-      } else if (event.event_type === 'cancelled') {
-        nextTask.status = 'CANCELLED';
-        nextTask.final_message =
-          typeof payload.message === 'string' ? payload.message : null;
-        nextTask.error_message =
-          typeof payload.message === 'string' ? payload.message : null;
-        nextTask.finished_at = event.created_at;
-      } else if (
-        event.event_type === 'step' &&
-        typeof payload.step === 'number'
-      ) {
-        nextTask.step_count = Math.max(nextTask.step_count, payload.step);
-      }
+      const nextTask = applyTaskEventToTask(currentTask, event);
 
       taskRunsRef.current[taskId] = nextTask;
       replaceTaskMessages(taskId);
@@ -591,9 +608,6 @@ export function DevicePanel({
     async (targetSessionId: string) => {
       const taskList = await listTaskSessionTasks(targetSessionId, 100, 0);
       const tasks = [...taskList.tasks].reverse();
-      taskRunsRef.current = Object.fromEntries(
-        tasks.map(task => [task.id, task])
-      );
 
       const eventPairs = await Promise.all(
         tasks.map(
@@ -602,13 +616,19 @@ export function DevicePanel({
         )
       );
       taskEventsRef.current = Object.fromEntries(eventPairs);
+      const reconciledTasks = tasks.map(task =>
+        reconcileTaskRun(task, taskEventsRef.current[task.id] || [])
+      );
+      taskRunsRef.current = Object.fromEntries(
+        reconciledTasks.map(task => [task.id, task])
+      );
       setMessages(
-        tasks.flatMap(task =>
+        reconciledTasks.flatMap(task =>
           buildMessagePair(task, taskEventsRef.current[task.id] || [])
         )
       );
 
-      const activeTask = [...tasks]
+      const activeTask = [...reconciledTasks]
         .reverse()
         .find(task => isTaskActive(task.status));
       if (activeTask) {
@@ -688,15 +708,23 @@ export function DevicePanel({
       setLoading(true);
       const task = await submitTaskSessionTask(sessionId, inputValue);
       const initialEvents = (await listTaskEvents(task.id)).events;
+      const reconciledTask = reconcileTaskRun(task, initialEvents);
 
-      taskRunsRef.current[task.id] = task;
+      taskRunsRef.current[task.id] = reconciledTask;
       taskEventsRef.current[task.id] = initialEvents;
-      currentTaskIdRef.current = task.id;
+      currentTaskIdRef.current = isTaskActive(reconciledTask.status)
+        ? task.id
+        : null;
       replaceTaskMessages(task.id);
       setInput('');
 
-      const lastSeq = initialEvents[initialEvents.length - 1]?.seq || 0;
-      attachTaskStream(task.id, lastSeq);
+      if (isTaskActive(reconciledTask.status)) {
+        const lastSeq = initialEvents[initialEvents.length - 1]?.seq || 0;
+        attachTaskStream(task.id, lastSeq);
+      } else {
+        setLoading(false);
+        setAborting(false);
+      }
     } catch (sendError) {
       console.error('Failed to submit task:', sendError);
       setLoading(false);

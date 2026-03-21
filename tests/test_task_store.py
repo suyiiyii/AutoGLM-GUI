@@ -112,3 +112,44 @@ def test_task_store_aggregates_latest_schedule_batch(tmp_path: Path) -> None:
     assert summary["last_run_status"] == "partial"
     assert summary["last_run_success_count"] == 1
     assert summary["last_run_total_count"] == 2
+
+
+def test_clear_device_history_keeps_active_tasks(tmp_path: Path) -> None:
+    store = TaskStore(tmp_path / "tasks.db")
+
+    queued = store.create_task_run(
+        source="chat",
+        executor_key="classic_chat",
+        device_id="device-1",
+        device_serial="serial-1",
+        input_text="排队中",
+    )
+    running = store.create_task_run(
+        source="chat",
+        executor_key="classic_chat",
+        device_id="device-1",
+        device_serial="serial-1",
+        input_text="执行中",
+        status=TaskStatus.RUNNING.value,
+    )
+    finished = store.create_task_run(
+        source="chat",
+        executor_key="classic_chat",
+        device_id="device-1",
+        device_serial="serial-1",
+        input_text="已完成",
+    )
+    store.update_task_terminal(
+        task_id=finished["id"],
+        status=TaskStatus.SUCCEEDED.value,
+        final_message="完成",
+        error_message=None,
+        step_count=1,
+    )
+
+    deleted_count = store.clear_device_history("serial-1")
+
+    assert deleted_count == 1
+    assert store.get_task(queued["id"]) is not None
+    assert store.get_task(running["id"]) is not None
+    assert store.get_task(finished["id"]) is None

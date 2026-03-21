@@ -392,6 +392,7 @@ class SchedulerManager:
 
         from AutoGLM_GUI.device_manager import DeviceManager
         from AutoGLM_GUI.task_manager import task_manager
+        from AutoGLM_GUI.task_store import TaskStatus, task_store
         from AutoGLM_GUI.workflow_manager import workflow_manager
 
         workflow = workflow_manager.get_workflow(task.workflow_uuid)
@@ -429,6 +430,32 @@ class SchedulerManager:
         for serialno in device_serialnos:
             device = online_devices.get(serialno)
             if device is None:
+                message = "Device offline"
+                failed_task = await asyncio.to_thread(
+                    task_store.create_task_run,
+                    source="scheduled",
+                    executor_key="scheduled_workflow",
+                    scheduled_task_id=task.id,
+                    workflow_uuid=task.workflow_uuid,
+                    schedule_fire_id=schedule_fire_id,
+                    device_id=serialno,
+                    device_serial=serialno,
+                    input_text=workflow["text"],
+                )
+                await asyncio.to_thread(
+                    task_store.append_event,
+                    task_id=failed_task["id"],
+                    event_type="error",
+                    payload={"message": message},
+                )
+                await asyncio.to_thread(
+                    task_store.update_task_terminal,
+                    task_id=failed_task["id"],
+                    status=TaskStatus.FAILED.value,
+                    final_message=message,
+                    error_message=message,
+                    step_count=0,
+                )
                 logger.warning(
                     f"Scheduled task {task.name} skipped offline device {serialno}"
                 )
