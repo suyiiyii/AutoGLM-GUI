@@ -8,7 +8,7 @@ import threading
 from datetime import datetime
 from enum import StrEnum
 from pathlib import Path
-from typing import Any
+from typing import Any, TypedDict
 from uuid import uuid4
 
 
@@ -38,9 +38,51 @@ TERMINAL_TASK_STATUSES = {
 }
 
 
-TaskRecord = dict[str, Any]
-TaskEventRecord = dict[str, Any]
-TaskSessionRecord = dict[str, Any]
+class TaskSessionRecord(TypedDict):
+    """Task session record from task_sessions table."""
+
+    id: str
+    kind: str
+    mode: str
+    device_id: str
+    device_serial: str
+    status: str
+    created_at: str
+    updated_at: str
+
+
+class TaskRecord(TypedDict):
+    """Task run record from task_runs table."""
+
+    id: str
+    source: str
+    executor_key: str
+    session_id: str | None
+    scheduled_task_id: str | None
+    workflow_uuid: str | None
+    schedule_fire_id: str | None
+    device_id: str
+    device_serial: str
+    status: str
+    input_text: str
+    final_message: str | None
+    error_message: str | None
+    step_count: int
+    created_at: str
+    started_at: str | None
+    finished_at: str | None
+
+
+class TaskEventRecord(TypedDict):
+    """Task event record from task_events table."""
+
+    id: int
+    task_id: str
+    seq: int
+    event_type: str
+    role: str
+    payload: dict[str, Any]
+    created_at: str
 
 
 class TaskStore:
