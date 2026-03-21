@@ -115,6 +115,7 @@ async def _stream_packets(sid: str, streamer: ScrcpyStreamer) -> None:
         try:
             await sio.emit("error", {"message": str(exc)}, to=sid)
         except Exception:
+            # Expected: client may have disconnected before we could send error
             pass
     finally:
         await _stop_stream_for_sid(sid)

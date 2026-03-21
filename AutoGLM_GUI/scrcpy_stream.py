@@ -419,6 +419,7 @@ class ScrcpyStreamer:
                 try:
                     sock.close()
                 except Exception:
+                    # Expected: socket may already be closed or invalid
                     pass
 
                 if attempt < max_attempts - 1:
@@ -551,6 +552,7 @@ class ScrcpyStreamer:
             try:
                 self.tcp_socket.close()
             except Exception:
+                # Expected: socket may already be closed by remote or never opened
                 pass
             self.tcp_socket = None
 
@@ -563,6 +565,7 @@ class ScrcpyStreamer:
                 try:
                     self.scrcpy_process.kill()
                 except Exception:
+                    # Expected: process may already be dead
                     pass
             self.scrcpy_process = None
 
@@ -579,6 +582,7 @@ class ScrcpyStreamer:
                     timeout=2,
                 )
             except Exception:
+                # Expected: port forward may already be removed or adb unavailable
                 pass
             self.forward_cleanup_needed = False
 

@@ -532,6 +532,8 @@ async def layered_agent_chat(request: LayeredAgentRequest) -> StreamingResponse:
                                             else args_str
                                         )
                                     except Exception:
+                                        # Expected: malformed JSON in tool arguments
+                                        # Fall back to raw string representation
                                         tool_args = {"raw": str(args_str)}
                                 else:
                                     func = getattr(raw, "function", None)

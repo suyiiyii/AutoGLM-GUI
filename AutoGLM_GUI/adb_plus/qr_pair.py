@@ -65,6 +65,8 @@ def _pick_host_from_info(info: ServiceInfo) -> str | None:
         if addrs:
             return addrs[0]
     except Exception:
+        # Expected: parsing may fail for malformed service info
+        # Fall through to hostname fallback below
         pass
 
     # Fallback to mDNS hostname (.local.)

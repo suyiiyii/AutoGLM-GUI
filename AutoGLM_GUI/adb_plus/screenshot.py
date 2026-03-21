@@ -78,6 +78,8 @@ def capture_screenshot(
                 )
                 return Screenshot(base64_data=base64_data, width=width, height=height)
             except Exception:
+                # Expected: corrupted PNG data or invalid image
+                # Continue to next retry attempt
                 continue
 
         span.set_attributes({"success": False, "fallback": True})
@@ -121,6 +123,8 @@ def _try_capture(device_id: str | None, adb_path: str, timeout: int) -> bytes | 
     except DeviceNotAvailableError:
         raise  # Re-raise to caller
     except Exception:
+        # Expected: subprocess timeout, command not found, or other ADB errors
+        # Return None to trigger retry logic in caller
         return None
 
 
