@@ -1,6 +1,7 @@
 """Async device control utilities for Android automation."""
 
 import asyncio
+from typing import Any
 
 from AutoGLM_GUI.adb.apps import APP_PACKAGES
 from AutoGLM_GUI.adb.timing import TIMING_CONFIG
@@ -11,7 +12,7 @@ from AutoGLM_GUI.trace import trace_span
 async def _trace_sleep(
     duration: float,
     name: str = "sleep",
-    attrs: dict | None = None,
+    attrs: dict[str, Any] | None = None,
 ) -> None:
     """Async sleep with tracing."""
     safe_duration = max(duration, 0.0)
@@ -233,9 +234,9 @@ async def home(device_id: str | None = None, delay: float | None = None) -> None
             timeout=5,
         )
         await _trace_sleep(
-        delay,
-        name="sleep.device_home_delay",
-        attrs={"device_id": device_id},
+            delay,
+            name="sleep.device_home_delay",
+            attrs={"device_id": device_id},
         )
 
 
@@ -272,7 +273,7 @@ async def launch_app(
             ],
             timeout=10,
         )
-    await trace_sleep(
+    await _trace_sleep(
         delay,
         name="sleep.device_launch_delay",
         attrs={"device_id": device_id, "app_name": app_name},
