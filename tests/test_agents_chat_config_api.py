@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 from typing import Any
 
@@ -13,6 +14,9 @@ import AutoGLM_GUI.api.agents as agents_api
 import AutoGLM_GUI.config_manager as config_manager_module
 import AutoGLM_GUI.device_manager as device_manager_module
 import AutoGLM_GUI.phone_agent_manager as phone_agent_manager_module
+import AutoGLM_GUI.task_manager as task_manager_module
+import AutoGLM_GUI.task_store as task_store_module
+import AutoGLM_GUI.trace as trace_module
 from AutoGLM_GUI.exceptions import AgentInitializationError, DeviceBusyError
 
 pytestmark = [pytest.mark.contract, pytest.mark.release_gate]
@@ -56,6 +60,9 @@ class FakeSyncAgent:
             raise self.run_error
         return self.run_result
 
+    def abort(self) -> None:
+        return None
+
 
 class FakePhoneAgentManager:
     def __init__(self) -> None:
@@ -85,11 +92,13 @@ class FakePhoneAgentManager:
     def release_device(self, device_id: str, **kwargs) -> None:
         self.release_calls.append(device_id)
 
-    def register_abort_handler(self, device_id: str, handler: Any) -> None:
-        self.registered_handlers[device_id] = handler
+    def register_abort_handler(self, device_id: str, handler: Any, **kwargs) -> None:
+        context = kwargs.get("context", "default")
+        self.registered_handlers[f"{device_id}:{context}"] = handler
 
-    def unregister_abort_handler(self, device_id: str) -> None:
-        self.unregistered_handlers.append(device_id)
+    def unregister_abort_handler(self, device_id: str, **kwargs) -> None:
+        context = kwargs.get("context", "default")
+        self.unregistered_handlers.append(f"{device_id}:{context}")
 
     def list_agents(self) -> list[str]:
         return list(self.destroy_candidates)
@@ -156,9 +165,11 @@ class FakeDeviceManager:
 
 
 @pytest.fixture
-def env(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
+def env(monkeypatch: pytest.MonkeyPatch, tmp_path) -> dict[str, Any]:
     fake_phone_manager = FakePhoneAgentManager()
     fake_config_manager = FakeConfigManager()
+    isolated_store = task_store_module.TaskStore(tmp_path / "tasks.db")
+    isolated_task_manager = task_manager_module.TaskManager(isolated_store)
 
     monkeypatch.setattr(
         phone_agent_manager_module.PhoneAgentManager,
@@ -171,19 +182,32 @@ def env(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
         "get_instance",
         staticmethod(lambda: FakeDeviceManager()),
     )
+    monkeypatch.setattr(task_store_module, "task_store", isolated_store)
+    monkeypatch.setattr(task_manager_module, "task_manager", isolated_task_manager)
 
     app = FastAPI()
     app.include_router(agents_api.router)
 
-    return {
-        "client": TestClient(app),
-        "phone_manager": fake_phone_manager,
-        "config_manager": fake_config_manager,
-    }
+    with TestClient(app) as client:
+        yield {
+            "client": client,
+            "phone_manager": fake_phone_manager,
+            "config_manager": fake_config_manager,
+            "task_manager": isolated_task_manager,
+            "task_store": isolated_store,
+        }
+
+    asyncio.run(isolated_task_manager.shutdown())
+    isolated_store.close()
 
 
 def test_chat_success_contract(env: dict[str, Any]) -> None:
-    env["phone_manager"].agent.run_result = "task finished"
+    env["phone_manager"].agent.stream_events = [
+        {
+            "type": "done",
+            "data": {"message": "task finished", "success": True, "steps": 3},
+        }
+    ]
     env["phone_manager"].agent.step_count = 3
 
     response = env["client"].post(
@@ -196,7 +220,7 @@ def test_chat_success_contract(env: dict[str, Any]) -> None:
     assert env["phone_manager"].release_calls == ["device-1"]
 
 
-def test_chat_returns_409_when_device_busy(env: dict[str, Any]) -> None:
+def test_chat_returns_failed_payload_when_device_busy(env: dict[str, Any]) -> None:
     env["phone_manager"].acquire_mode = "busy"
 
     response = env["client"].post(
@@ -204,11 +228,14 @@ def test_chat_returns_409_when_device_busy(env: dict[str, Any]) -> None:
         json={"device_id": "busy-device", "message": "open settings"},
     )
 
-    assert response.status_code == 409
-    assert response.json()["detail"] == "Device busy-device is busy. Please wait."
+    assert response.status_code == 200
+    assert response.json()["success"] is False
+    assert "busy" in response.json()["result"].lower()
 
 
-def test_chat_returns_500_when_agent_initialization_fails(env: dict[str, Any]) -> None:
+def test_chat_returns_failed_payload_when_agent_initialization_fails(
+    env: dict[str, Any],
+) -> None:
     env["phone_manager"].acquire_mode = "init_error"
 
     response = env["client"].post(
@@ -216,12 +243,13 @@ def test_chat_returns_500_when_agent_initialization_fails(env: dict[str, Any]) -
         json={"device_id": "device-1", "message": "open settings"},
     )
 
-    assert response.status_code == 500
-    assert "初始化失败" in response.json()["detail"]
+    assert response.status_code == 200
+    assert response.json()["success"] is False
+    assert "missing config" in response.json()["result"]
 
 
 def test_chat_unexpected_error_returns_success_false(env: dict[str, Any]) -> None:
-    env["phone_manager"].agent.run_error = RuntimeError("agent crashed")
+    env["phone_manager"].agent.stream_error = RuntimeError("agent crashed")
 
     response = env["client"].post(
         "/api/chat",
@@ -246,7 +274,7 @@ def test_chat_supports_sync_agent(env: dict[str, Any]) -> None:
     assert env["phone_manager"].release_calls == ["device-sync"]
 
 
-def test_chat_stream_returns_409_when_device_busy(env: dict[str, Any]) -> None:
+def test_chat_stream_emits_error_event_when_device_busy(env: dict[str, Any]) -> None:
     env["phone_manager"].acquire_mode = "busy"
 
     response = env["client"].post(
@@ -254,11 +282,15 @@ def test_chat_stream_returns_409_when_device_busy(env: dict[str, Any]) -> None:
         json={"device_id": "busy-device", "message": "open settings"},
     )
 
-    assert response.status_code == 409
-    assert response.json()["detail"] == "Device busy-device is busy. Please wait."
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert "event: error" in response.text
+    assert "busy" in response.text.lower()
 
 
-def test_chat_stream_returns_500_on_initialization_error(env: dict[str, Any]) -> None:
+def test_chat_stream_emits_error_event_on_initialization_error(
+    env: dict[str, Any],
+) -> None:
     env["phone_manager"].acquire_mode = "init_error"
 
     response = env["client"].post(
@@ -266,15 +298,17 @@ def test_chat_stream_returns_500_on_initialization_error(env: dict[str, Any]) ->
         json={"device_id": "device-1", "message": "open settings"},
     )
 
-    assert response.status_code == 500
-    assert "初始化失败" in response.json()["detail"]
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/event-stream")
+    assert "event: error" in response.text
+    assert "missing config" in response.text
 
 
 def test_chat_stream_emits_sse_events(
     env: dict[str, Any], monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setattr(
-        agents_api,
+        trace_module,
         "get_step_timing_summary",
         lambda step, **kwargs: {
             "step": step,
@@ -322,7 +356,7 @@ def test_chat_stream_emits_sse_events(
     assert '"message": "finished"' in body
 
 
-def test_chat_stream_returns_error_for_non_async_agent(env: dict[str, Any]) -> None:
+def test_chat_stream_supports_sync_agent(env: dict[str, Any]) -> None:
     env["phone_manager"].agent = FakeSyncAgent()
 
     response = env["client"].post(
@@ -334,8 +368,8 @@ def test_chat_stream_returns_error_for_non_async_agent(env: dict[str, Any]) -> N
     assert response.headers["content-type"].startswith("text/event-stream")
 
     body = response.text
-    assert "event: error" in body
-    assert "does not support streaming" in body
+    assert "event: done" in body
+    assert '"message": "sync ok"' in body
 
 
 def test_get_config_masks_empty_api_key_and_maps_conflicts(

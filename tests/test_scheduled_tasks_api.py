@@ -98,6 +98,11 @@ class FakeSchedulerManager:
         return self.next_run_times.get(task_id)
 
 
+class FakeTaskStore:
+    def get_latest_schedule_summary(self, scheduled_task_id: str):  # noqa: ANN201
+        return None
+
+
 @pytest.fixture
 def fake_workflow_manager() -> FakeWorkflowManager:
     return FakeWorkflowManager()
@@ -109,10 +114,16 @@ def fake_scheduler_manager() -> FakeSchedulerManager:
 
 
 @pytest.fixture
+def fake_task_store() -> FakeTaskStore:
+    return FakeTaskStore()
+
+
+@pytest.fixture
 def client(
     monkeypatch: pytest.MonkeyPatch,
     fake_workflow_manager: FakeWorkflowManager,
     fake_scheduler_manager: FakeSchedulerManager,
+    fake_task_store: FakeTaskStore,
 ) -> TestClient:
     monkeypatch.setattr(
         workflow_manager_module, "workflow_manager", fake_workflow_manager
@@ -120,6 +131,7 @@ def client(
     monkeypatch.setattr(
         scheduled_tasks_api, "scheduler_manager", fake_scheduler_manager
     )
+    monkeypatch.setattr(scheduled_tasks_api, "task_store", fake_task_store)
 
     app = FastAPI()
     app.include_router(scheduled_tasks_api.router)

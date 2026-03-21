@@ -13,23 +13,25 @@ import {
 import { throttle } from 'lodash';
 import { DeviceMonitor } from './DeviceMonitor';
 import type {
-  CancelledEvent,
-  ThinkingEvent,
-  StepEvent,
   StepTimingSummary,
-  DoneEvent,
-  ErrorEvent,
   Workflow,
   HistoryRecordResponse,
+  TaskRunResponse,
+  TaskEventRecordResponse,
+  TaskStatus,
 } from '../api';
 import {
-  abortChat,
-  resetChat,
-  sendMessageStream,
   listWorkflows,
   listHistory,
   clearHistory as clearHistoryApi,
   deleteHistoryRecord,
+  createTaskSession,
+  getTaskSession,
+  listTaskSessionTasks,
+  submitTaskSessionTask,
+  listTaskEvents,
+  streamTaskEvents,
+  cancelTaskRun,
 } from '../api';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -71,6 +73,137 @@ interface Message {
   stepTimings?: (StepTimingSummary | undefined)[];
   isStreaming?: boolean;
   currentThinking?: string; // Current thinking text being streamed
+}
+
+function isTaskActive(status: TaskStatus): boolean {
+  return status === 'QUEUED' || status === 'RUNNING';
+}
+
+function buildAssistantMessage(
+  task: TaskRunResponse,
+  events: TaskEventRecordResponse[]
+): Message {
+  const thinking: string[] = [];
+  const actions: Record<string, unknown>[] = [];
+  const screenshots: (string | undefined)[] = [];
+  const stepTimings: (StepTimingSummary | undefined)[] = [];
+  let currentThinking = '';
+  let content = task.final_message || task.error_message || '';
+  let steps = task.step_count;
+  let success: boolean | undefined =
+    task.status === 'SUCCEEDED'
+      ? true
+      : task.status === 'FAILED' ||
+          task.status === 'CANCELLED' ||
+          task.status === 'INTERRUPTED'
+        ? false
+        : undefined;
+
+  events.forEach(event => {
+    const payload = event.payload;
+    switch (event.event_type) {
+      case 'thinking': {
+        const chunk = payload.chunk;
+        if (typeof chunk === 'string') {
+          currentThinking += chunk;
+        }
+        break;
+      }
+      case 'step': {
+        const stepThinking =
+          typeof payload.thinking === 'string' && payload.thinking.length > 0
+            ? payload.thinking
+            : currentThinking;
+        thinking.push(stepThinking);
+        actions.push((payload.action as Record<string, unknown>) || {});
+        screenshots.push(
+          typeof payload.screenshot === 'string'
+            ? payload.screenshot
+            : undefined
+        );
+        stepTimings.push(
+          (payload.timings as StepTimingSummary | undefined) || undefined
+        );
+        currentThinking = '';
+        if (typeof payload.step === 'number') {
+          steps = payload.step;
+        }
+        break;
+      }
+      case 'done': {
+        if (typeof payload.message === 'string') {
+          content = payload.message;
+        }
+        if (typeof payload.steps === 'number') {
+          steps = payload.steps;
+        }
+        success = payload.success === true;
+        currentThinking = '';
+        break;
+      }
+      case 'error': {
+        if (typeof payload.message === 'string') {
+          content = payload.message;
+        }
+        success = false;
+        currentThinking = '';
+        break;
+      }
+      case 'cancelled': {
+        if (typeof payload.message === 'string') {
+          content = payload.message;
+        }
+        success = false;
+        currentThinking = '';
+        break;
+      }
+      case 'status': {
+        if (
+          payload.status === 'QUEUED' &&
+          !currentThinking &&
+          !content &&
+          thinking.length === 0
+        ) {
+          currentThinking = 'Waiting for device...';
+        }
+        break;
+      }
+    }
+  });
+
+  if (task.status === 'QUEUED' && !currentThinking && !content) {
+    currentThinking = 'Waiting for device...';
+  }
+
+  return {
+    id: `${task.id}-agent`,
+    role: 'assistant',
+    content,
+    timestamp: new Date(task.finished_at || task.started_at || task.created_at),
+    thinking,
+    actions,
+    screenshots,
+    stepTimings,
+    steps,
+    success,
+    isStreaming: isTaskActive(task.status),
+    currentThinking: currentThinking || undefined,
+  };
+}
+
+function buildMessagePair(
+  task: TaskRunResponse,
+  events: TaskEventRecordResponse[]
+): Message[] {
+  return [
+    {
+      id: `${task.id}-user`,
+      role: 'user',
+      content: task.input_text,
+      timestamp: new Date(task.created_at),
+    },
+    buildAssistantMessage(task, events),
+  ];
 }
 
 interface DevicePanelProps {
@@ -181,20 +314,28 @@ export function DevicePanel({
   const [historyItems, setHistoryItems] = useState<HistoryRecordResponse[]>([]);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [showWorkflowPopover, setShowWorkflowPopover] = useState(false);
+  const [sessionId, setSessionId] = useState<string | null>(null);
 
   const chatStreamRef = useRef<{ close: () => void } | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
+  const currentTaskIdRef = useRef<string | null>(null);
+  const taskRunsRef = useRef<Record<string, TaskRunResponse>>({});
+  const taskEventsRef = useRef<Record<string, TaskEventRecordResponse[]>>({});
   // ✅ 移除 hasAutoInited，不再需要自动初始化逻辑
   // const hasAutoInited = useRef(false);
   const prevMessageCountRef = useRef(0);
   const prevMessageSigRef = useRef<string | null>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [showNewMessageNotice, setShowNewMessageNotice] = useState(false);
+  const sessionStorageKey = `autoglm:classic-session:${deviceSerial}`;
+  const throttledUpdateScrollStateRef = useRef<ReturnType<
+    typeof throttle
+  > | null>(null);
 
-  // Create throttled scroll handler ref that persists across renders
-  const throttledUpdateScrollStateRef = useRef(
-    throttle(() => {
+  // Cleanup throttled function on unmount
+  useEffect(() => {
+    const throttledFn = throttle(() => {
       const container = messagesContainerRef.current;
       if (!container) return;
       const threshold = 80;
@@ -210,14 +351,11 @@ export function DevicePanel({
       if (distanceFromBottom <= threshold) {
         setShowNewMessageNotice(false);
       }
-    }, 100)
-  );
-
-  // Cleanup throttled function on unmount
-  useEffect(() => {
-    const throttledFn = throttledUpdateScrollStateRef.current;
+    }, 100);
+    throttledUpdateScrollStateRef.current = throttledFn;
     return () => {
       throttledFn.cancel();
+      throttledUpdateScrollStateRef.current = null;
     };
   }, []);
 
@@ -339,269 +477,286 @@ export function DevicePanel({
   // Note: Configuration is now managed entirely by backend ConfigManager.
   // If user updates config via Settings, they need to manually re-initialize agents.
 
-  const handleSend = useCallback(async () => {
-    const inputValue = input.trim();
-    if (!inputValue || loading) return;
+  const replaceTaskMessages = useCallback(
+    (taskId: string) => {
+      const task = taskRunsRef.current[taskId];
+      if (!task) return;
 
-    // ✅ 移除初始化检查，后端会自动初始化
-    // Agent 会在首次使用时自动创建
+      const pair = buildMessagePair(task, taskEventsRef.current[taskId] || []);
+      setMessages(prev => {
+        const userIndex = prev.findIndex(msg => msg.id === pair[0].id);
+        const assistantIndex = prev.findIndex(msg => msg.id === pair[1].id);
+        if (userIndex === -1 || assistantIndex === -1) {
+          return [...prev, ...pair];
+        }
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: inputValue,
-      timestamp: new Date(),
-    };
+        return prev.map(msg => {
+          if (msg.id === pair[0].id) return pair[0];
+          if (msg.id === pair[1].id) return pair[1];
+          return msg;
+        });
+      });
+    },
+    [setMessages]
+  );
 
-    setMessages(prev => [...prev, userMessage]);
-    setInput('');
-    setLoading(true);
-    setError(null);
+  const applyTaskEvent = useCallback(
+    (taskId: string, event: TaskEventRecordResponse) => {
+      const currentTask = taskRunsRef.current[taskId];
+      if (!currentTask) return;
 
-    const thinkingList: string[] = [];
-    const actionsList: Record<string, unknown>[] = [];
-    const screenshotsList: (string | undefined)[] = [];
-    const stepTimingsList: (StepTimingSummary | undefined)[] = [];
-    let currentThinkingText = '';
-    // Use a ref to batch updates and reduce render frequency
-    const thinkingChunksBuffer: string[] = [];
-    let updateTimeoutId: number | null = null;
+      taskEventsRef.current[taskId] = [
+        ...(taskEventsRef.current[taskId] || []),
+        event,
+      ];
 
-    const agentMessageId = (Date.now() + 1).toString();
-    const agentMessage: Message = {
-      id: agentMessageId,
-      role: 'assistant',
-      content: '',
-      timestamp: new Date(),
-      thinking: [],
-      actions: [],
-      screenshots: [],
-      stepTimings: [],
-      isStreaming: true,
-      currentThinking: '',
-    };
-
-    setMessages(prev => [...prev, agentMessage]);
-
-    // Batch update function to improve performance
-    const flushThinkingUpdate = () => {
-      if (thinkingChunksBuffer.length > 0) {
-        const chunksToAdd = thinkingChunksBuffer.join('');
-        thinkingChunksBuffer.length = 0; // Clear buffer
-        currentThinkingText += chunksToAdd;
-
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === agentMessageId
-              ? {
-                  ...msg,
-                  currentThinking: currentThinkingText,
-                }
-              : msg
-          )
-        );
+      const nextTask = { ...currentTask };
+      const payload = event.payload;
+      if (event.event_type === 'status') {
+        if (typeof payload.status === 'string') {
+          nextTask.status = payload.status as TaskStatus;
+          if (!isTaskActive(nextTask.status) && !nextTask.finished_at) {
+            nextTask.finished_at = event.created_at;
+          }
+        }
+      } else if (event.event_type === 'done') {
+        nextTask.status = 'SUCCEEDED';
+        nextTask.final_message =
+          typeof payload.message === 'string' ? payload.message : null;
+        nextTask.error_message = null;
+        nextTask.finished_at = event.created_at;
+        if (typeof payload.steps === 'number') {
+          nextTask.step_count = payload.steps;
+        }
+      } else if (event.event_type === 'error') {
+        nextTask.status = 'FAILED';
+        nextTask.final_message =
+          typeof payload.message === 'string' ? payload.message : null;
+        nextTask.error_message =
+          typeof payload.message === 'string' ? payload.message : null;
+        nextTask.finished_at = event.created_at;
+      } else if (event.event_type === 'cancelled') {
+        nextTask.status = 'CANCELLED';
+        nextTask.final_message =
+          typeof payload.message === 'string' ? payload.message : null;
+        nextTask.error_message =
+          typeof payload.message === 'string' ? payload.message : null;
+        nextTask.finished_at = event.created_at;
+      } else if (
+        event.event_type === 'step' &&
+        typeof payload.step === 'number'
+      ) {
+        nextTask.step_count = Math.max(nextTask.step_count, payload.step);
       }
-      updateTimeoutId = null;
+
+      taskRunsRef.current[taskId] = nextTask;
+      replaceTaskMessages(taskId);
+
+      if (
+        !isTaskActive(nextTask.status) &&
+        currentTaskIdRef.current === taskId
+      ) {
+        setLoading(false);
+        setAborting(false);
+        currentTaskIdRef.current = null;
+      }
+    },
+    [replaceTaskMessages]
+  );
+
+  const attachTaskStream = useCallback(
+    (taskId: string, afterSeq: number = 0) => {
+      if (chatStreamRef.current) {
+        chatStreamRef.current.close();
+      }
+
+      chatStreamRef.current = streamTaskEvents(
+        taskId,
+        event => {
+          applyTaskEvent(taskId, event);
+        },
+        message => {
+          setError(message);
+          setLoading(false);
+          setAborting(false);
+          chatStreamRef.current = null;
+        },
+        afterSeq
+      );
+    },
+    [applyTaskEvent]
+  );
+
+  const restoreSessionConversation = useCallback(
+    async (targetSessionId: string) => {
+      const taskList = await listTaskSessionTasks(targetSessionId, 100, 0);
+      const tasks = [...taskList.tasks].reverse();
+      taskRunsRef.current = Object.fromEntries(
+        tasks.map(task => [task.id, task])
+      );
+
+      const eventPairs = await Promise.all(
+        tasks.map(
+          async task =>
+            [task.id, (await listTaskEvents(task.id)).events] as const
+        )
+      );
+      taskEventsRef.current = Object.fromEntries(eventPairs);
+      setMessages(
+        tasks.flatMap(task =>
+          buildMessagePair(task, taskEventsRef.current[task.id] || [])
+        )
+      );
+
+      const activeTask = [...tasks]
+        .reverse()
+        .find(task => isTaskActive(task.status));
+      if (activeTask) {
+        currentTaskIdRef.current = activeTask.id;
+        setLoading(true);
+        const lastSeq =
+          taskEventsRef.current[activeTask.id]?.[
+            taskEventsRef.current[activeTask.id].length - 1
+          ]?.seq || 0;
+        attachTaskStream(activeTask.id, lastSeq);
+      } else {
+        currentTaskIdRef.current = null;
+        setLoading(false);
+      }
+    },
+    [attachTaskStream]
+  );
+
+  useEffect(() => {
+    let disposed = false;
+
+    const initializeSession = async () => {
+      try {
+        setError(null);
+        const storedSessionId = sessionStorage.getItem(sessionStorageKey);
+        let nextSessionId = storedSessionId;
+
+        if (storedSessionId) {
+          try {
+            const existingSession = await getTaskSession(storedSessionId);
+            if (
+              existingSession.device_id !== deviceId ||
+              existingSession.device_serial !== deviceSerial
+            ) {
+              nextSessionId = null;
+            }
+          } catch {
+            nextSessionId = null;
+          }
+        }
+
+        if (!nextSessionId) {
+          const session = await createTaskSession(deviceId, deviceSerial);
+          nextSessionId = session.id;
+          sessionStorage.setItem(sessionStorageKey, nextSessionId);
+        }
+
+        if (disposed || !nextSessionId) return;
+        setSessionId(nextSessionId);
+        await restoreSessionConversation(nextSessionId);
+      } catch (sessionError) {
+        if (!disposed) {
+          console.error('Failed to initialize task session:', sessionError);
+          setError('Failed to restore chat session');
+          setLoading(false);
+        }
+      }
     };
 
-    const stream = sendMessageStream(
-      userMessage.content,
-      deviceId,
-      (event: ThinkingEvent) => {
-        // Buffer chunks and batch update every 50ms to reduce render frequency
-        thinkingChunksBuffer.push(event.chunk);
+    initializeSession();
 
-        if (updateTimeoutId === null) {
-          updateTimeoutId = setTimeout(flushThinkingUpdate, 50);
-        }
-      },
-      (event: StepEvent) => {
-        // Flush any remaining chunks before processing step
-        if (updateTimeoutId !== null) {
-          clearTimeout(updateTimeoutId);
-          flushThinkingUpdate();
-        }
-
-        // Prefer backend-provided thinking as source of truth, fall back to streamed text
-        const stepThinking =
-          event.thinking && event.thinking.length > 0
-            ? event.thinking
-            : currentThinkingText;
-        if (stepThinking) {
-          thinkingList.push(stepThinking);
-        }
-        currentThinkingText = '';
-        actionsList.push(event.action);
-        screenshotsList.push(event.screenshot);
-        stepTimingsList.push(event.timings);
-
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === agentMessageId
-              ? {
-                  ...msg,
-                  thinking: [...thinkingList],
-                  actions: [...actionsList],
-                  screenshots: [...screenshotsList],
-                  stepTimings: [...stepTimingsList],
-                  steps: event.step,
-                  currentThinking: '',
-                }
-              : msg
-          )
-        );
-      },
-      (event: DoneEvent) => {
-        // Clear any pending updates
-        if (updateTimeoutId !== null) {
-          clearTimeout(updateTimeoutId);
-        }
-
-        const updatedAgentMessage = {
-          ...agentMessage,
-          content: event.message,
-          success: event.success,
-          isStreaming: false,
-          steps: event.steps,
-          thinking: [...thinkingList],
-          actions: [...actionsList],
-          screenshots: [...screenshotsList],
-          stepTimings: [...stepTimingsList],
-          timestamp: new Date(),
-          currentThinking: undefined,
-        };
-
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === agentMessageId ? updatedAgentMessage : msg
-          )
-        );
-        setLoading(false);
-        chatStreamRef.current = null;
-        // 历史记录已由后端自动保存，无需前端保存
-      },
-      (event: ErrorEvent) => {
-        // Clear any pending updates
-        if (updateTimeoutId !== null) {
-          clearTimeout(updateTimeoutId);
-        }
-
-        const updatedAgentMessage = {
-          ...agentMessage,
-          content: `Error: ${event.message}`,
-          success: false,
-          isStreaming: false,
-          thinking: [...thinkingList],
-          actions: [...actionsList],
-          screenshots: [...screenshotsList],
-          stepTimings: [...stepTimingsList],
-          timestamp: new Date(),
-          currentThinking: undefined,
-        };
-
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === agentMessageId ? updatedAgentMessage : msg
-          )
-        );
-        setLoading(false);
-        setError(event.message);
-        chatStreamRef.current = null;
-        // 历史记录已由后端自动保存，无需前端保存
-      },
-      (event: CancelledEvent) => {
-        // Clear any pending updates
-        if (updateTimeoutId !== null) {
-          clearTimeout(updateTimeoutId);
-        }
-
-        const updatedAgentMessage = {
-          ...agentMessage,
-          content: event.message || 'Task cancelled by user',
-          success: false,
-          isStreaming: false,
-          thinking: [...thinkingList],
-          actions: [...actionsList],
-          screenshots: [...screenshotsList],
-          stepTimings: [...stepTimingsList],
-          timestamp: new Date(),
-          currentThinking: undefined,
-        };
-
-        setMessages(prev =>
-          prev.map(msg =>
-            msg.id === agentMessageId ? updatedAgentMessage : msg
-          )
-        );
-        setLoading(false);
-        chatStreamRef.current = null;
-      }
-    );
-
-    chatStreamRef.current = stream;
-  }, [input, loading, deviceId]);
-
-  const handleReset = useCallback(async () => {
-    if (chatStreamRef.current) {
-      chatStreamRef.current.close();
-    }
-
-    setMessages([]);
-    setLoading(false);
-    setError(null);
-    setShowNewMessageNotice(false);
-    setIsAtBottom(true);
-    chatStreamRef.current = null;
-    prevMessageCountRef.current = 0;
-    prevMessageSigRef.current = null;
-
-    await resetChat(deviceId);
-  }, [deviceId]);
-
-  const handleAbortChat = useCallback(async () => {
-    if (!chatStreamRef.current) return;
-
-    setAborting(true);
-
-    try {
-      // Close SSE connection first
+    return () => {
+      disposed = true;
       if (chatStreamRef.current) {
         chatStreamRef.current.close();
         chatStreamRef.current = null;
       }
+    };
+  }, [deviceId, deviceSerial, restoreSessionConversation, sessionStorageKey]);
 
-      // Immediately update UI - set isStreaming to false and update message content
-      setMessages(prev => {
-        const lastMessage = prev[prev.length - 1];
-        if (
-          lastMessage &&
-          lastMessage.role === 'assistant' &&
-          lastMessage.isStreaming
-        ) {
-          return prev.map((msg, index) =>
-            index === prev.length - 1
-              ? {
-                  ...msg,
-                  content: msg.content || t.chat.aborted,
-                  isStreaming: false,
-                  success: false,
-                  currentThinking: undefined,
-                }
-              : msg
-          );
-        }
-        return prev;
-      });
+  const handleSend = useCallback(async () => {
+    const inputValue = input.trim();
+    if (!inputValue || loading || !sessionId) return;
 
-      // Notify backend to abort (don't wait for response)
-      abortChat(deviceId).catch(e => console.error('Backend abort failed:', e));
-    } catch (error) {
-      console.error('Failed to abort chat:', error);
-    } finally {
+    try {
+      setError(null);
+      setLoading(true);
+      const task = await submitTaskSessionTask(sessionId, inputValue);
+      const initialEvents = (await listTaskEvents(task.id)).events;
+
+      taskRunsRef.current[task.id] = task;
+      taskEventsRef.current[task.id] = initialEvents;
+      currentTaskIdRef.current = task.id;
+      replaceTaskMessages(task.id);
+      setInput('');
+
+      const lastSeq = initialEvents[initialEvents.length - 1]?.seq || 0;
+      attachTaskStream(task.id, lastSeq);
+    } catch (sendError) {
+      console.error('Failed to submit task:', sendError);
       setLoading(false);
-      setAborting(false);
+      setError(
+        sendError instanceof Error ? sendError.message : 'Failed to submit task'
+      );
     }
-  }, [deviceId, t]);
+  }, [attachTaskStream, input, loading, replaceTaskMessages, sessionId]);
+
+  const handleReset = useCallback(async () => {
+    if (chatStreamRef.current) {
+      chatStreamRef.current.close();
+      chatStreamRef.current = null;
+    }
+
+    try {
+      const session = await createTaskSession(deviceId, deviceSerial);
+      sessionStorage.setItem(sessionStorageKey, session.id);
+      setSessionId(session.id);
+      taskRunsRef.current = {};
+      taskEventsRef.current = {};
+      currentTaskIdRef.current = null;
+      setMessages([]);
+      setLoading(false);
+      setError(null);
+      setShowNewMessageNotice(false);
+      setIsAtBottom(true);
+      prevMessageCountRef.current = 0;
+      prevMessageSigRef.current = null;
+    } catch (resetError) {
+      console.error('Failed to reset chat session:', resetError);
+      setError(
+        resetError instanceof Error
+          ? resetError.message
+          : 'Failed to reset chat'
+      );
+    }
+  }, [deviceId, deviceSerial, sessionStorageKey]);
+
+  const handleAbortChat = useCallback(async () => {
+    const taskId = currentTaskIdRef.current;
+    if (!taskId) return;
+
+    setAborting(true);
+    try {
+      const response = await cancelTaskRun(taskId);
+      if (response.task) {
+        taskRunsRef.current[taskId] = response.task;
+        replaceTaskMessages(taskId);
+      }
+    } catch (abortError) {
+      console.error('Failed to abort chat:', abortError);
+      setAborting(false);
+      setError(
+        abortError instanceof Error
+          ? abortError.message
+          : 'Failed to cancel task'
+      );
+    }
+  }, [replaceTaskMessages]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -632,17 +787,24 @@ export function DevicePanel({
 
     if (isAtBottom) {
       scrollToBottom();
-      setShowNewMessageNotice(false);
-      return;
+      const frameId = requestAnimationFrame(() => {
+        setShowNewMessageNotice(false);
+      });
+      return () => cancelAnimationFrame(frameId);
     }
 
     if (messages.length === 0) {
-      setShowNewMessageNotice(false);
-      return;
+      const frameId = requestAnimationFrame(() => {
+        setShowNewMessageNotice(false);
+      });
+      return () => cancelAnimationFrame(frameId);
     }
 
     if (isNewMessage || hasLatestChanged) {
-      setShowNewMessageNotice(true);
+      const frameId = requestAnimationFrame(() => {
+        setShowNewMessageNotice(true);
+      });
+      return () => cancelAnimationFrame(frameId);
     }
   }, [messages, isAtBottom, scrollToBottom]);
 
@@ -675,7 +837,7 @@ export function DevicePanel({
   // Throttle scroll event handler to reduce the frequency of state updates
   // and improve performance, especially on lower-end devices
   const handleMessagesScroll = () => {
-    throttledUpdateScrollStateRef.current();
+    throttledUpdateScrollStateRef.current?.();
   };
 
   const handleScrollToLatest = () => {

@@ -6,10 +6,9 @@ import json
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from pydantic import ValidationError
 
-from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.schemas import (
     AbortRequest,
     ChatRequest,
@@ -19,33 +18,12 @@ from AutoGLM_GUI.schemas import (
     ResetRequest,
     StatusResponse,
 )
-from AutoGLM_GUI.trace import (
-    clear_trace_data,
-    create_trace_id,
-    get_step_timing_summary,
-    get_trace_timing_summary,
-    list_step_timing_summaries,
-    summarize_text,
-    trace_context,
-    trace_span,
-)
 from AutoGLM_GUI.version import APP_VERSION
 
 router = APIRouter()
 
 
 SSEPayload = dict[str, Any]
-
-
-def _build_chat_trace_attrs(
-    device_id: str, message: str, route: str
-) -> dict[str, str | int]:
-    return {
-        "route": route,
-        "device_id": device_id,
-        "task_preview": summarize_text(message) or "",
-        "task_length": len(message),
-    }
 
 
 def _create_sse_event(
@@ -56,349 +34,86 @@ def _create_sse_event(
     return event_data
 
 
+def _resolve_device_serial(device_id: str) -> str:
+    from AutoGLM_GUI.device_manager import DeviceManager
+
+    device_manager = DeviceManager.get_instance()
+    return device_manager.get_serial_by_device_id(device_id) or device_id
+
+
+async def _create_legacy_chat_task(request: ChatRequest) -> dict[str, Any]:
+    from AutoGLM_GUI.task_manager import task_manager
+
+    session = await task_manager.get_or_create_legacy_chat_session(
+        device_id=request.device_id,
+        device_serial=_resolve_device_serial(request.device_id),
+    )
+    return await task_manager.submit_chat_task(
+        session_id=str(session["id"]),
+        device_id=request.device_id,
+        device_serial=str(session["device_serial"]),
+        message=request.message,
+    )
+
+
 @router.post("/api/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest) -> ChatResponse:
-    """发送任务给 Agent 并执行（支持 AsyncAgent）。
+    """Compatibility wrapper around the new task-backed chat flow."""
+    from AutoGLM_GUI.task_manager import task_manager
+    from AutoGLM_GUI.task_store import TaskStatus
 
-    Agent 会在首次使用时自动初始化，无需手动预初始化。
-    """
-    from AutoGLM_GUI.agents.protocols import is_async_agent
-    from AutoGLM_GUI.exceptions import AgentInitializationError, DeviceBusyError
-    from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
+    task = await _create_legacy_chat_task(request)
+    final_task = await task_manager.wait_for_task(task["id"])
+    if final_task is None:
+        raise HTTPException(status_code=500, detail="Task disappeared unexpectedly")
 
-    device_id = request.device_id
-    manager = PhoneAgentManager.get_instance()
-
-    acquired = False
-    with trace_span(
-        "api.chat",
-        attrs=_build_chat_trace_attrs(device_id, request.message, "/api/chat"),
-        new_trace=True,
-    ) as chat_span:
-        try:
-            with trace_span(
-                "api.chat.acquire_device",
-                attrs={"device_id": device_id, "context": "chat"},
-            ):
-                acquired = await manager.acquire_device_async(
-                    device_id,
-                    auto_initialize=True,
-                    context="chat",
-                )
-
-            with trace_span(
-                "api.chat.get_agent",
-                attrs={"device_id": device_id, "context": "chat"},
-            ):
-                agent = await asyncio.to_thread(
-                    manager.get_agent_with_context,
-                    device_id,
-                    context="chat",
-                    agent_type=None,
-                )
-
-            with trace_span(
-                "api.chat.run_agent",
-                attrs={
-                    "device_id": device_id,
-                    "agent_type": agent.__class__.__name__,
-                    "is_async_agent": is_async_agent(agent),
-                },
-            ):
-                if is_async_agent(agent):
-                    result = await agent.run(request.message)  # type: ignore[misc]
-                else:
-                    result = await asyncio.to_thread(agent.run, request.message)  # type: ignore[misc]
-
-            steps = agent.step_count
-            chat_span.set_attributes({"steps": steps, "success": True})
-            return ChatResponse(result=result, steps=steps, success=True)  # type: ignore[arg-type]
-
-        except AgentInitializationError as e:
-            chat_span.set_attributes({"success": False, "error_kind": "init"})
-            logger.error(f"Failed to initialize agent for {device_id}: {e}")
-            raise HTTPException(
-                status_code=500,
-                detail=f"初始化失败: {str(e)}. 请检查全局配置 (base_url, api_key, model_name)",
-            )
-        except DeviceBusyError:
-            chat_span.set_attributes({"success": False, "error_kind": "busy"})
-            raise HTTPException(
-                status_code=409, detail=f"Device {device_id} is busy. Please wait."
-            )
-        except Exception as e:
-            chat_span.set_attributes({"success": False, "error_kind": "unexpected"})
-            logger.exception(f"Unexpected error in chat for {device_id}")
-            return ChatResponse(result=str(e), steps=0, success=False)
-        finally:
-            if acquired:
-                with trace_span(
-                    "api.chat.release_device",
-                    attrs={"device_id": device_id, "context": "chat"},
-                ):
-                    manager.release_device(device_id, context="chat")
+    success = final_task["status"] == TaskStatus.SUCCEEDED.value
+    message = (
+        final_task.get("final_message")
+        or final_task.get("error_message")
+        or final_task["status"]
+    )
+    return ChatResponse(
+        result=str(message),
+        steps=int(final_task.get("step_count", 0)),
+        success=success,
+    )
 
 
 @router.post("/api/chat/stream")
 async def chat_stream(request: ChatRequest):
-    """发送任务给 Agent 并实时推送执行进度（SSE，多设备支持）。
+    """Compatibility SSE endpoint backed by the new task event stream."""
+    from AutoGLM_GUI.task_store import TERMINAL_TASK_STATUSES, task_store
 
-    Agent 会在首次使用时自动初始化，无需手动预初始化。
-
-    Chat API 使用 AsyncAgent 实现原生 async streaming 和立即取消。
-    """
-    from datetime import datetime
-
-    from AutoGLM_GUI.agents.protocols import is_async_agent
-    from AutoGLM_GUI.device_manager import DeviceManager
-    from AutoGLM_GUI.exceptions import AgentInitializationError, DeviceBusyError
-    from AutoGLM_GUI.history_manager import history_manager
-    from AutoGLM_GUI.metrics import record_trace_latency_metrics
-    from AutoGLM_GUI.models.history import (
-        ConversationRecord,
-        MessageRecord,
-        StepTimingRecord,
-        TraceSummaryRecord,
-    )
-    from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
-
-    device_id = request.device_id
-    manager = PhoneAgentManager.get_instance()
-    trace_id = create_trace_id()
-
-    # ===== 在外层获取设备锁 =====
-    acquired = False
-    try:
-        with trace_context(trace_id):
-            with trace_span(
-                "api.chat.stream.acquire_device",
-                attrs={"device_id": device_id, "context": "chat"},
-            ):
-                acquired = await manager.acquire_device_async(
-                    device_id,
-                    auto_initialize=True,
-                    timeout=0,
-                    raise_on_timeout=True,
-                    context="chat",
-                )
-    except DeviceBusyError:
-        logger.warning(f"Device {device_id} is busy, returning 409")
-        return JSONResponse(
-            status_code=409,
-            content={"detail": f"Device {device_id} is busy. Please wait."},
-        )
-    except AgentInitializationError as e:
-        logger.error(f"Failed to initialize agent for {device_id}: {e}")
-        return JSONResponse(
-            status_code=500,
-            content={
-                "detail": f"初始化失败: {str(e)}. 请检查全局配置 (base_url, api_key, model_name)"
-            },
-        )
-
-    logger.info(f"Device lock acquired for {device_id}")
+    task = await _create_legacy_chat_task(request)
 
     async def event_generator():
-        start_time = datetime.now()
-        final_message = ""
-        final_success = False
-        final_steps = 0
-
-        # 收集完整对话消息
-        messages: list[MessageRecord] = []
-        # 添加用户消息
-        messages.append(
-            MessageRecord(
-                role="user",
-                content=request.message,
-                timestamp=start_time,
+        last_seq = 0
+        while True:
+            events = await asyncio.to_thread(
+                task_store.list_task_events,
+                task["id"],
+                after_seq=last_seq,
             )
-        )
-
-        with trace_context(trace_id):
-            with trace_span(
-                "api.chat.stream",
-                attrs=_build_chat_trace_attrs(
-                    device_id, request.message, "/api/chat/stream"
-                ),
-            ) as stream_span:
-                try:
-                    with trace_span(
-                        "api.chat.stream.get_agent",
-                        attrs={"device_id": device_id, "context": "chat"},
-                    ):
-                        agent = await asyncio.to_thread(
-                            manager.get_agent_with_context,
-                            device_id,
-                            context="chat",
-                            agent_type=None,
-                        )
-
-                    if not is_async_agent(agent):
-                        error_data = _create_sse_event(
-                            "error",
-                            {
-                                "message": (
-                                    "Current agent does not support streaming. "
-                                    "Please switch to an async agent (e.g. glm-async or gemini)."
-                                )
-                            },
-                        )
-                        stream_span.set_attributes(
-                            {"success": False, "error_kind": "non_async_agent"}
-                        )
-                        yield "event: error\n"
-                        yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
-                        return
-
-                    logger.info(f"Using AsyncAgent for device {device_id}")
-
-                    async def cancel_handler():
-                        await agent.cancel()  # type: ignore[union-attr]
-
-                    manager.register_abort_handler(device_id, cancel_handler)
-
-                    with trace_span(
-                        "api.chat.stream.run_agent",
-                        attrs={
-                            "device_id": device_id,
-                            "agent_type": agent.__class__.__name__,
-                        },
-                    ):
-                        async for event in agent.stream(request.message):  # type: ignore[union-attr]
-                            event_type = event["type"]
-                            event_data_dict = event["data"]
-
-                            if event_type == "step":
-                                step_number = event_data_dict.get("step")
-                                if isinstance(step_number, int):
-                                    step_timing = get_step_timing_summary(
-                                        step_number,
-                                        trace_id=trace_id,
-                                    )
-                                    if step_timing is not None:
-                                        event_data_dict = {
-                                            **event_data_dict,
-                                            "timings": step_timing,
-                                        }
-
-                                messages.append(
-                                    MessageRecord(
-                                        role="assistant",
-                                        content="",
-                                        timestamp=datetime.now(),
-                                        thinking=event_data_dict.get("thinking"),
-                                        action=event_data_dict.get("action"),
-                                        step=event_data_dict.get("step"),
-                                    )
-                                )
-
-                            if event_type == "done":
-                                final_message = event_data_dict.get("message", "")
-                                final_success = event_data_dict.get("success", False)
-                                final_steps = event_data_dict.get("steps", 0)
-                                stream_span.set_attributes(
-                                    {
-                                        "success": final_success,
-                                        "steps": final_steps,
-                                    }
-                                )
-
-                            sse_event = _create_sse_event(event_type, event_data_dict)
-                            yield f"event: {event_type}\n"
-                            yield f"data: {json.dumps(sse_event, ensure_ascii=False)}\n\n"
-
-                except asyncio.CancelledError:
-                    stream_span.set_attributes(
-                        {"success": False, "error_kind": "cancelled"}
-                    )
-                    logger.info(f"AsyncAgent task cancelled for device {device_id}")
-                    yield "event: cancelled\n"
-                    yield (
-                        f"data: {json.dumps(_create_sse_event('cancelled', {'message': 'Task cancelled by user'}), ensure_ascii=False)}\n\n"
-                    )
-
-                except AgentInitializationError as e:
-                    stream_span.set_attributes({"success": False, "error_kind": "init"})
-                    logger.error(f"Failed to initialize agent for {device_id}: {e}")
-                    error_data = _create_sse_event(
-                        "error",
-                        {
-                            "message": f"初始化失败: {str(e)}",
-                            "hint": "请检查全局配置 (base_url, api_key, model_name)",
-                        },
-                    )
-                    yield "event: error\n"
-                    yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
-
-                except Exception as e:
-                    stream_span.set_attributes(
-                        {"success": False, "error_kind": "unexpected"}
-                    )
-                    logger.exception(f"Error in streaming chat for {device_id}")
-                    error_data = _create_sse_event("error", {"message": str(e)})
-                    yield "event: error\n"
-                    yield f"data: {json.dumps(error_data, ensure_ascii=False)}\n\n"
-
-                finally:
-                    try:
-                        manager.unregister_abort_handler(device_id)
-                    except BaseException:
-                        pass
-                    if acquired:
-                        try:
-                            with trace_span(
-                                "api.chat.stream.release_device",
-                                attrs={"device_id": device_id, "context": "chat"},
-                            ):
-                                manager.release_device(device_id, context="chat")
-                            logger.info(f"Device lock released for {device_id}")
-                        except BaseException as e:
-                            logger.error(
-                                f"Failed to release device lock for {device_id}: {e}"
-                            )
-
-        # ===== 保存历史记录 =====
-        try:
-            device_manager = DeviceManager.get_instance()
-            serialno = device_manager.get_serial_by_device_id(device_id)
-            if serialno and final_message:
-                end_time = datetime.now()
-                duration_ms = int((end_time - start_time).total_seconds() * 1000)
-                step_timings = [
-                    StepTimingRecord.from_dict(item)
-                    for item in list_step_timing_summaries(trace_id=trace_id)
-                ]
-                trace_summary_dict = get_trace_timing_summary(
-                    trace_id=trace_id,
-                    total_duration_ms=duration_ms,
-                    steps=final_steps,
+            for event in events:
+                last_seq = int(event["seq"])
+                event_type = str(event["event_type"])
+                if event_type == "status":
+                    continue
+                sse_event = _create_sse_event(
+                    event_type,
+                    dict(event["payload"]),
+                    role=str(event["role"]),
                 )
-                record_trace_latency_metrics(
-                    source="chat",
-                    trace_summary=trace_summary_dict,
-                    step_summaries=[item.to_dict() for item in step_timings],
-                )
-                record = ConversationRecord(
-                    task_text=request.message,
-                    final_message=final_message,
-                    success=final_success,
-                    steps=final_steps,
-                    start_time=start_time,
-                    end_time=end_time,
-                    duration_ms=duration_ms,
-                    source="chat",
-                    error_message=None if final_success else final_message,
-                    trace_id=trace_id,
-                    step_timings=step_timings,
-                    trace_summary=TraceSummaryRecord.from_dict(trace_summary_dict)
-                    if trace_summary_dict
-                    else None,
-                    messages=messages,
-                )
-                history_manager.add_record(serialno, record)
-        finally:
-            clear_trace_data(trace_id)
+                yield f"event: {event_type}\n"
+                yield f"data: {json.dumps(sse_event, ensure_ascii=False)}\n\n"
+
+            current_task = await asyncio.to_thread(task_store.get_task, task["id"])
+            if (
+                current_task is None or current_task["status"] in TERMINAL_TASK_STATUSES
+            ) and not events:
+                break
+            await asyncio.sleep(0.2)
 
     return StreamingResponse(
         event_generator(),
@@ -462,14 +177,20 @@ def reset_agent(request: ResetRequest) -> dict[str, Any]:
 
 @router.post("/api/chat/abort")
 async def abort_chat(request: AbortRequest) -> dict[str, Any]:
-    """中断正在进行的对话流 (支持 AsyncAgent)。"""
+    """Cancel the latest active task for the device."""
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
+    from AutoGLM_GUI.task_manager import task_manager
+    from AutoGLM_GUI.task_store import TERMINAL_TASK_STATUSES, TaskStatus
 
-    device_id = request.device_id
-    manager = PhoneAgentManager.get_instance()
-
-    # 使用异步方法 (支持 AsyncAgent 和 BaseAgent)
-    success = await manager.abort_streaming_chat_async(device_id)
+    task = await task_manager.cancel_latest_chat_task(request.device_id)
+    success = task is not None and (
+        task["status"] not in TERMINAL_TASK_STATUSES
+        or task["status"] == TaskStatus.CANCELLED.value
+    )
+    if not success:
+        success = await PhoneAgentManager.get_instance().abort_streaming_chat_async(
+            request.device_id
+        )
 
     return {
         "success": success,

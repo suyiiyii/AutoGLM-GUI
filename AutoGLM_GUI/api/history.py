@@ -5,6 +5,7 @@ from typing import Any
 from fastapi import APIRouter, HTTPException
 
 from AutoGLM_GUI.history_manager import history_manager
+from AutoGLM_GUI.scheduler_manager import scheduler_manager
 from AutoGLM_GUI.models.history import ConversationRecord
 from AutoGLM_GUI.schemas import (
     HistoryListResponse,
@@ -13,6 +14,7 @@ from AutoGLM_GUI.schemas import (
     StepTimingSummaryResponse,
     TraceSummaryResponse,
 )
+from AutoGLM_GUI.task_store import TaskStatus, task_store
 
 router = APIRouter()
 
@@ -52,6 +54,95 @@ def _build_history_record_response(record: ConversationRecord) -> HistoryRecordR
     )
 
 
+def _build_history_record_from_task(record: dict[str, Any]) -> HistoryRecordResponse:
+    events = task_store.list_task_events(record["id"])
+    step_timings: list[StepTimingSummaryResponse] = []
+    messages: list[MessageRecordResponse] = [
+        MessageRecordResponse(
+            role="user",
+            content=record["input_text"],
+            timestamp=record["created_at"],
+        )
+    ]
+    for event in events:
+        if event["event_type"] != "step":
+            continue
+        payload = event["payload"]
+        messages.append(
+            MessageRecordResponse(
+                role="assistant",
+                content="",
+                timestamp=event["created_at"],
+                thinking=payload.get("thinking"),
+                action=payload.get("action"),
+                step=payload.get("step"),
+            )
+        )
+        timings = payload.get("timings")
+        if isinstance(timings, dict):
+            step_timings.append(StepTimingSummaryResponse(**timings))
+
+    source_detail = record.get("session_id") or ""
+    if record["source"] == "scheduled" and record.get("scheduled_task_id"):
+        task = scheduler_manager.get_task(str(record["scheduled_task_id"]))
+        if task is not None:
+            source_detail = task.name
+
+    final_message = (
+        record.get("final_message")
+        or record.get("error_message")
+        or record.get("status")
+        or ""
+    )
+    success = record["status"] == TaskStatus.SUCCEEDED.value
+    end_time = record.get("finished_at")
+    start_time = record.get("started_at") or record["created_at"]
+
+    duration_ms = 0
+    if end_time:
+        try:
+            from datetime import datetime
+
+            start_dt = datetime.fromisoformat(start_time)
+            end_dt = datetime.fromisoformat(end_time)
+            duration_ms = int((end_dt - start_dt).total_seconds() * 1000)
+        except ValueError:
+            duration_ms = 0
+
+    return HistoryRecordResponse(
+        id=str(record["id"]),
+        task_text=str(record["input_text"]),
+        final_message=str(final_message),
+        success=success,
+        steps=int(record.get("step_count", 0)),
+        start_time=str(start_time),
+        end_time=str(end_time) if end_time else None,
+        duration_ms=duration_ms,
+        source=str(record["source"]),
+        source_detail=str(source_detail),
+        error_message=str(record["error_message"])
+        if record.get("error_message") is not None
+        else None,
+        trace_id=None,
+        step_timings=step_timings,
+        trace_summary=None,
+        messages=messages,
+    )
+
+
+def _list_merged_history(serialno: str) -> list[HistoryRecordResponse]:
+    task_records, _ = task_store.list_tasks(
+        device_serial=serialno, limit=10000, offset=0
+    )
+    history_total = history_manager.get_total_count(serialno)
+    legacy_records = history_manager.list_records(serialno, history_total, 0)
+
+    merged = [_build_history_record_from_task(record) for record in task_records]
+    merged.extend(_build_history_record_response(record) for record in legacy_records)
+    merged.sort(key=lambda item: item.start_time, reverse=True)
+    return merged
+
+
 @router.get("/api/history/{serialno}", response_model=HistoryListResponse)
 def list_history(
     serialno: str, limit: int = 50, offset: int = 0
@@ -61,11 +152,12 @@ def list_history(
     if offset < 0:
         raise HTTPException(status_code=400, detail="offset must be non-negative")
 
-    records = history_manager.list_records(serialno, limit=limit, offset=offset)
-    total = history_manager.get_total_count(serialno)
+    merged_records = _list_merged_history(serialno)
+    total = len(merged_records)
+    records = merged_records[offset : offset + limit]
 
     return HistoryListResponse(
-        records=[_build_history_record_response(record) for record in records],
+        records=records,
         total=total,
         limit=limit,
         offset=offset,
@@ -74,6 +166,10 @@ def list_history(
 
 @router.get("/api/history/{serialno}/{record_id}", response_model=HistoryRecordResponse)
 def get_history_record(serialno: str, record_id: str) -> HistoryRecordResponse:
+    task_record = task_store.get_task(record_id)
+    if task_record is not None and task_record["device_serial"] == serialno:
+        return _build_history_record_from_task(task_record)
+
     record = history_manager.get_record(serialno, record_id)
     if not record:
         raise HTTPException(status_code=404, detail="Record not found")
@@ -83,7 +179,11 @@ def get_history_record(serialno: str, record_id: str) -> HistoryRecordResponse:
 
 @router.delete("/api/history/{serialno}/{record_id}")
 def delete_history_record(serialno: str, record_id: str) -> dict[str, Any]:
-    success = history_manager.delete_record(serialno, record_id)
+    task_record = task_store.get_task(record_id)
+    if task_record is not None and task_record["device_serial"] == serialno:
+        success = task_store.delete_task(record_id)
+    else:
+        success = history_manager.delete_record(serialno, record_id)
     if not success:
         raise HTTPException(status_code=404, detail="Record not found")
     return {"success": True, "message": "Record deleted"}
@@ -91,5 +191,6 @@ def delete_history_record(serialno: str, record_id: str) -> dict[str, Any]:
 
 @router.delete("/api/history/{serialno}")
 def clear_history(serialno: str) -> dict[str, Any]:
+    task_store.clear_device_history(serialno)
     history_manager.clear_device_history(serialno)
     return {"success": True, "message": f"History cleared for {serialno}"}

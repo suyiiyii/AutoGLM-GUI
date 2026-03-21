@@ -12,12 +12,14 @@ from AutoGLM_GUI.schemas import (
     ScheduledTaskResponse,
     ScheduledTaskUpdate,
 )
+from AutoGLM_GUI.task_store import task_store
 
 router = APIRouter()
 
 
 def _task_to_response(task: ScheduledTask) -> ScheduledTaskResponse:
     next_run = scheduler_manager.get_next_run_time(task.id)
+    latest_summary = task_store.get_latest_schedule_summary(task.id)
     return ScheduledTaskResponse(
         id=task.id,
         name=task.name,
@@ -28,12 +30,38 @@ def _task_to_response(task: ScheduledTask) -> ScheduledTaskResponse:
         enabled=task.enabled,
         created_at=task.created_at.isoformat(),
         updated_at=task.updated_at.isoformat(),
-        last_run_time=task.last_run_time.isoformat() if task.last_run_time else None,
-        last_run_success=task.last_run_success,
-        last_run_status=task.last_run_status,
-        last_run_success_count=task.last_run_success_count,
-        last_run_total_count=task.last_run_total_count,
-        last_run_message=task.last_run_message,
+        last_run_time=(
+            latest_summary["last_run_time"]
+            if latest_summary
+            else task.last_run_time.isoformat()
+            if task.last_run_time
+            else None
+        ),
+        last_run_success=(
+            latest_summary["last_run_success"]
+            if latest_summary
+            else task.last_run_success
+        ),
+        last_run_status=(
+            latest_summary["last_run_status"]
+            if latest_summary
+            else task.last_run_status
+        ),
+        last_run_success_count=(
+            latest_summary["last_run_success_count"]
+            if latest_summary
+            else task.last_run_success_count
+        ),
+        last_run_total_count=(
+            latest_summary["last_run_total_count"]
+            if latest_summary
+            else task.last_run_total_count
+        ),
+        last_run_message=(
+            latest_summary["last_run_message"]
+            if latest_summary
+            else task.last_run_message
+        ),
         next_run_time=next_run.isoformat() if next_run else None,
     )
 

@@ -34,6 +34,7 @@ from . import (
     media,
     metrics,
     scheduled_tasks,
+    tasks,
     version,
     workflows,
 )
@@ -160,11 +161,13 @@ def create_app() -> FastAPI:
 
         from AutoGLM_GUI.device_manager import DeviceManager
         from AutoGLM_GUI.scheduler_manager import scheduler_manager
+        from AutoGLM_GUI.task_manager import task_manager
 
         adb_path = os.environ.get("AUTOGLM_ADB_PATH", "adb")
         device_manager = DeviceManager.get_instance(adb_path=adb_path)
         device_manager.start_polling()
 
+        await task_manager.start()
         # Start scheduled task scheduler
         await scheduler_manager.start()
 
@@ -174,6 +177,7 @@ def create_app() -> FastAPI:
 
         # App shutdown
         await scheduler_manager.shutdown()
+        await task_manager.shutdown()
 
     # Create FastAPI app with combined lifespan
     app = FastAPI(
@@ -197,6 +201,7 @@ def create_app() -> FastAPI:
     app.include_router(media.router)
     app.include_router(metrics.router)
     app.include_router(scheduled_tasks.router)
+    app.include_router(tasks.router)
     app.include_router(version.router)
     app.include_router(workflows.router)
 

@@ -773,6 +773,94 @@ class HistoryListResponse(BaseModel):
     offset: int
 
 
+# Task Models
+
+
+class TaskSessionCreate(BaseModel):
+    """Create chat task session request."""
+
+    device_id: str
+    device_serial: str
+
+    @field_validator("device_id", "device_serial")
+    @classmethod
+    def validate_required_str(cls, v: str) -> str:
+        v = v.strip()
+        if not v:
+            raise ValueError("value cannot be empty")
+        return v
+
+
+class TaskSessionResponse(BaseModel):
+    id: str
+    kind: str
+    mode: str
+    device_id: str
+    device_serial: str
+    status: str
+    created_at: str
+    updated_at: str
+
+
+class TaskSubmitRequest(BaseModel):
+    message: str
+
+    @field_validator("message")
+    @classmethod
+    def validate_message_non_empty(cls, v: str) -> str:
+        if not v or not v.strip():
+            raise ValueError("message cannot be empty")
+        if len(v) > 10000:
+            raise ValueError("message too long (max 10000 characters)")
+        return v.strip()
+
+
+class TaskRunResponse(BaseModel):
+    id: str
+    source: str
+    executor_key: str
+    session_id: str | None = None
+    scheduled_task_id: str | None = None
+    workflow_uuid: str | None = None
+    schedule_fire_id: str | None = None
+    device_id: str
+    device_serial: str
+    status: str
+    input_text: str
+    final_message: str | None = None
+    error_message: str | None = None
+    step_count: int
+    created_at: str
+    started_at: str | None = None
+    finished_at: str | None = None
+
+
+class TaskRunListResponse(BaseModel):
+    tasks: list[TaskRunResponse]
+    total: int
+    limit: int
+    offset: int
+
+
+class TaskEventResponse(BaseModel):
+    task_id: str
+    seq: int
+    event_type: str
+    role: str
+    payload: dict[str, Any]
+    created_at: str
+
+
+class TaskEventListResponse(BaseModel):
+    events: list[TaskEventResponse]
+
+
+class TaskCancelResponse(BaseModel):
+    success: bool
+    message: str
+    task: TaskRunResponse | None = None
+
+
 # Scheduled Task Models
 
 

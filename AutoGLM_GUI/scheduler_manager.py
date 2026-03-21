@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self
+from uuid import uuid4
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
@@ -390,8 +391,7 @@ class SchedulerManager:
         )
 
         from AutoGLM_GUI.device_manager import DeviceManager
-        from AutoGLM_GUI.history_manager import history_manager
-        from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
+        from AutoGLM_GUI.task_manager import task_manager
         from AutoGLM_GUI.workflow_manager import workflow_manager
 
         workflow = workflow_manager.get_workflow(task.workflow_uuid)
@@ -406,7 +406,6 @@ class SchedulerManager:
             return
 
         device_manager = DeviceManager.get_instance()
-        manager = PhoneAgentManager.get_instance()
 
         total_count = len(device_serialnos)
         if total_count == 0:
@@ -419,72 +418,44 @@ class SchedulerManager:
             )
             return
 
-        semaphore = asyncio.Semaphore(4)
+        online_devices = {
+            device.serial: device
+            for device in device_manager.get_devices()
+            if device.state.value == "online"
+        }
 
-        async def _run_device(serialno: str) -> DeviceExecutionResult:
-            async with semaphore:
-                result = await self._execute_single_device(
-                    serialno=serialno,
-                    workflow=workflow,
-                    task_name=task.name,
-                    manager=manager,
-                    device_manager=device_manager,
-                    history_manager=history_manager,
+        schedule_fire_id = str(uuid4())
+        created_count = 0
+        for serialno in device_serialnos:
+            device = online_devices.get(serialno)
+            if device is None:
+                logger.warning(
+                    f"Scheduled task {task.name} skipped offline device {serialno}"
                 )
-                status_icon = "✓" if result.success else "✗"
-                logger.info(
-                    f"  {status_icon} {result.device_model or result.serialno}: {result.message[:50]}"
-                )
-                return result
+                continue
 
-        gather_results = await asyncio.gather(
-            *[_run_device(s) for s in device_serialnos], return_exceptions=True
-        )
+            await task_manager.enqueue_scheduled_task(
+                scheduled_task_id=task.id,
+                workflow_uuid=task.workflow_uuid,
+                device_id=device.primary_device_id,
+                device_serial=device.serial,
+                input_text=workflow["text"],
+                schedule_fire_id=schedule_fire_id,
+            )
+            created_count += 1
 
-        results: list[DeviceExecutionResult] = []
-        for i, r in enumerate(gather_results):
-            if isinstance(r, BaseException):
-                logger.error(f"Device {device_serialnos[i]} raised exception: {r}")
-                results.append(
-                    DeviceExecutionResult(
-                        serialno=device_serialnos[i],
-                        success=False,
-                        message=str(r),
-                    )
-                )
-            else:
-                results.append(r)
-
-        success_count = sum(1 for r in results if r.success)
-        any_success = success_count > 0
-        all_success = success_count == total_count
-
-        summary_parts = []
-        for r in results:
-            status = "✓" if r.success else "✗"
-            short_serial = r.serialno[:8] + "..." if len(r.serialno) > 8 else r.serialno
-            display_name = r.device_model or short_serial
-            summary_parts.append(f"{status} {display_name}: {r.message[:30]}")
-        summary_message = " | ".join(summary_parts)
+        if created_count == 0:
+            self._record_run(
+                task=task,
+                status="failure",
+                message="No online devices available",
+                success_count=0,
+                total_count=total_count,
+            )
+            return
 
         logger.info(
-            f"Task {task.name} completed: {success_count}/{total_count} devices succeeded"
-        )
-
-        status: str
-        if all_success:
-            status = "success"
-        elif any_success:
-            status = "partial"
-        else:
-            status = "failure"
-
-        self._record_run(
-            task=task,
-            status=status,
-            message=summary_message,
-            success_count=success_count,
-            total_count=total_count,
+            f"Scheduled task {task.name} enqueued {created_count}/{total_count} task run(s)"
         )
 
     def _record_run(

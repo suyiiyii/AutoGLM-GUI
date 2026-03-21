@@ -598,6 +598,7 @@ class PhoneAgentManager:
         abort_handler: threading.Event
         | Callable[[], None]
         | Callable[[], Awaitable[None]],
+        context: str = "default",
     ) -> None:
         """注册取消处理器 (支持同步和异步处理器)。
 
@@ -609,11 +610,13 @@ class PhoneAgentManager:
             abort_handler: 取消处理器 (Event / 同步函数 / 异步函数)
         """
         with self._manager_lock:
-            metadata = self._metadata.get(device_id)
+            metadata = self._metadata.get(self._make_agent_key(device_id, context))
             if metadata:
                 metadata.abort_handler = abort_handler
 
-    def unregister_abort_handler(self, device_id: str) -> None:
+    def unregister_abort_handler(
+        self, device_id: str, context: str = "default"
+    ) -> None:
         """注销取消处理器。
 
         Instantaneous operation (microsecond lock hold). Safe to call directly
@@ -623,7 +626,7 @@ class PhoneAgentManager:
             device_id: 设备标识符
         """
         with self._manager_lock:
-            metadata = self._metadata.get(device_id)
+            metadata = self._metadata.get(self._make_agent_key(device_id, context))
             if metadata:
                 metadata.abort_handler = None
 

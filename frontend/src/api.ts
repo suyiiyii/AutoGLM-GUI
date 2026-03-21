@@ -841,6 +841,216 @@ export async function deleteWorkflow(uuid: string): Promise<void> {
   await axios.delete(`/api/workflows/${uuid}`);
 }
 
+// ==================== Task API ====================
+
+export type TaskStatus =
+  | 'QUEUED'
+  | 'RUNNING'
+  | 'SUCCEEDED'
+  | 'FAILED'
+  | 'CANCELLED'
+  | 'INTERRUPTED';
+
+export interface TaskSessionResponse {
+  id: string;
+  kind: string;
+  mode: string;
+  device_id: string;
+  device_serial: string;
+  status: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface TaskRunResponse {
+  id: string;
+  source: string;
+  executor_key: string;
+  session_id: string | null;
+  scheduled_task_id: string | null;
+  workflow_uuid: string | null;
+  schedule_fire_id: string | null;
+  device_id: string;
+  device_serial: string;
+  status: TaskStatus;
+  input_text: string;
+  final_message: string | null;
+  error_message: string | null;
+  step_count: number;
+  created_at: string;
+  started_at: string | null;
+  finished_at: string | null;
+}
+
+export interface TaskRunListResponse {
+  tasks: TaskRunResponse[];
+  total: number;
+  limit: number;
+  offset: number;
+}
+
+export interface TaskEventRecordResponse {
+  task_id: string;
+  seq: number;
+  event_type: string;
+  role: string;
+  payload: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface TaskEventListResponse {
+  events: TaskEventRecordResponse[];
+}
+
+export interface TaskCancelResponse {
+  success: boolean;
+  message: string;
+  task: TaskRunResponse | null;
+}
+
+export async function createTaskSession(
+  deviceId: string,
+  deviceSerial: string
+): Promise<TaskSessionResponse> {
+  const res = await axios.post<TaskSessionResponse>('/api/task-sessions', {
+    device_id: deviceId,
+    device_serial: deviceSerial,
+  });
+  return res.data;
+}
+
+export async function getTaskSession(
+  sessionId: string
+): Promise<TaskSessionResponse> {
+  const res = await axios.get<TaskSessionResponse>(
+    `/api/task-sessions/${sessionId}`
+  );
+  return res.data;
+}
+
+export async function listTaskSessionTasks(
+  sessionId: string,
+  limit: number = 50,
+  offset: number = 0
+): Promise<TaskRunListResponse> {
+  const res = await axios.get<TaskRunListResponse>(
+    `/api/task-sessions/${sessionId}/tasks`,
+    { params: { limit, offset } }
+  );
+  return res.data;
+}
+
+export async function submitTaskSessionTask(
+  sessionId: string,
+  message: string
+): Promise<TaskRunResponse> {
+  const res = await axios.post<TaskRunResponse>(
+    `/api/task-sessions/${sessionId}/tasks`,
+    { message }
+  );
+  return res.data;
+}
+
+export async function getTask(taskId: string): Promise<TaskRunResponse> {
+  const res = await axios.get<TaskRunResponse>(`/api/tasks/${taskId}`);
+  return res.data;
+}
+
+export async function listTaskEvents(
+  taskId: string,
+  afterSeq: number = 0
+): Promise<TaskEventListResponse> {
+  const res = await axios.get<TaskEventListResponse>(
+    `/api/tasks/${taskId}/events`,
+    { params: { after_seq: afterSeq } }
+  );
+  return res.data;
+}
+
+export async function cancelTaskRun(
+  taskId: string
+): Promise<TaskCancelResponse> {
+  const res = await axios.post<TaskCancelResponse>(
+    `/api/tasks/${taskId}/cancel`
+  );
+  return res.data;
+}
+
+export function streamTaskEvents(
+  taskId: string,
+  onEvent: (event: TaskEventRecordResponse) => void,
+  onError?: (message: string) => void,
+  afterSeq: number = 0
+): { close: () => void } {
+  const controller = new AbortController();
+
+  fetch(`/api/tasks/${taskId}/stream?after_seq=${afterSeq}`, {
+    method: 'GET',
+    signal: controller.signal,
+  })
+    .then(async response => {
+      if (!response.ok) {
+        let errorDetail = `HTTP error! status: ${response.status}`;
+        try {
+          const errorData = await response.json();
+          if (errorData.detail) {
+            errorDetail = errorData.detail;
+          }
+        } catch {
+          // Ignore invalid error body
+        }
+        throw new Error(errorDetail);
+      }
+
+      if (!response.body) {
+        throw new Error('Response body is null');
+      }
+
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+      let eventType = 'message';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (line.startsWith('event: ')) {
+            eventType = line.slice(7).trim();
+          } else if (line.startsWith('data: ')) {
+            try {
+              const data = JSON.parse(line.slice(6));
+              onEvent({
+                ...(data as TaskEventRecordResponse),
+                event_type:
+                  (data as TaskEventRecordResponse).event_type || eventType,
+              });
+            } catch (error) {
+              console.error('Failed to parse task SSE data:', error, line);
+            }
+          }
+        }
+      }
+    })
+    .catch(error => {
+      if (error.name === 'AbortError') {
+        return;
+      }
+      if (onError) {
+        onError(error.message);
+      }
+    });
+
+  return {
+    close: () => controller.abort(),
+  };
+}
+
 // ==================== Layered Agent API ====================
 
 export async function abortLayeredAgentChat(sessionId: string): Promise<{

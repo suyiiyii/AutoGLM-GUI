@@ -1103,37 +1103,37 @@ function ChatComponent() {
               </div>
             </div>
           ) : (
-            devices.map(device => (
-              <div
-                key={device.serial}
-                className={`w-full max-w-7xl flex items-stretch justify-center min-h-0 ${
-                  device.id === currentDeviceId ? '' : 'hidden'
-                }`}
-              >
-                {chatMode === 'chatkit' ? (
-                  <div className="w-full flex items-stretch justify-center">
-                    <ChatKitPanel
-                      deviceId={device.id}
-                      deviceSerial={device.serial}
-                      deviceName={device.model}
-                      deviceConnectionType={device.connection_type}
-                      isVisible={device.id === currentDeviceId}
-                    />
-                  </div>
-                ) : (
-                  <div className="w-full flex items-stretch justify-center">
-                    <DevicePanel
-                      deviceId={device.id}
-                      deviceSerial={device.serial}
-                      deviceName={device.model}
-                      deviceConnectionType={device.connection_type}
-                      isConfigured={!!config?.base_url}
-                      isVisible={device.id === currentDeviceId} // ✅ 新增：传递可见性状态
-                    />
-                  </div>
-                )}
-              </div>
-            ))
+            devices
+              .filter(device => device.id === currentDeviceId)
+              .map(device => (
+                <div
+                  key={device.serial}
+                  className="w-full max-w-7xl flex items-stretch justify-center min-h-0"
+                >
+                  {chatMode === 'chatkit' ? (
+                    <div className="w-full flex items-stretch justify-center">
+                      <ChatKitPanel
+                        deviceId={device.id}
+                        deviceSerial={device.serial}
+                        deviceName={device.model}
+                        deviceConnectionType={device.connection_type}
+                        isVisible={device.id === currentDeviceId}
+                      />
+                    </div>
+                  ) : (
+                    <div className="w-full flex items-stretch justify-center">
+                      <DevicePanel
+                        deviceId={device.id}
+                        deviceSerial={device.serial}
+                        deviceName={device.model}
+                        deviceConnectionType={device.connection_type}
+                        isConfigured={!!config?.base_url}
+                        isVisible={device.id === currentDeviceId} // ✅ 新增：传递可见性状态
+                      />
+                    </div>
+                  )}
+                </div>
+              ))
           )}
         </div>
       </div>
