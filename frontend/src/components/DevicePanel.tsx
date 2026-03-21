@@ -16,22 +16,12 @@ import type {
   StepTimingSummary,
   Workflow,
   HistoryRecordResponse,
-  TaskRunResponse,
-  TaskEventRecordResponse,
-  TaskStatus,
 } from '../api';
 import {
   listWorkflows,
   listHistory,
   clearHistory as clearHistoryApi,
   deleteHistoryRecord,
-  createTaskSession,
-  getTaskSession,
-  listTaskSessionTasks,
-  submitTaskSessionTask,
-  listTaskEvents,
-  streamTaskEvents,
-  cancelTaskRun,
 } from '../api';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -51,6 +41,10 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { ImagePreview } from '@/components/ui/image-preview';
+import {
+  useTaskSessionConversation,
+  type TaskConversationMessage,
+} from '../hooks/useTaskSessionConversation';
 
 interface ActionPayload {
   action?: string;
@@ -58,206 +52,6 @@ interface ActionPayload {
   start?: [number, number];
   end?: [number, number];
   [key: string]: unknown;
-}
-
-interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-  steps?: number;
-  success?: boolean;
-  thinking?: string[];
-  actions?: Record<string, unknown>[];
-  screenshots?: (string | undefined)[];
-  stepTimings?: (StepTimingSummary | undefined)[];
-  isStreaming?: boolean;
-  currentThinking?: string; // Current thinking text being streamed
-}
-
-function isTaskActive(status: TaskStatus): boolean {
-  return status === 'QUEUED' || status === 'RUNNING';
-}
-
-function applyTaskEventToTask(
-  task: TaskRunResponse,
-  event: TaskEventRecordResponse
-): TaskRunResponse {
-  const nextTask = { ...task };
-  const payload = event.payload;
-
-  if (event.event_type === 'status') {
-    if (typeof payload.status === 'string') {
-      nextTask.status = payload.status as TaskStatus;
-      if (!isTaskActive(nextTask.status) && !nextTask.finished_at) {
-        nextTask.finished_at = event.created_at;
-      }
-    }
-  } else if (event.event_type === 'done') {
-    nextTask.status = 'SUCCEEDED';
-    nextTask.final_message =
-      typeof payload.message === 'string' ? payload.message : null;
-    nextTask.error_message = null;
-    nextTask.finished_at = event.created_at;
-    if (typeof payload.steps === 'number') {
-      nextTask.step_count = payload.steps;
-    }
-  } else if (event.event_type === 'error') {
-    nextTask.status = 'FAILED';
-    nextTask.final_message =
-      typeof payload.message === 'string' ? payload.message : null;
-    nextTask.error_message =
-      typeof payload.message === 'string' ? payload.message : null;
-    nextTask.finished_at = event.created_at;
-  } else if (event.event_type === 'cancelled') {
-    nextTask.status = 'CANCELLED';
-    nextTask.final_message =
-      typeof payload.message === 'string' ? payload.message : null;
-    nextTask.error_message =
-      typeof payload.message === 'string' ? payload.message : null;
-    nextTask.finished_at = event.created_at;
-  } else if (event.event_type === 'step' && typeof payload.step === 'number') {
-    nextTask.step_count = Math.max(nextTask.step_count, payload.step);
-  }
-
-  return nextTask;
-}
-
-function reconcileTaskRun(
-  task: TaskRunResponse,
-  events: TaskEventRecordResponse[]
-): TaskRunResponse {
-  return events.reduce(
-    (currentTask, event) => applyTaskEventToTask(currentTask, event),
-    { ...task }
-  );
-}
-
-function buildAssistantMessage(
-  task: TaskRunResponse,
-  events: TaskEventRecordResponse[]
-): Message {
-  const thinking: string[] = [];
-  const actions: Record<string, unknown>[] = [];
-  const screenshots: (string | undefined)[] = [];
-  const stepTimings: (StepTimingSummary | undefined)[] = [];
-  let currentThinking = '';
-  let content = task.final_message || task.error_message || '';
-  let steps = task.step_count;
-  let success: boolean | undefined =
-    task.status === 'SUCCEEDED'
-      ? true
-      : task.status === 'FAILED' ||
-          task.status === 'CANCELLED' ||
-          task.status === 'INTERRUPTED'
-        ? false
-        : undefined;
-
-  events.forEach(event => {
-    const payload = event.payload;
-    switch (event.event_type) {
-      case 'thinking': {
-        const chunk = payload.chunk;
-        if (typeof chunk === 'string') {
-          currentThinking += chunk;
-        }
-        break;
-      }
-      case 'step': {
-        const stepThinking =
-          typeof payload.thinking === 'string' && payload.thinking.length > 0
-            ? payload.thinking
-            : currentThinking;
-        thinking.push(stepThinking);
-        actions.push((payload.action as Record<string, unknown>) || {});
-        screenshots.push(
-          typeof payload.screenshot === 'string'
-            ? payload.screenshot
-            : undefined
-        );
-        stepTimings.push(
-          (payload.timings as StepTimingSummary | undefined) || undefined
-        );
-        currentThinking = '';
-        if (typeof payload.step === 'number') {
-          steps = payload.step;
-        }
-        break;
-      }
-      case 'done': {
-        if (typeof payload.message === 'string') {
-          content = payload.message;
-        }
-        if (typeof payload.steps === 'number') {
-          steps = payload.steps;
-        }
-        success = payload.success === true;
-        currentThinking = '';
-        break;
-      }
-      case 'error': {
-        if (typeof payload.message === 'string') {
-          content = payload.message;
-        }
-        success = false;
-        currentThinking = '';
-        break;
-      }
-      case 'cancelled': {
-        if (typeof payload.message === 'string') {
-          content = payload.message;
-        }
-        success = false;
-        currentThinking = '';
-        break;
-      }
-      case 'status': {
-        if (
-          payload.status === 'QUEUED' &&
-          !currentThinking &&
-          !content &&
-          thinking.length === 0
-        ) {
-          currentThinking = 'Waiting for device...';
-        }
-        break;
-      }
-    }
-  });
-
-  if (task.status === 'QUEUED' && !currentThinking && !content) {
-    currentThinking = 'Waiting for device...';
-  }
-
-  return {
-    id: `${task.id}-agent`,
-    role: 'assistant',
-    content,
-    timestamp: new Date(task.finished_at || task.started_at || task.created_at),
-    thinking,
-    actions,
-    screenshots,
-    stepTimings,
-    steps,
-    success,
-    isStreaming: isTaskActive(task.status),
-    currentThinking: currentThinking || undefined,
-  };
-}
-
-function buildMessagePair(
-  task: TaskRunResponse,
-  events: TaskEventRecordResponse[]
-): Message[] {
-  return [
-    {
-      id: `${task.id}-user`,
-      role: 'user',
-      content: task.input_text,
-      timestamp: new Date(task.created_at),
-    },
-    buildAssistantMessage(task, events),
-  ];
 }
 
 interface DevicePanelProps {
@@ -357,32 +151,36 @@ export function DevicePanel({
   isVisible = true, // ✅ 新增：默认 true 向后兼容
 }: DevicePanelProps) {
   const t = useTranslation();
-  const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [aborting, setAborting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   // ✅ 移除 initialized 状态，依赖后端自动初始化
   // const [initialized, setInitialized] = useState(false);
   const [showHistoryPopover, setShowHistoryPopover] = useState(false);
   const [historyItems, setHistoryItems] = useState<HistoryRecordResponse[]>([]);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [showWorkflowPopover, setShowWorkflowPopover] = useState(false);
-  const [sessionId, setSessionId] = useState<string | null>(null);
-
-  const chatStreamRef = useRef<{ close: () => void } | null>(null);
+  const {
+    messages,
+    setMessages,
+    loading,
+    aborting,
+    error,
+    sessionReady,
+    sendMessage,
+    resetConversation,
+    abortConversation,
+  } = useTaskSessionConversation({
+    deviceId,
+    deviceSerial,
+    sessionStorageKey: `autoglm:classic-session:${deviceSerial}`,
+  });
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const messagesContainerRef = useRef<HTMLDivElement>(null);
-  const currentTaskIdRef = useRef<string | null>(null);
-  const taskRunsRef = useRef<Record<string, TaskRunResponse>>({});
-  const taskEventsRef = useRef<Record<string, TaskEventRecordResponse[]>>({});
   // ✅ 移除 hasAutoInited，不再需要自动初始化逻辑
   // const hasAutoInited = useRef(false);
   const prevMessageCountRef = useRef(0);
   const prevMessageSigRef = useRef<string | null>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [showNewMessageNotice, setShowNewMessageNotice] = useState(false);
-  const sessionStorageKey = `autoglm:classic-session:${deviceSerial}`;
   const throttledUpdateScrollStateRef = useRef<ReturnType<
     typeof throttle
   > | null>(null);
@@ -436,7 +234,7 @@ export function DevicePanel({
 
   const handleSelectHistory = (record: HistoryRecordResponse) => {
     // Convert backend messages to frontend Message format
-    const newMessages: Message[] = [];
+    const newMessages: TaskConversationMessage[] = [];
 
     // Find user message from record
     const userMsg = record.messages.find(m => m.role === 'user');
@@ -472,7 +270,7 @@ export function DevicePanel({
       });
 
     // Create agent message
-    const agentMessage: Message = {
+    const agentMessage: TaskConversationMessage = {
       id: `${record.id}-agent`,
       role: 'assistant',
       content: record.final_message,
@@ -531,260 +329,24 @@ export function DevicePanel({
   // Note: Configuration is now managed entirely by backend ConfigManager.
   // If user updates config via Settings, they need to manually re-initialize agents.
 
-  const replaceTaskMessages = useCallback(
-    (taskId: string) => {
-      const task = taskRunsRef.current[taskId];
-      if (!task) return;
-
-      const pair = buildMessagePair(task, taskEventsRef.current[taskId] || []);
-      setMessages(prev => {
-        const userIndex = prev.findIndex(msg => msg.id === pair[0].id);
-        const assistantIndex = prev.findIndex(msg => msg.id === pair[1].id);
-        if (userIndex === -1 || assistantIndex === -1) {
-          return [...prev, ...pair];
-        }
-
-        return prev.map(msg => {
-          if (msg.id === pair[0].id) return pair[0];
-          if (msg.id === pair[1].id) return pair[1];
-          return msg;
-        });
-      });
-    },
-    [setMessages]
-  );
-
-  const applyTaskEvent = useCallback(
-    (taskId: string, event: TaskEventRecordResponse) => {
-      const currentTask = taskRunsRef.current[taskId];
-      if (!currentTask) return;
-
-      taskEventsRef.current[taskId] = [
-        ...(taskEventsRef.current[taskId] || []),
-        event,
-      ];
-
-      const nextTask = applyTaskEventToTask(currentTask, event);
-
-      taskRunsRef.current[taskId] = nextTask;
-      replaceTaskMessages(taskId);
-
-      if (
-        !isTaskActive(nextTask.status) &&
-        currentTaskIdRef.current === taskId
-      ) {
-        setLoading(false);
-        setAborting(false);
-        currentTaskIdRef.current = null;
-      }
-    },
-    [replaceTaskMessages]
-  );
-
-  const attachTaskStream = useCallback(
-    (taskId: string, afterSeq: number = 0) => {
-      if (chatStreamRef.current) {
-        chatStreamRef.current.close();
-      }
-
-      chatStreamRef.current = streamTaskEvents(
-        taskId,
-        event => {
-          applyTaskEvent(taskId, event);
-        },
-        message => {
-          setError(message);
-          setLoading(false);
-          setAborting(false);
-          chatStreamRef.current = null;
-        },
-        afterSeq
-      );
-    },
-    [applyTaskEvent]
-  );
-
-  const restoreSessionConversation = useCallback(
-    async (targetSessionId: string) => {
-      const taskList = await listTaskSessionTasks(targetSessionId, 100, 0);
-      const tasks = [...taskList.tasks].reverse();
-
-      const eventPairs = await Promise.all(
-        tasks.map(
-          async task =>
-            [task.id, (await listTaskEvents(task.id)).events] as const
-        )
-      );
-      taskEventsRef.current = Object.fromEntries(eventPairs);
-      const reconciledTasks = tasks.map(task =>
-        reconcileTaskRun(task, taskEventsRef.current[task.id] || [])
-      );
-      taskRunsRef.current = Object.fromEntries(
-        reconciledTasks.map(task => [task.id, task])
-      );
-      setMessages(
-        reconciledTasks.flatMap(task =>
-          buildMessagePair(task, taskEventsRef.current[task.id] || [])
-        )
-      );
-
-      const activeTask = [...reconciledTasks]
-        .reverse()
-        .find(task => isTaskActive(task.status));
-      if (activeTask) {
-        currentTaskIdRef.current = activeTask.id;
-        setLoading(true);
-        const lastSeq =
-          taskEventsRef.current[activeTask.id]?.[
-            taskEventsRef.current[activeTask.id].length - 1
-          ]?.seq || 0;
-        attachTaskStream(activeTask.id, lastSeq);
-      } else {
-        currentTaskIdRef.current = null;
-        setLoading(false);
-      }
-    },
-    [attachTaskStream]
-  );
-
-  useEffect(() => {
-    let disposed = false;
-
-    const initializeSession = async () => {
-      try {
-        setError(null);
-        const storedSessionId = sessionStorage.getItem(sessionStorageKey);
-        let nextSessionId = storedSessionId;
-
-        if (storedSessionId) {
-          try {
-            const existingSession = await getTaskSession(storedSessionId);
-            if (
-              existingSession.device_id !== deviceId ||
-              existingSession.device_serial !== deviceSerial
-            ) {
-              nextSessionId = null;
-            }
-          } catch {
-            nextSessionId = null;
-          }
-        }
-
-        if (!nextSessionId) {
-          const session = await createTaskSession(deviceId, deviceSerial);
-          nextSessionId = session.id;
-          sessionStorage.setItem(sessionStorageKey, nextSessionId);
-        }
-
-        if (disposed || !nextSessionId) return;
-        setSessionId(nextSessionId);
-        await restoreSessionConversation(nextSessionId);
-      } catch (sessionError) {
-        if (!disposed) {
-          console.error('Failed to initialize task session:', sessionError);
-          setError('Failed to restore chat session');
-          setLoading(false);
-        }
-      }
-    };
-
-    initializeSession();
-
-    return () => {
-      disposed = true;
-      if (chatStreamRef.current) {
-        chatStreamRef.current.close();
-        chatStreamRef.current = null;
-      }
-    };
-  }, [deviceId, deviceSerial, restoreSessionConversation, sessionStorageKey]);
-
   const handleSend = useCallback(async () => {
-    const inputValue = input.trim();
-    if (!inputValue || loading || !sessionId) return;
-
-    try {
-      setError(null);
-      setLoading(true);
-      const task = await submitTaskSessionTask(sessionId, inputValue);
-      const initialEvents = (await listTaskEvents(task.id)).events;
-      const reconciledTask = reconcileTaskRun(task, initialEvents);
-
-      taskRunsRef.current[task.id] = reconciledTask;
-      taskEventsRef.current[task.id] = initialEvents;
-      currentTaskIdRef.current = isTaskActive(reconciledTask.status)
-        ? task.id
-        : null;
-      replaceTaskMessages(task.id);
+    const didSend = await sendMessage(input);
+    if (didSend) {
       setInput('');
-
-      if (isTaskActive(reconciledTask.status)) {
-        const lastSeq = initialEvents[initialEvents.length - 1]?.seq || 0;
-        attachTaskStream(task.id, lastSeq);
-      } else {
-        setLoading(false);
-        setAborting(false);
-      }
-    } catch (sendError) {
-      console.error('Failed to submit task:', sendError);
-      setLoading(false);
-      setError(
-        sendError instanceof Error ? sendError.message : 'Failed to submit task'
-      );
     }
-  }, [attachTaskStream, input, loading, replaceTaskMessages, sessionId]);
+  }, [input, sendMessage]);
 
   const handleReset = useCallback(async () => {
-    if (chatStreamRef.current) {
-      chatStreamRef.current.close();
-      chatStreamRef.current = null;
-    }
-
-    try {
-      const session = await createTaskSession(deviceId, deviceSerial);
-      sessionStorage.setItem(sessionStorageKey, session.id);
-      setSessionId(session.id);
-      taskRunsRef.current = {};
-      taskEventsRef.current = {};
-      currentTaskIdRef.current = null;
-      setMessages([]);
-      setLoading(false);
-      setError(null);
-      setShowNewMessageNotice(false);
-      setIsAtBottom(true);
-      prevMessageCountRef.current = 0;
-      prevMessageSigRef.current = null;
-    } catch (resetError) {
-      console.error('Failed to reset chat session:', resetError);
-      setError(
-        resetError instanceof Error
-          ? resetError.message
-          : 'Failed to reset chat'
-      );
-    }
-  }, [deviceId, deviceSerial, sessionStorageKey]);
+    await resetConversation();
+    setShowNewMessageNotice(false);
+    setIsAtBottom(true);
+    prevMessageCountRef.current = 0;
+    prevMessageSigRef.current = null;
+  }, [resetConversation]);
 
   const handleAbortChat = useCallback(async () => {
-    const taskId = currentTaskIdRef.current;
-    if (!taskId) return;
-
-    setAborting(true);
-    try {
-      const response = await cancelTaskRun(taskId);
-      if (response.task) {
-        taskRunsRef.current[taskId] = response.task;
-        replaceTaskMessages(taskId);
-      }
-    } catch (abortError) {
-      console.error('Failed to abort chat:', abortError);
-      setAborting(false);
-      setError(
-        abortError instanceof Error
-          ? abortError.message
-          : 'Failed to cancel task'
-      );
-    }
-  }, [replaceTaskMessages]);
+    await abortConversation();
+  }, [abortConversation]);
 
   const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -835,14 +397,6 @@ export function DevicePanel({
       return () => cancelAnimationFrame(frameId);
     }
   }, [messages, isAtBottom, scrollToBottom]);
-
-  useEffect(() => {
-    return () => {
-      if (chatStreamRef.current) {
-        chatStreamRef.current.close();
-      }
-    };
-  }, [deviceId]);
 
   // Load workflows
   useEffect(() => {
@@ -1398,7 +952,7 @@ export function DevicePanel({
             {!loading && (
               <Button
                 onClick={handleSend}
-                disabled={!input.trim()}
+                disabled={!input.trim() || !sessionReady}
                 size="icon"
                 variant="twitter"
                 className="h-10 w-10 rounded-full flex-shrink-0"
