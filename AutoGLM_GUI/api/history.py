@@ -14,7 +14,7 @@ from AutoGLM_GUI.schemas import (
     StepTimingSummaryResponse,
     TraceSummaryResponse,
 )
-from AutoGLM_GUI.task_store import TaskStatus, task_store
+from AutoGLM_GUI.task_store import TERMINAL_TASK_STATUSES, TaskStatus, task_store
 
 router = APIRouter()
 
@@ -130,6 +130,10 @@ def _build_history_record_from_task(record: dict[str, Any]) -> HistoryRecordResp
     )
 
 
+def _is_terminal_task_record(record: dict[str, Any]) -> bool:
+    return record["status"] in TERMINAL_TASK_STATUSES
+
+
 def _list_merged_history(serialno: str) -> list[HistoryRecordResponse]:
     task_records, _ = task_store.list_tasks(
         device_serial=serialno, limit=10000, offset=0
@@ -137,7 +141,11 @@ def _list_merged_history(serialno: str) -> list[HistoryRecordResponse]:
     history_total = history_manager.get_total_count(serialno)
     legacy_records = history_manager.list_records(serialno, history_total, 0)
 
-    merged = [_build_history_record_from_task(record) for record in task_records]
+    merged = [
+        _build_history_record_from_task(record)
+        for record in task_records
+        if _is_terminal_task_record(record)
+    ]
     merged.extend(_build_history_record_response(record) for record in legacy_records)
     merged.sort(key=lambda item: item.start_time, reverse=True)
     return merged
@@ -167,7 +175,11 @@ def list_history(
 @router.get("/api/history/{serialno}/{record_id}", response_model=HistoryRecordResponse)
 def get_history_record(serialno: str, record_id: str) -> HistoryRecordResponse:
     task_record = task_store.get_task(record_id)
-    if task_record is not None and task_record["device_serial"] == serialno:
+    if (
+        task_record is not None
+        and task_record["device_serial"] == serialno
+        and _is_terminal_task_record(task_record)
+    ):
         return _build_history_record_from_task(task_record)
 
     record = history_manager.get_record(serialno, record_id)
@@ -181,6 +193,11 @@ def get_history_record(serialno: str, record_id: str) -> HistoryRecordResponse:
 def delete_history_record(serialno: str, record_id: str) -> dict[str, Any]:
     task_record = task_store.get_task(record_id)
     if task_record is not None and task_record["device_serial"] == serialno:
+        if not _is_terminal_task_record(task_record):
+            raise HTTPException(
+                status_code=409,
+                detail="Cannot delete task history while task is still active",
+            )
         success = task_store.delete_task(record_id)
     else:
         success = history_manager.delete_record(serialno, record_id)

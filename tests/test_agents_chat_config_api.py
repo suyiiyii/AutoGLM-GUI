@@ -356,6 +356,41 @@ def test_chat_stream_emits_sse_events(
     assert '"message": "finished"' in body
 
 
+def test_chat_stream_persists_step_timings_from_trace_context(
+    env: dict[str, Any],
+) -> None:
+    async def traced_stream(message: str):
+        _ = message
+        with trace_module.trace_span("agent.step", attrs={"step": 1}):
+            with trace_module.trace_span("step.llm", attrs={"step": 1}):
+                pass
+            yield {
+                "type": "step",
+                "data": {"step": 1, "thinking": "先分析页面"},
+            }
+        yield {
+            "type": "done",
+            "data": {"message": "finished", "success": True, "steps": 1},
+        }
+
+    env["phone_manager"].agent.stream = traced_stream
+
+    response = env["client"].post(
+        "/api/chat/stream",
+        json={"device_id": "device-1", "message": "open settings"},
+    )
+
+    assert response.status_code == 200
+    tasks, total = env["task_store"].list_tasks(limit=10, offset=0)
+    assert total == 1
+    events = env["task_store"].list_task_events(str(tasks[0]["id"]))
+    step_event = next(event for event in events if event["event_type"] == "step")
+    timings = step_event["payload"].get("timings")
+    assert isinstance(timings, dict)
+    assert timings["step"] == 1
+    assert timings["llm_duration_ms"] >= 0
+
+
 def test_chat_stream_supports_sync_agent(env: dict[str, Any]) -> None:
     env["phone_manager"].agent = FakeSyncAgent()
 

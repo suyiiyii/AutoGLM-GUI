@@ -249,6 +249,36 @@ def test_history_includes_task_backed_records(
     assert data["records"][0]["source_detail"] == "session-1"
 
 
+def test_history_excludes_active_task_records(
+    client: TestClient, fake_task_store: FakeTaskStore
+) -> None:
+    fake_task_store.tasks["task-active"] = {
+        "id": "task-active",
+        "source": "chat",
+        "executor_key": "classic_chat",
+        "session_id": "session-2",
+        "scheduled_task_id": None,
+        "workflow_uuid": None,
+        "schedule_fire_id": None,
+        "device_id": "dev-1",
+        "device_serial": "device-1",
+        "status": "RUNNING",
+        "input_text": "继续执行",
+        "final_message": None,
+        "error_message": None,
+        "step_count": 1,
+        "created_at": "2026-01-04T09:00:00",
+        "started_at": "2026-01-04T09:00:01",
+        "finished_at": None,
+    }
+
+    response = client.get("/api/history/device-1")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert all(record["id"] != "task-active" for record in data["records"])
+
+
 def test_list_history_validates_limit_and_offset(client: TestClient) -> None:
     limit_response = client.get("/api/history/device-1", params={"limit": 101})
     assert limit_response.status_code == 400
@@ -285,6 +315,39 @@ def test_delete_history_record_success_and_not_found(client: TestClient) -> None
     missing_resp = client.delete("/api/history/device-1/rec-2")
     assert missing_resp.status_code == 404
     assert missing_resp.json()["detail"] == "Record not found"
+
+
+def test_delete_history_record_rejects_active_task(
+    client: TestClient, fake_task_store: FakeTaskStore
+) -> None:
+    fake_task_store.tasks["task-active"] = {
+        "id": "task-active",
+        "source": "chat",
+        "executor_key": "classic_chat",
+        "session_id": "session-2",
+        "scheduled_task_id": None,
+        "workflow_uuid": None,
+        "schedule_fire_id": None,
+        "device_id": "dev-1",
+        "device_serial": "device-1",
+        "status": "RUNNING",
+        "input_text": "继续执行",
+        "final_message": None,
+        "error_message": None,
+        "step_count": 1,
+        "created_at": "2026-01-04T09:00:00",
+        "started_at": "2026-01-04T09:00:01",
+        "finished_at": None,
+    }
+
+    response = client.delete("/api/history/device-1/task-active")
+
+    assert response.status_code == 409
+    assert (
+        response.json()["detail"]
+        == "Cannot delete task history while task is still active"
+    )
+    assert "task-active" in fake_task_store.tasks
 
 
 def test_clear_history_always_returns_success_message(client: TestClient) -> None:
