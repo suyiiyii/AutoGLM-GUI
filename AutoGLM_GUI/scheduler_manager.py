@@ -238,57 +238,30 @@ class SchedulerManager:
         task_success = False
 
         try:
-            from AutoGLM_GUI.agents.protocols import is_async_agent
-
             agent: Any = manager.get_agent(device.primary_device_id)
             agent.reset()
 
-            if is_async_agent(agent):
-                async for event in agent.stream(workflow["text"]):
-                    step_data: dict[str, Any] = event.get("data", {})
-                    if event["type"] == "step":
-                        messages.append(
-                            MessageRecord(
-                                role="assistant",
-                                content="",
-                                timestamp=datetime.now(),
-                                thinking=step_data.get("thinking", ""),
-                                action=step_data.get("action", {}),
-                                step=step_data.get("step", 0),
-                            )
-                        )
-                    elif event["type"] == "done":
-                        result_message = step_data.get("message", "Task completed")
-                        task_success = step_data.get("success", False)
-                        break
-                    elif event["type"] == "error":
-                        result_message = step_data.get("message", "Task failed")
-                        task_success = False
-                        break
-            else:
-                is_first = True
-                while agent.step_count < agent.agent_config.max_steps:
-                    step_result = await asyncio.to_thread(
-                        agent.step, workflow["text"] if is_first else None
-                    )
-                    is_first = False
+            async for event in agent.stream(workflow["text"]):
+                step_data: dict[str, Any] = event.get("data", {})
+                if event["type"] == "step":
                     messages.append(
                         MessageRecord(
                             role="assistant",
                             content="",
                             timestamp=datetime.now(),
-                            thinking=step_result.thinking,
-                            action=step_result.action,
-                            step=agent.step_count,
+                            thinking=step_data.get("thinking", ""),
+                            action=step_data.get("action", {}),
+                            step=step_data.get("step", 0),
                         )
                     )
-                    if step_result.finished:
-                        result_message = step_result.message or "Task completed"
-                        task_success = step_result.success
-                        break
-                else:
-                    result_message = "Max steps reached"
+                elif event["type"] == "done":
+                    result_message = step_data.get("message", "Task completed")
+                    task_success = step_data.get("success", False)
+                    break
+                elif event["type"] == "error":
+                    result_message = step_data.get("message", "Task failed")
                     task_success = False
+                    break
 
             steps = agent.step_count
             end_time = datetime.now()
