@@ -28,7 +28,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { QRCodeSVG } from 'qrcode.react';
-import type { Device, DeviceGroup, MdnsDevice, RemoteDeviceInfo } from '../api';
+import type { Device, MdnsDevice, RemoteDeviceInfo } from '../api';
 import {
   addRemoteDevice,
   cancelQRPairing,
@@ -37,11 +37,11 @@ import {
   discoverRemoteDevices,
   generateQRPairing,
   getQRPairingStatus,
-  listDeviceGroups,
   pairWifi,
 } from '../api';
 import { useTranslation } from '../lib/i18n-context';
 import { useDebouncedState } from '@/hooks/useDebouncedState';
+import { useDeviceGroups } from '../hooks/useDeviceGroups';
 import type { ToastType } from './Toast';
 
 // Emulator presets for quick connection
@@ -123,23 +123,7 @@ export function DeviceSidebar({
   const [isResizing, setIsResizing] = useState(false);
   const dragStartX = useRef(0);
   const dragStartWidth = useRef(sidebarWidth);
-
-  // Device groups state
-  const [groups, setGroups] = useState<DeviceGroup[]>([]);
-
-  // Fetch groups on mount; device counts are derived from current devices in the list.
-  const fetchGroups = useCallback(async () => {
-    try {
-      const response = await listDeviceGroups();
-      setGroups(response.groups);
-    } catch (error) {
-      console.error('Failed to fetch device groups:', error);
-    }
-  }, []);
-
-  useEffect(() => {
-    fetchGroups();
-  }, [fetchGroups]);
+  const { groups, refreshGroups } = useDeviceGroups();
 
   // Manual WiFi connection
   const [showManualConnect, setShowManualConnect] = useState(false);
@@ -739,7 +723,7 @@ export function DeviceSidebar({
               onConnectWifi={onConnectWifi}
               onDisconnectWifi={onDisconnectWifi}
               onRefreshDevices={onRefreshDevices}
-              onRefreshGroups={fetchGroups}
+              onRefreshGroups={refreshGroups}
               showToast={showToast}
             />
           )}

@@ -3,9 +3,7 @@ import { ScrcpyPlayer } from './ScrcpyPlayer';
 import { WidthControl } from './WidthControl';
 import { ResizableHandle } from './ResizableHandle';
 import { useLocalStorage } from '../hooks/useLocalStorage';
-import { usePageVisibility } from '../hooks/usePageVisibility';
-import type { ScreenshotResponse } from '../api';
-import { getScreenshot } from '../api';
+import { useScreenshotPolling } from '../hooks/useScreenshotPolling';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
@@ -48,10 +46,8 @@ export function DeviceMonitor({
   className = '',
 }: DeviceMonitorProps) {
   const t = useTranslation();
-  const isPageVisible = usePageVisibility();
 
   const isRemoteDevice = connectionType === 'remote';
-  const [screenshot, setScreenshot] = useState<ScreenshotResponse | null>(null);
   const [useVideoStream, setUseVideoStream] = useState(!isRemoteDevice);
   const [videoStreamFailed, setVideoStreamFailed] = useState(false);
   const [displayMode, setDisplayMode] = useState<
@@ -71,9 +67,17 @@ export function DeviceMonitor({
   const [showWebCodecsWarning, setShowWebCodecsWarning] = useState(false);
 
   const videoStreamRef = useRef<{ close: () => void } | null>(null);
-  const screenshotFetchingRef = useRef(false);
   const feedbackTimeoutRef = useRef<number | null>(null);
   const controlsTimeoutRef = useRef<number | null>(null);
+  const shouldPollScreenshots =
+    isVisible &&
+    (displayMode === 'screenshot' ||
+      (displayMode === 'auto' && videoStreamFailed));
+  const { screenshot } = useScreenshotPolling({
+    deviceId,
+    enabled: shouldPollScreenshots,
+    pollDelayMs: getScreenshotPollDelay(displayMode),
+  });
 
   const showFeedback = (
     message: string,
@@ -155,60 +159,6 @@ export function DeviceMonitor({
       }
     };
   }, []);
-
-  useEffect(() => {
-    if (!deviceId || !isVisible || !isPageVisible) return;
-
-    const shouldPollScreenshots =
-      displayMode === 'screenshot' ||
-      (displayMode === 'auto' && videoStreamFailed);
-
-    if (!shouldPollScreenshots) {
-      return;
-    }
-
-    let isCancelled = false;
-    let timeoutId: number | null = null;
-
-    const fetchScreenshot = async () => {
-      if (screenshotFetchingRef.current || isCancelled) return;
-
-      screenshotFetchingRef.current = true;
-      try {
-        const data = await getScreenshot(deviceId);
-        if (!isCancelled && data.success) {
-          setScreenshot(data);
-        }
-      } catch (e) {
-        if (!isCancelled) {
-          console.error('Failed to fetch screenshot:', e);
-        }
-      } finally {
-        screenshotFetchingRef.current = false;
-      }
-    };
-
-    const pollScreenshots = async () => {
-      await fetchScreenshot();
-
-      if (isCancelled) {
-        return;
-      }
-
-      timeoutId = window.setTimeout(() => {
-        void pollScreenshots();
-      }, getScreenshotPollDelay(displayMode));
-    };
-
-    void pollScreenshots();
-
-    return () => {
-      isCancelled = true;
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
-      }
-    };
-  }, [deviceId, videoStreamFailed, displayMode, isVisible, isPageVisible]);
 
   const getReasonMessage = (reason: string): string => {
     const messages: Record<string, string> = {
