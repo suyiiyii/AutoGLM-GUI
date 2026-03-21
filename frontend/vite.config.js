@@ -9,6 +9,7 @@ export default defineConfig({
     __BACKEND_VERSION__: JSON.stringify(
       process.env.VITE_BACKEND_VERSION || 'unknown'
     ),
+    __DEVTOOLS_ENABLED__: JSON.stringify(process.env.NODE_ENV !== 'production'),
   },
   plugins: [
     tanstackRouter({ target: 'react', autoCodeSplitting: true }),

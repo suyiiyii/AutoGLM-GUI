@@ -1,13 +1,13 @@
 import * as React from 'react';
 import { Outlet, createRootRoute } from '@tanstack/react-router';
 import { TanStackRouterDevtools } from '@tanstack/react-router-devtools';
-import { getStatus, checkVersion, type VersionCheckResponse } from '../api';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '@/components/ui/badge';
 import { Github, Globe } from 'lucide-react';
 import { useLocale, useTranslation } from '../lib/i18n-context';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { NavigationSidebar } from '../components/NavigationSidebar';
+import { useFooterVersionInfo } from '../hooks/useFooterVersionInfo';
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -15,74 +15,10 @@ export const Route = createRootRoute({
 
 function Footer() {
   const buildBackendVersion = __BACKEND_VERSION__ || 'unknown';
-  const [backendVersion, setBackendVersion] = React.useState<string | null>(
-    null
-  );
-  const [versionMismatch, setVersionMismatch] = React.useState(false);
   const { locale, setLocale, localeName } = useLocale();
   const t = useTranslation();
-  const [updateInfo, setUpdateInfo] =
-    React.useState<VersionCheckResponse | null>(null);
-  const [showUpdateBadge, setShowUpdateBadge] = React.useState(false);
-
-  React.useEffect(() => {
-    getStatus()
-      .then(status => {
-        setBackendVersion(status.version);
-        if (
-          buildBackendVersion !== 'unknown' &&
-          status.version !== buildBackendVersion
-        ) {
-          setVersionMismatch(true);
-        } else {
-          setVersionMismatch(false);
-        }
-      })
-      .catch(() => setBackendVersion(null));
-
-    // Check for updates
-    const checkForUpdates = async () => {
-      // 1. Check session storage cache (1 hour TTL)
-      const cachedCheck = sessionStorage.getItem('version_check');
-      if (cachedCheck) {
-        try {
-          const { data, timestamp } = JSON.parse(cachedCheck);
-          if (Date.now() - timestamp < 3600000) {
-            // 1 hour
-            setUpdateInfo(data);
-            setShowUpdateBadge(data.has_update);
-            return;
-          }
-        } catch (e) {
-          console.log(e);
-          // Invalid cache, continue to fetch
-        }
-      }
-
-      // 2. Fetch from API
-      try {
-        const result = await checkVersion();
-        setUpdateInfo(result);
-
-        // Cache in session storage
-        sessionStorage.setItem(
-          'version_check',
-          JSON.stringify({
-            data: result,
-            timestamp: Date.now(),
-          })
-        );
-
-        // Show badge if update available
-        setShowUpdateBadge(result.has_update);
-      } catch (err) {
-        console.error('Failed to check for updates:', err);
-        // Silently fail - non-critical feature
-      }
-    };
-
-    checkForUpdates();
-  }, [buildBackendVersion]);
+  const { backendVersion, updateInfo, showUpdateBadge, versionMismatch } =
+    useFooterVersionInfo(buildBackendVersion);
 
   const displayedVersion = backendVersion ?? buildBackendVersion;
   const versionTitle =
@@ -188,7 +124,9 @@ function RootComponent() {
           <Footer />
         </div>
       </div>
-      <TanStackRouterDevtools position="bottom-right" />
+      {__DEVTOOLS_ENABLED__ && (
+        <TanStackRouterDevtools position="bottom-right" />
+      )}
     </div>
   );
 }

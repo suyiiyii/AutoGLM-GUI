@@ -1,4 +1,5 @@
 import axios from 'redaxios';
+import { readServerEventStream } from './lib/sse';
 
 /**
  * 从 axios/redaxios 错误中提取详细的错误信息
@@ -432,69 +433,25 @@ export function sendMessageStream(
     signal: controller.signal,
   })
     .then(async response => {
-      if (!response.ok) {
-        let errorDetail = `HTTP error! status: ${response.status}`;
-        try {
-          const errorData = await response.json();
-          if (errorData.detail) {
-            errorDetail = errorData.detail;
-          }
-        } catch {
-          // 如果无法解析响应体，使用默认的状态码错误
-        }
-        throw new Error(errorDetail);
-      }
-
-      if (!response.body) {
-        throw new Error('Response body is null');
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let eventType = 'message'; // 移到外部，跨 chunks 保持状态
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-
-        // 保留最后一行（可能不完整）
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            eventType = line.slice(7).trim();
-          } else if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-
-              if (eventType === 'thinking') {
-                console.log('[SSE] Received thinking event:', data);
-                onThinking(data as ThinkingEvent);
-              } else if (eventType === 'step') {
-                console.log('[SSE] Received step event:', data);
-                onStep(data as StepEvent);
-              } else if (eventType === 'done') {
-                console.log('[SSE] Received done event:', data);
-                onDone(data as DoneEvent);
-              } else if (eventType === 'cancelled') {
-                console.log('[SSE] Received cancelled event:', data);
-                if (onCancelled) {
-                  onCancelled(data as CancelledEvent);
-                }
-              } else if (eventType === 'error') {
-                console.log('[SSE] Received error event:', data);
-                onError(data as ErrorEvent);
-              }
-            } catch (e) {
-              console.error('Failed to parse SSE data:', line, e);
+      await readServerEventStream(
+        response,
+        (eventType, data) => {
+          if (eventType === 'thinking') {
+            onThinking(data as ThinkingEvent);
+          } else if (eventType === 'step') {
+            onStep(data as StepEvent);
+          } else if (eventType === 'done') {
+            onDone(data as DoneEvent);
+          } else if (eventType === 'cancelled') {
+            if (onCancelled) {
+              onCancelled(data as CancelledEvent);
             }
+          } else if (eventType === 'error') {
+            onError(data as ErrorEvent);
           }
-        }
-      }
+        },
+        'Failed to parse SSE data:'
+      );
     })
     .catch(error => {
       if (error.name === 'AbortError') {
@@ -989,53 +946,17 @@ export function streamTaskEvents(
     signal: controller.signal,
   })
     .then(async response => {
-      if (!response.ok) {
-        let errorDetail = `HTTP error! status: ${response.status}`;
-        try {
-          const errorData = await response.json();
-          if (errorData.detail) {
-            errorDetail = errorData.detail;
-          }
-        } catch {
-          // Ignore invalid error body
-        }
-        throw new Error(errorDetail);
-      }
-
-      if (!response.body) {
-        throw new Error('Response body is null');
-      }
-
-      const reader = response.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let eventType = 'message';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('event: ')) {
-            eventType = line.slice(7).trim();
-          } else if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-              onEvent({
-                ...(data as TaskEventRecordResponse),
-                event_type:
-                  (data as TaskEventRecordResponse).event_type || eventType,
-              });
-            } catch (error) {
-              console.error('Failed to parse task SSE data:', error, line);
-            }
-          }
-        }
-      }
+      await readServerEventStream(
+        response,
+        (eventType, data) => {
+          onEvent({
+            ...(data as TaskEventRecordResponse),
+            event_type:
+              (data as TaskEventRecordResponse).event_type || eventType,
+          });
+        },
+        'Failed to parse task SSE data:'
+      );
     })
     .catch(error => {
       if (error.name === 'AbortError') {
