@@ -18,7 +18,6 @@ import re
 import subprocess
 from dataclasses import dataclass
 from io import BytesIO
-from typing import TYPE_CHECKING
 
 from AutoGLM_GUI.exceptions import DeviceNotAvailableError
 from AutoGLM_GUI.logger import logger
@@ -28,9 +27,6 @@ from AutoGLM_GUI.platform_utils import (
     run_cmd_silently,
 )
 from AutoGLM_GUI.trace import trace_span
-
-if TYPE_CHECKING:
-    from PIL import Image
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
@@ -75,7 +71,9 @@ async def capture_screenshot(
     ) as span:
         attempts = max(1, retries + 1)
         for attempt in range(attempts):
-            data = await _try_capture(device_id=device_id, adb_path=adb_path, timeout=timeout)
+            data = await _try_capture(
+                device_id=device_id, adb_path=adb_path, timeout=timeout
+            )
             if not data:
                 continue
 
@@ -104,7 +102,9 @@ async def capture_screenshot(
         return _fallback_screenshot()
 
 
-async def _try_capture(device_id: str | None, adb_path: str, timeout: int) -> bytes | None:
+async def _try_capture(
+    device_id: str | None, adb_path: str, timeout: int
+) -> bytes | None:
     """Run exec-out screencap and return raw bytes or None on failure (async version).
 
     Raises:
@@ -146,10 +146,7 @@ async def _try_capture(device_id: str | None, adb_path: str, timeout: int) -> by
 
 def _is_valid_png(data: bytes) -> bool:
     """Basic PNG validation (signature + minimal length)."""
-    return (
-        len(data) > len(PNG_SIGNATURE) + 8
-        and data.startswith(PNG_SIGNATURE)
-    )
+    return len(data) > len(PNG_SIGNATURE) + 8 and data.startswith(PNG_SIGNATURE)
 
 
 def _fallback_screenshot() -> Screenshot:
@@ -267,7 +264,9 @@ def _extract_ip(text: str) -> str | None:
     return ip
 
 
-async def get_wifi_ip(adb_path: str = "adb", device_id: str | None = None) -> str | None:
+async def get_wifi_ip(
+    adb_path: str = "adb", device_id: str | None = None
+) -> str | None:
     """
     Prefer WiFi IP when multiple interfaces exist (async version).
 
@@ -277,7 +276,9 @@ async def get_wifi_ip(adb_path: str = "adb", device_id: str | None = None) -> st
     """
     # 1) route
     try:
-        route_out = await _run_async(adb_path, device_id, ["ip", "-4", "route", "get", "8.8.8.8"])
+        route_out = await _run_async(
+            adb_path, device_id, ["ip", "-4", "route", "get", "8.8.8.8"]
+        )
         for line in route_out.splitlines():
             if "src" not in line:
                 continue
@@ -304,7 +305,9 @@ async def get_wifi_ip(adb_path: str = "adb", device_id: str | None = None) -> st
 
     # 2) wlan0 addr
     try:
-        addr_out = await _run_async(adb_path, device_id, ["ip", "-4", "addr", "show", "wlan0"])
+        addr_out = await _run_async(
+            adb_path, device_id, ["ip", "-4", "addr", "show", "wlan0"]
+        )
         ip = _extract_ip(addr_out)
         if ip:
             return ip
@@ -449,7 +452,7 @@ async def pair_device(
 
     try:
         # Execute: adb pair ip:port pairing_code
-        result = await run_cmd_silently(
+        result = await run_adb_async(
             [adb_path, "pair", address, pairing_code], timeout=30
         )
 

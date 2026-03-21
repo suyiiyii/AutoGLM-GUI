@@ -52,6 +52,43 @@ async def run_cmd_silently(cmd: Sequence[str]) -> subprocess.CompletedProcess[st
     return subprocess.CompletedProcess(cmd, return_code, stdout_str, stderr_str)
 
 
+async def run_adb_async(
+    cmd: Sequence[str], timeout: float = 10
+) -> subprocess.CompletedProcess[str]:
+    """Run an ADB command asynchronously with timeout support.
+
+    This is the async version for use in async contexts. It uses
+    asyncio.create_subprocess_exec on Unix and asyncio.to_thread on Windows.
+
+    Args:
+        cmd: ADB command to run as a sequence of strings
+        timeout: Timeout in seconds (default: 10)
+
+    Returns:
+        CompletedProcess with stdout/stderr captured
+
+    Raises:
+        asyncio.TimeoutError: If command exceeds timeout
+    """
+    if is_windows():
+        return await asyncio.to_thread(
+            subprocess.run, cmd, capture_output=True, text=True, timeout=timeout
+        )
+
+    process = await asyncio.create_subprocess_exec(
+        *cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
+    try:
+        stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
+        stdout_str = stdout.decode("utf-8") if stdout else ""
+        stderr_str = stderr.decode("utf-8") if stderr else ""
+        return_code = process.returncode if process.returncode is not None else -1
+        return subprocess.CompletedProcess(cmd, return_code, stdout_str, stderr_str)
+    except asyncio.TimeoutError:
+        process.kill()
+        raise
+
+
 async def spawn_process(
     cmd: Sequence[str], *, capture_output: bool = False
 ) -> subprocess.Popen[bytes] | AsyncProcess:
