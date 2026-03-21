@@ -2,6 +2,7 @@
 
 from typing import Any
 
+from AutoGLM_GUI.actions.types import Action
 from AutoGLM_GUI.logger import logger
 
 
@@ -29,7 +30,7 @@ def _require_str(args: dict[str, Any], key: str) -> str:
     return val
 
 
-def tool_call_to_action(tool_name: str, arguments: dict[str, Any]) -> dict[str, Any]:
+def tool_call_to_action(tool_name: str, arguments: dict[str, Any]) -> Action:
     """Convert a function call to an ActionHandler-compatible action dict.
 
     Args:
@@ -52,7 +53,7 @@ def tool_call_to_action(tool_name: str, arguments: dict[str, Any]) -> dict[str, 
         return {"_metadata": "finish", "message": f"Invalid tool call: {e}"}
 
 
-def _build_action(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
+def _build_action(tool_name: str, args: dict[str, Any]) -> Action:
     """Build action dict with validated arguments."""
     if tool_name == "tap":
         return {

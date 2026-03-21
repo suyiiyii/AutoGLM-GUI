@@ -115,9 +115,7 @@ class ActionHandler:
                 )
                 return result
 
-    def _get_handler(
-        self, action_name: str
-    ) -> ActionHandlerFunc | None:
+    def _get_handler(self, action_name: str) -> ActionHandlerFunc | None:
         handlers = {
             "Launch": self._handle_launch,
             "Tap": self._handle_tap,
@@ -143,9 +141,7 @@ class ActionHandler:
         y = int(clamped_y / 1000 * screen_height)
         return x, y
 
-    def _handle_launch(
-        self, action: Action, width: int, height: int
-    ) -> ActionResult:
+    def _handle_launch(self, action: Action, width: int, height: int) -> ActionResult:
         app_name = action.get("app")
         if not app_name:
             return ActionResult(False, False, "No app name specified")
@@ -155,9 +151,7 @@ class ActionHandler:
             return ActionResult(True, False)
         return ActionResult(False, False, f"App not found: {app_name}")
 
-    def _handle_tap(
-        self, action: Action, width: int, height: int
-    ) -> ActionResult:
+    def _handle_tap(self, action: Action, width: int, height: int) -> ActionResult:
         element = action.get("element")
         if not element:
             return ActionResult(False, False, "No element coordinates")
@@ -165,7 +159,8 @@ class ActionHandler:
         x, y = self._convert_relative_to_absolute(element, width, height)
 
         if "message" in action:
-            if not self.confirmation_callback(action["message"]):
+            msg = action.get("message")
+            if msg and not self.confirmation_callback(msg):
                 return ActionResult(
                     success=False,
                     should_finish=True,
@@ -177,10 +172,8 @@ class ActionHandler:
 
     _ADB_IME = "com.android.adbkeyboard/.AdbIME"
 
-    def _handle_type(
-        self, action: Action, width: int, height: int
-    ) -> ActionResult:
-        text = action.get("text", "")
+    def _handle_type(self, action: Action, width: int, height: int) -> ActionResult:
+        text = action.get("text") or ""
 
         original_ime = self.device.detect_and_set_adb_keyboard()
         need_restore = self._ADB_IME not in original_ime
@@ -216,9 +209,7 @@ class ActionHandler:
 
         return ActionResult(True, False)
 
-    def _handle_swipe(
-        self, action: Action, width: int, height: int
-    ) -> ActionResult:
+    def _handle_swipe(self, action: Action, width: int, height: int) -> ActionResult:
         start = action.get("start")
         end = action.get("end")
 
@@ -231,15 +222,11 @@ class ActionHandler:
         self.device.swipe(start_x, start_y, end_x, end_y)
         return ActionResult(True, False)
 
-    def _handle_back(
-        self, action: Action, width: int, height: int
-    ) -> ActionResult:
+    def _handle_back(self, action: Action, width: int, height: int) -> ActionResult:
         self.device.back()
         return ActionResult(True, False)
 
-    def _handle_home(
-        self, action: Action, width: int, height: int
-    ) -> ActionResult:
+    def _handle_home(self, action: Action, width: int, height: int) -> ActionResult:
         self.device.home()
         return ActionResult(True, False)
 
@@ -267,10 +254,8 @@ class ActionHandler:
 
     MAX_WAIT_SECONDS = 30
 
-    def _handle_wait(
-        self, action: Action, width: int, height: int
-    ) -> ActionResult:
-        duration_str = action.get("duration", "1 seconds")
+    def _handle_wait(self, action: Action, width: int, height: int) -> ActionResult:
+        duration_str = action.get("duration") or "1 seconds"
         try:
             duration = float(duration_str.replace("seconds", "").strip())
         except ValueError:
@@ -284,16 +269,12 @@ class ActionHandler:
         )
         return ActionResult(True, False)
 
-    def _handle_takeover(
-        self, action: Action, width: int, height: int
-    ) -> ActionResult:
-        message = action.get("message", "User intervention required")
+    def _handle_takeover(self, action: Action, width: int, height: int) -> ActionResult:
+        message = action.get("message") or "User intervention required"
         self.takeover_callback(message)
         return ActionResult(True, False)
 
-    def _handle_note(
-        self, action: Action, width: int, height: int
-    ) -> ActionResult:
+    def _handle_note(self, action: Action, width: int, height: int) -> ActionResult:
         return ActionResult(True, False)
 
     @staticmethod

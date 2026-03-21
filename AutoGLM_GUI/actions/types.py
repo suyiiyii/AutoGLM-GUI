@@ -1,7 +1,7 @@
 """Type definitions for actions."""
 
 from dataclasses import dataclass
-from typing import Any, Literal, TypedDict
+from typing import TypedDict
 
 
 @dataclass
@@ -16,7 +16,7 @@ class Action(TypedDict, total=False):
     """Base action type with common fields."""
 
     action: str
-    _metadata: dict[str, Any] | None
+    _metadata: str | None  # Action type: "do", "finish", etc.
     # Element-based actions (tap, double_tap, long_press)
     element: list[int] | None
     # Launch action

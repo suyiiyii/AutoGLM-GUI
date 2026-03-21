@@ -1,13 +1,15 @@
 import ast
 from typing import Any
 
+from AutoGLM_GUI.actions.types import Action
+
 
 class GLMParser:
     @property
     def coordinate_scale(self) -> int:
         return 1000
 
-    def parse(self, raw_response: str) -> dict[str, Any]:
+    def parse(self, raw_response: str) -> Action:
         action_str = raw_response.strip()
 
         if action_str.startswith("finish("):
@@ -16,7 +18,7 @@ class GLMParser:
             return self._parse_do(action_str)
         raise ValueError(f"Unknown action format: {action_str}")
 
-    def _parse_finish(self, action_str: str) -> dict[str, Any]:
+    def _parse_finish(self, action_str: str) -> Action:
         try:
             params = self._extract_params(action_str, "finish")
             return {
@@ -26,12 +28,12 @@ class GLMParser:
         except Exception as e:
             raise ValueError(f"Failed to parse finish action: {e}") from e
 
-    def _parse_do(self, action_str: str) -> dict[str, Any]:
+    def _parse_do(self, action_str: str) -> Action:
         try:
             params = self._extract_params(action_str, "do")
             action_name = params.get("action", "")
 
-            result = {
+            result: Action = {
                 "_metadata": "do",
                 "action": action_name,
             }

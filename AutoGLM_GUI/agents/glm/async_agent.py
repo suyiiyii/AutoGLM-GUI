@@ -7,6 +7,7 @@ from collections.abc import AsyncGenerator
 from typing import Any
 from collections.abc import Callable
 
+from AutoGLM_GUI.actions.types import Action
 from AutoGLM_GUI.agents.base import AsyncAgentBase
 from AutoGLM_GUI.agents.protocols import AsyncAgent
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
@@ -167,7 +168,7 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
             except ValueError as e:
                 if self.agent_config.verbose:
                     logger.warning(f"Failed to parse action: {e}, treating as finish")
-                action = {"_metadata": "finish", "message": action_str}
+                action: Action = {"_metadata": "finish", "message": action_str}
 
         if self.agent_config.verbose:
             msgs = get_messages(self.agent_config.lang)
