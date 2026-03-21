@@ -1,13 +1,16 @@
 """Action handler for executing phone operations."""
 
-from typing import Any
 from collections.abc import Callable
 
 from AutoGLM_GUI.adb.timing import TIMING_CONFIG
 from AutoGLM_GUI.device_protocol import DeviceProtocol
 from AutoGLM_GUI.trace import trace_sleep, trace_span
 
-from .types import ActionResult
+from .types import Action, ActionResult
+
+
+# Handler function type
+ActionHandlerFunc = Callable[[Action, int, int], ActionResult]
 
 
 class ActionHandler:
@@ -22,7 +25,7 @@ class ActionHandler:
         self.takeover_callback = takeover_callback or self._default_takeover
 
     def execute(
-        self, action: dict[str, Any], screen_width: int, screen_height: int
+        self, action: Action, screen_width: int, screen_height: int
     ) -> ActionResult:
         action_type = action.get("_metadata")
         action_name = action.get("action")
@@ -114,7 +117,7 @@ class ActionHandler:
 
     def _get_handler(
         self, action_name: str
-    ) -> Callable[[dict[str, Any], int, int], ActionResult] | None:
+    ) -> ActionHandlerFunc | None:
         handlers = {
             "Launch": self._handle_launch,
             "Tap": self._handle_tap,
@@ -141,7 +144,7 @@ class ActionHandler:
         return x, y
 
     def _handle_launch(
-        self, action: dict[str, Any], width: int, height: int
+        self, action: Action, width: int, height: int
     ) -> ActionResult:
         app_name = action.get("app")
         if not app_name:
@@ -153,7 +156,7 @@ class ActionHandler:
         return ActionResult(False, False, f"App not found: {app_name}")
 
     def _handle_tap(
-        self, action: dict[str, Any], width: int, height: int
+        self, action: Action, width: int, height: int
     ) -> ActionResult:
         element = action.get("element")
         if not element:
@@ -175,7 +178,7 @@ class ActionHandler:
     _ADB_IME = "com.android.adbkeyboard/.AdbIME"
 
     def _handle_type(
-        self, action: dict[str, Any], width: int, height: int
+        self, action: Action, width: int, height: int
     ) -> ActionResult:
         text = action.get("text", "")
 
@@ -214,7 +217,7 @@ class ActionHandler:
         return ActionResult(True, False)
 
     def _handle_swipe(
-        self, action: dict[str, Any], width: int, height: int
+        self, action: Action, width: int, height: int
     ) -> ActionResult:
         start = action.get("start")
         end = action.get("end")
@@ -229,19 +232,19 @@ class ActionHandler:
         return ActionResult(True, False)
 
     def _handle_back(
-        self, action: dict[str, Any], width: int, height: int
+        self, action: Action, width: int, height: int
     ) -> ActionResult:
         self.device.back()
         return ActionResult(True, False)
 
     def _handle_home(
-        self, action: dict[str, Any], width: int, height: int
+        self, action: Action, width: int, height: int
     ) -> ActionResult:
         self.device.home()
         return ActionResult(True, False)
 
     def _handle_double_tap(
-        self, action: dict[str, Any], width: int, height: int
+        self, action: Action, width: int, height: int
     ) -> ActionResult:
         element = action.get("element")
         if not element:
@@ -252,7 +255,7 @@ class ActionHandler:
         return ActionResult(True, False)
 
     def _handle_long_press(
-        self, action: dict[str, Any], width: int, height: int
+        self, action: Action, width: int, height: int
     ) -> ActionResult:
         element = action.get("element")
         if not element:
@@ -265,7 +268,7 @@ class ActionHandler:
     MAX_WAIT_SECONDS = 30
 
     def _handle_wait(
-        self, action: dict[str, Any], width: int, height: int
+        self, action: Action, width: int, height: int
     ) -> ActionResult:
         duration_str = action.get("duration", "1 seconds")
         try:
@@ -282,14 +285,14 @@ class ActionHandler:
         return ActionResult(True, False)
 
     def _handle_takeover(
-        self, action: dict[str, Any], width: int, height: int
+        self, action: Action, width: int, height: int
     ) -> ActionResult:
         message = action.get("message", "User intervention required")
         self.takeover_callback(message)
         return ActionResult(True, False)
 
     def _handle_note(
-        self, action: dict[str, Any], width: int, height: int
+        self, action: Action, width: int, height: int
     ) -> ActionResult:
         return ActionResult(True, False)
 
