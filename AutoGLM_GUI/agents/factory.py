@@ -14,16 +14,16 @@ from AutoGLM_GUI.device_protocol import DeviceProtocol
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.types import AgentSpecificConfig
 
-from .protocols import AsyncAgent, BaseAgent
+from .protocols import AsyncAgent
 
 
 # Agent registry: agent_type -> (creator_function, config_schema)
-AGENT_REGISTRY: dict[str, Callable[..., AsyncAgent | BaseAgent]] = {}
+AGENT_REGISTRY: dict[str, Callable[..., AsyncAgent]] = {}
 
 
 def register_agent(
     agent_type: str,
-    creator: Callable[..., AsyncAgent | BaseAgent],
+    creator: Callable[..., AsyncAgent],
 ) -> None:
     """
     Register a new agent type.
@@ -31,7 +31,7 @@ def register_agent(
     Args:
         agent_type: Unique identifier for the agent type (e.g., "glm-async", "mai")
         creator: Function that creates the agent instance.
-                  Signature: (model_config, agent_config, agent_specific_config, callbacks) -> BaseAgent
+                  Signature: (model_config, agent_config, agent_specific_config, callbacks) -> AsyncAgent
 
     Example:
         >>> def create_mai_agent(model_config, agent_config, mai_config, callbacks):
@@ -54,7 +54,7 @@ def create_agent(
     device: DeviceProtocol,
     takeover_callback: Callable[..., Any] | None = None,
     confirmation_callback: Callable[..., Any] | None = None,
-) -> AsyncAgent | BaseAgent:
+) -> AsyncAgent:
     """
     Create an agent instance using the factory pattern.
 
@@ -68,8 +68,7 @@ def create_agent(
         confirmation_callback: Confirmation callback
 
     Returns:
-        Agent instance implementing AsyncAgent or BaseAgent interface.
-        Use runtime type detection (e.g., inspect.iscoroutinefunction) to determine which.
+        Agent instance implementing AsyncAgent.
 
     Raises:
         ValueError: If agent_type is not registered

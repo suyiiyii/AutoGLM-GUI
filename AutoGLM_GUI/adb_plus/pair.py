@@ -1,6 +1,6 @@
 """ADB wireless pairing support for Android 11+."""
 
-from AutoGLM_GUI.platform_utils import run_cmd_silently_sync
+from AutoGLM_GUI.platform_utils import run_cmd_silently, run_cmd_silently_sync
 
 
 def pair_device(
@@ -58,3 +58,38 @@ def pair_device(
 
     except Exception as e:
         return False, f"Pairing error: {e}"
+
+
+async def pair_device_async(
+    ip: str,
+    port: int,
+    pairing_code: str,
+    adb_path: str = "adb",
+) -> tuple[bool, str]:
+    """Async variant of ``pair_device`` for request flows."""
+    if not pairing_code.isdigit() or len(pairing_code) != 6:
+        return False, "Pairing code must be 6 digits"
+
+    address = f"{ip}:{port}"
+
+    try:
+        result = await run_cmd_silently(
+            [adb_path, "pair", address, pairing_code],
+            timeout=30,
+        )
+        output = result.stdout + result.stderr
+
+        if "Successfully paired" in output or "success" in output.lower():
+            return True, f"Successfully paired to {address}"
+        if "failed" in output.lower():
+            if "pairing code" in output.lower():
+                return False, "Invalid pairing code"
+            if "refused" in output.lower():
+                return (
+                    False,
+                    "Connection refused - check if wireless debugging is enabled",
+                )
+            return False, f"Pairing failed: {output.strip()}"
+        return False, output.strip() or "Unknown pairing error"
+    except Exception as exc:
+        return False, f"Pairing error: {exc}"

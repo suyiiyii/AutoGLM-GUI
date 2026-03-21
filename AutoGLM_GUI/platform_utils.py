@@ -31,19 +31,35 @@ def run_cmd_silently_sync(
     )
 
 
-async def run_cmd_silently(cmd: Sequence[str]) -> subprocess.CompletedProcess[str]:
+async def run_cmd_silently(
+    cmd: Sequence[str], timeout: float | None = None
+) -> subprocess.CompletedProcess[str]:
     """Run a command, suppressing output but preserving it in the result; safe for async contexts on all platforms."""
     if is_windows():
         # Avoid blocking the event loop with a blocking subprocess call on Windows.
         return await asyncio.to_thread(
-            subprocess.run, cmd, capture_output=True, text=True, check=False
+            subprocess.run,
+            cmd,
+            capture_output=True,
+            text=True,
+            check=False,
+            timeout=timeout,
         )
 
     # Use PIPE on macOS/Linux to capture output
     process = await asyncio.create_subprocess_exec(
         *cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
     )
-    stdout, stderr = await process.communicate()
+    try:
+        communicate = process.communicate()
+        if timeout is None:
+            stdout, stderr = await communicate
+        else:
+            stdout, stderr = await asyncio.wait_for(communicate, timeout=timeout)
+    except asyncio.TimeoutError:
+        process.kill()
+        await process.communicate()
+        raise subprocess.TimeoutExpired(cmd, timeout or 0.0)
     # Decode bytes to string for API consistency across platforms
     stdout_str = stdout.decode("utf-8") if stdout else ""
     stderr_str = stderr.decode("utf-8") if stderr else ""

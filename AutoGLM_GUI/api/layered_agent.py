@@ -211,7 +211,6 @@ async def chat(device_id: str, message: str) -> str:
         - steps: 执行的步数
         - success: 是否成功
     """
-    from AutoGLM_GUI.agents.protocols import is_async_agent
     from AutoGLM_GUI.exceptions import DeviceBusyError
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
     from AutoGLM_GUI.prompts import MCP_SYSTEM_PROMPT_ZH
@@ -272,13 +271,10 @@ async def chat(device_id: str, message: str) -> str:
                     attrs={
                         "device_id": device_id,
                         "agent_type": agent.__class__.__name__,
-                        "is_async_agent": is_async_agent(agent),
+                        "is_async_agent": True,
                     },
                 ):
-                    if is_async_agent(agent):
-                        result = await agent.run(message)  # type: ignore[misc]
-                    else:
-                        result = await asyncio.to_thread(agent.run, message)  # type: ignore[misc]
+                    result = await agent.run(message)
                 steps = agent.step_count
 
                 if steps >= MCP_MAX_STEPS and result == "Max steps reached":

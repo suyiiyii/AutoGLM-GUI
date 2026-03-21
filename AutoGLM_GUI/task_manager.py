@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import inspect
 from collections.abc import Awaitable, Callable
-from typing import Any, cast
+from typing import Any
 
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.task_store import (
@@ -258,7 +258,6 @@ class TaskManager:
             self._workers.pop(device_id, None)
 
     async def _execute_classic_chat(self, task: TaskRecord) -> None:
-        from AutoGLM_GUI.agents.protocols import is_async_agent
         from AutoGLM_GUI.exceptions import AgentInitializationError, DeviceBusyError
         from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
         from AutoGLM_GUI.trace import (
@@ -294,12 +293,7 @@ class TaskManager:
                 )
 
                 async def cancel_handler() -> None:
-                    if is_async_agent(agent):
-                        await agent.cancel()  # type: ignore[union-attr]
-                    else:
-                        abort = getattr(agent, "abort", None)
-                        if callable(abort):
-                            await asyncio.to_thread(abort)
+                    await agent.cancel()
 
                 self._abort_handlers[task_id] = cancel_handler
                 self._register_abort_handler(
@@ -310,52 +304,43 @@ class TaskManager:
                 )
                 abort_registered = True
 
-                if is_async_agent(agent):
-                    async for event in agent.stream(task["input_text"]):  # type: ignore[union-attr]
-                        event_type = event["type"]
-                        event_data = dict(event.get("data", {}))
+                async for event in agent.stream(task["input_text"]):
+                    event_type = event["type"]
+                    event_data = dict(event.get("data", {}))
 
-                        if event_type == "step":
-                            step_count = max(step_count, int(event_data.get("step", 0)))
-                            timings = get_step_timing_summary(
-                                step_count,
-                                trace_id=trace_id,
-                            )
-                            if timings is not None:
-                                event_data = {**event_data, "timings": timings}
-
-                        await asyncio.to_thread(
-                            self.store.append_event,
-                            task_id=task_id,
-                            event_type=event_type,
-                            payload=event_data,
-                            role="assistant",
+                    if event_type == "step":
+                        step_count = max(step_count, int(event_data.get("step", 0)))
+                        timings = get_step_timing_summary(
+                            step_count,
+                            trace_id=trace_id,
                         )
+                        if timings is not None:
+                            event_data = {**event_data, "timings": timings}
 
-                        if event_type == "done":
-                            final_message = str(event_data.get("message", ""))
-                            final_status = (
-                                TaskStatus.SUCCEEDED.value
-                                if event_data.get("success", False)
-                                else TaskStatus.FAILED.value
-                            )
-                            step_count = int(event_data.get("steps", step_count))
-                        elif event_type == "error":
-                            final_message = str(
-                                event_data.get("message", "Task failed")
-                            )
-                            final_status = TaskStatus.FAILED.value
-                        elif event_type == "cancelled":
-                            final_message = str(
-                                event_data.get("message", "Task cancelled by user")
-                            )
-                            final_status = TaskStatus.CANCELLED.value
-                else:
-                    sync_agent = cast(Any, agent)
-                    result = await asyncio.to_thread(sync_agent.run, task["input_text"])
-                    step_count = int(sync_agent.step_count)
-                    final_message = str(result)
-                    final_status = TaskStatus.SUCCEEDED.value
+                    await asyncio.to_thread(
+                        self.store.append_event,
+                        task_id=task_id,
+                        event_type=event_type,
+                        payload=event_data,
+                        role="assistant",
+                    )
+
+                    if event_type == "done":
+                        final_message = str(event_data.get("message", ""))
+                        final_status = (
+                            TaskStatus.SUCCEEDED.value
+                            if event_data.get("success", False)
+                            else TaskStatus.FAILED.value
+                        )
+                        step_count = int(event_data.get("steps", step_count))
+                    elif event_type == "error":
+                        final_message = str(event_data.get("message", "Task failed"))
+                        final_status = TaskStatus.FAILED.value
+                    elif event_type == "cancelled":
+                        final_message = str(
+                            event_data.get("message", "Task cancelled by user")
+                        )
+                        final_status = TaskStatus.CANCELLED.value
 
             if not final_message:
                 final_message = "Task finished without a final response"
@@ -431,7 +416,6 @@ class TaskManager:
         )
 
     async def _execute_scheduled_workflow(self, task: TaskRecord) -> None:
-        from AutoGLM_GUI.agents.protocols import is_async_agent
         from AutoGLM_GUI.exceptions import AgentInitializationError, DeviceBusyError
         from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
@@ -459,8 +443,7 @@ class TaskManager:
             )
 
             async def cancel_handler() -> None:
-                if is_async_agent(agent):
-                    await agent.cancel()  # type: ignore[union-attr]
+                await agent.cancel()
 
             self._abort_handlers[task_id] = cancel_handler
             self._register_abort_handler(
@@ -472,79 +455,44 @@ class TaskManager:
             abort_registered = True
             agent.reset()
 
-            if is_async_agent(agent):
-                async for event in agent.stream(task["input_text"]):  # type: ignore[union-attr]
-                    event_type = event["type"]
-                    event_data = dict(event.get("data", {}))
-                    if event_type == "thinking":
-                        await asyncio.to_thread(
-                            self.store.append_event,
-                            task_id=task_id,
-                            event_type="thinking",
-                            payload=event_data,
-                            role="assistant",
-                        )
-                    elif event_type == "step":
-                        step_count = max(step_count, int(event_data.get("step", 0)))
-                        await asyncio.to_thread(
-                            self.store.append_event,
-                            task_id=task_id,
-                            event_type="step",
-                            payload=event_data,
-                            role="assistant",
-                        )
-                    elif event_type == "done":
-                        final_message = str(event_data.get("message", "Task completed"))
-                        final_status = (
-                            TaskStatus.SUCCEEDED.value
-                            if event_data.get("success", False)
-                            else TaskStatus.FAILED.value
-                        )
-                        step_count = int(event_data.get("steps", step_count))
-                    elif event_type == "error":
-                        final_message = str(event_data.get("message", "Task failed"))
-                        final_status = TaskStatus.FAILED.value
-                        await asyncio.to_thread(
-                            self.store.append_event,
-                            task_id=task_id,
-                            event_type="error",
-                            payload={"message": final_message},
-                            role="assistant",
-                        )
-            else:
-                sync_agent = cast(Any, agent)
-                is_first = True
-                while sync_agent.step_count < sync_agent.agent_config.max_steps:
-                    step_result = await asyncio.to_thread(
-                        sync_agent.step,
-                        task["input_text"] if is_first else None,
+            async for event in agent.stream(task["input_text"]):
+                event_type = event["type"]
+                event_data = dict(event.get("data", {}))
+                if event_type == "thinking":
+                    await asyncio.to_thread(
+                        self.store.append_event,
+                        task_id=task_id,
+                        event_type="thinking",
+                        payload=event_data,
+                        role="assistant",
                     )
-                    is_first = False
-                    step_count = int(sync_agent.step_count)
+                elif event_type == "step":
+                    step_count = max(step_count, int(event_data.get("step", 0)))
                     await asyncio.to_thread(
                         self.store.append_event,
                         task_id=task_id,
                         event_type="step",
-                        payload={
-                            "step": step_count,
-                            "thinking": step_result.thinking,
-                            "action": step_result.action,
-                            "success": step_result.success,
-                            "finished": step_result.finished,
-                        },
+                        payload=event_data,
                         role="assistant",
                     )
-                    if step_result.finished:
-                        final_message = step_result.message or "Task completed"
-                        final_status = (
-                            TaskStatus.SUCCEEDED.value
-                            if step_result.success
-                            else TaskStatus.FAILED.value
-                        )
-                        break
-                else:
-                    final_message = "Max steps reached"
+                elif event_type == "done":
+                    final_message = str(event_data.get("message", "Task completed"))
+                    final_status = (
+                        TaskStatus.SUCCEEDED.value
+                        if event_data.get("success", False)
+                        else TaskStatus.FAILED.value
+                    )
+                    step_count = int(event_data.get("steps", step_count))
+                elif event_type == "error":
+                    final_message = str(event_data.get("message", "Task failed"))
                     final_status = TaskStatus.FAILED.value
+                    await asyncio.to_thread(
+                        self.store.append_event,
+                        task_id=task_id,
+                        event_type="error",
+                        payload={"message": final_message},
+                        role="assistant",
+                    )
 
             if not final_message:
                 final_message = "Task finished without a final response"

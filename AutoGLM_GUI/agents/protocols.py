@@ -1,48 +1,9 @@
 from __future__ import annotations
 
-import inspect
 from typing import Any, Protocol
 from collections.abc import AsyncIterator
 
 from AutoGLM_GUI.config import AgentConfig, ModelConfig, StepResult
-
-
-def is_async_agent(agent: AsyncAgent | BaseAgent) -> bool:
-    """Check if an agent implements the AsyncAgent interface.
-
-    Uses runtime inspection to detect async capabilities since static
-    type narrowing is not possible with Protocol union types.
-
-    Args:
-        agent: Agent instance to check
-
-    Returns:
-        True if agent has async stream() method, False otherwise
-    """
-    stream_method = getattr(agent, "stream", None)
-    return stream_method is not None and inspect.isasyncgenfunction(stream_method)
-
-
-class BaseAgent(Protocol):
-    model_config: ModelConfig
-    agent_config: AgentConfig
-
-    def run(self, task: str) -> str: ...
-
-    def step(self, task: str | None = None) -> StepResult: ...
-
-    def reset(self) -> None: ...
-
-    def abort(self) -> None: ...
-
-    @property
-    def step_count(self) -> int: ...
-
-    @property
-    def context(self) -> list[dict[str, Any]]: ...
-
-    @property
-    def is_running(self) -> bool: ...
 
 
 class AsyncAgent(Protocol):
@@ -115,6 +76,10 @@ class AsyncAgent(Protocol):
 
     def reset(self) -> None:
         """重置状态（同步方法，只清理内存）。"""
+        ...
+
+    def step(self, task: str | None = None) -> StepResult:
+        """执行单步任务。"""
         ...
 
     @property

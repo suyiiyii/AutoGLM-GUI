@@ -8,7 +8,9 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import TYPE_CHECKING, Any, TypeAlias
+from typing import TYPE_CHECKING, TypeAlias
+
+from typing_extensions import TypedDict
 
 from AutoGLM_GUI.adb import ADBConnection, ConnectionType, DeviceInfo
 from AutoGLM_GUI.logger import logger
@@ -25,6 +27,29 @@ if TYPE_CHECKING:
 DeviceSerial: TypeAlias = str
 ConnectionDeviceID: TypeAlias = str
 PrimaryDeviceID: TypeAlias = str
+
+
+class ManagedDevicePayload(TypedDict):
+    id: str
+    serial: str
+    model: str
+    display_name: str | None
+    status: str
+    connection_type: str
+    state: str
+    is_available_only: bool
+
+
+class RemoteDeviceConfig(TypedDict):
+    base_url: str
+    device_id: str
+
+
+class RemoteDiscoveryDevice(TypedDict):
+    device_id: str
+    model: str
+    platform: str
+    status: str
 
 
 def map_adb_connection_type_to_device_connection_type(
@@ -153,7 +178,7 @@ class ManagedDevice:
 
         self.primary_connection_idx = sorted_conns[0][0]
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> ManagedDevicePayload:
         """转换为纯设备信息字典（不包含 Agent 状态）。
 
         Returns:
@@ -266,7 +291,7 @@ class DeviceManager:
         self._enable_mdns_discovery: bool = True  # Feature toggle
 
         self._remote_devices: dict[str, DeviceProtocol] = {}
-        self._remote_device_configs: dict[str, dict[str, Any]] = {}
+        self._remote_device_configs: dict[str, RemoteDeviceConfig] = {}
 
         # ADB Keyboard setup state (process-local, best-effort)
         self._adb_keyboard_attempted_serials: set[DeviceSerial] = set()
@@ -840,7 +865,7 @@ class DeviceManager:
 
     def discover_remote_devices(
         self, base_url: str, timeout: int = 5
-    ) -> tuple[bool, str, list[dict[str, Any]]]:
+    ) -> tuple[bool, str, list[RemoteDiscoveryDevice]]:
         """Discover devices from a remote Device Agent Server.
 
         Args:
@@ -860,7 +885,7 @@ class DeviceManager:
             remote_manager = RemoteDeviceManager(base_url, timeout=float(timeout))
             devices = remote_manager.list_devices()
 
-            devices_list = [
+            devices_list: list[RemoteDiscoveryDevice] = [
                 {
                     "device_id": d.device_id,
                     "model": d.model or "Unknown",

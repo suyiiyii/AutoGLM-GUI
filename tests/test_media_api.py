@@ -86,7 +86,7 @@ def media_env(monkeypatch: pytest.MonkeyPatch) -> dict:
     def fake_stop_streamers(device_id: str | None = None) -> None:
         reset_calls.append(device_id)
 
-    def fake_capture_screenshot(device_id: str | None = None) -> FakeScreenshot:
+    async def fake_capture_screenshot(device_id: str | None = None) -> FakeScreenshot:
         captured_requests.append(device_id)
         return FakeScreenshot(
             base64_data="LOCAL_IMG",
@@ -97,7 +97,7 @@ def media_env(monkeypatch: pytest.MonkeyPatch) -> dict:
 
     monkeypatch.setattr(device_manager_module, "DeviceManager", FakeDeviceManagerClass)
     monkeypatch.setattr(media_api, "stop_streamers", fake_stop_streamers)
-    monkeypatch.setattr(media_api, "capture_screenshot", fake_capture_screenshot)
+    monkeypatch.setattr(media_api, "capture_screenshot_async", fake_capture_screenshot)
 
     app = FastAPI()
     app.include_router(media_api.router)
@@ -206,10 +206,10 @@ def test_screenshot_handles_device_not_available_error(
     media_env: dict,
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
-    def raise_unavailable(device_id: str | None = None) -> FakeScreenshot:
+    async def raise_unavailable(device_id: str | None = None) -> FakeScreenshot:
         raise DeviceNotAvailableError("device temporarily offline")
 
-    monkeypatch.setattr(media_api, "capture_screenshot", raise_unavailable)
+    monkeypatch.setattr(media_api, "capture_screenshot_async", raise_unavailable)
 
     response = media_env["client"].post(
         "/api/screenshot",

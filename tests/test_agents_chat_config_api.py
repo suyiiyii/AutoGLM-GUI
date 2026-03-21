@@ -48,22 +48,6 @@ class FakeAsyncAgent:
         self.cancelled = True
 
 
-class FakeSyncAgent:
-    def __init__(self) -> None:
-        self.step_count = 1
-        self.run_result = "sync ok"
-        self.run_error: Exception | None = None
-
-    def run(self, message: str) -> str:
-        _ = message
-        if self.run_error is not None:
-            raise self.run_error
-        return self.run_result
-
-    def abort(self) -> None:
-        return None
-
-
 class FakePhoneAgentManager:
     def __init__(self) -> None:
         self.acquire_mode = "ok"
@@ -261,19 +245,6 @@ def test_chat_unexpected_error_returns_success_false(env: dict[str, Any]) -> Non
     assert env["phone_manager"].release_calls == ["device-2"]
 
 
-def test_chat_supports_sync_agent(env: dict[str, Any]) -> None:
-    env["phone_manager"].agent = FakeSyncAgent()
-
-    response = env["client"].post(
-        "/api/chat",
-        json={"device_id": "device-sync", "message": "open settings"},
-    )
-
-    assert response.status_code == 200
-    assert response.json() == {"result": "sync ok", "steps": 1, "success": True}
-    assert env["phone_manager"].release_calls == ["device-sync"]
-
-
 def test_chat_stream_emits_error_event_when_device_busy(env: dict[str, Any]) -> None:
     env["phone_manager"].acquire_mode = "busy"
 
@@ -389,22 +360,6 @@ def test_chat_stream_persists_step_timings_from_trace_context(
     assert isinstance(timings, dict)
     assert timings["step"] == 1
     assert timings["llm_duration_ms"] >= 0
-
-
-def test_chat_stream_supports_sync_agent(env: dict[str, Any]) -> None:
-    env["phone_manager"].agent = FakeSyncAgent()
-
-    response = env["client"].post(
-        "/api/chat/stream",
-        json={"device_id": "device-sync", "message": "open settings"},
-    )
-
-    assert response.status_code == 200
-    assert response.headers["content-type"].startswith("text/event-stream")
-
-    body = response.text
-    assert "event: done" in body
-    assert '"message": "sync ok"' in body
 
 
 def test_get_config_masks_empty_api_key_and_maps_conflicts(

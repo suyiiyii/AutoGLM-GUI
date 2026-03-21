@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from fastapi import APIRouter
 
-from AutoGLM_GUI.adb_plus import capture_screenshot
+from AutoGLM_GUI.adb_plus import capture_screenshot_async
 from AutoGLM_GUI.exceptions import DeviceNotAvailableError
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.schemas import ScreenshotRequest, ScreenshotResponse
@@ -30,7 +31,7 @@ async def reset_video_stream(device_id: str | None = None) -> dict[str, Any]:
 
 
 @router.post("/api/screenshot", response_model=ScreenshotResponse)
-def take_screenshot(request: ScreenshotRequest) -> ScreenshotResponse:
+async def take_screenshot(request: ScreenshotRequest) -> ScreenshotResponse:
     """获取设备截图。此操作无副作用，不影响 PhoneAgent 运行。"""
     from AutoGLM_GUI.device_manager import DeviceManager
 
@@ -75,7 +76,10 @@ def take_screenshot(request: ScreenshotRequest) -> ScreenshotResponse:
                         error=f"Remote device {serial} not found",
                     )
 
-                screenshot = remote_device.get_screenshot(timeout=10)  # type: ignore
+                screenshot = await asyncio.to_thread(
+                    remote_device.get_screenshot,
+                    timeout=10,
+                )
                 return ScreenshotResponse(
                     success=True,
                     image=screenshot.base64_data,
@@ -84,7 +88,7 @@ def take_screenshot(request: ScreenshotRequest) -> ScreenshotResponse:
                     is_sensitive=screenshot.is_sensitive,
                 )
 
-        screenshot = capture_screenshot(device_id=device_id)
+        screenshot = await capture_screenshot_async(device_id=device_id)
         return ScreenshotResponse(
             success=True,
             image=screenshot.base64_data,

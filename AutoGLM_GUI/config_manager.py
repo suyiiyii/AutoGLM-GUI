@@ -18,9 +18,10 @@ import os
 from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
-from typing import Any, Self
+from typing import Any, Self, cast
 
 from pydantic import BaseModel, field_validator
+from typing_extensions import TypedDict
 
 from AutoGLM_GUI.logger import logger
 
@@ -49,6 +50,19 @@ class ThinkingMode(StrEnum):
 
     FAST = "fast"  # 快速响应模式 - 减少思考时间
     DEEP = "deep"  # 深度思考模式 - 完整思考过程
+
+
+class ConfigFileData(TypedDict, total=False):
+    base_url: str
+    model_name: str
+    api_key: str
+    agent_type: str
+    agent_config_params: dict[str, Any]
+    default_max_steps: int
+    layered_max_turns: int
+    decision_base_url: str
+    decision_model_name: str
+    decision_api_key: str
 
 
 class ConfigModel(BaseModel):
@@ -161,28 +175,31 @@ class ConfigLayer:
         value = getattr(self, key, None)
         return value is not None
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> ConfigFileData:
         """转换为字典，排除 None 值.
 
         Returns:
             dict[str, Any]: 配置字典
         """
-        return {
-            k: v
-            for k, v in {
-                "base_url": self.base_url,
-                "model_name": self.model_name,
-                "api_key": self.api_key,
-                "agent_type": self.agent_type,
-                "agent_config_params": self.agent_config_params,
-                "default_max_steps": self.default_max_steps,
-                "layered_max_turns": self.layered_max_turns,
-                "decision_base_url": self.decision_base_url,
-                "decision_model_name": self.decision_model_name,
-                "decision_api_key": self.decision_api_key,
-            }.items()
-            if v is not None
-        }
+        return cast(
+            ConfigFileData,
+            {
+                k: v
+                for k, v in {
+                    "base_url": self.base_url,
+                    "model_name": self.model_name,
+                    "api_key": self.api_key,
+                    "agent_type": self.agent_type,
+                    "agent_config_params": self.agent_config_params,
+                    "default_max_steps": self.default_max_steps,
+                    "layered_max_turns": self.layered_max_turns,
+                    "decision_base_url": self.decision_base_url,
+                    "decision_model_name": self.decision_model_name,
+                    "decision_api_key": self.decision_api_key,
+                }.items()
+                if v is not None
+            },
+        )
 
 
 # ==================== 配置冲突数据类 ====================
@@ -250,7 +267,7 @@ class UnifiedConfigManager:
         )
 
         # 文件缓存（带修改时间戳）
-        self._file_cache: dict[str, Any] | None = None
+        self._file_cache: ConfigFileData | None = None
         self._file_mtime: float | None = None
 
         # 有效配置缓存
@@ -452,7 +469,7 @@ class UnifiedConfigManager:
             self._config_path.parent.mkdir(parents=True, exist_ok=True)
 
             # 准备新配置
-            new_config: dict[str, str | bool | int | dict[str, Any] | None] = {
+            new_config: ConfigFileData = {
                 "base_url": base_url,
                 "model_name": model_name,
             }
@@ -569,7 +586,7 @@ class UnifiedConfigManager:
             return self._effective_config
 
         # 按优先级合并配置
-        merged = {}
+        merged: ConfigFileData = {}
 
         # 所有配置字段
         config_keys = [
@@ -733,7 +750,7 @@ class UnifiedConfigManager:
         """
         return self._config_path
 
-    def to_dict(self) -> dict[str, Any]:
+    def to_dict(self) -> ConfigFileData:
         """
         将有效配置转换为字典.
 
@@ -741,18 +758,21 @@ class UnifiedConfigManager:
             dict[str, Any]: 配置字典
         """
         config = self.get_effective_config()
-        return {
-            "base_url": config.base_url,
-            "model_name": config.model_name,
-            "api_key": config.api_key,
-            "agent_type": config.agent_type,
-            "agent_config_params": config.agent_config_params,
-            "default_max_steps": config.default_max_steps,
-            "decision_base_url": config.decision_base_url,
-            "decision_model_name": config.decision_model_name,
-            "decision_api_key": config.decision_api_key,
-            "layered_max_turns": config.layered_max_turns,
-        }
+        return cast(
+            ConfigFileData,
+            {
+                "base_url": config.base_url,
+                "model_name": config.model_name,
+                "api_key": config.api_key,
+                "agent_type": config.agent_type,
+                "agent_config_params": config.agent_config_params,
+                "default_max_steps": config.default_max_steps,
+                "decision_base_url": config.decision_base_url,
+                "decision_model_name": config.decision_model_name,
+                "decision_api_key": config.decision_api_key,
+                "layered_max_turns": config.layered_max_turns,
+            },
+        )
 
 
 # ==================== 全局单例 ====================

@@ -13,9 +13,21 @@ from __future__ import annotations
 import json
 import uuid as uuid_lib
 from pathlib import Path
-from typing import Any, Self
+from typing import Self
+
+from typing_extensions import TypedDict
 
 from AutoGLM_GUI.logger import logger
+
+
+class WorkflowRecord(TypedDict):
+    uuid: str
+    name: str
+    text: str
+
+
+class WorkflowFile(TypedDict):
+    workflows: list[WorkflowRecord]
 
 
 class WorkflowManager:
@@ -35,10 +47,10 @@ class WorkflowManager:
             return
         self._initialized = True
         self._workflows_path = Path.home() / ".config" / "autoglm" / "workflows.json"
-        self._file_cache: list[dict[str, Any]] | None = None
+        self._file_cache: list[WorkflowRecord] | None = None
         self._file_mtime: float | None = None
 
-    def list_workflows(self) -> list[dict[str, Any]]:
+    def list_workflows(self) -> list[WorkflowRecord]:
         """获取所有 workflows.
 
         Returns:
@@ -46,7 +58,7 @@ class WorkflowManager:
         """
         return self._load_workflows()
 
-    def get_workflow(self, uuid: str) -> dict[str, Any] | None:
+    def get_workflow(self, uuid: str) -> WorkflowRecord | None:
         """根据 UUID 获取单个 workflow.
 
         Args:
@@ -58,7 +70,7 @@ class WorkflowManager:
         workflows = self._load_workflows()
         return next((wf for wf in workflows if wf["uuid"] == uuid), None)
 
-    def create_workflow(self, name: str, text: str) -> dict[str, Any]:
+    def create_workflow(self, name: str, text: str) -> WorkflowRecord:
         """创建新 workflow.
 
         Args:
@@ -69,7 +81,7 @@ class WorkflowManager:
             dict: 新创建的 workflow
         """
         workflows = self._load_workflows()
-        new_workflow = {
+        new_workflow: WorkflowRecord = {
             "uuid": str(uuid_lib.uuid4()),
             "name": name,
             "text": text,
@@ -79,7 +91,7 @@ class WorkflowManager:
         logger.info(f"Created workflow: {name} (uuid={new_workflow['uuid']})")
         return new_workflow
 
-    def update_workflow(self, uuid: str, name: str, text: str) -> dict[str, Any] | None:
+    def update_workflow(self, uuid: str, name: str, text: str) -> WorkflowRecord | None:
         """更新 workflow.
 
         Args:
@@ -120,7 +132,7 @@ class WorkflowManager:
         logger.warning(f"Workflow not found for deletion: uuid={uuid}")
         return False
 
-    def _load_workflows(self) -> list[dict[str, Any]]:
+    def _load_workflows(self) -> list[WorkflowRecord]:
         """从文件加载（带 mtime 缓存）.
 
         Returns:
@@ -147,7 +159,7 @@ class WorkflowManager:
             logger.warning(f"Failed to load workflows: {e}")
             return []
 
-    def _save_workflows(self, workflows: list[dict[str, Any]]) -> bool:
+    def _save_workflows(self, workflows: list[WorkflowRecord]) -> bool:
         """原子写入文件.
 
         Args:
@@ -158,7 +170,7 @@ class WorkflowManager:
         """
         self._workflows_path.parent.mkdir(parents=True, exist_ok=True)
 
-        data = {"workflows": workflows}
+        data: WorkflowFile = {"workflows": workflows}
 
         # 原子写入：临时文件 + rename
         temp_path = self._workflows_path.with_suffix(".tmp")

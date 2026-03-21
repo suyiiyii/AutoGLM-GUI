@@ -114,8 +114,10 @@ async def _stream_packets(sid: str, streamer: ScrcpyStreamer) -> None:
         logger.exception("Video streaming failed: %s", exc)
         try:
             await sio.emit("error", {"message": str(exc)}, to=sid)
-        except Exception:
-            pass
+        except Exception as emit_exc:
+            logger.debug(
+                "Failed to emit Socket.IO stream error to %s: %s", sid, emit_exc
+            )
     finally:
         await _stop_stream_for_sid(sid)
 

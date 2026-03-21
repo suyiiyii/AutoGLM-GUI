@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Any
 from collections.abc import Callable
 
-from .protocols import AsyncAgent, BaseAgent, is_async_agent
+from .protocols import AsyncAgent
 
 
 def register_agent(agent_type: str, creator: Callable[..., Any]) -> None:
@@ -20,7 +20,7 @@ def create_agent(
     device: Any,
     takeover_callback: Callable[..., Any] | None = None,
     confirmation_callback: Callable[..., Any] | None = None,
-) -> AsyncAgent | BaseAgent:
+) -> AsyncAgent:
     from .factory import create_agent as _create_agent
 
     return _create_agent(
@@ -48,10 +48,8 @@ def is_agent_type_registered(agent_type: str) -> bool:
 
 __all__ = [
     "AsyncAgent",
-    "BaseAgent",
     "create_agent",
     "is_agent_type_registered",
-    "is_async_agent",
     "list_agent_types",
     "register_agent",
 ]

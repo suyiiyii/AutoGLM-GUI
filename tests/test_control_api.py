@@ -65,7 +65,7 @@ def control_env(monkeypatch: pytest.MonkeyPatch) -> dict:
                 }
             )
 
-    def fake_touch_down(
+    async def fake_touch_down(
         x: int, y: int, device_id: str | None = None, delay: float = 0.0
     ) -> None:
         if should_fail["down"]:
@@ -74,7 +74,7 @@ def control_env(monkeypatch: pytest.MonkeyPatch) -> dict:
             {"x": x, "y": y, "device_id": device_id, "delay": delay}
         )
 
-    def fake_touch_move(
+    async def fake_touch_move(
         x: int, y: int, device_id: str | None = None, delay: float = 0.0
     ) -> None:
         if should_fail["move"]:
@@ -83,7 +83,7 @@ def control_env(monkeypatch: pytest.MonkeyPatch) -> dict:
             {"x": x, "y": y, "device_id": device_id, "delay": delay}
         )
 
-    def fake_touch_up(
+    async def fake_touch_up(
         x: int, y: int, device_id: str | None = None, delay: float = 0.0
     ) -> None:
         if should_fail["up"]:
@@ -93,9 +93,9 @@ def control_env(monkeypatch: pytest.MonkeyPatch) -> dict:
         )
 
     monkeypatch.setattr(control_api, "ADBDevice", FakeADBDevice)
-    monkeypatch.setattr(adb_plus, "touch_down", fake_touch_down)
-    monkeypatch.setattr(adb_plus, "touch_move", fake_touch_move)
-    monkeypatch.setattr(adb_plus, "touch_up", fake_touch_up)
+    monkeypatch.setattr(adb_plus, "touch_down_async", fake_touch_down)
+    monkeypatch.setattr(adb_plus, "touch_move_async", fake_touch_move)
+    monkeypatch.setattr(adb_plus, "touch_up_async", fake_touch_up)
 
     app = FastAPI()
     app.include_router(control_api.router)

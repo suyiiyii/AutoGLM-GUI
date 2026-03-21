@@ -2,7 +2,7 @@
 
 import re
 
-from AutoGLM_GUI.platform_utils import run_cmd_silently_sync
+from AutoGLM_GUI.platform_utils import run_cmd_silently, run_cmd_silently_sync
 
 
 def extract_serial_from_mdns(device_id: str) -> str | None:
@@ -104,6 +104,36 @@ def get_device_serial(device_id: str, adb_path: str = "adb") -> str:
     # Fallback: Use device_id itself as serial
     # This handles emulators (MuMu, Nox, etc.) and restricted devices
     # that don't expose serial number via getprop
+    logger.warning(
+        f"Could not get hardware serial for {device_id}, "
+        f"using device_id as serial (emulator/restricted device)"
+    )
+    return device_id
+
+
+async def get_device_serial_async(device_id: str, adb_path: str = "adb") -> str:
+    """Async variant of ``get_device_serial`` for request flows."""
+    from AutoGLM_GUI.logger import logger
+
+    mdns_serial = extract_serial_from_mdns(device_id)
+    if mdns_serial:
+        logger.debug(f"Extracted serial from mDNS name: {device_id} → {mdns_serial}")
+        return mdns_serial
+
+    for prop in _SERIAL_PROPS:
+        try:
+            result = await run_cmd_silently(
+                [adb_path, "-s", device_id, "shell", "getprop", prop],
+                timeout=5,
+            )
+            if result.returncode == 0:
+                serial = result.stdout.strip()
+                if serial and not serial.startswith("error:") and serial != "unknown":
+                    logger.debug(f"Got serial via {prop}: {device_id} → {serial}")
+                    return serial
+        except Exception as exc:
+            logger.debug(f"Failed to get serial via {prop} for {device_id}: {exc}")
+
     logger.warning(
         f"Could not get hardware serial for {device_id}, "
         f"using device_id as serial (emulator/restricted device)"

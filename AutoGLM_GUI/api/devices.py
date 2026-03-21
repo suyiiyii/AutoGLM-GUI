@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import APIRouter
 
@@ -58,7 +58,7 @@ def _build_device_response_with_agent(
     """
     from AutoGLM_GUI.device_group_manager import device_group_manager
 
-    response = device.to_dict()
+    response: dict[str, Any] = dict(device.to_dict())
 
     # 添加分组信息
     response["group_id"] = device_group_manager.get_device_group(device.serial)

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from enum import StrEnum
 from typing import Any
 
-from AutoGLM_GUI.agents.protocols import AsyncAgent, BaseAgent
+from AutoGLM_GUI.agents.protocols import AsyncAgent
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.exceptions import (
     AgentInitializationError,
@@ -91,8 +91,7 @@ class PhoneAgentManager:
         self._metadata: dict[str, AgentMetadata] = {}
 
         # Agent storage (transition from global state to instance state)
-        # Agents can be either AsyncAgent or BaseAgent depending on agent_type
-        self._agents: dict[str, AsyncAgent | BaseAgent] = {}
+        self._agents: dict[str, AsyncAgent] = {}
         self._agent_configs: dict[str, tuple[ModelConfig, AgentConfig]] = {}
 
     @classmethod
@@ -117,7 +116,7 @@ class PhoneAgentManager:
         takeover_callback: Callable[..., Any] | None = None,
         confirmation_callback: Callable[..., Any] | None = None,
         force: bool = False,
-    ) -> AsyncAgent | BaseAgent:
+    ) -> AsyncAgent:
         from AutoGLM_GUI.agents import create_agent
 
         with trace_span(
@@ -277,7 +276,7 @@ class PhoneAgentManager:
         )
         logger.info(f"Agent auto-initialized for key {agent_key}")
 
-    def get_agent(self, device_id: str) -> AsyncAgent | BaseAgent:
+    def get_agent(self, device_id: str) -> AsyncAgent:
         """Get agent using default context (backward compatible)."""
         return self.get_agent_with_context(device_id, context="default")
 
@@ -286,7 +285,7 @@ class PhoneAgentManager:
         device_id: str,
         context: str = "default",
         agent_type: str | None = None,
-    ) -> AsyncAgent | BaseAgent:
+    ) -> AsyncAgent:
         """Get or create agent for specific context.
 
         Args:
@@ -305,7 +304,7 @@ class PhoneAgentManager:
 
             return self._agents[agent_key]
 
-    def get_agent_safe(self, device_id: str) -> AsyncAgent | BaseAgent | None:
+    def get_agent_safe(self, device_id: str) -> AsyncAgent | None:
         with self._manager_lock:
             return self._agents.get(device_id)
 
@@ -522,7 +521,7 @@ class PhoneAgentManager:
             auto_initialize: Auto-initialize if not already initialized (default: True)
 
         Yields:
-            BaseAgent: Agent instance
+            AsyncAgent: Agent instance
 
         Raises:
             DeviceBusyError: If device is busy

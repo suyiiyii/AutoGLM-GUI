@@ -6,6 +6,7 @@ import re
 from dataclasses import dataclass
 from typing import Any
 
+from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.platform_utils import run_cmd_silently_sync
 
 __all__ = ["MdnsDevice", "discover_mdns_devices"]
@@ -187,6 +188,7 @@ def discover_mdns_devices(adb_path: str = "adb") -> list[MdnsDevice]:
 
         return devices
 
-    except Exception:
+    except Exception as exc:
+        logger.debug("Failed to discover mDNS devices: %s", exc)
         # Return empty list on any error (timeout, command not found, etc.)
         return []

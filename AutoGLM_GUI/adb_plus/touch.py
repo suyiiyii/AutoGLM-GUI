@@ -1,9 +1,10 @@
 """Touch control utilities using ADB motion events for real-time dragging."""
 
+import asyncio
 import subprocess
 import time
 
-from AutoGLM_GUI.platform_utils import build_adb_command
+from AutoGLM_GUI.platform_utils import build_adb_command, run_cmd_silently
 
 
 def touch_down(
@@ -85,3 +86,54 @@ def touch_up(
     )
     if delay > 0:
         time.sleep(delay)
+
+
+async def touch_down_async(
+    x: int,
+    y: int,
+    device_id: str | None = None,
+    delay: float = 0.0,
+    adb_path: str = "adb",
+) -> None:
+    """Async variant of ``touch_down`` for request handlers."""
+    adb_prefix = build_adb_command(device_id, adb_path)
+    await run_cmd_silently(
+        adb_prefix + ["shell", "input", "motionevent", "DOWN", str(x), str(y)],
+        timeout=5,
+    )
+    if delay > 0:
+        await asyncio.sleep(delay)
+
+
+async def touch_move_async(
+    x: int,
+    y: int,
+    device_id: str | None = None,
+    delay: float = 0.0,
+    adb_path: str = "adb",
+) -> None:
+    """Async variant of ``touch_move`` for request handlers."""
+    adb_prefix = build_adb_command(device_id, adb_path)
+    await run_cmd_silently(
+        adb_prefix + ["shell", "input", "motionevent", "MOVE", str(x), str(y)],
+        timeout=5,
+    )
+    if delay > 0:
+        await asyncio.sleep(delay)
+
+
+async def touch_up_async(
+    x: int,
+    y: int,
+    device_id: str | None = None,
+    delay: float = 0.0,
+    adb_path: str = "adb",
+) -> None:
+    """Async variant of ``touch_up`` for request handlers."""
+    adb_prefix = build_adb_command(device_id, adb_path)
+    await run_cmd_silently(
+        adb_prefix + ["shell", "input", "motionevent", "UP", str(x), str(y)],
+        timeout=5,
+    )
+    if delay > 0:
+        await asyncio.sleep(delay)

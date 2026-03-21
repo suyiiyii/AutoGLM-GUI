@@ -550,8 +550,8 @@ class ScrcpyStreamer:
         if self.tcp_socket:
             try:
                 self.tcp_socket.close()
-            except Exception:
-                pass
+            except OSError as exc:
+                logger.debug("Failed to close scrcpy socket: %s", exc)
             self.tcp_socket = None
 
         if self.scrcpy_process:
@@ -559,11 +559,12 @@ class ScrcpyStreamer:
                 self.scrcpy_process.terminate()
                 if isinstance(self.scrcpy_process, subprocess.Popen):
                     self.scrcpy_process.wait(timeout=2)
-            except Exception:
+            except (OSError, subprocess.TimeoutExpired) as exc:
+                logger.debug("Graceful scrcpy shutdown failed: %s", exc)
                 try:
                     self.scrcpy_process.kill()
-                except Exception:
-                    pass
+                except OSError as kill_exc:
+                    logger.debug("Failed to kill scrcpy process: %s", kill_exc)
             self.scrcpy_process = None
 
         if self.forward_cleanup_needed:
@@ -578,8 +579,12 @@ class ScrcpyStreamer:
                     stderr=subprocess.DEVNULL,
                     timeout=2,
                 )
-            except Exception:
-                pass
+            except (OSError, subprocess.SubprocessError) as exc:
+                logger.debug(
+                    "Failed to remove adb forward for port %s: %s",
+                    self.port,
+                    exc,
+                )
             self.forward_cleanup_needed = False
 
     def __del__(self):

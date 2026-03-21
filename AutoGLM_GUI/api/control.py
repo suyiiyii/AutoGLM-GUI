@@ -1,5 +1,7 @@
 """Device control routes (tap/swipe/touch)."""
 
+import asyncio
+
 from fastapi import APIRouter
 
 from AutoGLM_GUI.devices.adb_device import ADBDevice
@@ -20,14 +22,15 @@ router = APIRouter()
 
 
 @router.post("/api/control/tap", response_model=TapResponse)
-def control_tap(request: TapRequest) -> TapResponse:
+async def control_tap(request: TapRequest) -> TapResponse:
     """Execute tap at specified device coordinates."""
     try:
         if not request.device_id:
             return TapResponse(success=False, error="device_id is required")
 
         device = ADBDevice(request.device_id)
-        device.tap(
+        await asyncio.to_thread(
+            device.tap,
             x=request.x,
             y=request.y,
             delay=request.delay,
@@ -39,14 +42,15 @@ def control_tap(request: TapRequest) -> TapResponse:
 
 
 @router.post("/api/control/swipe", response_model=SwipeResponse)
-def control_swipe(request: SwipeRequest) -> SwipeResponse:
+async def control_swipe(request: SwipeRequest) -> SwipeResponse:
     """Execute swipe from start to end coordinates."""
     try:
         if not request.device_id:
             return SwipeResponse(success=False, error="device_id is required")
 
         device = ADBDevice(request.device_id)
-        device.swipe(
+        await asyncio.to_thread(
+            device.swipe,
             start_x=request.start_x,
             start_y=request.start_y,
             end_x=request.end_x,
@@ -61,12 +65,12 @@ def control_swipe(request: SwipeRequest) -> SwipeResponse:
 
 
 @router.post("/api/control/touch/down", response_model=TouchDownResponse)
-def control_touch_down(request: TouchDownRequest) -> TouchDownResponse:
+async def control_touch_down(request: TouchDownRequest) -> TouchDownResponse:
     """Send touch DOWN event at specified device coordinates."""
     try:
-        from AutoGLM_GUI.adb_plus import touch_down
+        from AutoGLM_GUI.adb_plus import touch_down_async
 
-        touch_down(
+        await touch_down_async(
             x=request.x,
             y=request.y,
             device_id=request.device_id,
@@ -79,12 +83,12 @@ def control_touch_down(request: TouchDownRequest) -> TouchDownResponse:
 
 
 @router.post("/api/control/touch/move", response_model=TouchMoveResponse)
-def control_touch_move(request: TouchMoveRequest) -> TouchMoveResponse:
+async def control_touch_move(request: TouchMoveRequest) -> TouchMoveResponse:
     """Send touch MOVE event at specified device coordinates."""
     try:
-        from AutoGLM_GUI.adb_plus import touch_move
+        from AutoGLM_GUI.adb_plus import touch_move_async
 
-        touch_move(
+        await touch_move_async(
             x=request.x,
             y=request.y,
             device_id=request.device_id,
@@ -97,12 +101,12 @@ def control_touch_move(request: TouchMoveRequest) -> TouchMoveResponse:
 
 
 @router.post("/api/control/touch/up", response_model=TouchUpResponse)
-def control_touch_up(request: TouchUpRequest) -> TouchUpResponse:
+async def control_touch_up(request: TouchUpRequest) -> TouchUpResponse:
     """Send touch UP event at specified device coordinates."""
     try:
-        from AutoGLM_GUI.adb_plus import touch_up
+        from AutoGLM_GUI.adb_plus import touch_up_async
 
-        touch_up(
+        await touch_up_async(
             x=request.x,
             y=request.y,
             device_id=request.device_id,
