@@ -1,7 +1,7 @@
 """MAI Agent - Internal implementation.
 
 This module co-locates all MAI-specific code:
-- InternalMAIAgent: The main agent implementation
+- AsyncMAIAgent: The async agent implementation
 - MAIParser: XML+JSON format parser with coordinate conversion (0-999 to 0-1000)
 - MAI_MOBILE_SYSTEM_PROMPT: System prompt for Chinese environments
 - TrajMemory, TrajStep: Trajectory memory for multi-step tasks
@@ -13,7 +13,6 @@ Design notes:
 - Internal implementation replacing third-party mai_agent dependency
 """
 
-from .agent import InternalMAIAgent
 from .async_agent import AsyncMAIAgent
 from .parser import MAIParser, MAIParseError
 from .prompts import MAI_MOBILE_SYSTEM_PROMPT
@@ -21,7 +20,6 @@ from .traj_memory import TrajMemory, TrajStep
 
 __all__ = [
     "AsyncMAIAgent",
-    "InternalMAIAgent",
     "MAIParser",
     "MAIParseError",
     "MAI_MOBILE_SYSTEM_PROMPT",
