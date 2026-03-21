@@ -49,6 +49,7 @@ import {
   Smartphone,
 } from 'lucide-react';
 import { useTranslation } from '../lib/i18n-context';
+import { usePageVisibility } from '../hooks/usePageVisibility';
 
 // 视觉模型预设配置
 const VISION_PRESETS = [
@@ -159,6 +160,50 @@ type ElectronRelaunchAPI = {
   };
 };
 
+function areAgentStatesEqual(
+  left: Device['agent'] | null,
+  right: Device['agent'] | null
+): boolean {
+  if (left === right) {
+    return true;
+  }
+
+  if (!left || !right) {
+    return false;
+  }
+
+  return (
+    left.state === right.state &&
+    left.created_at === right.created_at &&
+    left.last_used === right.last_used &&
+    left.error_message === right.error_message &&
+    left.model_name === right.model_name
+  );
+}
+
+function areDevicesEqual(previous: Device[], next: Device[]): boolean {
+  if (previous.length !== next.length) {
+    return false;
+  }
+
+  return previous.every((device, index) => {
+    const nextDevice = next[index];
+
+    return (
+      device.id === nextDevice.id &&
+      device.serial === nextDevice.serial &&
+      device.model === nextDevice.model &&
+      device.status === nextDevice.status &&
+      device.connection_type === nextDevice.connection_type &&
+      device.state === nextDevice.state &&
+      device.is_available_only === nextDevice.is_available_only &&
+      device.display_name === nextDevice.display_name &&
+      device.group_id === nextDevice.group_id &&
+      areAgentStatesEqual(device.agent, nextDevice.agent)
+    );
+  });
+}
+
 export const Route = createFileRoute('/chat')({
   component: ChatComponent,
   validateSearch: (search: Record<string, unknown>): ChatSearchParams => {
@@ -174,6 +219,7 @@ function ChatComponent() {
   const t = useTranslation();
   const searchParams = Route.useSearch();
   const navigate = useNavigate();
+  const isPageVisible = usePageVisibility();
   const [devices, setDevices] = useState<Device[]>([]);
   const [currentDeviceId, setCurrentDeviceId] = useState<string>('');
   // Chat mode: 'classic' for DevicePanel (single model), 'chatkit' for ChatKitPanel (layered agent)
@@ -198,6 +244,7 @@ function ChatComponent() {
   const [showConfig, setShowConfig] = useState(false);
   const [showGroupManager, setShowGroupManager] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
+  const isLoadingDevicesRef = React.useRef(false);
   const [tempConfig, setTempConfig] = useState({
     base_url: VISION_PRESETS[0].config.base_url as string,
     model_name: VISION_PRESETS[0].config.model_name as string,
@@ -259,6 +306,11 @@ function ChatComponent() {
   }, []);
 
   const loadDevices = useCallback(async () => {
+    if (isLoadingDevicesRef.current) {
+      return;
+    }
+
+    isLoadingDevicesRef.current = true;
     try {
       const response = await listDevices();
 
@@ -289,7 +341,11 @@ function ChatComponent() {
       });
 
       const filteredDevices = Array.from(deviceMap.values());
-      setDevices(filteredDevices);
+      setDevices(previousDevices =>
+        areDevicesEqual(previousDevices, filteredDevices)
+          ? previousDevices
+          : filteredDevices
+      );
 
       // On initial load, try to select device from URL serial param
       if (filteredDevices.length > 0 && !initialDeviceSet) {
@@ -318,23 +374,40 @@ function ChatComponent() {
       }
     } catch (error) {
       console.error('Failed to load devices:', error);
+    } finally {
+      isLoadingDevicesRef.current = false;
     }
   }, [currentDeviceId, initialDeviceSet, searchParams.serial]);
 
   useEffect(() => {
-    // Initial load with a small delay to avoid synchronous setState
-    const timeoutId = setTimeout(() => {
-      loadDevices();
-    }, 0);
+    if (!isPageVisible) {
+      return;
+    }
 
-    // Set up interval for periodic updates
-    const intervalId = setInterval(loadDevices, 3000);
+    let isCancelled = false;
+    let timeoutId: number | null = null;
+
+    const pollDevices = async () => {
+      await loadDevices();
+
+      if (isCancelled) {
+        return;
+      }
+
+      timeoutId = window.setTimeout(() => {
+        void pollDevices();
+      }, 3000);
+    };
+
+    void pollDevices();
 
     return () => {
-      clearTimeout(timeoutId);
-      clearInterval(intervalId);
+      isCancelled = true;
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
     };
-  }, [loadDevices]);
+  }, [isPageVisible, loadDevices]);
 
   // Sync state changes to URL search params
   useEffect(() => {

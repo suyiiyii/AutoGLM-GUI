@@ -127,7 +127,7 @@ export function DeviceSidebar({
   // Device groups state
   const [groups, setGroups] = useState<DeviceGroup[]>([]);
 
-  // Fetch groups on mount and when devices change
+  // Fetch groups on mount; device counts are derived from current devices in the list.
   const fetchGroups = useCallback(async () => {
     try {
       const response = await listDeviceGroups();
@@ -140,11 +140,6 @@ export function DeviceSidebar({
   useEffect(() => {
     fetchGroups();
   }, [fetchGroups]);
-
-  // Refresh groups when devices change (to update device counts)
-  useEffect(() => {
-    fetchGroups();
-  }, [devices, fetchGroups]);
 
   // Manual WiFi connection
   const [showManualConnect, setShowManualConnect] = useState(false);

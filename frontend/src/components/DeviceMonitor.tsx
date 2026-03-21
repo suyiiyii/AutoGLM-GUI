@@ -3,6 +3,7 @@ import { ScrcpyPlayer } from './ScrcpyPlayer';
 import { WidthControl } from './WidthControl';
 import { ResizableHandle } from './ResizableHandle';
 import { useLocalStorage } from '../hooks/useLocalStorage';
+import { usePageVisibility } from '../hooks/usePageVisibility';
 import type { ScreenshotResponse } from '../api';
 import { getScreenshot } from '../api';
 import { Button } from '@/components/ui/button';
@@ -35,6 +36,10 @@ interface DeviceMonitorProps {
   className?: string;
 }
 
+function getScreenshotPollDelay(mode: 'auto' | 'video' | 'screenshot'): number {
+  return mode === 'screenshot' ? 750 : 1200;
+}
+
 export function DeviceMonitor({
   deviceId,
   serial: _serial,
@@ -43,6 +48,7 @@ export function DeviceMonitor({
   className = '',
 }: DeviceMonitorProps) {
   const t = useTranslation();
+  const isPageVisible = usePageVisibility();
 
   const isRemoteDevice = connectionType === 'remote';
   const [screenshot, setScreenshot] = useState<ScreenshotResponse | null>(null);
@@ -151,7 +157,7 @@ export function DeviceMonitor({
   }, []);
 
   useEffect(() => {
-    if (!deviceId || !isVisible) return;
+    if (!deviceId || !isVisible || !isPageVisible) return;
 
     const shouldPollScreenshots =
       displayMode === 'screenshot' ||
@@ -161,27 +167,48 @@ export function DeviceMonitor({
       return;
     }
 
+    let isCancelled = false;
+    let timeoutId: number | null = null;
+
     const fetchScreenshot = async () => {
-      if (screenshotFetchingRef.current) return;
+      if (screenshotFetchingRef.current || isCancelled) return;
 
       screenshotFetchingRef.current = true;
       try {
         const data = await getScreenshot(deviceId);
-        if (data.success) {
+        if (!isCancelled && data.success) {
           setScreenshot(data);
         }
       } catch (e) {
-        console.error('Failed to fetch screenshot:', e);
+        if (!isCancelled) {
+          console.error('Failed to fetch screenshot:', e);
+        }
       } finally {
         screenshotFetchingRef.current = false;
       }
     };
 
-    fetchScreenshot();
-    const interval = setInterval(fetchScreenshot, 500);
+    const pollScreenshots = async () => {
+      await fetchScreenshot();
 
-    return () => clearInterval(interval);
-  }, [deviceId, videoStreamFailed, displayMode, isVisible]);
+      if (isCancelled) {
+        return;
+      }
+
+      timeoutId = window.setTimeout(() => {
+        void pollScreenshots();
+      }, getScreenshotPollDelay(displayMode));
+    };
+
+    void pollScreenshots();
+
+    return () => {
+      isCancelled = true;
+      if (timeoutId !== null) {
+        window.clearTimeout(timeoutId);
+      }
+    };
+  }, [deviceId, videoStreamFailed, displayMode, isVisible, isPageVisible]);
 
   const getReasonMessage = (reason: string): string => {
     const messages: Record<string, string> = {
