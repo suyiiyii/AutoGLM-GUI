@@ -779,6 +779,11 @@ export function DevicePanel({
                       {/* Final result */}
                       {message.content && (
                         <div
+                          data-testid={
+                            message.success === false
+                              ? 'assistant-message-error'
+                              : 'assistant-message-final'
+                          }
                           className={`
                           rounded-2xl px-4 py-3 flex items-start gap-2
                           ${
@@ -849,6 +854,7 @@ export function DevicePanel({
         <div className="p-4 border-t border-slate-200 dark:border-slate-800">
           <div className="flex items-end gap-3">
             <Textarea
+              data-testid="chat-input"
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleInputKeyDown}
@@ -953,6 +959,7 @@ export function DevicePanel({
               <Button
                 onClick={handleSend}
                 disabled={!input.trim() || !sessionReady}
+                data-testid="chat-send"
                 size="icon"
                 variant="twitter"
                 className="h-10 w-10 rounded-full flex-shrink-0"
