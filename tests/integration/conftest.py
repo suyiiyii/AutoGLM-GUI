@@ -5,6 +5,7 @@ import multiprocessing
 import socket
 import subprocess
 import time
+import shutil
 from contextlib import closing
 from pathlib import Path
 
@@ -348,6 +349,9 @@ def mock_agent_server_multi():
 @pytest.fixture
 def frontend_dev_server(local_server: dict):
     """Start Vite dev server for browser-driven integration tests."""
+    if shutil.which("pnpm") is None:
+        pytest.skip("pnpm is required for browser-driven frontend E2E tests")
+
     port = find_free_port(start=3000, end=3999)
     url = f"http://127.0.0.1:{port}"
     frontend_dir = Path(__file__).parent.parent.parent / "frontend"
