@@ -359,17 +359,11 @@ def frontend_dev_server(local_server: dict):
     env = os.environ.copy()
     env["VITE_API_PROXY_TARGET"] = local_server["access_url"]
 
+    # Use shell command to ensure pnpm workspace detection works correctly
+    cmd = f'cd "{frontend_dir}" && pnpm exec vite --host 127.0.0.1 --port {port}'
     proc = subprocess.Popen(
-        [
-            "pnpm",
-            "exec",
-            "vite",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(port),
-        ],
-        cwd=frontend_dir,
+        cmd,
+        shell=True,
         env=env,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
