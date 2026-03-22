@@ -1,7 +1,9 @@
 """Pytest fixtures for integration tests."""
 
+import os
 import multiprocessing
 import socket
+import subprocess
 import time
 from contextlib import closing
 from pathlib import Path
@@ -341,3 +343,64 @@ def mock_agent_server_multi():
     if proc.is_alive():
         proc.kill()
         proc.join(timeout=1)
+
+
+@pytest.fixture
+def frontend_dev_server(local_server: dict):
+    """Start Vite dev server for browser-driven integration tests."""
+    port = find_free_port(start=3000, end=3999)
+    url = f"http://127.0.0.1:{port}"
+    frontend_dir = Path(__file__).parent.parent.parent / "frontend"
+
+    env = os.environ.copy()
+    env["VITE_API_PROXY_TARGET"] = local_server["access_url"]
+
+    proc = subprocess.Popen(
+        [
+            "pnpm",
+            "exec",
+            "vite",
+            "--host",
+            "127.0.0.1",
+            "--port",
+            str(port),
+        ],
+        cwd=frontend_dir,
+        env=env,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+
+    try:
+        wait_for_server(url, timeout=30.0, endpoint="/")
+    except RuntimeError as exc:
+        proc.terminate()
+        proc.wait(timeout=5)
+        raise RuntimeError(f"Frontend dev server failed to start: {exc}") from exc
+
+    yield {"url": url, "port": port}
+
+    proc.terminate()
+    try:
+        proc.wait(timeout=5)
+    except subprocess.TimeoutExpired:
+        proc.kill()
+        proc.wait(timeout=2)
+
+
+@pytest.fixture
+def browser_page():
+    """Provide a Playwright page for browser-based E2E flows."""
+    try:
+        from playwright.sync_api import sync_playwright
+    except ImportError as exc:
+        pytest.skip(f"playwright is not installed: {exc}")
+
+    try:
+        with sync_playwright() as playwright:
+            browser = playwright.chromium.launch(headless=True)
+            page = browser.new_page()
+            yield page
+            browser.close()
+    except Exception as exc:  # pragma: no cover - environment-dependent
+        pytest.skip(f"playwright browser is not available: {exc}")

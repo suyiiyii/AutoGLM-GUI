@@ -553,7 +553,10 @@ function ChatComponent() {
 
       {/* Config Dialog */}
       <Dialog open={showConfig} onOpenChange={setShowConfig}>
-        <DialogContent className="sm:max-w-md h-[75vh] flex flex-col">
+        <DialogContent
+          data-testid="config-dialog"
+          className="sm:max-w-md h-[75vh] flex flex-col"
+        >
           <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center gap-2">
               <Settings className="w-5 h-5 text-[#1d9bf0]" />
@@ -653,6 +656,7 @@ function ChatComponent() {
                 <Label htmlFor="base_url">{t.chat.baseUrl} *</Label>
                 <Input
                   id="base_url"
+                  data-testid="config-base-url"
                   value={tempConfig.base_url}
                   onChange={e =>
                     setTempConfig({ ...tempConfig, base_url: e.target.value })
@@ -672,6 +676,7 @@ function ChatComponent() {
                 <div className="relative">
                   <Input
                     id="api_key"
+                    data-testid="config-api-key"
                     type={showApiKey ? 'text' : 'password'}
                     value={tempConfig.api_key}
                     onChange={e =>
@@ -703,6 +708,7 @@ function ChatComponent() {
                 <Label htmlFor="model_name">{t.chat.modelName}</Label>
                 <Input
                   id="model_name"
+                  data-testid="config-model-name"
                   value={tempConfig.model_name}
                   onChange={e =>
                     setTempConfig({
@@ -1065,7 +1071,11 @@ function ChatComponent() {
             >
               {t.chat.cancel}
             </Button>
-            <Button onClick={handleSaveConfig} variant="twitter">
+            <Button
+              onClick={handleSaveConfig}
+              variant="twitter"
+              data-testid="save-config"
+            >
               <CheckCircle2 className="w-4 h-4 mr-2" />
               {t.chat.saveConfig}
             </Button>

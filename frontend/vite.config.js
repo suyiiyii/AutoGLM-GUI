@@ -4,6 +4,9 @@ import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import path from 'path';
 
 // https://vitejs.dev/config/
+const apiProxyTarget =
+  process.env.VITE_API_PROXY_TARGET || 'http://localhost:8000';
+
 export default defineConfig({
   define: {
     __BACKEND_VERSION__: JSON.stringify(
@@ -23,12 +26,12 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: apiProxyTarget,
         changeOrigin: true,
         ws: true,
       },
       '/socket.io': {
-        target: 'http://localhost:8000',
+        target: apiProxyTarget,
         changeOrigin: true,
         ws: true,
       },

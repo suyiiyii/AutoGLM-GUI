@@ -736,6 +736,7 @@ export function DeviceSidebar({
           <Button
             variant="outline"
             onClick={() => setShowManualConnect(true)}
+            data-testid="open-add-device-dialog"
             className="w-full justify-start gap-2 rounded-full border-slate-200 dark:border-slate-700"
           >
             <Plus className="h-4 w-4" />
@@ -754,6 +755,7 @@ export function DeviceSidebar({
           <Button
             variant="outline"
             onClick={onOpenConfig}
+            data-testid="open-config-dialog"
             className="w-full justify-start gap-2 rounded-full border-slate-200 dark:border-slate-700"
           >
             <Settings className="h-4 w-4" />
@@ -763,7 +765,10 @@ export function DeviceSidebar({
 
         {/* Manual WiFi Connect Dialog */}
         <Dialog open={showManualConnect} onOpenChange={setShowManualConnect}>
-          <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
+          <DialogContent
+            data-testid="add-device-dialog"
+            className="sm:max-w-md max-h-[80vh] overflow-y-auto"
+          >
             <DialogHeader>
               <DialogTitle>{t.deviceSidebar.manualConnectTitle}</DialogTitle>
               <DialogDescription>
@@ -777,13 +782,13 @@ export function DeviceSidebar({
               className="w-full"
             >
               <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="direct">
+                <TabsTrigger value="direct" data-testid="device-tab-direct">
                   {t.deviceSidebar.directConnectTab}
                 </TabsTrigger>
-                <TabsTrigger value="pair">
+                <TabsTrigger value="pair" data-testid="device-tab-pair">
                   {t.deviceSidebar.pairTab}
                 </TabsTrigger>
-                <TabsTrigger value="remote">
+                <TabsTrigger value="remote" data-testid="device-tab-remote">
                   {t.deviceSidebar.remoteTab || '远程设备'}
                 </TabsTrigger>
               </TabsList>
@@ -1292,6 +1297,7 @@ export function DeviceSidebar({
                   </Label>
                   <Input
                     id="remote-url"
+                    data-testid="remote-server-url"
                     placeholder="http://192.168.1.100:8001"
                     value={remoteBaseUrl}
                     onChange={e => {
@@ -1312,6 +1318,7 @@ export function DeviceSidebar({
                   <Button
                     onClick={handleDiscoverRemote}
                     disabled={isDiscoveringRemote || !remoteBaseUrl}
+                    data-testid="discover-remote-devices"
                     className="w-full"
                   >
                     {isDiscoveringRemote ? '正在发现...' : '发现设备'}
@@ -1328,6 +1335,7 @@ export function DeviceSidebar({
                           onClick={() =>
                             setSelectedRemoteDevice(device.device_id)
                           }
+                          data-testid={`remote-device-option-${device.device_id}`}
                           className={`
                             w-full rounded-lg border p-3 text-left transition-colors
                             ${
@@ -1361,6 +1369,7 @@ export function DeviceSidebar({
                   <Button
                     onClick={handleAddRemoteDevice}
                     disabled={isConnectingRemote}
+                    data-testid="connect-remote-device"
                     className="w-full"
                   >
                     {isConnectingRemote ? '正在连接...' : '连接远程设备'}
