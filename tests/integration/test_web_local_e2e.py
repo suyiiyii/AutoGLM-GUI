@@ -33,8 +33,11 @@ class TestWebLocalE2E:
 
         page.goto(f"{frontend_url}/chat", wait_until="networkidle")
 
+        # Close any dialogs that might be open (e.g., from previous state)
+        page.keyboard.press("Escape")
+
         # Configure the model through the settings dialog.
-        page.get_by_test_id("open-config-dialog").click()
+        page.get_by_test_id("open-config-dialog").click(timeout=10000)
         page.get_by_test_id("config-dialog").wait_for(state="visible")
         page.get_by_test_id("config-base-url").fill(f"{llm_url}/v1")
         page.get_by_test_id("config-model-name").fill("mock-glm-model")
