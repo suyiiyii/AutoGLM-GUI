@@ -7,9 +7,11 @@ from typing_extensions import TypedDict
 
 from fastmcp import FastMCP
 
+from AutoGLM_GUI.adb_plus import capture_screenshot_async
+from AutoGLM_GUI.exceptions import DeviceNotAvailableError
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.prompts import MCP_SYSTEM_PROMPT_ZH
-from AutoGLM_GUI.schemas import DeviceResponse
+from AutoGLM_GUI.schemas import DeviceResponse, ScreenshotResponse
 
 
 class ChatResult(TypedDict):
@@ -141,6 +143,97 @@ def list_devices() -> list[DeviceResponse]:
     ]
 
     return devices_with_agents
+
+
+@mcp.tool()
+async def screenshot(device_id: str) -> ScreenshotResponse:
+    """
+    Capture a screenshot from the specified device.
+
+    This is a read-only operation and does not affect Phone Agent execution.
+
+    Args:
+        device_id: Device identifier returned by list_devices()
+    """
+    from AutoGLM_GUI.device_manager import DeviceManager
+
+    logger.info(f"[MCP] screenshot tool called: device_id={device_id}")
+
+    try:
+        if not device_id:
+            return ScreenshotResponse(
+                success=False,
+                image="",
+                width=0,
+                height=0,
+                is_sensitive=False,
+                error="device_id is required",
+            )
+
+        device_manager = DeviceManager.get_instance()
+        serial = device_manager.get_serial_by_device_id(device_id)
+
+        if not serial:
+            return ScreenshotResponse(
+                success=False,
+                image="",
+                width=0,
+                height=0,
+                is_sensitive=False,
+                error=f"Device {device_id} not found",
+            )
+
+        managed = device_manager.get_device_by_serial(serial)
+        if managed and managed.connection_type.value == "remote":
+            remote_device = device_manager.get_remote_device_instance(serial)
+
+            if not remote_device:
+                return ScreenshotResponse(
+                    success=False,
+                    image="",
+                    width=0,
+                    height=0,
+                    is_sensitive=False,
+                    error=f"Remote device {serial} not found",
+                )
+
+            shot = await asyncio.to_thread(remote_device.get_screenshot, timeout=10)
+            return ScreenshotResponse(
+                success=True,
+                image=shot.base64_data,
+                width=shot.width,
+                height=shot.height,
+                is_sensitive=shot.is_sensitive,
+            )
+
+        shot = await capture_screenshot_async(device_id=device_id)
+        return ScreenshotResponse(
+            success=True,
+            image=shot.base64_data,
+            width=shot.width,
+            height=shot.height,
+            is_sensitive=shot.is_sensitive,
+        )
+    except DeviceNotAvailableError as e:
+        logger.warning("[MCP] screenshot failed - device not available: %s", e)
+        return ScreenshotResponse(
+            success=False,
+            image="",
+            width=0,
+            height=0,
+            is_sensitive=False,
+            error=str(e),
+        )
+    except Exception as e:
+        logger.exception("[MCP] screenshot tool error for device %s", device_id)
+        return ScreenshotResponse(
+            success=False,
+            image="",
+            width=0,
+            height=0,
+            is_sensitive=False,
+            error=str(e),
+        )
 
 
 def get_mcp_asgi_app() -> Any:
