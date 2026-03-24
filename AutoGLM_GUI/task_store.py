@@ -225,7 +225,7 @@ class TaskStore:
             self._conn.commit()
 
     def get_latest_open_chat_session(
-        self, *, device_id: str, device_serial: str
+        self, *, device_id: str, device_serial: str, mode: str = "classic"
     ) -> TaskSessionRecord | None:
         self._ensure_ready()
         with self._lock:
@@ -234,16 +234,31 @@ class TaskStore:
                     """
                     SELECT * FROM task_sessions
                     WHERE kind = 'chat'
-                      AND mode = 'classic'
+                      AND mode = ?
                       AND device_id = ?
                       AND device_serial = ?
                       AND status = ?
                     ORDER BY updated_at DESC
                     LIMIT 1
                     """,
-                    (device_id, device_serial, TaskSessionStatus.OPEN.value),
+                    (mode, device_id, device_serial, TaskSessionStatus.OPEN.value),
                 )
             )
+
+    def archive_session(self, session_id: str) -> TaskSessionRecord | None:
+        self._ensure_ready()
+        with self._lock:
+            assert self._conn is not None
+            self._conn.execute(
+                """
+                UPDATE task_sessions
+                SET status = ?, updated_at = ?
+                WHERE id = ?
+                """,
+                (TaskSessionStatus.ARCHIVED.value, _now_iso(), session_id),
+            )
+            self._conn.commit()
+            return self.get_session(session_id)
 
     def _append_event_locked(
         self,
@@ -635,21 +650,56 @@ class TaskStore:
             )
             return [str(row["device_id"]) for row in rows]
 
-    def get_latest_active_chat_task(self, device_id: str) -> TaskRecord | None:
+    def get_latest_active_chat_task(
+        self, device_id: str, mode: str | None = None
+    ) -> TaskRecord | None:
+        self._ensure_ready()
+        params: list[Any] = [
+            device_id,
+            TaskStatus.QUEUED.value,
+            TaskStatus.RUNNING.value,
+        ]
+        join_clause = ""
+        mode_clause = ""
+        if mode is not None:
+            join_clause = (
+                "JOIN task_sessions ON task_sessions.id = task_runs.session_id"
+            )
+            mode_clause = "AND task_sessions.mode = ?"
+            params.append(mode)
+        with self._lock:
+            return self._row_to_task(
+                self._fetchone(
+                    f"""
+                    SELECT task_runs.*
+                    FROM task_runs
+                    {join_clause}
+                    WHERE source = 'chat'
+                      AND device_id = ?
+                      AND status IN (?, ?)
+                      {mode_clause}
+                    ORDER BY created_at DESC
+                    LIMIT 1
+                    """,
+                    tuple(params),
+                )
+            )
+
+    def get_latest_active_session_task(self, session_id: str) -> TaskRecord | None:
         self._ensure_ready()
         with self._lock:
             return self._row_to_task(
                 self._fetchone(
                     """
-                    SELECT * FROM task_runs
-                    WHERE source = 'chat'
-                      AND device_id = ?
+                    SELECT *
+                    FROM task_runs
+                    WHERE session_id = ?
                       AND status IN (?, ?)
                     ORDER BY created_at DESC
                     LIMIT 1
                     """,
                     (
-                        device_id,
+                        session_id,
                         TaskStatus.QUEUED.value,
                         TaskStatus.RUNNING.value,
                     ),

@@ -781,6 +781,7 @@ class TaskSessionCreate(BaseModel):
 
     device_id: str
     device_serial: str
+    mode: str = "classic"
 
     @field_validator("device_id", "device_serial")
     @classmethod
@@ -789,6 +790,14 @@ class TaskSessionCreate(BaseModel):
         if not v:
             raise ValueError("value cannot be empty")
         return v
+
+    @field_validator("mode")
+    @classmethod
+    def validate_mode(cls, v: str) -> str:
+        mode = v.strip()
+        if mode not in {"classic", "layered"}:
+            raise ValueError("mode must be one of: classic, layered")
+        return mode
 
 
 class TaskSessionResponse(BaseModel):
@@ -861,6 +870,12 @@ class TaskCancelResponse(BaseModel):
     task: TaskRunResponse | None = None
 
 
+class TaskSessionResetResponse(BaseModel):
+    success: bool
+    message: str
+    session: TaskSessionResponse | None = None
+
+
 # Scheduled Task Models
 
 
@@ -873,6 +888,7 @@ class ScheduledTaskCreate(BaseModel):
     device_group_id: str | None = None  # 或指定设备分组
     cron_expression: str
     enabled: bool = True
+    execution_mode: str = "classic"
 
     @field_validator("name")
     @classmethod
@@ -908,6 +924,14 @@ class ScheduledTaskCreate(BaseModel):
             )
         return v.strip()
 
+    @field_validator("execution_mode")
+    @classmethod
+    def validate_execution_mode(cls, v: str) -> str:
+        mode = v.strip()
+        if mode not in {"classic", "layered"}:
+            raise ValueError("execution_mode must be one of: classic, layered")
+        return mode
+
     def model_post_init(self, __context: Any) -> None:
         """验证必须指定 device_serialnos 或 device_group_id 之一."""
         if not self.device_serialnos and not self.device_group_id:
@@ -925,6 +949,7 @@ class ScheduledTaskUpdate(BaseModel):
     device_group_id: str | None = None
     cron_expression: str | None = None
     enabled: bool | None = None
+    execution_mode: str | None = None
 
     @field_validator("device_serialnos")
     @classmethod
@@ -957,6 +982,16 @@ class ScheduledTaskUpdate(BaseModel):
             )
         return v.strip()
 
+    @field_validator("execution_mode")
+    @classmethod
+    def validate_execution_mode(cls, v: str | None) -> str | None:
+        if v is None:
+            return v
+        mode = v.strip()
+        if mode not in {"classic", "layered"}:
+            raise ValueError("execution_mode must be one of: classic, layered")
+        return mode
+
 
 class ScheduledTaskResponse(BaseModel):
     """定时任务响应."""
@@ -968,6 +1003,7 @@ class ScheduledTaskResponse(BaseModel):
     device_group_id: str | None = None
     cron_expression: str
     enabled: bool
+    execution_mode: str = "classic"
     created_at: str
     updated_at: str
     last_run_time: str | None

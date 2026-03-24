@@ -8,6 +8,8 @@ from collections.abc import Awaitable, Callable
 from typing import Any
 
 from AutoGLM_GUI.logger import logger
+from AutoGLM_GUI.metrics import record_trace_latency_metrics
+from AutoGLM_GUI.models.history import ConversationRecord, TraceSummaryRecord
 from AutoGLM_GUI.task_store import (
     TERMINAL_TASK_STATUSES,
     TaskRecord,
@@ -16,6 +18,7 @@ from AutoGLM_GUI.task_store import (
     TaskStore,
     task_store,
 )
+import AutoGLM_GUI.trace as trace_module
 
 TaskExecutor = Callable[[TaskRecord], Awaitable[None]]
 
@@ -35,7 +38,11 @@ class TaskManager:
         self._started = False
         self._shutdown = False
         self.register_executor("classic_chat", self._execute_classic_chat)
+        self.register_executor("layered_chat", self._execute_layered_chat)
         self.register_executor("scheduled_workflow", self._execute_scheduled_workflow)
+        self.register_executor(
+            "scheduled_layered_workflow", self._execute_scheduled_layered_workflow
+        )
 
     def register_executor(self, executor_key: str, executor: TaskExecutor) -> None:
         self._executors[executor_key] = executor
@@ -62,12 +69,12 @@ class TaskManager:
         self._started = False
 
     async def create_chat_session(
-        self, *, device_id: str, device_serial: str
+        self, *, device_id: str, device_serial: str, mode: str = "classic"
     ) -> TaskSessionRecord:
         return await asyncio.to_thread(
             self.store.create_session,
             kind="chat",
-            mode="classic",
+            mode=mode,
             device_id=device_id,
             device_serial=device_serial,
         )
@@ -76,19 +83,24 @@ class TaskManager:
         return await asyncio.to_thread(self.store.get_session, session_id)
 
     async def get_or_create_legacy_chat_session(
-        self, *, device_id: str, device_serial: str
+        self, *, device_id: str, device_serial: str, mode: str = "classic"
     ) -> TaskSessionRecord:
         session = await asyncio.to_thread(
             self.store.get_latest_open_chat_session,
             device_id=device_id,
             device_serial=device_serial,
+            mode=mode,
         )
         if session:
             return session
         return await self.create_chat_session(
             device_id=device_id,
             device_serial=device_serial,
+            mode=mode,
         )
+
+    async def archive_session(self, session_id: str) -> TaskSessionRecord | None:
+        return await asyncio.to_thread(self.store.archive_session, session_id)
 
     async def submit_chat_task(
         self,
@@ -102,10 +114,18 @@ class TaskManager:
         if session is None:
             raise ValueError(f"Session {session_id} not found")
 
+        session_mode = str(session["mode"])
+        executor_key = {
+            "classic": "classic_chat",
+            "layered": "layered_chat",
+        }.get(session_mode)
+        if executor_key is None:
+            raise ValueError(f"Unsupported session mode: {session_mode}")
+
         task = await asyncio.to_thread(
             self.store.create_task_run,
             source="chat",
-            executor_key="classic_chat",
+            executor_key=executor_key,
             session_id=session_id,
             device_id=device_id,
             device_serial=device_serial,
@@ -124,11 +144,12 @@ class TaskManager:
         device_serial: str,
         input_text: str,
         schedule_fire_id: str,
+        executor_key: str = "scheduled_workflow",
     ) -> TaskRecord:
         task = await asyncio.to_thread(
             self.store.create_task_run,
             source="scheduled",
-            executor_key="scheduled_workflow",
+            executor_key=executor_key,
             scheduled_task_id=scheduled_task_id,
             workflow_uuid=workflow_uuid,
             schedule_fire_id=schedule_fire_id,
@@ -182,9 +203,11 @@ class TaskManager:
 
         return task
 
-    async def cancel_latest_chat_task(self, device_id: str) -> TaskRecord | None:
+    async def cancel_latest_chat_task(
+        self, device_id: str, mode: str | None = None
+    ) -> TaskRecord | None:
         task = await asyncio.to_thread(
-            self.store.get_latest_active_chat_task, device_id
+            self.store.get_latest_active_chat_task, device_id, mode
         )
         if task is None:
             return None
@@ -260,18 +283,13 @@ class TaskManager:
     async def _execute_classic_chat(self, task: TaskRecord) -> None:
         from AutoGLM_GUI.exceptions import AgentInitializationError, DeviceBusyError
         from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
-        from AutoGLM_GUI.trace import (
-            create_trace_id,
-            get_step_timing_summary,
-            trace_context,
-        )
 
         manager = PhoneAgentManager.get_instance()
         task_id = task["id"]
         device_id = task["device_id"]
         session_id = task["session_id"] or task_id
         context = f"chat:{session_id}"
-        trace_id = create_trace_id()
+        trace_id = trace_module.create_trace_id()
         acquired = False
         final_status = TaskStatus.FAILED.value
         final_message = ""
@@ -279,7 +297,7 @@ class TaskManager:
         abort_registered = False
 
         try:
-            with trace_context(trace_id):
+            with trace_module.trace_context(trace_id):
                 acquired = await manager.acquire_device_async(
                     device_id,
                     auto_initialize=True,
@@ -310,7 +328,7 @@ class TaskManager:
 
                     if event_type == "step":
                         step_count = max(step_count, int(event_data.get("step", 0)))
-                        timings = get_step_timing_summary(
+                        timings = trace_module.get_step_timing_summary(
                             step_count,
                             trace_id=trace_id,
                         )
@@ -413,6 +431,163 @@ class TaskManager:
             status=final_status,
             final_message=final_message,
             step_count=step_count,
+        )
+
+    async def _execute_layered_chat(self, task: TaskRecord) -> None:
+        await self._execute_layered_task(
+            task,
+            session_id=str(task["session_id"] or task["id"]),
+            record_history=True,
+            clear_session_after_run=False,
+            metrics_source="layered",
+        )
+
+    async def _execute_layered_task(
+        self,
+        task: TaskRecord,
+        *,
+        session_id: str,
+        record_history: bool,
+        clear_session_after_run: bool,
+        metrics_source: str,
+    ) -> None:
+        from datetime import datetime
+
+        from AutoGLM_GUI.device_manager import DeviceManager
+        from AutoGLM_GUI.history_manager import history_manager
+        from AutoGLM_GUI.layered_agent_service import (
+            reset_session as reset_layered_session,
+            start_run,
+        )
+
+        task_id = str(task["id"])
+        trace_id = trace_module.create_trace_id()
+        start_time = datetime.now()
+        final_status = TaskStatus.FAILED.value
+        final_message = ""
+        run = None
+
+        try:
+            with trace_module.trace_context(trace_id):
+                run = start_run(
+                    task_id=task_id,
+                    session_id=session_id,
+                    message=str(task["input_text"]),
+                )
+                self._abort_handlers[task_id] = run.cancel
+
+                async for event in run.stream_events():
+                    event_type = str(event["type"])
+                    event_payload = dict(event.get("payload", {}))
+                    await asyncio.to_thread(
+                        self.store.append_event,
+                        task_id=task_id,
+                        event_type=event_type,
+                        payload=event_payload,
+                        role="assistant",
+                    )
+
+                    if event_type == "done":
+                        final_message = str(event_payload.get("content", ""))
+                        final_status = (
+                            TaskStatus.SUCCEEDED.value
+                            if event_payload.get("success", False)
+                            else TaskStatus.FAILED.value
+                        )
+                    elif event_type == "error":
+                        final_message = str(event_payload.get("message", "Task failed"))
+                        final_status = TaskStatus.FAILED.value
+                    elif event_type == "cancelled":
+                        final_message = str(
+                            event_payload.get("message", "Task cancelled by user")
+                        )
+                        final_status = TaskStatus.CANCELLED.value
+
+            if not final_message:
+                final_message = run.final_output
+            if not final_message:
+                final_message = "Task finished without a final response"
+                final_status = TaskStatus.FAILED.value
+        except Exception as exc:
+            if task_id in self._cancel_requested:
+                final_message = "Task cancelled by user"
+                final_status = TaskStatus.CANCELLED.value
+                await asyncio.to_thread(
+                    self.store.append_event,
+                    task_id=task_id,
+                    event_type="cancelled",
+                    payload={"message": final_message},
+                    role="assistant",
+                )
+            else:
+                final_message = str(exc)
+                final_status = TaskStatus.FAILED.value
+                await asyncio.to_thread(
+                    self.store.append_event,
+                    task_id=task_id,
+                    event_type="error",
+                    payload={"message": final_message},
+                    role="assistant",
+                )
+        finally:
+            self._cancel_requested.discard(task_id)
+            self._abort_handlers.pop(task_id, None)
+            if clear_session_after_run:
+                reset_layered_session(session_id)
+
+        await self._finalize_task(
+            task_id=task_id,
+            status=final_status,
+            final_message=final_message,
+            step_count=0,
+        )
+
+        end_time = datetime.now()
+        duration_ms = int((end_time - start_time).total_seconds() * 1000)
+        trace_summary_dict = trace_module.get_trace_timing_summary(
+            trace_id=trace_id,
+            total_duration_ms=duration_ms,
+        )
+        record_trace_latency_metrics(
+            source=metrics_source,
+            trace_summary=trace_summary_dict,
+            step_summaries=[],
+        )
+
+        if record_history:
+            device_manager = DeviceManager.get_instance()
+            serialno = device_manager.get_serial_by_device_id(str(task["device_id"]))
+            if serialno:
+                record = ConversationRecord(
+                    task_text=str(task["input_text"]),
+                    final_message=final_message,
+                    success=final_status == TaskStatus.SUCCEEDED.value,
+                    steps=0,
+                    start_time=start_time,
+                    end_time=end_time,
+                    duration_ms=duration_ms,
+                    source="layered",
+                    source_detail=session_id,
+                    error_message=(
+                        None
+                        if final_status == TaskStatus.SUCCEEDED.value
+                        else final_message
+                    ),
+                    trace_id=trace_id,
+                    trace_summary=TraceSummaryRecord.from_dict(trace_summary_dict)
+                    if trace_summary_dict
+                    else None,
+                )
+                await asyncio.to_thread(history_manager.add_record, serialno, record)
+        trace_module.clear_trace_data(trace_id)
+
+    async def _execute_scheduled_layered_workflow(self, task: TaskRecord) -> None:
+        await self._execute_layered_task(
+            task,
+            session_id=str(task["id"]),
+            record_history=False,
+            clear_session_after_run=True,
+            metrics_source="scheduled",
         )
 
     async def _execute_scheduled_workflow(self, task: TaskRecord) -> None:

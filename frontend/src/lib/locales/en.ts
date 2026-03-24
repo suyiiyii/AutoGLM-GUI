@@ -395,6 +395,11 @@ export const en = {
     taskNamePlaceholder: 'e.g., Daily Check-in',
     workflow: 'Workflow',
     selectWorkflow: 'Select Workflow',
+    executionMode: 'Execution Mode',
+    executionModeOption: {
+      classic: 'Classic',
+      layered: 'Layered Agent',
+    },
     device: 'Device',
     selectDevice: 'Select Device',
     cronExpression: 'Cron Expression',

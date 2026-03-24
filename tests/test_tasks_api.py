@@ -132,6 +132,20 @@ class FakeTaskStore:
             if int(event["seq"]) > after_seq
         ]
 
+    def get_latest_active_session_task(
+        self, session_id: str
+    ) -> dict[str, object] | None:
+        tasks = [
+            task
+            for task in self.tasks.values()
+            if task["session_id"] == session_id
+            and task["status"] in {"QUEUED", "RUNNING"}
+        ]
+        if not tasks:
+            return None
+        tasks.sort(key=lambda item: str(item["created_at"]), reverse=True)
+        return tasks[0]
+
 
 class FakeTaskManager:
     def __init__(self, store: FakeTaskStore) -> None:
@@ -150,12 +164,12 @@ class FakeTaskManager:
         }
 
     async def create_chat_session(
-        self, *, device_id: str, device_serial: str
+        self, *, device_id: str, device_serial: str, mode: str = "classic"
     ) -> dict[str, object]:
         session = {
             "id": "session-2",
             "kind": "chat",
-            "mode": "classic",
+            "mode": mode,
             "device_id": device_id,
             "device_serial": device_serial,
             "status": "open",
@@ -179,7 +193,11 @@ class FakeTaskManager:
         task = {
             "id": "task-3",
             "source": "chat",
-            "executor_key": "classic_chat",
+            "executor_key": (
+                "layered_chat"
+                if self.sessions[session_id]["mode"] == "layered"
+                else "classic_chat"
+            ),
             "session_id": session_id,
             "scheduled_task_id": None,
             "workflow_uuid": None,
@@ -209,17 +227,33 @@ class FakeTaskManager:
         task["finished_at"] = "2026-01-03T10:00:05"
         return task
 
+    async def archive_session(self, session_id: str) -> dict[str, object] | None:
+        session = self.sessions.get(session_id)
+        if session is None:
+            return None
+        session["status"] = "archived"
+        session["updated_at"] = "2026-01-03T10:00:06"
+        return session
+
 
 @pytest.fixture
 def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     store = FakeTaskStore()
     manager = FakeTaskManager(store)
+    reset_calls: list[str] = []
     monkeypatch.setattr(tasks_api, "task_store", store)
     monkeypatch.setattr(tasks_api, "task_manager", manager)
+    monkeypatch.setattr(
+        tasks_api,
+        "reset_layered_session",
+        lambda session_id: reset_calls.append(session_id) or True,
+    )
 
     app = FastAPI()
     app.include_router(tasks_api.router)
-    return TestClient(app)
+    client = TestClient(app)
+    client.reset_calls = reset_calls  # type: ignore[attr-defined]
+    return client
 
 
 def test_task_session_create_and_submit(client: TestClient) -> None:
@@ -241,6 +275,26 @@ def test_task_session_create_and_submit(client: TestClient) -> None:
     assert submit_resp.status_code == 200
     assert submit_resp.json()["id"] == "task-3"
     assert submit_resp.json()["status"] == "QUEUED"
+
+
+def test_task_session_supports_layered_mode(client: TestClient) -> None:
+    create_resp = client.post(
+        "/api/task-sessions",
+        json={
+            "device_id": "device-9",
+            "device_serial": "serial-9",
+            "mode": "layered",
+        },
+    )
+    assert create_resp.status_code == 200
+    assert create_resp.json()["mode"] == "layered"
+
+    submit_resp = client.post(
+        "/api/task-sessions/session-2/tasks",
+        json={"message": "复杂任务"},
+    )
+    assert submit_resp.status_code == 200
+    assert submit_resp.json()["executor_key"] == "layered_chat"
 
 
 def test_task_list_endpoints_support_filters(client: TestClient) -> None:
@@ -277,3 +331,22 @@ def test_task_stream_and_cancel(client: TestClient) -> None:
     assert cancel_resp.status_code == 200
     assert cancel_resp.json()["success"] is True
     assert cancel_resp.json()["task"]["status"] == "CANCELLED"
+
+
+def test_task_session_reset_archives_layered_session(client: TestClient) -> None:
+    create_resp = client.post(
+        "/api/task-sessions",
+        json={
+            "device_id": "device-9",
+            "device_serial": "serial-9",
+            "mode": "layered",
+        },
+    )
+    assert create_resp.status_code == 200
+    session_id = create_resp.json()["id"]
+
+    reset_resp = client.post(f"/api/task-sessions/{session_id}/reset")
+    assert reset_resp.status_code == 200
+    assert reset_resp.json()["success"] is True
+    assert reset_resp.json()["session"]["status"] == "archived"
+    assert client.reset_calls == [session_id]  # type: ignore[attr-defined]

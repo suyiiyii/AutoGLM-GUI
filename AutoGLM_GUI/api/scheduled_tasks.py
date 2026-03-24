@@ -28,6 +28,7 @@ def _task_to_response(task: ScheduledTask) -> ScheduledTaskResponse:
         device_group_id=task.device_group_id,
         cron_expression=task.cron_expression,
         enabled=task.enabled,
+        execution_mode=task.execution_mode,
         created_at=task.created_at.isoformat(),
         updated_at=task.updated_at.isoformat(),
         last_run_time=(
@@ -87,6 +88,7 @@ def create_scheduled_task(request: ScheduledTaskCreate) -> ScheduledTaskResponse
         device_group_id=request.device_group_id,
         cron_expression=request.cron_expression,
         enabled=request.enabled,
+        execution_mode=request.execution_mode,
     )
     return _task_to_response(task)
 

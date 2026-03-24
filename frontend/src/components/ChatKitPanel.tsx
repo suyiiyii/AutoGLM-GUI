@@ -23,11 +23,22 @@ import {
 } from 'lucide-react';
 import type { Workflow, HistoryRecordResponse } from '../api';
 import {
+  cancelTaskRun,
+  createTaskSession,
+  getTaskSession,
   listWorkflows,
   getErrorMessage,
   listHistory,
   clearHistory as clearHistoryApi,
   deleteHistoryRecord,
+  listTaskEvents,
+  listTaskSessionTasks,
+  resetTaskSession,
+  streamTaskEvents,
+  submitTaskSessionTask,
+  type TaskEventRecordResponse,
+  type TaskRunResponse,
+  type TaskStatus,
 } from '../api';
 import {
   Popover,
@@ -72,6 +83,169 @@ interface Message {
   success?: boolean;
 }
 
+function isTaskActive(status: TaskStatus): boolean {
+  return status === 'QUEUED' || status === 'RUNNING';
+}
+
+function applyTaskEventToTask(
+  task: TaskRunResponse,
+  event: TaskEventRecordResponse
+): TaskRunResponse {
+  const nextTask = { ...task };
+  const payload = event.payload;
+
+  if (event.event_type === 'status') {
+    if (typeof payload.status === 'string') {
+      nextTask.status = payload.status as TaskStatus;
+      if (!isTaskActive(nextTask.status) && !nextTask.finished_at) {
+        nextTask.finished_at = event.created_at;
+      }
+    }
+  } else if (event.event_type === 'done') {
+    nextTask.status = 'SUCCEEDED';
+    nextTask.final_message =
+      typeof payload.content === 'string'
+        ? payload.content
+        : typeof payload.message === 'string'
+          ? payload.message
+          : null;
+    nextTask.error_message = null;
+    nextTask.finished_at = event.created_at;
+  } else if (event.event_type === 'error') {
+    nextTask.status = 'FAILED';
+    nextTask.final_message =
+      typeof payload.message === 'string' ? payload.message : null;
+    nextTask.error_message =
+      typeof payload.message === 'string' ? payload.message : null;
+    nextTask.finished_at = event.created_at;
+  } else if (event.event_type === 'cancelled') {
+    nextTask.status = 'CANCELLED';
+    nextTask.final_message =
+      typeof payload.message === 'string' ? payload.message : null;
+    nextTask.error_message =
+      typeof payload.message === 'string' ? payload.message : null;
+    nextTask.finished_at = event.created_at;
+  }
+
+  return nextTask;
+}
+
+function reconcileTaskRun(
+  task: TaskRunResponse,
+  events: TaskEventRecordResponse[]
+): TaskRunResponse {
+  return events.reduce(
+    (currentTask, event) => applyTaskEventToTask(currentTask, event),
+    { ...task }
+  );
+}
+
+function buildExecutionSteps(
+  events: TaskEventRecordResponse[]
+): ExecutionStep[] {
+  const steps: ExecutionStep[] = [];
+
+  events.forEach(event => {
+    const payload = event.payload;
+
+    if (event.event_type === 'tool_call') {
+      const toolName =
+        typeof payload.tool_name === 'string' ? payload.tool_name : 'unknown';
+      steps.push({
+        id: `step-${event.task_id}-${event.seq}`,
+        type: 'tool_call',
+        content:
+          toolName === 'chat'
+            ? '发送指令给 Phone Agent'
+            : toolName === 'list_devices'
+              ? '获取设备列表'
+              : `调用工具: ${toolName}`,
+        toolName,
+        toolArgs:
+          (payload.tool_args as Record<string, unknown> | undefined) || {},
+        timestamp: new Date(event.created_at),
+        isExpanded: true,
+      });
+    } else if (event.event_type === 'tool_result') {
+      const toolName =
+        typeof payload.tool_name === 'string' ? payload.tool_name : 'unknown';
+      steps.push({
+        id: `step-${event.task_id}-${event.seq}`,
+        type: 'tool_result',
+        content:
+          toolName === 'chat' ? 'Phone Agent 执行结果' : `${toolName} 结果`,
+        toolName,
+        toolResult:
+          typeof payload.result === 'string'
+            ? payload.result
+            : JSON.stringify(payload.result ?? '', null, 2),
+        timestamp: new Date(event.created_at),
+        isExpanded: true,
+      });
+    }
+  });
+
+  return steps;
+}
+
+function buildAssistantMessage(
+  task: TaskRunResponse,
+  events: TaskEventRecordResponse[]
+): Message {
+  const steps = buildExecutionSteps(events);
+  let content = task.final_message || task.error_message || '';
+
+  for (const event of events) {
+    const payload = event.payload;
+    if (event.event_type === 'message' && typeof payload.content === 'string') {
+      content = payload.content;
+    } else if (event.event_type === 'done') {
+      if (typeof payload.content === 'string') {
+        content = payload.content;
+      } else if (typeof payload.message === 'string') {
+        content = payload.message;
+      }
+    } else if (
+      (event.event_type === 'error' || event.event_type === 'cancelled') &&
+      typeof payload.message === 'string'
+    ) {
+      content = payload.message;
+    }
+  }
+
+  return {
+    id: `${task.id}-agent`,
+    role: 'assistant',
+    content,
+    timestamp: new Date(task.finished_at || task.started_at || task.created_at),
+    steps,
+    isStreaming: isTaskActive(task.status),
+    success:
+      task.status === 'SUCCEEDED'
+        ? true
+        : task.status === 'FAILED' ||
+            task.status === 'CANCELLED' ||
+            task.status === 'INTERRUPTED'
+          ? false
+          : undefined,
+  };
+}
+
+function buildMessagePair(
+  task: TaskRunResponse,
+  events: TaskEventRecordResponse[]
+): Message[] {
+  return [
+    {
+      id: `${task.id}-user`,
+      role: 'user',
+      content: task.input_text,
+      timestamp: new Date(task.created_at),
+    },
+    buildAssistantMessage(task, events),
+  ];
+}
+
 export function ChatKitPanel({
   deviceId,
   deviceSerial,
@@ -87,9 +261,18 @@ export function ChatKitPanel({
   const [loading, setLoading] = React.useState(false);
   const [aborting, setAborting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
+  const [sessionId, setSessionId] = React.useState<string | null>(null);
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
-  const eventSourceRef = React.useRef<EventSource | null>(null);
-  const abortControllerRef = React.useRef<AbortController | null>(null);
+  const taskStreamRef = React.useRef<{ close: () => void } | null>(null);
+  const currentTaskIdRef = React.useRef<string | null>(null);
+  const taskRunsRef = React.useRef<Record<string, TaskRunResponse>>({});
+  const taskEventsRef = React.useRef<Record<string, TaskEventRecordResponse[]>>(
+    {}
+  );
+  const sessionStorageKey = React.useMemo(
+    () => `layered-task-session:${deviceId}`,
+    [deviceId]
+  );
 
   // Workflow state
   const [workflows, setWorkflows] = React.useState<Workflow[]>([]);
@@ -107,8 +290,8 @@ export function ChatKitPanel({
 
   React.useEffect(() => {
     return () => {
-      if (eventSourceRef.current) {
-        eventSourceRef.current.close();
+      if (taskStreamRef.current) {
+        taskStreamRef.current.close();
       }
     };
   }, []);
@@ -207,299 +390,253 @@ export function ChatKitPanel({
     );
   };
 
-  // Send message using Layered Agent API
-  const handleSend = React.useCallback(async () => {
-    const inputValue = input.trim();
-    if (!inputValue || loading) return;
+  const replaceTaskMessages = React.useCallback(() => {
+    const orderedTasks = Object.values(taskRunsRef.current).sort(
+      (left, right) =>
+        new Date(left.created_at).getTime() -
+        new Date(right.created_at).getTime()
+    );
+    setMessages(
+      orderedTasks.flatMap(task =>
+        buildMessagePair(task, taskEventsRef.current[task.id] || [])
+      )
+    );
+  }, []);
 
-    const userMessage: Message = {
-      id: Date.now().toString(),
-      role: 'user',
-      content: inputValue,
-      timestamp: new Date(),
+  const attachTaskStream = React.useCallback(
+    (taskId: string, afterSeq: number = 0) => {
+      if (taskStreamRef.current) {
+        taskStreamRef.current.close();
+      }
+
+      taskStreamRef.current = streamTaskEvents(
+        taskId,
+        event => {
+          const existingEvents = taskEventsRef.current[taskId] || [];
+          taskEventsRef.current[taskId] = [...existingEvents, event];
+          const task = taskRunsRef.current[taskId];
+          if (task) {
+            taskRunsRef.current[taskId] = applyTaskEventToTask(task, event);
+          }
+          replaceTaskMessages();
+
+          const nextTask = taskRunsRef.current[taskId];
+          if (nextTask && !isTaskActive(nextTask.status)) {
+            currentTaskIdRef.current = null;
+            setLoading(false);
+            setAborting(false);
+          }
+        },
+        message => {
+          setError(message);
+          setLoading(false);
+          setAborting(false);
+        },
+        afterSeq
+      );
+    },
+    [replaceTaskMessages]
+  );
+
+  const restoreSessionConversation = React.useCallback(
+    async (nextSessionId: string) => {
+      if (taskStreamRef.current) {
+        taskStreamRef.current.close();
+        taskStreamRef.current = null;
+      }
+
+      const { tasks } = await listTaskSessionTasks(nextSessionId);
+      const orderedTasks = [...tasks].sort(
+        (left, right) =>
+          new Date(left.created_at).getTime() -
+          new Date(right.created_at).getTime()
+      );
+
+      const reconciledTasks = await Promise.all(
+        orderedTasks.map(async task => {
+          const events = (await listTaskEvents(task.id)).events;
+          taskEventsRef.current[task.id] = events;
+          return reconcileTaskRun(task, events);
+        })
+      );
+
+      taskRunsRef.current = Object.fromEntries(
+        reconciledTasks.map(task => [task.id, task])
+      );
+      replaceTaskMessages();
+
+      const activeTask = [...reconciledTasks]
+        .reverse()
+        .find(task => isTaskActive(task.status));
+      if (activeTask) {
+        currentTaskIdRef.current = activeTask.id;
+        setLoading(true);
+        const lastSeq =
+          taskEventsRef.current[activeTask.id]?.[
+            taskEventsRef.current[activeTask.id].length - 1
+          ]?.seq || 0;
+        attachTaskStream(activeTask.id, lastSeq);
+      } else {
+        currentTaskIdRef.current = null;
+        setLoading(false);
+      }
+    },
+    [attachTaskStream, replaceTaskMessages]
+  );
+
+  React.useEffect(() => {
+    let disposed = false;
+
+    const initializeSession = async () => {
+      try {
+        setError(null);
+        const storedSessionId = sessionStorage.getItem(sessionStorageKey);
+        let nextSessionId = storedSessionId;
+
+        if (storedSessionId) {
+          try {
+            const existingSession = await getTaskSession(storedSessionId);
+            if (
+              existingSession.device_id !== deviceId ||
+              existingSession.device_serial !== deviceSerial ||
+              existingSession.mode !== 'layered' ||
+              existingSession.status !== 'open'
+            ) {
+              nextSessionId = null;
+            }
+          } catch {
+            nextSessionId = null;
+          }
+        }
+
+        if (!nextSessionId) {
+          const session = await createTaskSession(
+            deviceId,
+            deviceSerial,
+            'layered'
+          );
+          nextSessionId = session.id;
+          sessionStorage.setItem(sessionStorageKey, nextSessionId);
+        }
+
+        if (disposed || !nextSessionId) {
+          return;
+        }
+
+        setSessionId(nextSessionId);
+        await restoreSessionConversation(nextSessionId);
+      } catch (sessionError) {
+        if (!disposed) {
+          console.error(
+            'Failed to initialize layered task session:',
+            sessionError
+          );
+          setError('Failed to restore layered chat session');
+          setLoading(false);
+        }
+      }
     };
 
-    setMessages(prev => [...prev, userMessage]);
+    void initializeSession();
+
+    return () => {
+      disposed = true;
+      if (taskStreamRef.current) {
+        taskStreamRef.current.close();
+        taskStreamRef.current = null;
+      }
+    };
+  }, [deviceId, deviceSerial, restoreSessionConversation, sessionStorageKey]);
+
+  const handleSend = React.useCallback(async () => {
+    const inputValue = input.trim();
+    if (!inputValue || loading || !sessionId) return;
+
     setInput('');
     setLoading(true);
     setError(null);
 
-    const agentMessageId = (Date.now() + 1).toString();
-    const agentMessage: Message = {
-      id: agentMessageId,
-      role: 'assistant',
-      content: '',
-      timestamp: new Date(),
-      steps: [],
-      isStreaming: true,
-    };
-
-    setMessages(prev => [...prev, agentMessage]);
-
-    // Create abort controller for this request
-    const controller = new AbortController();
-    abortControllerRef.current = controller;
-
     try {
-      // Use simplified layered agent API
-      const response = await fetch('/api/layered-agent/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          message: inputValue,
-          device_id: deviceId,
-          session_id: deviceId, // 使用 deviceId 作为 session 标识，保持对话上下文
-        }),
-        signal: controller.signal,
-      });
+      const task = await submitTaskSessionTask(sessionId, inputValue);
+      const initialEvents = (await listTaskEvents(task.id)).events;
+      const reconciledTask = reconcileTaskRun(task, initialEvents);
+      taskRunsRef.current[task.id] = reconciledTask;
+      taskEventsRef.current[task.id] = initialEvents;
+      currentTaskIdRef.current = isTaskActive(reconciledTask.status)
+        ? task.id
+        : null;
+      replaceTaskMessages();
 
-      if (!response.ok) {
-        let errorDetail = `HTTP error! status: ${response.status}`;
-        try {
-          const errorData = await response.json();
-          if (errorData.detail) {
-            errorDetail = errorData.detail;
-          }
-        } catch {
-          // 如果无法解析响应体，使用默认的状态码错误
-        }
-        throw new Error(errorDetail);
+      if (isTaskActive(reconciledTask.status)) {
+        const lastSeq = initialEvents[initialEvents.length - 1]?.seq || 0;
+        attachTaskStream(task.id, lastSeq);
+      } else {
+        setLoading(false);
+        setAborting(false);
       }
-
-      const reader = response.body?.getReader();
-      if (!reader) {
-        throw new Error('No response body');
-      }
-
-      const decoder = new TextDecoder();
-      let buffer = '';
-      const steps: ExecutionStep[] = [];
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            try {
-              const data = JSON.parse(line.slice(6));
-
-              // Handle different event types from layered agent API
-              if (data.type === 'tool_call') {
-                // Tool call step
-                const step: ExecutionStep = {
-                  id: `step-${Date.now()}-${Math.random()}`,
-                  type: 'tool_call',
-                  content:
-                    data.tool_name === 'chat'
-                      ? `发送指令给 Phone Agent`
-                      : data.tool_name === 'list_devices'
-                        ? '获取设备列表'
-                        : `调用工具: ${data.tool_name}`,
-                  toolName: data.tool_name,
-                  toolArgs: data.tool_args || {},
-                  timestamp: new Date(),
-                  isExpanded: true,
-                };
-                steps.push(step);
-                setMessages(prev =>
-                  prev.map(msg =>
-                    msg.id === agentMessageId
-                      ? { ...msg, steps: [...steps] }
-                      : msg
-                  )
-                );
-              } else if (data.type === 'tool_result') {
-                // Tool result
-                const step: ExecutionStep = {
-                  id: `step-${Date.now()}-${Math.random()}`,
-                  type: 'tool_result',
-                  content:
-                    data.tool_name === 'chat'
-                      ? 'Phone Agent 执行结果'
-                      : `${data.tool_name} 结果`,
-                  toolResult: data.result,
-                  timestamp: new Date(),
-                  isExpanded: true,
-                };
-                steps.push(step);
-                setMessages(prev =>
-                  prev.map(msg =>
-                    msg.id === agentMessageId
-                      ? { ...msg, steps: [...steps] }
-                      : msg
-                  )
-                );
-              } else if (data.type === 'message') {
-                // Intermediate message
-                setMessages(prev =>
-                  prev.map(msg =>
-                    msg.id === agentMessageId
-                      ? { ...msg, content: data.content }
-                      : msg
-                  )
-                );
-              } else if (data.type === 'done') {
-                // Final response
-                const updatedAgentMessage = {
-                  ...agentMessage,
-                  content: data.content || '',
-                  isStreaming: false,
-                  success: data.success,
-                  steps: [...steps],
-                  timestamp: new Date(),
-                };
-                setMessages(prev =>
-                  prev.map(msg =>
-                    msg.id === agentMessageId ? updatedAgentMessage : msg
-                  )
-                );
-                // 历史记录已由后端自动保存，无需前端保存
-              } else if (data.type === 'error') {
-                // Error
-                const updatedAgentMessage = {
-                  ...agentMessage,
-                  content: `错误: ${data.message}`,
-                  isStreaming: false,
-                  success: false,
-                  steps: [...steps],
-                  timestamp: new Date(),
-                };
-                setMessages(prev =>
-                  prev.map(msg =>
-                    msg.id === agentMessageId ? updatedAgentMessage : msg
-                  )
-                );
-                setError(data.message);
-                // 历史记录已由后端自动保存，无需前端保存
-              }
-            } catch (e) {
-              console.error('Failed to parse SSE data:', e, line);
-            }
-          }
-        }
-      }
-
-      // Mark as complete if not already
-      setMessages(prev =>
-        prev.map(msg =>
-          msg.id === agentMessageId && msg.isStreaming
-            ? { ...msg, isStreaming: false, success: true }
-            : msg
-        )
-      );
     } catch (err) {
-      // Handle abort error silently (user initiated)
-      if (err instanceof Error && err.name === 'AbortError') {
-        console.log('Chat aborted by user');
-        return;
-      }
-
-      console.error('Chat error:', err);
+      console.error('Failed to submit layered task:', err);
       const errorMessage = getErrorMessage(err);
       setError(errorMessage);
-      setMessages(prev =>
-        prev.map(msg =>
-          msg.id === agentMessageId
-            ? {
-                ...msg,
-                content: `错误: ${errorMessage}`,
-                isStreaming: false,
-                success: false,
-              }
-            : msg
-        )
-      );
-      // 历史记录已由后端自动保存，无需前端保存
-    } finally {
-      setLoading(false);
-      abortControllerRef.current = null;
-    }
-  }, [input, loading, deviceId]);
-
-  // Abort chat function
-  const handleAbort = React.useCallback(() => {
-    if (!abortControllerRef.current) return;
-
-    setAborting(true);
-
-    try {
-      // Abort the fetch request
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-
-      // Update UI - set isStreaming to false
-      setMessages(prev => {
-        const lastMessage = prev[prev.length - 1];
-        if (
-          lastMessage &&
-          lastMessage.role === 'assistant' &&
-          lastMessage.isStreaming
-        ) {
-          return prev.map((msg, index) =>
-            index === prev.length - 1
-              ? {
-                  ...msg,
-                  content: msg.content || t.chat?.aborted || '任务已中断',
-                  isStreaming: false,
-                  success: false,
-                }
-              : msg
-          );
-        }
-        return prev;
-      });
-
-      // Notify backend to abort (don't wait for response)
-      // Use deviceId as session_id (same as in handleSend)
-      import('../api').then(({ abortLayeredAgentChat }) => {
-        abortLayeredAgentChat(deviceId).catch(e =>
-          console.error('Backend abort failed:', e)
-        );
-      });
-    } catch (error) {
-      console.error('Failed to abort chat:', error);
     } finally {
       setLoading(false);
       setAborting(false);
     }
-  }, [t, deviceId]);
+  }, [attachTaskStream, input, loading, replaceTaskMessages, sessionId]);
+
+  const handleAbort = React.useCallback(() => {
+    const taskId = currentTaskIdRef.current;
+    if (!taskId) return;
+
+    setAborting(true);
+
+    void (async () => {
+      try {
+        const response = await cancelTaskRun(taskId);
+        if (response.task) {
+          taskRunsRef.current[taskId] = response.task;
+          replaceTaskMessages();
+        }
+      } catch (abortError) {
+        console.error('Failed to abort chat:', abortError);
+        setError(getErrorMessage(abortError));
+      }
+    })().finally(() => {
+      setLoading(false);
+      setAborting(false);
+    });
+  }, [replaceTaskMessages]);
 
   const handleReset = React.useCallback(async () => {
-    // Abort any ongoing request
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-    setMessages([]);
-    setError(null);
-    if (eventSourceRef.current) {
-      eventSourceRef.current.close();
-      eventSourceRef.current = null;
-    }
-
-    // 清除后端的对话历史 session
     try {
-      await fetch('/api/layered-agent/reset', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          session_id: deviceId,
-        }),
-      });
-    } catch (e) {
-      // 忽略 reset 失败，不影响用户体验
-      console.warn('Failed to reset backend session:', e);
+      if (taskStreamRef.current) {
+        taskStreamRef.current.close();
+        taskStreamRef.current = null;
+      }
+
+      if (sessionId) {
+        await resetTaskSession(sessionId);
+      }
+
+      const nextSession = await createTaskSession(
+        deviceId,
+        deviceSerial,
+        'layered'
+      );
+      sessionStorage.setItem(sessionStorageKey, nextSession.id);
+      setSessionId(nextSession.id);
+      taskRunsRef.current = {};
+      taskEventsRef.current = {};
+      currentTaskIdRef.current = null;
+      setMessages([]);
+      setLoading(false);
+      setError(null);
+      setAborting(false);
+    } catch (resetError) {
+      console.error('Failed to reset layered task session:', resetError);
+      setError(getErrorMessage(resetError));
     }
-  }, [deviceId]);
+  }, [deviceId, deviceSerial, sessionId, sessionStorageKey]);
 
   const handleInputKeyDown = (
     event: React.KeyboardEvent<HTMLTextAreaElement>

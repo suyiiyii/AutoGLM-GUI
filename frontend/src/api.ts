@@ -865,13 +865,21 @@ export interface TaskCancelResponse {
   task: TaskRunResponse | null;
 }
 
+export interface TaskSessionResetResponse {
+  success: boolean;
+  message: string;
+  session: TaskSessionResponse | null;
+}
+
 export async function createTaskSession(
   deviceId: string,
-  deviceSerial: string
+  deviceSerial: string,
+  mode: 'classic' | 'layered' = 'classic'
 ): Promise<TaskSessionResponse> {
   const res = await axios.post<TaskSessionResponse>('/api/task-sessions', {
     device_id: deviceId,
     device_serial: deviceSerial,
+    mode,
   });
   return res.data;
 }
@@ -881,6 +889,15 @@ export async function getTaskSession(
 ): Promise<TaskSessionResponse> {
   const res = await axios.get<TaskSessionResponse>(
     `/api/task-sessions/${sessionId}`
+  );
+  return res.data;
+}
+
+export async function resetTaskSession(
+  sessionId: string
+): Promise<TaskSessionResetResponse> {
+  const res = await axios.post<TaskSessionResetResponse>(
+    `/api/task-sessions/${sessionId}/reset`
   );
   return res.data;
 }
@@ -1062,6 +1079,7 @@ export interface ScheduledTaskResponse {
   device_group_id?: string | null;
   cron_expression: string;
   enabled: boolean;
+  execution_mode: 'classic' | 'layered';
   created_at: string;
   updated_at: string;
   last_run_time: string | null;
@@ -1084,6 +1102,7 @@ export interface ScheduledTaskCreate {
   device_group_id?: string | null;
   cron_expression: string;
   enabled?: boolean;
+  execution_mode?: 'classic' | 'layered';
 }
 
 export interface ScheduledTaskUpdate {
@@ -1093,6 +1112,7 @@ export interface ScheduledTaskUpdate {
   device_group_id?: string | null;
   cron_expression?: string;
   enabled?: boolean;
+  execution_mode?: 'classic' | 'layered';
 }
 
 export async function listScheduledTasks(): Promise<ScheduledTaskListResponse> {

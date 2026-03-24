@@ -49,10 +49,11 @@ def test_scheduler_execution_counts_offline_devices_in_latest_summary(
             device_serial: str,
             input_text: str,
             schedule_fire_id: str,
+            executor_key: str = "scheduled_workflow",
         ) -> dict[str, object]:
             task = self.store.create_task_run(
                 source="scheduled",
-                executor_key="scheduled_workflow",
+                executor_key=executor_key,
                 scheduled_task_id=scheduled_task_id,
                 workflow_uuid=workflow_uuid,
                 schedule_fire_id=schedule_fire_id,
@@ -116,3 +117,70 @@ def test_scheduler_execution_counts_offline_devices_in_latest_summary(
     offline_task = next(task for task in tasks if task["device_serial"] == "offline-1")
     assert offline_task["status"] == TaskStatus.FAILED.value
     assert offline_task["error_message"] == "Device offline"
+
+
+def test_scheduler_uses_layered_executor_when_task_mode_is_layered(
+    tmp_path: Path, monkeypatch
+) -> None:
+    class FakeWorkflowManager:
+        @staticmethod
+        def get_workflow(workflow_uuid: str) -> dict[str, str] | None:
+            if workflow_uuid != "wf-1":
+                return None
+            return {"uuid": "wf-1", "name": "Planner", "text": "执行复杂任务"}
+
+    class FakeDeviceManager:
+        @staticmethod
+        def get_devices() -> list[SimpleNamespace]:
+            return [
+                SimpleNamespace(
+                    serial="online-1",
+                    primary_device_id="device-online-1",
+                    state=SimpleNamespace(value="online"),
+                )
+            ]
+
+    class FakeTaskManager:
+        def __init__(self) -> None:
+            self.enqueued: list[dict[str, object]] = []
+
+        async def enqueue_scheduled_task(self, **kwargs) -> dict[str, object]:
+            self.enqueued.append(kwargs)
+            return {"id": "task-1"}
+
+    store = TaskStore(tmp_path / "tasks.db")
+    fake_task_manager = FakeTaskManager()
+
+    SchedulerManager._instance = None
+    manager = SchedulerManager()
+    manager._tasks = {
+        "scheduled-1": ScheduledTask(
+            id="scheduled-1",
+            name="Planner",
+            workflow_uuid="wf-1",
+            device_serialnos=["online-1"],
+            cron_expression="0 8 * * *",
+            enabled=True,
+            execution_mode="layered",
+        )
+    }
+
+    monkeypatch.setattr(
+        workflow_manager_module, "workflow_manager", FakeWorkflowManager()
+    )
+    monkeypatch.setattr(
+        device_manager_module.DeviceManager,
+        "get_instance",
+        classmethod(lambda cls: FakeDeviceManager()),
+    )
+    monkeypatch.setattr(task_manager_module, "task_manager", fake_task_manager)
+    monkeypatch.setattr(task_store_module, "task_store", store)
+
+    try:
+        asyncio.run(manager._execute_task("scheduled-1"))
+    finally:
+        store.close()
+        SchedulerManager._instance = None
+
+    assert len(fake_task_manager.enqueued) == 1
+    assert fake_task_manager.enqueued[0]["executor_key"] == "scheduled_layered_workflow"

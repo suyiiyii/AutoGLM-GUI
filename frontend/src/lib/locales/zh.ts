@@ -387,6 +387,11 @@ export const zh = {
     taskNamePlaceholder: '例如：每日签到',
     workflow: '工作流',
     selectWorkflow: '选择工作流',
+    executionMode: '执行模式',
+    executionModeOption: {
+      classic: '经典执行',
+      layered: '分层代理',
+    },
     device: '设备',
     selectDevice: '选择设备',
     cronExpression: 'Cron 表达式',
