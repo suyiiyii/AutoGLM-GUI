@@ -150,6 +150,7 @@ class FakeTaskStore:
 class FakeTaskManager:
     def __init__(self, store: FakeTaskStore) -> None:
         self.store = store
+        self.waited_task_ids: list[str] = []
         self.sessions: dict[str, dict[str, object]] = {
             "session-1": {
                 "id": "session-1",
@@ -227,6 +228,13 @@ class FakeTaskManager:
         task["finished_at"] = "2026-01-03T10:00:05"
         return task
 
+    async def wait_for_task(
+        self, task_id: str, timeout: float | None = None
+    ) -> dict[str, object] | None:
+        _ = timeout
+        self.waited_task_ids.append(task_id)
+        return self.store.tasks.get(task_id)
+
     async def archive_session(self, session_id: str) -> dict[str, object] | None:
         session = self.sessions.get(session_id)
         if session is None:
@@ -253,6 +261,7 @@ def client(monkeypatch: pytest.MonkeyPatch) -> TestClient:
     app.include_router(tasks_api.router)
     client = TestClient(app)
     client.reset_calls = reset_calls  # type: ignore[attr-defined]
+    client.fake_task_manager = manager  # type: ignore[attr-defined]
     return client
 
 
@@ -350,3 +359,31 @@ def test_task_session_reset_archives_layered_session(client: TestClient) -> None
     assert reset_resp.json()["success"] is True
     assert reset_resp.json()["session"]["status"] == "archived"
     assert client.reset_calls == [session_id]  # type: ignore[attr-defined]
+
+
+def test_task_session_reset_waits_for_active_task_terminal_state(
+    client: TestClient,
+) -> None:
+    create_resp = client.post(
+        "/api/task-sessions",
+        json={
+            "device_id": "device-9",
+            "device_serial": "serial-9",
+            "mode": "layered",
+        },
+    )
+    assert create_resp.status_code == 200
+    session_id = create_resp.json()["id"]
+
+    submit_resp = client.post(
+        f"/api/task-sessions/{session_id}/tasks",
+        json={"message": "复杂任务"},
+    )
+    assert submit_resp.status_code == 200
+
+    task_id = submit_resp.json()["id"]
+    client.fake_task_manager.store.tasks[task_id]["status"] = "RUNNING"  # type: ignore[attr-defined]
+
+    response = client.post(f"/api/task-sessions/{session_id}/reset")
+    assert response.status_code == 200
+    assert client.fake_task_manager.waited_task_ids == [task_id]  # type: ignore[attr-defined]

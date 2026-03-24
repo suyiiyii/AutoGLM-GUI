@@ -74,10 +74,11 @@ async def _get_or_create_compat_session(
         if session is not None:
             return session
 
-    if request.device_id:
+    legacy_device_id = request.device_id or request.session_id
+    if legacy_device_id:
         return await task_manager.get_or_create_legacy_chat_session(
-            device_id=request.device_id,
-            device_serial=_resolve_device_serial(request.device_id),
+            device_id=legacy_device_id,
+            device_serial=_resolve_device_serial(legacy_device_id),
             mode="layered",
         )
 
@@ -205,6 +206,7 @@ async def reset_session(request: ResetSessionRequest) -> dict[str, Any]:
     )
     if active_task is not None:
         await task_manager.cancel_task(str(active_task["id"]))
+        await task_manager.wait_for_task(str(active_task["id"]))
 
     reset_layered_session(str(session["id"]))
     await task_manager.archive_session(str(session["id"]))

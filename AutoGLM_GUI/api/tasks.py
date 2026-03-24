@@ -128,6 +128,7 @@ async def reset_task_session(session_id: str) -> TaskSessionResetResponse:
     )
     if active_task is not None:
         await task_manager.cancel_task(str(active_task["id"]))
+        await task_manager.wait_for_task(str(active_task["id"]))
 
     if str(session["mode"]) == "layered":
         reset_layered_session(session_id)

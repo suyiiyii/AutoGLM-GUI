@@ -65,6 +65,7 @@ class FakeTaskManager:
         self.store = store
         self.cancelled_ids: list[str] = []
         self.archived_ids: list[str] = []
+        self.waited_task_ids: list[str] = []
 
     async def get_session(self, session_id: str) -> dict[str, object] | None:
         if session_id == self.store.layered_session["id"]:
@@ -133,6 +134,13 @@ class FakeTaskManager:
             task["status"] = "CANCELLED"
         return task
 
+    async def wait_for_task(
+        self, task_id: str, timeout: float | None = None
+    ) -> dict[str, object] | None:
+        _ = timeout
+        self.waited_task_ids.append(task_id)
+        return self.store.tasks.get(task_id)
+
     async def archive_session(self, session_id: str) -> dict[str, object] | None:
         self.archived_ids.append(session_id)
         if session_id == self.store.layered_session["id"]:
@@ -183,6 +191,18 @@ def test_chat_endpoint_streams_task_events(layered_env: dict[str, Any]) -> None:
     assert "任务完成" in response.text
 
 
+def test_chat_endpoint_supports_legacy_session_id_only_calls(
+    layered_env: dict[str, Any],
+) -> None:
+    response = layered_env["client"].post(
+        "/api/layered-agent/chat",
+        json={"session_id": "device-1", "message": "复杂任务"},
+    )
+
+    assert response.status_code == 200
+    assert '"type": "done"' in response.text
+
+
 def test_abort_session_success(layered_env: dict[str, Any]) -> None:
     layered_env["store"].tasks["task-2"] = {
         "id": "task-2",
@@ -217,6 +237,12 @@ def test_abort_session_not_found(layered_env: dict[str, Any]) -> None:
 
 
 def test_reset_session_clears_existing_session(layered_env: dict[str, Any]) -> None:
+    layered_env["store"].tasks["task-2"] = {
+        "id": "task-2",
+        "session_id": "layered-session-1",
+        "status": "RUNNING",
+    }
+
     response = layered_env["client"].post(
         "/api/layered-agent/reset",
         json={"session_id": "device-1"},
@@ -229,6 +255,7 @@ def test_reset_session_clears_existing_session(layered_env: dict[str, Any]) -> N
     }
     assert layered_env["reset_calls"] == ["layered-session-1"]
     assert layered_env["manager"].archived_ids == ["layered-session-1"]
+    assert layered_env["manager"].waited_task_ids == ["task-2"]
 
 
 def test_reset_session_is_idempotent(layered_env: dict[str, Any]) -> None:
