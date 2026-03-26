@@ -306,7 +306,7 @@ export const en = {
   },
   terminal: {
     title: 'Web Terminal',
-    subtitle: 'Run ADB and system commands directly in the browser',
+    subtitle: 'Run ADB commands directly in the browser',
     newSession: 'New Session',
     restartSession: 'Restart Session',
     closeSession: 'Close Session',
@@ -324,7 +324,7 @@ export const en = {
     adbDevices: 'List Devices',
     adbShell: 'Open Shell',
     initialMessage:
-      'Terminal is ready. You can now run adb commands such as adb devices, adb connect, or adb shell.',
+      'Terminal is ready. Only adb commands are allowed, such as adb devices, adb connect, or adb shell.',
     createFailed: 'Failed to create terminal session',
     websocketFailed: 'Terminal WebSocket connection failed',
     sessionClosed: 'Session closed',

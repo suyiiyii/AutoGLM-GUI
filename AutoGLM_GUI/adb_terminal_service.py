@@ -4,11 +4,14 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import hashlib
+import hmac
 import os
-import shutil
+import secrets
 import signal
 import struct
 import subprocess
+import sys
 import time
 import uuid
 from collections import deque
@@ -20,29 +23,88 @@ from AutoGLM_GUI.platform_utils import is_windows
 
 _DEFAULT_BUFFER_SIZE = 200
 _DEFAULT_READ_CHUNK_SIZE = 4096
+_DEFAULT_BUFFER_BYTES = 256 * 1024
+_DEFAULT_MAX_OUTPUT_BYTES = 5 * 1024 * 1024
+
+
+def _get_project_root() -> Path:
+    """Return the AutoGLM project root directory."""
+    return Path(__file__).resolve().parent.parent
 
 
 def _resolve_default_shell_command() -> list[str]:
-    """Return the default interactive shell command."""
-    if is_windows():
-        comspec = os.environ.get("COMSPEC")
-        if comspec:
-            return [comspec]
-        return ["cmd.exe"]
+    """Return the default interactive ADB-only terminal command."""
+    return [sys.executable, "-m", "AutoGLM_GUI.adb_terminal_repl"]
 
-    shell = os.environ.get("SHELL")
-    if shell:
-        return [shell, "-i"]
 
-    for candidate in ("/bin/zsh", "/bin/bash", "/bin/sh"):
-        if Path(candidate).exists():
-            return [candidate, "-i"]
+def _detect_scrcpy_server_path() -> str | None:
+    """Return the best available scrcpy-server path."""
+    project_server = (
+        _get_project_root() / "AutoGLM_GUI" / "resources" / "scrcpy-server-v3.3.3"
+    )
+    if project_server.exists():
+        return str(project_server)
 
-    resolved_shell = shutil.which("zsh") or shutil.which("bash") or shutil.which("sh")
-    if resolved_shell:
-        return [resolved_shell, "-i"]
+    scrcpy_server = os.environ.get("SCRCPY_SERVER_PATH")
+    if scrcpy_server and Path(scrcpy_server).exists():
+        return scrcpy_server
 
-    return ["/bin/sh", "-i"]
+    return None
+
+
+def _prepend_path_entries(env: dict[str, str], entries: list[Path]) -> None:
+    """Prepend directories to PATH while preserving order and removing duplicates."""
+    path_key = next((key for key in env if key.upper() == "PATH"), "PATH")
+    separator = os.pathsep
+    current_path = env.get(path_key, "")
+
+    normalized_entries: list[str] = []
+    seen = set()
+    for entry in entries:
+        entry_str = str(entry)
+        if not entry_str or entry_str in seen:
+            continue
+        seen.add(entry_str)
+        normalized_entries.append(entry_str)
+
+    existing_parts = [part for part in current_path.split(separator) if part]
+    filtered_existing = [part for part in existing_parts if part not in seen]
+    env[path_key] = separator.join(normalized_entries + filtered_existing)
+
+
+def _build_terminal_environment(project_root: Path) -> dict[str, str]:
+    """Build the default environment for new terminal sessions."""
+    env = os.environ.copy()
+    env["TERM"] = "xterm-256color"
+    env["AUTOGLM_PROJECT_ROOT"] = str(project_root)
+
+    path_entries: list[Path] = []
+
+    adb_path = env.get("AUTOGLM_ADB_PATH")
+    if adb_path:
+        adb_binary = Path(adb_path).expanduser()
+        if adb_binary.is_file():
+            path_entries.append(adb_binary.parent)
+
+    venv_root = project_root / ".venv"
+    venv_bin_dir = venv_root / ("Scripts" if is_windows() else "bin")
+    if venv_bin_dir.exists():
+        env["VIRTUAL_ENV"] = str(venv_root)
+        path_entries.append(venv_bin_dir)
+
+    path_entries.append(project_root)
+    _prepend_path_entries(env, path_entries)
+
+    scrcpy_server_path = _detect_scrcpy_server_path()
+    if scrcpy_server_path:
+        env["SCRCPY_SERVER_PATH"] = scrcpy_server_path
+
+    return env
+
+
+def _hash_session_token(token: str) -> str:
+    """Return a stable hash for a session token."""
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
 
 
 class TerminalSession:
@@ -54,17 +116,29 @@ class TerminalSession:
         session_id: str,
         cwd: str,
         command: list[str],
+        env: dict[str, str],
+        created_by: str | None,
+        origin: str | None,
+        owner_token_hash: str,
         buffer_size: int = _DEFAULT_BUFFER_SIZE,
+        max_buffer_bytes: int = _DEFAULT_BUFFER_BYTES,
+        max_output_bytes: int = _DEFAULT_MAX_OUTPUT_BYTES,
     ) -> None:
         self.session_id = session_id
         self.cwd = cwd
         self.command = command
+        self.env = env
+        self.created_by = created_by
+        self.origin = origin
+        self.owner_token_hash = owner_token_hash
         self.status = "created"
         self.created_at = time.time()
         self.last_active_at = self.created_at
         self.exit_code: int | None = None
+        self.total_output_bytes = 0
 
-        self._buffer: deque[dict[str, Any]] = deque(maxlen=buffer_size)
+        self._buffer: deque[tuple[dict[str, Any], int]] = deque(maxlen=buffer_size)
+        self._buffer_bytes = 0
         self._subscribers: set[asyncio.Queue[dict[str, Any]]] = set()
         self._process: subprocess.Popen[bytes] | asyncio.subprocess.Process | None = (
             None
@@ -73,6 +147,9 @@ class TerminalSession:
         self._reader_task: asyncio.Task[None] | None = None
         self._wait_task: asyncio.Task[None] | None = None
         self._close_lock = asyncio.Lock()
+        self._max_buffer_bytes = max_buffer_bytes
+        self._max_output_bytes = max_output_bytes
+        self._output_limit_triggered = False
 
     def to_response(self) -> dict[str, Any]:
         return {
@@ -83,12 +160,16 @@ class TerminalSession:
             "created_at": self.created_at,
             "last_active_at": self.last_active_at,
             "exit_code": self.exit_code,
+            "created_by": self.created_by,
+            "origin": self.origin,
+            "owner_token_hash": self.owner_token_hash,
+            "total_output_bytes": self.total_output_bytes,
         }
 
     def subscribe(self) -> tuple[asyncio.Queue[dict[str, Any]], list[dict[str, Any]]]:
         queue: asyncio.Queue[dict[str, Any]] = asyncio.Queue()
         self._subscribers.add(queue)
-        return queue, list(self._buffer)
+        return queue, [event for event, _ in self._buffer]
 
     def unsubscribe(self, queue: asyncio.Queue[dict[str, Any]]) -> None:
         self._subscribers.discard(queue)
@@ -171,13 +252,10 @@ class TerminalSession:
         import pty
 
         master_fd, slave_fd = pty.openpty()
-        env = os.environ.copy()
-        env.setdefault("TERM", "xterm-256color")
-
         process = subprocess.Popen(
             self.command,
             cwd=self.cwd,
-            env=env,
+            env=self.env,
             stdin=slave_fd,
             stdout=slave_fd,
             stderr=slave_fd,
@@ -195,6 +273,7 @@ class TerminalSession:
         process = await asyncio.create_subprocess_exec(
             *self.command,
             cwd=self.cwd,
+            env=self.env,
             stdin=asyncio.subprocess.PIPE,
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
@@ -218,13 +297,8 @@ class TerminalSession:
             if not chunk:
                 return
 
-            await self._publish(
-                {
-                    "type": "output",
-                    "stream": "stdout",
-                    "data": chunk.decode("utf-8", errors="replace"),
-                }
-            )
+            if not await self._publish_output("stdout", chunk):
+                return
 
     async def _read_windows_output(self) -> None:
         process = self._windows_process
@@ -236,13 +310,8 @@ class TerminalSession:
             if not chunk:
                 return
 
-            await self._publish(
-                {
-                    "type": "output",
-                    "stream": "stdout",
-                    "data": chunk.decode("utf-8", errors="replace"),
-                }
-            )
+            if not await self._publish_output("stdout", chunk):
+                return
 
     async def _wait_for_process(self) -> None:
         exit_code: int
@@ -297,15 +366,16 @@ class TerminalSession:
 
         self.status = "closed"
         self.last_active_at = time.time()
+        current_task = asyncio.current_task()
 
         if self._reader_task is not None:
             self._reader_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._reader_task
+            if self._reader_task is not current_task:
+                with contextlib.suppress(asyncio.CancelledError):
+                    await self._reader_task
             self._reader_task = None
 
         if self._wait_task is not None:
-            current_task = asyncio.current_task()
             if self._wait_task is not current_task:
                 with contextlib.suppress(asyncio.CancelledError):
                     await self._wait_task
@@ -319,7 +389,7 @@ class TerminalSession:
         await self._publish({"type": "status", "status": self.status})
 
     async def _publish(self, event: dict[str, Any]) -> None:
-        self._buffer.append(event)
+        self._append_to_buffer(event, self._estimate_event_size(event))
         dead_queues: list[asyncio.Queue[dict[str, Any]]] = []
 
         for queue in self._subscribers:
@@ -330,6 +400,47 @@ class TerminalSession:
 
         for queue in dead_queues:
             self._subscribers.discard(queue)
+
+    async def _publish_output(self, stream: str, chunk: bytes) -> bool:
+        chunk_size = len(chunk)
+        if self.total_output_bytes + chunk_size > self._max_output_bytes:
+            if not self._output_limit_triggered:
+                self._output_limit_triggered = True
+                await self._publish(
+                    {
+                        "type": "error",
+                        "message": "Terminal output limit exceeded. Session will be closed.",
+                    }
+                )
+                asyncio.create_task(self.close())
+            return False
+
+        self.total_output_bytes += chunk_size
+        await self._publish(
+            {
+                "type": "output",
+                "stream": stream,
+                "data": chunk.decode("utf-8", errors="replace"),
+            }
+        )
+        return True
+
+    def _append_to_buffer(self, event: dict[str, Any], event_size: int) -> None:
+        self._buffer.append((event, event_size))
+        self._buffer_bytes += event_size
+
+        while self._buffer and self._buffer_bytes > self._max_buffer_bytes:
+            _, removed_size = self._buffer.popleft()
+            self._buffer_bytes -= removed_size
+
+    def _estimate_event_size(self, event: dict[str, Any]) -> int:
+        payload = event.get("data")
+        if isinstance(payload, str):
+            return len(payload.encode("utf-8", errors="replace")) + 128
+        message = event.get("message")
+        if isinstance(message, str):
+            return len(message.encode("utf-8", errors="replace")) + 128
+        return 256
 
     @property
     def _posix_process(self) -> subprocess.Popen[bytes] | None:
@@ -349,6 +460,7 @@ class TerminalSessionManager:
 
     def __init__(self) -> None:
         self._sessions: dict[str, TerminalSession] = {}
+        self._session_token_hashes: dict[str, str] = {}
         self._lock = asyncio.Lock()
 
     async def create_session(
@@ -356,25 +468,37 @@ class TerminalSessionManager:
         *,
         cwd: str | None = None,
         command: list[str] | None = None,
-    ) -> TerminalSession:
-        resolved_cwd = str(Path(cwd or os.getcwd()).expanduser().resolve())
+        created_by: str | None = None,
+        origin: str | None = None,
+    ) -> tuple[TerminalSession, str]:
+        project_root = _get_project_root()
+        resolved_cwd = str(Path(cwd or project_root).expanduser().resolve())
         if not Path(resolved_cwd).exists():
             raise ValueError(f"Working directory does not exist: {resolved_cwd}")
         if not Path(resolved_cwd).is_dir():
             raise ValueError(f"Working directory is not a directory: {resolved_cwd}")
 
-        resolved_command = command or _resolve_default_shell_command()
-        if not resolved_command:
-            raise ValueError("Command cannot be empty")
+        if command is not None:
+            raise ValueError("Custom terminal commands are disabled in ADB-only mode")
+
+        resolved_command = _resolve_default_shell_command()
+
+        session_token = secrets.token_urlsafe(32)
+        owner_token_hash = _hash_session_token(session_token)
 
         session = TerminalSession(
             session_id=uuid.uuid4().hex,
             cwd=resolved_cwd,
             command=resolved_command,
+            env=_build_terminal_environment(project_root),
+            created_by=created_by,
+            origin=origin,
+            owner_token_hash=owner_token_hash,
         )
 
         async with self._lock:
             self._sessions[session.session_id] = session
+            self._session_token_hashes[session.session_id] = owner_token_hash
 
         await session.start()
         logger.info(
@@ -383,11 +507,12 @@ class TerminalSessionManager:
             session.cwd,
             session.command,
         )
-        return session
+        return session, session_token
 
     async def close_session(self, session_id: str) -> bool:
         async with self._lock:
             session = self._sessions.pop(session_id, None)
+            self._session_token_hashes.pop(session_id, None)
 
         if session is None:
             return False
@@ -398,6 +523,23 @@ class TerminalSessionManager:
 
     def get_session(self, session_id: str) -> TerminalSession | None:
         return self._sessions.get(session_id)
+
+    def authenticate_session(
+        self, session_id: str, session_token: str | None
+    ) -> TerminalSession | None:
+        if not session_token:
+            return None
+
+        session = self._sessions.get(session_id)
+        expected_hash = self._session_token_hashes.get(session_id)
+        if session is None or expected_hash is None:
+            return None
+
+        provided_hash = _hash_session_token(session_token)
+        if not hmac.compare_digest(provided_hash, expected_hash):
+            return None
+
+        return session
 
 
 terminal_session_manager = TerminalSessionManager()

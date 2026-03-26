@@ -301,7 +301,7 @@ export const zh = {
   },
   terminal: {
     title: 'Web Terminal',
-    subtitle: '在浏览器里直接执行 ADB 和系统命令',
+    subtitle: '在浏览器里直接执行 ADB 命令',
     newSession: '新建会话',
     restartSession: '重建会话',
     closeSession: '关闭会话',
@@ -319,7 +319,7 @@ export const zh = {
     adbDevices: '列出设备',
     adbShell: '打开 Shell',
     initialMessage:
-      'Terminal 已就绪。您现在可以直接输入 adb 命令，例如 adb devices、adb connect 或 adb shell。',
+      'Terminal 已就绪。目前只允许执行 adb 命令，例如 adb devices、adb connect 或 adb shell。',
     createFailed: '创建终端会话失败',
     websocketFailed: 'Terminal WebSocket 连接失败',
     sessionClosed: '会话已关闭',

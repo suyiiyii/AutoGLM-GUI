@@ -26,9 +26,13 @@ export const Route = createFileRoute('/terminal')({
   component: TerminalRouteComponent,
 });
 
-function buildTerminalWebSocketUrl(sessionId: string): string {
+function buildTerminalWebSocketUrl(
+  sessionId: string,
+  sessionToken: string
+): string {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  return `${protocol}//${window.location.host}/api/terminal/sessions/${sessionId}/stream`;
+  const query = new URLSearchParams({ token: sessionToken }).toString();
+  return `${protocol}//${window.location.host}/api/terminal/sessions/${sessionId}/stream?${query}`;
 }
 
 function TerminalRouteComponent() {
@@ -39,6 +43,7 @@ function TerminalRouteComponent() {
   const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const webSocketRef = useRef<WebSocket | null>(null);
   const sessionIdRef = useRef<string | null>(null);
+  const sessionTokenRef = useRef<string | null>(null);
 
   const [isTerminalReady, setIsTerminalReady] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -92,13 +97,16 @@ function TerminalRouteComponent() {
 
   const closeCurrentSession = useCallback(async (clearState: boolean) => {
     const currentSessionId = sessionIdRef.current;
+    const currentSessionToken = sessionTokenRef.current;
 
     if (webSocketRef.current) {
       webSocketRef.current.close();
       webSocketRef.current = null;
     }
 
-    if (!currentSessionId) {
+    if (!currentSessionId || !currentSessionToken) {
+      sessionIdRef.current = null;
+      sessionTokenRef.current = null;
       if (clearState) {
         setSocketConnected(false);
         setSession(null);
@@ -107,9 +115,10 @@ function TerminalRouteComponent() {
     }
 
     sessionIdRef.current = null;
+    sessionTokenRef.current = null;
 
     try {
-      await closeTerminalSession(currentSessionId);
+      await closeTerminalSession(currentSessionId, currentSessionToken);
     } catch (closeError) {
       console.error('Failed to close terminal session:', closeError);
     } finally {
@@ -121,8 +130,10 @@ function TerminalRouteComponent() {
   }, []);
 
   const connectSessionStream = useCallback(
-    (sessionId: string) => {
-      const socket = new WebSocket(buildTerminalWebSocketUrl(sessionId));
+    (sessionId: string, sessionToken: string) => {
+      const socket = new WebSocket(
+        buildTerminalWebSocketUrl(sessionId, sessionToken)
+      );
       webSocketRef.current = socket;
 
       socket.onopen = () => {
@@ -199,13 +210,16 @@ function TerminalRouteComponent() {
     setError('');
 
     await closeCurrentSession(false);
+    sessionIdRef.current = null;
+    sessionTokenRef.current = null;
     terminalRef.current?.clear();
 
     try {
       const nextSession = await createTerminalSession();
       sessionIdRef.current = nextSession.session_id;
+      sessionTokenRef.current = nextSession.session_token;
       setSession(nextSession);
-      connectSessionStream(nextSession.session_id);
+      connectSessionStream(nextSession.session_id, nextSession.session_token);
       appendSystemMessage(t.terminal.initialMessage);
     } catch (createError) {
       const message =
@@ -214,6 +228,7 @@ function TerminalRouteComponent() {
           : t.terminal.createFailed;
       setError(message);
       appendSystemMessage(message);
+      sessionTokenRef.current = null;
       setSession(null);
     } finally {
       setIsLoading(false);
@@ -495,7 +510,7 @@ function TerminalRouteComponent() {
           </div>
         )}
 
-        <div className="relative mx-4 mt-4 rounded-[28px] border border-slate-200 dark:border-slate-800 bg-slate-950 shadow-[0_24px_80px_rgba(15,23,42,0.28)] flex-1 overflow-hidden">
+        <div className="relative mx-4 mt-4 flex-1 overflow-hidden border border-slate-200 dark:border-slate-800 bg-slate-950 shadow-[0_24px_80px_rgba(15,23,42,0.28)]">
           {!session && !isLoading && (
             <div className="absolute inset-x-0 top-20 z-10 mx-auto w-fit rounded-full bg-white/90 px-4 py-2 text-sm text-slate-600 shadow-sm backdrop-blur dark:bg-slate-900/80 dark:text-slate-300">
               {t.terminal.closedHint}
@@ -503,7 +518,7 @@ function TerminalRouteComponent() {
           )}
           <div
             ref={terminalContainerRef}
-            className="h-full w-full p-4"
+            className="h-full w-full"
             aria-label={t.terminal.title}
           />
           {isLoading && (

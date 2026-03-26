@@ -1183,6 +1183,16 @@ class TerminalSessionResponse(BaseModel):
     created_at: float
     last_active_at: float
     exit_code: int | None = None
+    created_by: str | None = None
+    origin: str | None = None
+    owner_token_hash: str | None = None
+    total_output_bytes: int = 0
+
+
+class TerminalSessionCreateResponse(TerminalSessionResponse):
+    """创建 Web Terminal 会话响应."""
+
+    session_token: str
 
 
 class TerminalSessionCloseResponse(BaseModel):

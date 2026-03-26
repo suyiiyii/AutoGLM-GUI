@@ -339,6 +339,14 @@ export interface TerminalSession {
   created_at: number;
   last_active_at: number;
   exit_code?: number | null;
+  created_by?: string | null;
+  origin?: string | null;
+  owner_token_hash?: string | null;
+  total_output_bytes: number;
+}
+
+export interface TerminalSessionCreateResponse extends TerminalSession {
+  session_token: string;
 }
 
 export interface TerminalSessionCloseResponse {
@@ -431,8 +439,8 @@ export async function removeRemoteDevice(
 
 export async function createTerminalSession(
   payload: TerminalSessionCreateRequest = {}
-): Promise<TerminalSession> {
-  const res = await axios.post<TerminalSession>(
+): Promise<TerminalSessionCreateResponse> {
+  const res = await axios.post<TerminalSessionCreateResponse>(
     '/api/terminal/sessions',
     payload
   );
@@ -440,19 +448,27 @@ export async function createTerminalSession(
 }
 
 export async function getTerminalSession(
-  sessionId: string
+  sessionId: string,
+  sessionToken: string
 ): Promise<TerminalSession> {
   const res = await axios.get<TerminalSession>(
-    `/api/terminal/sessions/${sessionId}`
+    `/api/terminal/sessions/${sessionId}`,
+    {
+      params: { token: sessionToken },
+    }
   );
   return res.data;
 }
 
 export async function closeTerminalSession(
-  sessionId: string
+  sessionId: string,
+  sessionToken: string
 ): Promise<TerminalSessionCloseResponse> {
   const res = await axios.delete<TerminalSessionCloseResponse>(
-    `/api/terminal/sessions/${sessionId}`
+    `/api/terminal/sessions/${sessionId}`,
+    {
+      params: { token: sessionToken },
+    }
   );
   return res.data;
 }

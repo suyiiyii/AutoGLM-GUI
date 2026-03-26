@@ -266,6 +266,7 @@ def main() -> None:
 
     # 写入环境变量（供 --reload 模式的子进程使用）
     os.environ["AUTOGLM_ADB_PATH"] = adb_path
+    os.environ["AUTOGLM_SERVER_HOST"] = args.host
 
     # 预先创建 DeviceManager 单例（用正确的 adb_path）
     from AutoGLM_GUI.device_manager import DeviceManager

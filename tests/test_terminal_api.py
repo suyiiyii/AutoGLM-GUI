@@ -22,6 +22,10 @@ class FakeTerminalSession:
         self.created_at = 1700000000.0
         self.last_active_at = 1700000001.0
         self.exit_code: int | None = None
+        self.created_by = "127.0.0.1"
+        self.origin = "http://localhost:3000"
+        self.owner_token_hash = "token-hash"
+        self.total_output_bytes = 7
         self.backlog = [
             {"type": "status", "status": "running"},
             {"type": "output", "stream": "stdout", "data": "ready\r\n"},
@@ -40,6 +44,10 @@ class FakeTerminalSession:
             "created_at": self.created_at,
             "last_active_at": self.last_active_at,
             "exit_code": self.exit_code,
+            "created_by": self.created_by,
+            "origin": self.origin,
+            "owner_token_hash": self.owner_token_hash,
+            "total_output_bytes": self.total_output_bytes,
         }
 
     def subscribe(self) -> tuple[asyncio.Queue[dict], list[dict]]:
@@ -59,6 +67,7 @@ class FakeTerminalSession:
 class FakeTerminalManager:
     def __init__(self) -> None:
         self.session = FakeTerminalSession()
+        self.session_token = "token-1"
         self.create_args: tuple[str | None, list[str] | None] | None = None
         self.closed_ids: list[str] = []
 
@@ -67,12 +76,26 @@ class FakeTerminalManager:
         *,
         cwd: str | None = None,
         command: list[str] | None = None,
-    ) -> FakeTerminalSession:
+        created_by: str | None = None,
+        origin: str | None = None,
+    ) -> tuple[FakeTerminalSession, str]:
         self.create_args = (cwd, command)
-        return self.session
+        self.session.created_by = created_by or self.session.created_by
+        self.session.origin = origin or self.session.origin
+        return self.session, self.session_token
 
     def get_session(self, session_id: str) -> FakeTerminalSession | None:
         if session_id == self.session.session_id:
+            return self.session
+        return None
+
+    def authenticate_session(
+        self, session_id: str, session_token: str | None
+    ) -> FakeTerminalSession | None:
+        if (
+            session_id == self.session.session_id
+            and session_token == self.session_token
+        ):
             return self.session
         return None
 
@@ -100,26 +123,37 @@ def terminal_env(monkeypatch: pytest.MonkeyPatch) -> dict:
 
 
 def test_create_terminal_session(terminal_env: dict) -> None:
-    response = terminal_env["client"].post(
-        "/api/terminal/sessions",
-        json={"cwd": "/workspace", "command": ["/bin/bash", "-i"]},
-    )
+    response = terminal_env["client"].post("/api/terminal/sessions", json={})
 
     assert response.status_code == 200
-    assert terminal_env["manager"].create_args == ("/workspace", ["/bin/bash", "-i"])
+    assert terminal_env["manager"].create_args == (None, None)
     assert response.json()["session_id"] == "terminal-1"
+    assert response.json()["session_token"] == "token-1"
     assert response.json()["status"] == "running"
 
 
 def test_get_terminal_session_not_found(terminal_env: dict) -> None:
-    response = terminal_env["client"].get("/api/terminal/sessions/missing")
+    response = terminal_env["client"].get(
+        "/api/terminal/sessions/missing",
+        params={"token": "token-1"},
+    )
 
-    assert response.status_code == 404
-    assert response.json()["detail"] == "Terminal session not found"
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Invalid terminal session token"
+
+
+def test_get_terminal_session_requires_token(terminal_env: dict) -> None:
+    response = terminal_env["client"].get("/api/terminal/sessions/terminal-1")
+
+    assert response.status_code == 403
+    assert response.json()["detail"] == "Invalid terminal session token"
 
 
 def test_close_terminal_session(terminal_env: dict) -> None:
-    response = terminal_env["client"].delete("/api/terminal/sessions/terminal-1")
+    response = terminal_env["client"].delete(
+        "/api/terminal/sessions/terminal-1",
+        params={"token": "token-1"},
+    )
 
     assert response.status_code == 200
     assert response.json() == {
@@ -134,7 +168,8 @@ def test_terminal_websocket_streams_backlog_and_input(terminal_env: dict) -> Non
     session = terminal_env["session"]
 
     with terminal_env["client"].websocket_connect(
-        "/api/terminal/sessions/terminal-1/stream"
+        "/api/terminal/sessions/terminal-1/stream?token=token-1",
+        headers={"origin": "http://localhost:3000"},
     ) as websocket:
         assert websocket.receive_json() == {"type": "status", "status": "running"}
         assert websocket.receive_json() == {
@@ -162,3 +197,15 @@ def test_terminal_websocket_streams_backlog_and_input(terminal_env: dict) -> Non
     assert session.inputs == ["adb devices\n"]
     assert session.resizes == [(120, 40)]
     assert session.unsubscribed is True
+
+
+def test_terminal_disabled_for_non_local_host_by_default(
+    terminal_env: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AUTOGLM_SERVER_HOST", "0.0.0.0")
+    monkeypatch.delenv("AUTOGLM_ENABLE_WEB_TERMINAL", raising=False)
+
+    response = terminal_env["client"].post("/api/terminal/sessions", json={})
+
+    assert response.status_code == 403
+    assert "AUTOGLM_ENABLE_WEB_TERMINAL=1" in response.json()["detail"]
