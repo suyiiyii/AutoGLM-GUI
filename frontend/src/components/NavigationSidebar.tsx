@@ -6,6 +6,7 @@ import {
   FileText,
   History,
   Clock,
+  Terminal,
   type LucideIcon,
 } from 'lucide-react';
 import {
@@ -61,6 +62,12 @@ export function NavigationSidebar({ className }: NavigationSidebarProps) {
       icon: FileText,
       label: t.navigation.logs,
       path: '/logs',
+    },
+    {
+      id: 'terminal',
+      icon: Terminal,
+      label: t.navigation.terminal,
+      path: '/terminal',
     },
   ];
 

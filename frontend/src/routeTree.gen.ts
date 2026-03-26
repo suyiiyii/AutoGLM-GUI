@@ -10,6 +10,7 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as WorkflowsRouteImport } from './routes/workflows'
+import { Route as TerminalRouteImport } from './routes/terminal'
 import { Route as ScheduledTasksRouteImport } from './routes/scheduled-tasks'
 import { Route as LogsRouteImport } from './routes/logs'
 import { Route as HistoryRouteImport } from './routes/history'
@@ -20,6 +21,11 @@ import { Route as IndexRouteImport } from './routes/index'
 const WorkflowsRoute = WorkflowsRouteImport.update({
   id: '/workflows',
   path: '/workflows',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const TerminalRoute = TerminalRouteImport.update({
+  id: '/terminal',
+  path: '/terminal',
   getParentRoute: () => rootRouteImport,
 } as any)
 const ScheduledTasksRoute = ScheduledTasksRouteImport.update({
@@ -60,6 +66,7 @@ export interface FileRoutesByFullPath {
   '/history': typeof HistoryRoute
   '/logs': typeof LogsRoute
   '/scheduled-tasks': typeof ScheduledTasksRoute
+  '/terminal': typeof TerminalRoute
   '/workflows': typeof WorkflowsRoute
 }
 export interface FileRoutesByTo {
@@ -69,6 +76,7 @@ export interface FileRoutesByTo {
   '/history': typeof HistoryRoute
   '/logs': typeof LogsRoute
   '/scheduled-tasks': typeof ScheduledTasksRoute
+  '/terminal': typeof TerminalRoute
   '/workflows': typeof WorkflowsRoute
 }
 export interface FileRoutesById {
@@ -79,6 +87,7 @@ export interface FileRoutesById {
   '/history': typeof HistoryRoute
   '/logs': typeof LogsRoute
   '/scheduled-tasks': typeof ScheduledTasksRoute
+  '/terminal': typeof TerminalRoute
   '/workflows': typeof WorkflowsRoute
 }
 export interface FileRouteTypes {
@@ -90,6 +99,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/logs'
     | '/scheduled-tasks'
+    | '/terminal'
     | '/workflows'
   fileRoutesByTo: FileRoutesByTo
   to:
@@ -99,6 +109,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/logs'
     | '/scheduled-tasks'
+    | '/terminal'
     | '/workflows'
   id:
     | '__root__'
@@ -108,6 +119,7 @@ export interface FileRouteTypes {
     | '/history'
     | '/logs'
     | '/scheduled-tasks'
+    | '/terminal'
     | '/workflows'
   fileRoutesById: FileRoutesById
 }
@@ -118,6 +130,7 @@ export interface RootRouteChildren {
   HistoryRoute: typeof HistoryRoute
   LogsRoute: typeof LogsRoute
   ScheduledTasksRoute: typeof ScheduledTasksRoute
+  TerminalRoute: typeof TerminalRoute
   WorkflowsRoute: typeof WorkflowsRoute
 }
 
@@ -128,6 +141,13 @@ declare module '@tanstack/react-router' {
       path: '/workflows'
       fullPath: '/workflows'
       preLoaderRoute: typeof WorkflowsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/terminal': {
+      id: '/terminal'
+      path: '/terminal'
+      fullPath: '/terminal'
+      preLoaderRoute: typeof TerminalRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/scheduled-tasks': {
@@ -182,6 +202,7 @@ const rootRouteChildren: RootRouteChildren = {
   HistoryRoute: HistoryRoute,
   LogsRoute: LogsRoute,
   ScheduledTasksRoute: ScheduledTasksRoute,
+  TerminalRoute: TerminalRoute,
   WorkflowsRoute: WorkflowsRoute,
 }
 export const routeTree = rootRouteImport

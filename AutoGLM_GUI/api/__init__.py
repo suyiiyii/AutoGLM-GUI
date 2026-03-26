@@ -34,6 +34,7 @@ from . import (
     media,
     metrics,
     scheduled_tasks,
+    terminal,
     tasks,
     version,
     workflows,
@@ -201,6 +202,7 @@ def create_app() -> FastAPI:
     app.include_router(media.router)
     app.include_router(metrics.router)
     app.include_router(scheduled_tasks.router)
+    app.include_router(terminal.router)
     app.include_router(tasks.router)
     app.include_router(version.router)
     app.include_router(workflows.router)

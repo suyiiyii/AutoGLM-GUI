@@ -1153,3 +1153,41 @@ class DeviceNameResponse(BaseModel):
     serial: str
     display_name: str | None = None
     error: str | None = None
+
+
+class TerminalSessionCreateRequest(BaseModel):
+    """创建 Web Terminal 会话请求."""
+
+    cwd: str | None = None
+    command: list[str] | None = None
+
+    @field_validator("command")
+    @classmethod
+    def validate_command(cls, value: list[str] | None) -> list[str] | None:
+        """验证命令参数."""
+        if value is None:
+            return value
+        command = [part.strip() for part in value if part.strip()]
+        if not command:
+            raise ValueError("command cannot be empty")
+        return command
+
+
+class TerminalSessionResponse(BaseModel):
+    """Web Terminal 会话信息."""
+
+    session_id: str
+    cwd: str
+    command: list[str]
+    status: str
+    created_at: float
+    last_active_at: float
+    exit_code: int | None = None
+
+
+class TerminalSessionCloseResponse(BaseModel):
+    """关闭 Web Terminal 会话响应."""
+
+    success: bool
+    message: str
+    session_id: str
