@@ -73,6 +73,17 @@ class FakePhoneAgentManager:
     def get_metadata(self, device_id: str) -> FakeMetadata | None:
         return self.metadata_by_device_id.get(device_id)
 
+    def get_metadata_for_device(self, device_id: str) -> FakeMetadata | None:
+        exact = self.metadata_by_device_id.get(device_id)
+        if exact:
+            return exact
+
+        prefix = f"{device_id}:"
+        for key, metadata in self.metadata_by_device_id.items():
+            if key.startswith(prefix):
+                return metadata
+        return None
+
 
 class FakeDeviceManager:
     def __init__(self) -> None:
@@ -195,6 +206,19 @@ def test_list_devices_refreshes_when_polling_inactive(devices_env: dict) -> None
     assert device["group_id"] == "qa"
     assert device["agent"]["state"] == "idle"
     assert device["agent"]["model_name"] == "autoglm-phone-9b"
+
+
+def test_list_devices_surfaces_contextual_agent_metadata(devices_env: dict) -> None:
+    devices_env["agent_manager"].metadata_by_device_id["dev-1:chat:session-42"] = (
+        FakeMetadata(model_name="mock-context-model")
+    )
+
+    response = devices_env["client"].get("/api/devices")
+
+    assert response.status_code == 200
+    device = response.json()["devices"][0]
+    assert device["agent"]["state"] == "idle"
+    assert device["agent"]["model_name"] == "mock-context-model"
 
 
 def test_connect_wifi_requires_device_id(devices_env: dict) -> None:

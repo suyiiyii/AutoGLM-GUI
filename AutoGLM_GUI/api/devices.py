@@ -67,7 +67,7 @@ def _build_device_response_with_agent(
     # 使用 device.connections 公开属性（ManagedDevice 提供）
     for conn in device.connections:
         # 只调用 PhoneAgentManager 的公开方法
-        metadata = agent_manager.get_metadata(conn.device_id)
+        metadata = agent_manager.get_metadata_for_device(conn.device_id)
         if metadata:
             # 找到了已初始化的 Agent
             response["agent"] = {
