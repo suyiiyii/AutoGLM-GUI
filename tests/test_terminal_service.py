@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import subprocess
 from pathlib import Path
 
 import pytest
@@ -97,6 +98,28 @@ async def test_create_session_rejects_custom_command() -> None:
 
 
 @pytest.mark.anyio
+async def test_create_session_removes_registry_entries_when_start_fails(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    project_root = tmp_path / "project"
+    project_root.mkdir()
+
+    async def fake_start(self: terminal_service.TerminalSession) -> None:
+        raise RuntimeError("boom")
+
+    monkeypatch.setattr(terminal_service, "_get_project_root", lambda: project_root)
+    monkeypatch.setattr(terminal_service.TerminalSession, "start", fake_start)
+
+    manager = terminal_service.TerminalSessionManager()
+
+    with pytest.raises(RuntimeError, match="boom"):
+        await manager.create_session(created_by="127.0.0.1")
+
+    assert manager._sessions == {}
+    assert manager._session_token_hashes == {}
+
+
+@pytest.mark.anyio
 async def test_terminal_output_limit_triggers_close() -> None:
     session = terminal_service.TerminalSession(
         session_id="terminal-1",
@@ -155,3 +178,37 @@ def test_append_to_buffer_accounts_for_deque_auto_eviction() -> None:
 
     assert [event for event, _ in session._buffer] == [second, third]
     assert session._buffer_bytes == second_size + third_size
+
+
+@pytest.mark.anyio
+async def test_start_posix_closes_pty_fds_when_spawn_fails(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    session = terminal_service.TerminalSession(
+        session_id="terminal-1",
+        cwd="/tmp",
+        command=["/bin/sh"],
+        env={"TERM": "xterm-256color"},
+        created_by="127.0.0.1",
+        origin="http://localhost:3000",
+        owner_token_hash="token-hash",
+    )
+
+    closed_fds: list[int] = []
+
+    monkeypatch.setattr(terminal_service, "is_windows", lambda: False)
+
+    import pty
+
+    monkeypatch.setattr(pty, "openpty", lambda: (101, 102))
+
+    def fake_popen(*args: object, **kwargs: object) -> subprocess.Popen[bytes]:
+        raise OSError("spawn failed")
+
+    monkeypatch.setattr(terminal_service.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(terminal_service.os, "close", lambda fd: closed_fds.append(fd))
+
+    with pytest.raises(OSError, match="spawn failed"):
+        await session._start_posix()
+
+    assert closed_fds == [101, 102]

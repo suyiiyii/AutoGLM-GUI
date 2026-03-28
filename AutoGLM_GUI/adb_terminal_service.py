@@ -259,16 +259,24 @@ class TerminalSession:
         import pty
 
         master_fd, slave_fd = pty.openpty()
-        process = subprocess.Popen(
-            self.command,
-            cwd=self.cwd,
-            env=self.env,
-            stdin=slave_fd,
-            stdout=slave_fd,
-            stderr=slave_fd,
-            start_new_session=True,
-            close_fds=True,
-        )
+        try:
+            process = subprocess.Popen(
+                self.command,
+                cwd=self.cwd,
+                env=self.env,
+                stdin=slave_fd,
+                stdout=slave_fd,
+                stderr=slave_fd,
+                start_new_session=True,
+                close_fds=True,
+            )
+        except Exception:
+            with contextlib.suppress(OSError):
+                os.close(master_fd)
+            with contextlib.suppress(OSError):
+                os.close(slave_fd)
+            raise
+
         os.close(slave_fd)
 
         self._master_fd = master_fd
@@ -511,7 +519,14 @@ class TerminalSessionManager:
             self._sessions[session.session_id] = session
             self._session_token_hashes[session.session_id] = owner_token_hash
 
-        await session.start()
+        try:
+            await session.start()
+        except Exception:
+            async with self._lock:
+                self._sessions.pop(session.session_id, None)
+                self._session_token_hashes.pop(session.session_id, None)
+            raise
+
         logger.info(
             "Created terminal session %s with cwd=%s command=%s",
             session.session_id,
