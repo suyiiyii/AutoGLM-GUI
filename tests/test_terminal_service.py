@@ -46,6 +46,16 @@ def test_build_terminal_environment_includes_project_tools(
     assert "/usr/bin" in path_parts
 
 
+def test_resolve_default_shell_command_uses_cli_flag_for_non_python_executable(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(terminal_service.sys, "executable", "/tmp/autoglm-gui")
+
+    command = terminal_service._resolve_default_shell_command()
+
+    assert command == ["/tmp/autoglm-gui", "--adb-terminal-repl"]
+
+
 @pytest.mark.anyio
 async def test_create_session_defaults_to_project_root(
     monkeypatch: pytest.MonkeyPatch, tmp_path: Path
@@ -116,3 +126,32 @@ async def test_terminal_output_limit_triggers_close() -> None:
     await asyncio.sleep(0)
 
     assert closed.is_set() is True
+
+
+def test_append_to_buffer_accounts_for_deque_auto_eviction() -> None:
+    session = terminal_service.TerminalSession(
+        session_id="terminal-1",
+        cwd="/tmp",
+        command=["/bin/sh"],
+        env={"TERM": "xterm-256color"},
+        created_by="127.0.0.1",
+        origin="http://localhost:3000",
+        owner_token_hash="token-hash",
+        buffer_size=2,
+        max_buffer_bytes=4096,
+    )
+
+    first = {"type": "output", "data": "first"}
+    second = {"type": "output", "data": "second"}
+    third = {"type": "output", "data": "third"}
+
+    first_size = session._estimate_event_size(first)
+    second_size = session._estimate_event_size(second)
+    third_size = session._estimate_event_size(third)
+
+    session._append_to_buffer(first, first_size)
+    session._append_to_buffer(second, second_size)
+    session._append_to_buffer(third, third_size)
+
+    assert [event for event, _ in session._buffer] == [second, third]
+    assert session._buffer_bytes == second_size + third_size

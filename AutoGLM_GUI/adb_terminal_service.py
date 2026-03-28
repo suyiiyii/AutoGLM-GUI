@@ -34,6 +34,13 @@ def _get_project_root() -> Path:
 
 def _resolve_default_shell_command() -> list[str]:
     """Return the default interactive ADB-only terminal command."""
+    if getattr(sys, "frozen", False):
+        return [sys.executable, "--adb-terminal-repl"]
+
+    executable_name = Path(sys.executable).name.lower()
+    if "python" not in executable_name:
+        return [sys.executable, "--adb-terminal-repl"]
+
     return [sys.executable, "-m", "AutoGLM_GUI.adb_terminal_repl"]
 
 
@@ -426,6 +433,10 @@ class TerminalSession:
         return True
 
     def _append_to_buffer(self, event: dict[str, Any], event_size: int) -> None:
+        if self._buffer.maxlen is not None and len(self._buffer) == self._buffer.maxlen:
+            _, removed_size = self._buffer.popleft()
+            self._buffer_bytes -= removed_size
+
         self._buffer.append((event, event_size))
         self._buffer_bytes += event_size
 
