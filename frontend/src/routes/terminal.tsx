@@ -114,11 +114,10 @@ function TerminalRouteComponent() {
       return;
     }
 
-    sessionIdRef.current = null;
-    sessionTokenRef.current = null;
-
     try {
       await closeTerminalSession(currentSessionId, currentSessionToken);
+      sessionIdRef.current = null;
+      sessionTokenRef.current = null;
     } catch (closeError) {
       console.error('Failed to close terminal session:', closeError);
     } finally {
