@@ -263,6 +263,8 @@ export function ChatKitPanel({
   const [error, setError] = React.useState<string | null>(null);
   const [sessionId, setSessionId] = React.useState<string | null>(null);
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
+  const scrollAreaRef = React.useRef<HTMLDivElement>(null);
+  const [isNearBottom, setIsNearBottom] = React.useState(true);
   const taskStreamRef = React.useRef<{ close: () => void } | null>(null);
   const currentTaskIdRef = React.useRef<string | null>(null);
   const taskRunsRef = React.useRef<Record<string, TaskRunResponse>>({});
@@ -284,9 +286,27 @@ export function ChatKitPanel({
   >([]);
   const [showHistoryPopover, setShowHistoryPopover] = React.useState(false);
 
+  // Handle scroll position tracking
+  const handleScroll = React.useCallback(
+    (event: React.UIEvent<HTMLDivElement>) => {
+      const target = event.currentTarget;
+      const scrollHeight = target.scrollHeight;
+      const scrollTop = target.scrollTop;
+      const clientHeight = target.clientHeight;
+      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+
+      // Consider "near bottom" if within 200px
+      setIsNearBottom(distanceFromBottom < 200);
+    },
+    []
+  );
+
+  // Auto-scroll to bottom only if user is near bottom
   React.useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages]);
+    if (isNearBottom) {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, isNearBottom]);
 
   React.useEffect(() => {
     return () => {
@@ -756,7 +776,11 @@ export function ChatKitPanel({
         )}
 
         {/* Messages with Execution Steps */}
-        <ScrollArea className="flex-1 min-h-0">
+        <ScrollArea
+          ref={scrollAreaRef}
+          className="flex-1 min-h-0"
+          onScroll={handleScroll}
+        >
           <div className="p-4 space-y-4">
             {messages.length === 0 ? (
               <div className="h-full flex flex-col items-center justify-center text-center py-12">
