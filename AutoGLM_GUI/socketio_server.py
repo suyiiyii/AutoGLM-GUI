@@ -14,6 +14,7 @@ import socketio
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.scrcpy_protocol import ScrcpyMediaStreamPacket
 from AutoGLM_GUI.scrcpy_stream import ScrcpyStreamer
+from AutoGLM_GUI.scrcpy_control import ScrcpyControlClient
 
 
 class VideoPacketPayload(TypedDict):
@@ -35,6 +36,9 @@ _stream_tasks: dict[str, asyncio.Task[None]] = {}
 _device_locks: dict[
     str, asyncio.Lock
 ] = {}  # Lock per device to prevent concurrent connections
+_control_clients: dict[
+    str, ScrcpyControlClient
+] = {}  # scrcpy control clients by device_id
 
 
 async def _stop_stream_for_sid(sid: str) -> None:
@@ -44,6 +48,9 @@ async def _stop_stream_for_sid(sid: str) -> None:
 
     streamer = _socket_streamers.pop(sid, None)
     if streamer:
+        # Clean up control client for this device
+        if streamer.device_id in _control_clients:
+            del _control_clients[streamer.device_id]
         streamer.stop()
 
 
@@ -203,6 +210,11 @@ async def connect_device(sid: str, data: dict[str, Any] | None) -> None:
                 to=sid,
             )
 
+            # Store control client if available (for low-latency device control)
+            if streamer.control_client:
+                _control_clients[device_id] = streamer.control_client
+                logger.info(f"Scrcpy control client available for device {device_id}")
+
             _socket_streamers[sid] = streamer
             _stream_tasks[sid] = asyncio.create_task(_stream_packets(sid, streamer))
 
@@ -212,3 +224,33 @@ async def connect_device(sid: str, data: dict[str, Any] | None) -> None:
             # Use unified error classification
             error_info = _classify_error(exc)
             await sio.emit("error", error_info, to=sid)
+
+
+# === Public API for device control ===
+
+
+def get_scrcpy_control_client(device_id: str) -> ScrcpyControlClient | None:
+    """Get scrcpy control client for a device.
+
+    Returns the control client if an active scrcpy stream exists for the device,
+    otherwise returns None.
+
+    Args:
+        device_id: The device ID
+
+    Returns:
+        ScrcpyControlClient | None: Control client if available
+    """
+    return _control_clients.get(device_id)
+
+
+def is_scrcpy_control_available(device_id: str) -> bool:
+    """Check if scrcpy control is available for a device.
+
+    Args:
+        device_id: The device ID
+
+    Returns:
+        bool: True if scrcpy control is available
+    """
+    return device_id in _control_clients

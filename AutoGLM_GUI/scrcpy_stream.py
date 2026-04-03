@@ -14,6 +14,7 @@ from collections.abc import AsyncGenerator
 from AutoGLM_GUI.adb_plus import check_device_available
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.platform_utils import is_windows, run_cmd_silently, spawn_process
+from AutoGLM_GUI.scrcpy_control import ScrcpyControlClient
 from AutoGLM_GUI.scrcpy_protocol import (
     PTS_CONFIG,
     PTS_KEYFRAME,
@@ -143,6 +144,9 @@ class ScrcpyStreamer:
         self.tcp_socket: socket.socket | None = None
         self.forward_cleanup_needed = False
 
+        # Scrcpy control client (enabled when control=True)
+        self.control_client: ScrcpyControlClient | None = None
+
         self._read_buffer = bytearray()
         self._metadata: ScrcpyVideoStreamMetadata | None = None
         self._dummy_byte_skipped = False
@@ -227,10 +231,41 @@ class ScrcpyStreamer:
             await self._connect_socket()
             logger.info("Successfully connected!")
 
+            # 6. Initialize control client if control is enabled
+            # Note: enable_control defaults to True, so control is enabled
+            enable_control = True
+            if enable_control:
+                logger.info("Initializing scrcpy control client...")
+                await self._init_control_client()
+
         except Exception as e:
             logger.exception(f"Failed to start: {e}")
             self.stop()
             raise RuntimeError(f"Failed to start scrcpy server: {e}") from e
+
+    async def _init_control_client(self) -> None:
+        """Initialize scrcpy control client after socket connection."""
+        # Read metadata to get device resolution
+        metadata = await self.read_video_metadata()
+
+        if metadata.width is None or metadata.height is None:
+            logger.warning(
+                "Could not get device resolution from metadata, using default 1080x1920"
+            )
+            width, height = 1080, 1920
+        else:
+            width, height = metadata.width, metadata.height
+
+        logger.info(f"Initializing scrcpy control with resolution: {width}x{height}")
+
+        # Create control client
+        assert self.tcp_socket is not None, "TCP socket should be connected"
+        self.control_client = ScrcpyControlClient(
+            sock=self.tcp_socket,
+            device_width=width,
+            device_height=height,
+        )
+        logger.info("Scrcpy control client initialized successfully")
 
     async def _cleanup_existing_server(self) -> None:
         """Kill existing scrcpy server processes and wait for port release."""
@@ -291,7 +326,7 @@ class ScrcpyStreamer:
         await run_cmd_silently(cmd)
         self.forward_cleanup_needed = True
 
-    def _build_server_options(self) -> ScrcpyServerOptions:
+    def _build_server_options(self, enable_control: bool = True) -> ScrcpyServerOptions:
         codec_options = f"i-frame-interval={self.idr_interval_s}"
         return ScrcpyServerOptions(
             max_size=self.max_size,
@@ -299,7 +334,7 @@ class ScrcpyStreamer:
             max_fps=20,
             tunnel_forward=True,
             audio=False,
-            control=False,
+            control=enable_control,
             cleanup=False,
             video_codec=self.stream_options.video_codec,
             send_frame_meta=self.stream_options.send_frame_meta,
@@ -314,7 +349,8 @@ class ScrcpyStreamer:
         max_retries = 3
         retry_delay = 1.0  # Reduced from 2s (cleanup handles waiting now)
 
-        options = self._build_server_options()
+        # Enable control mode for device control via scrcpy protocol
+        options = self._build_server_options(enable_control=True)
 
         for attempt in range(max_retries):
             cmd = ["adb"]
