@@ -68,9 +68,9 @@ class DroidRunAgent:
             from droidrun.agent.utils.llm_picker import (  # pyright: ignore[reportMissingImports]
                 load_llm,
             )
-            from droidrun.config_manager.config_manager import (  # pyright: ignore[reportMissingImports]
+            from droidrun.config_manager.config_manager import (  # pyright: ignore[reportMissingImports,reportAttributeAccessIssue]
                 DeviceConfig,
-                DroidrunConfig,
+                DroidConfig,
             )
         except ImportError as e:
             yield {
@@ -176,8 +176,8 @@ class DroidRunAgent:
 
             return None
 
-        # 构建 DroidrunConfig（只需设备配置，LLM 直接传入）
-        config = DroidrunConfig()
+        # 构建 DroidConfig（只需设备配置，LLM 直接传入）
+        config = DroidConfig()
         config.device = DeviceConfig(serial=self._device.device_id)
         config.telemetry.enabled = False
         config.agent.max_steps = self.agent_config.max_steps
