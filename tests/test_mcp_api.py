@@ -100,7 +100,7 @@ def mcp_env(monkeypatch: pytest.MonkeyPatch) -> dict:
 
 
 def test_mcp_screenshot_requires_device_id(mcp_env: dict) -> None:
-    result = asyncio.run(mcp_api.screenshot.fn(""))
+    result = asyncio.run(mcp_api.screenshot(""))
 
     assert result.model_dump() == {
         "success": False,
@@ -113,14 +113,14 @@ def test_mcp_screenshot_requires_device_id(mcp_env: dict) -> None:
 
 
 def test_mcp_screenshot_device_not_found(mcp_env: dict) -> None:
-    result = asyncio.run(mcp_api.screenshot.fn("unknown-device"))
+    result = asyncio.run(mcp_api.screenshot("unknown-device"))
 
     assert result.success is False
     assert result.error == "Device unknown-device not found"
 
 
 def test_mcp_screenshot_local_device_success(mcp_env: dict) -> None:
-    result = asyncio.run(mcp_api.screenshot.fn("local-device"))
+    result = asyncio.run(mcp_api.screenshot("local-device"))
 
     assert result.model_dump() == {
         "success": True,
@@ -134,7 +134,7 @@ def test_mcp_screenshot_local_device_success(mcp_env: dict) -> None:
 
 
 def test_mcp_screenshot_remote_device_success(mcp_env: dict) -> None:
-    result = asyncio.run(mcp_api.screenshot.fn("remote-device"))
+    result = asyncio.run(mcp_api.screenshot("remote-device"))
 
     assert result.model_dump() == {
         "success": True,
@@ -149,7 +149,7 @@ def test_mcp_screenshot_remote_device_success(mcp_env: dict) -> None:
 def test_mcp_screenshot_remote_device_missing_instance(mcp_env: dict) -> None:
     mcp_env["manager"].remote_instances.pop("serial-remote", None)
 
-    result = asyncio.run(mcp_api.screenshot.fn("remote-device"))
+    result = asyncio.run(mcp_api.screenshot("remote-device"))
 
     assert result.success is False
     assert result.error == "Remote device serial-remote not found"
@@ -164,7 +164,7 @@ def test_mcp_screenshot_handles_device_not_available_error(
 
     monkeypatch.setattr(mcp_api, "capture_screenshot_async", raise_unavailable)
 
-    result = asyncio.run(mcp_api.screenshot.fn("local-device"))
+    result = asyncio.run(mcp_api.screenshot("local-device"))
 
     assert result.model_dump() == {
         "success": False,
