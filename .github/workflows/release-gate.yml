@@ -6,6 +6,7 @@ on:
     paths:
       - 'AutoGLM_GUI/**'
       - 'tests/**'
+      - 'frontend/**'
       - 'scripts/lint.py'
       - 'pytest.ini'
       - 'pyproject.toml'
