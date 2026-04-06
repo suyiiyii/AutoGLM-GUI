@@ -274,3 +274,58 @@ def test_cancel_task_with_post_stream_check(tmp_path: Path) -> None:
         store.close()
 
     asyncio.run(scenario())
+
+
+# ---------------------------------------------------------------------------
+# Test: release_device preserves ERROR state (PR #317 regression)
+# ---------------------------------------------------------------------------
+
+
+def test_release_device_preserves_error_state() -> None:
+    """After set_error_state() sets state to ERROR, release_device() must NOT
+    override it back to IDLE.  This is the regression lock for the QA-reported
+    blocking issue in PR #317."""
+
+    manager = PhoneAgentManager()
+    device_id = "device-err"
+    agent_key = device_id  # default context
+
+    # Simulate a device that went through acquire → (task runs) → error
+    manager._metadata[agent_key] = AgentMetadata(
+        device_id=device_id,
+        state=AgentState.BUSY,
+        abort_handler=lambda: None,
+        model_config=MagicMock(),
+        agent_config=MagicMock(),
+    )
+
+    # Task fails → set_error_state
+    manager.set_error_state(device_id, "something broke")
+    assert manager._metadata[agent_key].state == AgentState.ERROR
+
+    # Finally block calls release_device — state must stay ERROR
+    manager.release_device(device_id)
+    assert manager._metadata[agent_key].state == AgentState.ERROR
+    # abort_handler should still be cleared
+    assert manager._metadata[agent_key].abort_handler is None
+
+
+def test_release_device_transitions_busy_to_idle() -> None:
+    """When device is BUSY (no error), release_device should still transition
+    to IDLE as before."""
+
+    manager = PhoneAgentManager()
+    device_id = "device-ok"
+    agent_key = device_id
+
+    manager._metadata[agent_key] = AgentMetadata(
+        device_id=device_id,
+        state=AgentState.BUSY,
+        abort_handler=lambda: None,
+        model_config=MagicMock(),
+        agent_config=MagicMock(),
+    )
+
+    manager.release_device(device_id)
+    assert manager._metadata[agent_key].state == AgentState.IDLE
+    assert manager._metadata[agent_key].abort_handler is None
