@@ -501,7 +501,10 @@ class PhoneAgentManager:
         with self._manager_lock:
             metadata = self._metadata.get(agent_key)
             if metadata:
-                metadata.state = AgentState.IDLE
+                # Only transition BUSY→IDLE; preserve ERROR state so callers
+                # can observe failures.  ERROR must be explicitly cleared.
+                if metadata.state == AgentState.BUSY:
+                    metadata.state = AgentState.IDLE
                 metadata.abort_handler = None
 
         logger.debug(f"Device lock released for {agent_key}")
