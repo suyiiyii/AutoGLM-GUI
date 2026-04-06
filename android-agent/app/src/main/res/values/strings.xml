@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AutoGLM Android Agent</string>
+    <string name="app_summary">Phase A2 MVP: expose screenshot, gesture, text input, and current-app endpoints for the Remote Device protocol.</string>
+    <string name="server_status_label">Service status</string>
+    <string name="server_status_running">Running</string>
+    <string name="server_status_stopped">Stopped</string>
+    <string name="server_endpoint_label">Base endpoint</string>
+    <string name="server_endpoint_template">http://127.0.0.1:%1$d</string>
+    <string name="accessibility_status_label">Accessibility</string>
+    <string name="accessibility_enabled">Enabled</string>
+    <string name="accessibility_disabled">Disabled</string>
+    <string name="capture_status_label">Screen capture</string>
+    <string name="capture_ready">Granted</string>
+    <string name="capture_missing">Missing</string>
+    <string name="start_server">Start agent</string>
+    <string name="stop_server">Stop agent</string>
+    <string name="open_accessibility_settings">Open accessibility settings</string>
+    <string name="request_screen_capture">Grant screen capture</string>
+    <string name="notification_channel_name">Agent runtime</string>
+    <string name="notification_title">AutoGLM Android Agent is running</string>
+    <string name="notification_content">Local HTTP server listening on port %1$d</string>
+    <string name="accessibility_service_name">AutoGLM Agent Control</string>
+    <string name="demo_input_hint">Focus here before calling /type_text</string>
+    <string name="tap_target_label">Tap target</string>
+    <string name="demo_status_idle">No local gesture demo yet.</string>
+    <string name="tap_target_hit">Tap target clicked.</string>
+    <string name="input_focused">Input focused.</string>
+    <string name="capture_granted">Screen capture permission granted.</string>
+    <string name="capture_denied">Screen capture permission denied.</string>
+    <string name="capture_failed_template">Screen capture setup failed: %1$s</string>
+    <string name="swipe_area_label">Swipe sandbox</string>
+    <string name="scroll_content">Swipe inside this screen to verify gesture delivery.\n\nLine 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8\nLine 9\nLine 10\nLine 11\nLine 12\nLine 13\nLine 14\nLine 15\nLine 16\nLine 17\nLine 18\nLine 19\nLine 20</string>
+</resources>
