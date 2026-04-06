@@ -12,6 +12,7 @@ from AutoGLM_GUI.exceptions import DeviceNotAvailableError
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.prompts import MCP_SYSTEM_PROMPT_ZH
 from AutoGLM_GUI.schemas import DeviceResponse, ScreenshotResponse
+from AutoGLM_GUI.task_store import TaskStatus, task_store
 
 
 class ChatResult(TypedDict):
@@ -234,6 +235,199 @@ async def screenshot(device_id: str) -> ScreenshotResponse:
             is_sensitive=False,
             error=str(e),
         )
+
+
+# ---------------------------------------------------------------------------
+# Async task scheduling tools — integrate with TaskManager queue
+# ---------------------------------------------------------------------------
+
+
+@mcp.tool()
+async def create_task(
+    device_id: str,
+    device_serial: str,
+    message: str,
+    mode: str = "classic",
+) -> dict[str, Any]:
+    """
+    Submit an asynchronous task to the device's task queue.
+
+    The task is queued and executed by a per-device worker. Use get_task /
+    get_task_events to poll for progress and results.
+
+    Args:
+        device_id: Device identifier (from list_devices).
+        device_serial: Device serial number (from list_devices).
+        message: Natural language task (e.g., "打开微信", "发送消息给张三").
+        mode: Execution mode — "classic" (default) or "layered".
+    """
+    from AutoGLM_GUI.task_manager import task_manager
+
+    logger.info(f"[MCP] create_task: device_id={device_id}, mode={mode}")
+
+    session = await task_manager.get_or_create_legacy_chat_session(
+        device_id=device_id,
+        device_serial=device_serial,
+        mode=mode,
+    )
+
+    task = await task_manager.submit_chat_task(
+        session_id=session["id"],
+        device_id=device_id,
+        device_serial=device_serial,
+        message=message,
+    )
+
+    return {
+        "task_id": task["id"],
+        "session_id": session["id"],
+        "status": task["status"],
+        "input_text": task["input_text"],
+    }
+
+
+@mcp.tool()
+async def get_task(task_id: str) -> dict[str, Any] | None:
+    """
+    Get the current status and result of a task.
+
+    Args:
+        task_id: Task identifier returned by create_task.
+    """
+    from AutoGLM_GUI.api.tasks import _task_run_response
+
+    record = await asyncio.to_thread(task_store.get_task, task_id)
+    if record is None:
+        return None
+
+    resp = _task_run_response(record)
+    return resp.model_dump()
+
+
+@mcp.tool()
+async def list_tasks(
+    status: str | None = None,
+    device_id: str | None = None,
+    device_serial: str | None = None,
+    limit: int = 20,
+    offset: int = 0,
+) -> dict[str, Any]:
+    """
+    List tasks with optional filters.
+
+    Args:
+        status: Filter by status (QUEUED, RUNNING, SUCCEEDED, FAILED, CANCELLED, INTERRUPTED).
+        device_id: Filter by device identifier.
+        device_serial: Filter by device serial number.
+        limit: Maximum number of tasks to return (1–100, default 20).
+        offset: Number of tasks to skip.
+    """
+    from AutoGLM_GUI.api.tasks import _task_run_response
+
+    if status is not None:
+        valid = {s.value for s in TaskStatus}
+        if status not in valid:
+            raise ValueError(
+                f"Invalid status '{status}'. Must be one of: {', '.join(sorted(valid))}"
+            )
+
+    limit = max(1, min(limit, 100))
+    offset = max(0, offset)
+
+    records, total = await asyncio.to_thread(
+        task_store.list_tasks,
+        status=status,
+        device_id=device_id,
+        device_serial=device_serial,
+        limit=limit,
+        offset=offset,
+    )
+
+    return {
+        "tasks": [_task_run_response(r).model_dump() for r in records],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@mcp.tool()
+async def cancel_task(task_id: str) -> dict[str, Any]:
+    """
+    Cancel a queued or running task.
+
+    Args:
+        task_id: Task identifier to cancel.
+    """
+    from AutoGLM_GUI.task_manager import task_manager
+
+    logger.info(f"[MCP] cancel_task: task_id={task_id}")
+
+    record = await task_manager.cancel_task(task_id)
+    if record is None:
+        return {"success": False, "message": "Task not found"}
+
+    from AutoGLM_GUI.api.tasks import _task_run_response
+
+    return {
+        "success": True,
+        "message": "Cancellation requested",
+        "task": _task_run_response(record).model_dump(),
+    }
+
+
+@mcp.tool()
+async def get_task_events(
+    task_id: str,
+    after_seq: int = 0,
+) -> dict[str, Any]:
+    """
+    Get execution events for a task (step-by-step log).
+
+    Args:
+        task_id: Task identifier.
+        after_seq: Return only events with seq > this value (for polling).
+    """
+    record = await asyncio.to_thread(task_store.get_task, task_id)
+    if record is None:
+        return {"task_id": task_id, "events": [], "error": "Task not found"}
+
+    from AutoGLM_GUI.api.tasks import _task_event_response
+
+    events = await asyncio.to_thread(
+        task_store.list_task_events, task_id, after_seq=after_seq
+    )
+
+    return {
+        "task_id": task_id,
+        "events": [_task_event_response(e).model_dump() for e in events],
+    }
+
+
+@mcp.tool()
+async def get_device(device_id: str) -> dict[str, Any] | None:
+    """
+    Get details for a single device by its device_id.
+
+    Args:
+        device_id: Device identifier (from list_devices).
+    """
+    from AutoGLM_GUI.api.devices import _build_device_response_with_agent
+    from AutoGLM_GUI.device_manager import DeviceManager
+    from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
+
+    device_manager = DeviceManager.get_instance()
+    serial = device_manager.get_serial_by_device_id(device_id)
+    if serial is None:
+        return None
+
+    managed = device_manager.get_device_by_serial(serial)
+    if managed is None:
+        return None
+
+    agent_manager = PhoneAgentManager.get_instance()
+    resp = _build_device_response_with_agent(managed, agent_manager)
+    return resp.model_dump()
 
 
 def get_mcp_asgi_app() -> Any:
