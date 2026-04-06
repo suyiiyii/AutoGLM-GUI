@@ -6,6 +6,7 @@ on:
     paths:
       - 'tests/integration/**'
       - 'AutoGLM_GUI/**'
+      - 'frontend/**'
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/integration-tests.yml'
@@ -14,6 +15,7 @@ on:
     paths:
       - 'tests/integration/**'
       - 'AutoGLM_GUI/**'
+      - 'frontend/**'
   workflow_dispatch:  # Allow manual trigger
 
 jobs:
