@@ -306,6 +306,28 @@ def test_task_session_supports_layered_mode(client: TestClient) -> None:
     assert submit_resp.json()["executor_key"] == "layered_chat"
 
 
+def test_task_session_submit_uses_selected_session_device_context(
+    client: TestClient,
+) -> None:
+    create_resp = client.post(
+        "/api/task-sessions",
+        json={
+            "device_id": "device-2",
+            "device_serial": "serial-2",
+        },
+    )
+    assert create_resp.status_code == 200
+    session_id = create_resp.json()["id"]
+
+    submit_resp = client.post(
+        f"/api/task-sessions/{session_id}/tasks",
+        json={"message": "发送到第二台设备"},
+    )
+    assert submit_resp.status_code == 200
+    assert submit_resp.json()["device_id"] == "device-2"
+    assert submit_resp.json()["device_serial"] == "serial-2"
+
+
 def test_task_list_endpoints_support_filters(client: TestClient) -> None:
     session_tasks = client.get("/api/task-sessions/session-1/tasks")
     assert session_tasks.status_code == 200

@@ -153,3 +153,43 @@ def test_clear_device_history_keeps_active_tasks(tmp_path: Path) -> None:
     assert store.get_task(queued["id"]) is not None
     assert store.get_task(running["id"]) is not None
     assert store.get_task(finished["id"]) is None
+
+
+def test_get_latest_open_chat_session_isolated_by_device_id_and_serial(
+    tmp_path: Path,
+) -> None:
+    store = TaskStore(tmp_path / "tasks.db")
+
+    first = store.create_session(
+        kind="chat",
+        mode="classic",
+        device_id="device-1",
+        device_serial="serial-1",
+    )
+    second = store.create_session(
+        kind="chat",
+        mode="classic",
+        device_id="device-2",
+        device_serial="serial-2",
+    )
+
+    selected_second = store.get_latest_open_chat_session(
+        device_id="device-2",
+        device_serial="serial-2",
+        mode="classic",
+    )
+    selected_first = store.get_latest_open_chat_session(
+        device_id="device-1",
+        device_serial="serial-1",
+        mode="classic",
+    )
+
+    assert selected_second is not None
+    assert selected_second["id"] == second["id"]
+    assert selected_second["device_id"] == "device-2"
+    assert selected_second["device_serial"] == "serial-2"
+
+    assert selected_first is not None
+    assert selected_first["id"] == first["id"]
+    assert selected_first["device_id"] == "device-1"
+    assert selected_first["device_serial"] == "serial-1"
