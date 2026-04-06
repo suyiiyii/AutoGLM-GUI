@@ -100,7 +100,22 @@ class TaskManager:
         )
 
     async def archive_session(self, session_id: str) -> TaskSessionRecord | None:
-        return await asyncio.to_thread(self.store.archive_session, session_id)
+        session = await self.get_session(session_id)
+        if session is None:
+            return None
+        archived = await asyncio.to_thread(self.store.archive_session, session_id)
+        if archived is not None:
+            # Clean up the contextual agent for this session to prevent memory leak.
+            # The agent key pattern is "device_id:chat:session_id".
+            device_id = str(archived["device_id"])
+            context = f"chat:{session_id}"
+            try:
+                from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
+                manager = PhoneAgentManager.get_instance()
+                manager.destroy_agent(device_id, context=context)
+            except Exception as exc:
+                logger.debug(f"Contextual agent cleanup skipped for {device_id}/{context}: {exc}")
+        return archived
 
     async def submit_chat_task(
         self,
@@ -436,6 +451,8 @@ class TaskManager:
                     device_id,
                     context=context,
                 )
+            if final_status == TaskStatus.FAILED.value:
+                manager.set_error_state(device_id, final_message, context=context)
             if acquired:
                 manager.release_device(device_id, context=context)
 
@@ -756,6 +773,8 @@ class TaskManager:
                     device_id,
                     context=context,
                 )
+            if final_status == TaskStatus.FAILED.value:
+                manager.set_error_state(device_id, final_message, context=context)
             if acquired:
                 manager.release_device(device_id, context=context)
 

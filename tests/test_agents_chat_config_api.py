@@ -87,6 +87,9 @@ class FakePhoneAgentManager:
     def list_agents(self) -> list[str]:
         return list(self.destroy_candidates)
 
+    def set_error_state(self, device_id: str, error_message: str, **kwargs: Any) -> None:
+        pass
+
     def destroy_agent(self, device_id: str) -> None:
         self.destroy_calls.append(device_id)
         if device_id.endswith("-fail"):

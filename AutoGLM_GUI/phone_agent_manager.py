@@ -308,43 +308,47 @@ class PhoneAgentManager:
         with self._manager_lock:
             return self._agents.get(device_id)
 
-    def reset_agent(self, device_id: str) -> None:
+    def reset_agent(self, device_id: str, context: str = "default") -> None:
         """
         Reset agent state by calling the agent's reset() method.
 
         Args:
             device_id: Device identifier
+            context: Agent context (default, chat:session_id, scheduled, etc.)
 
         Raises:
             AgentNotInitializedError: If agent not initialized
         """
+        agent_key = self._make_agent_key(device_id, context)
         with self._manager_lock:
-            if device_id not in self._agents:
+            if agent_key not in self._agents:
                 raise AgentNotInitializedError(
-                    f"Agent not initialized for device {device_id}"
+                    f"Agent not initialized for device {device_id} (context={context})"
                 )
 
             # Reset agent state using its reset() method
-            self._agents[device_id].reset()
+            self._agents[agent_key].reset()
 
             # Update metadata
-            if device_id in self._metadata:
-                self._metadata[device_id].last_used = time.time()
-                self._metadata[device_id].error_message = None
-                self._metadata[device_id].state = AgentState.IDLE
+            if agent_key in self._metadata:
+                self._metadata[agent_key].last_used = time.time()
+                self._metadata[agent_key].error_message = None
+                self._metadata[agent_key].state = AgentState.IDLE
 
-            logger.info(f"Agent reset for device {device_id}")
+            logger.info(f"Agent reset for device {device_id} (context={context})")
 
-    def destroy_agent(self, device_id: str) -> None:
+    def destroy_agent(self, device_id: str, context: str = "default") -> None:
         """
         Destroy agent and clean up resources.
 
         Args:
             device_id: Device identifier
+            context: Agent context (default, chat:session_id, scheduled, etc.)
         """
+        agent_key = self._make_agent_key(device_id, context)
         with self._manager_lock:
             # Remove agent
-            agent = self._agents.pop(device_id, None)
+            agent = self._agents.pop(agent_key, None)
             if agent:
                 try:
                     agent.reset()  # Clean up agent state
@@ -352,17 +356,18 @@ class PhoneAgentManager:
                     logger.warning(f"Error resetting agent during destroy: {e}")
 
             # Remove config
-            self._agent_configs.pop(device_id, None)
+            self._agent_configs.pop(agent_key, None)
 
             # Remove metadata
-            self._metadata.pop(device_id, None)
+            self._metadata.pop(agent_key, None)
 
-            logger.info(f"Agent destroyed for device {device_id}")
+            logger.info(f"Agent destroyed for device {device_id} (context={context})")
 
-    def is_initialized(self, device_id: str) -> bool:
+    def is_initialized(self, device_id: str, context: str = "default") -> bool:
         """Check if agent is initialized for device."""
         with self._manager_lock:
-            return device_id in self._agents
+            agent_key = self._make_agent_key(device_id, context)
+            return agent_key in self._agents
 
     # ==================== Concurrency Control ====================
 
@@ -559,14 +564,15 @@ class PhoneAgentManager:
             metadata = self._metadata.get(device_id)
             return metadata.state if metadata else AgentState.ERROR
 
-    def set_error_state(self, device_id: str, error_message: str) -> None:
+    def set_error_state(self, device_id: str, error_message: str, context: str = "default") -> None:
         """Mark agent as errored."""
+        agent_key = self._make_agent_key(device_id, context)
         with self._manager_lock:
-            if device_id in self._metadata:
-                self._metadata[device_id].state = AgentState.ERROR
-                self._metadata[device_id].error_message = error_message
+            if agent_key in self._metadata:
+                self._metadata[agent_key].state = AgentState.ERROR
+                self._metadata[agent_key].error_message = error_message
 
-            logger.error(f"Agent error for {device_id}: {error_message}")
+            logger.error(f"Agent error for {device_id} (context={context}): {error_message}")
 
     # ==================== Configuration Management ====================
 
