@@ -39,6 +39,7 @@ const sidebars: SidebarsConfig = {
         'features/interrupt',
         'features/layered-agent',
         'features/mcp',
+        'features/web-terminal',
         'features/logs',
       ],
     },

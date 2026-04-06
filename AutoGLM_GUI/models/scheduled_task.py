@@ -46,6 +46,7 @@ class ScheduledTask:
     # 调度配置
     cron_expression: str = ""  # Cron 表达式 (如 "0 8 * * *")
     enabled: bool = True  # 是否启用
+    execution_mode: str = "classic"  # classic | layered
 
     # 元数据
     created_at: datetime = field(default_factory=datetime.now)
@@ -70,6 +71,7 @@ class ScheduledTask:
             "device_group_id": self.device_group_id,
             "cron_expression": self.cron_expression,
             "enabled": self.enabled,
+            "execution_mode": self.execution_mode,
             "created_at": self.created_at.isoformat(),
             "updated_at": self.updated_at.isoformat(),
             "last_run_time": self.last_run_time.isoformat()
@@ -100,6 +102,7 @@ class ScheduledTask:
             device_group_id=data.get("device_group_id"),
             cron_expression=data.get("cron_expression", ""),
             enabled=data.get("enabled", True),
+            execution_mode=data.get("execution_mode", "classic"),
             created_at=datetime.fromisoformat(data["created_at"])
             if data.get("created_at")
             else datetime.now(),

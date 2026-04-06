@@ -65,6 +65,7 @@ class SchedulerManager:
         cron_expression: str,
         enabled: bool = True,
         device_group_id: str | None = None,
+        execution_mode: str = "classic",
     ) -> ScheduledTask:
         task = ScheduledTask(
             name=name,
@@ -73,6 +74,7 @@ class SchedulerManager:
             device_group_id=device_group_id,
             cron_expression=cron_expression,
             enabled=enabled,
+            execution_mode=execution_mode,
         )
         self._tasks[task.id] = task
         self._save_tasks()
@@ -400,6 +402,11 @@ class SchedulerManager:
 
         schedule_fire_id = str(uuid4())
         created_count = 0
+        executor_key = (
+            "scheduled_layered_workflow"
+            if task.execution_mode == "layered"
+            else "scheduled_workflow"
+        )
         for serialno in device_serialnos:
             device = online_devices.get(serialno)
             if device is None:
@@ -407,7 +414,7 @@ class SchedulerManager:
                 failed_task = await asyncio.to_thread(
                     task_store.create_task_run,
                     source="scheduled",
-                    executor_key="scheduled_workflow",
+                    executor_key=executor_key,
                     scheduled_task_id=task.id,
                     workflow_uuid=task.workflow_uuid,
                     schedule_fire_id=schedule_fire_id,
@@ -441,6 +448,7 @@ class SchedulerManager:
                 device_serial=device.serial,
                 input_text=workflow["text"],
                 schedule_fire_id=schedule_fire_id,
+                executor_key=executor_key,
             )
             created_count += 1
 

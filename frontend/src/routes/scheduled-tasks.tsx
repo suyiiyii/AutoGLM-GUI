@@ -68,6 +68,7 @@ interface TaskFormData {
   device_group_id: string | null;
   cron_expression: string;
   enabled: boolean;
+  execution_mode: 'classic' | 'layered';
 }
 
 type DeviceSelectionMode = 'devices' | 'group';
@@ -98,6 +99,7 @@ function ScheduledTasksComponent() {
     device_group_id: null,
     cron_expression: '',
     enabled: true,
+    execution_mode: 'classic',
   });
   const [deviceSelectionMode, setDeviceSelectionMode] =
     useState<DeviceSelectionMode>('devices');
@@ -140,6 +142,7 @@ function ScheduledTasksComponent() {
       device_group_id: null,
       cron_expression: '',
       enabled: true,
+      execution_mode: 'classic',
     });
     setDeviceSelectionMode('devices');
     setShowDialog(true);
@@ -154,6 +157,7 @@ function ScheduledTasksComponent() {
       device_group_id: task.device_group_id || null,
       cron_expression: task.cron_expression,
       enabled: task.enabled,
+      execution_mode: task.execution_mode,
     });
     // Determine selection mode based on existing data
     setDeviceSelectionMode(task.device_group_id ? 'group' : 'devices');
@@ -169,6 +173,7 @@ function ScheduledTasksComponent() {
         workflow_uuid: formData.workflow_uuid,
         cron_expression: formData.cron_expression,
         enabled: formData.enabled,
+        execution_mode: formData.execution_mode,
         device_serialnos:
           deviceSelectionMode === 'devices' ? formData.device_serialnos : null,
         device_group_id:
@@ -355,6 +360,17 @@ function ScheduledTasksComponent() {
 
                   {/* Cron */}
                   <div className="text-sm">
+                    <span className="text-slate-500 dark:text-slate-400">
+                      {t.scheduledTasks.executionMode}:{' '}
+                    </span>
+                    <Badge variant="secondary" className="capitalize">
+                      {task.execution_mode === 'layered'
+                        ? t.scheduledTasks.executionModeOption.layered
+                        : t.scheduledTasks.executionModeOption.classic}
+                    </Badge>
+                  </div>
+
+                  <div className="text-sm">
                     <Badge variant="outline" className="font-mono">
                       <Clock className="w-3 h-3 mr-1" />
                       {task.cron_expression}
@@ -481,6 +497,31 @@ function ScheduledTasksComponent() {
                   </SelectContent>
                 </Select>
               )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>{t.scheduledTasks.executionMode}</Label>
+              <Select
+                value={formData.execution_mode}
+                onValueChange={value =>
+                  setFormData(prev => ({
+                    ...prev,
+                    execution_mode: value === 'layered' ? 'layered' : 'classic',
+                  }))
+                }
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="classic">
+                    {t.scheduledTasks.executionModeOption.classic}
+                  </SelectItem>
+                  <SelectItem value="layered">
+                    {t.scheduledTasks.executionModeOption.layered}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             <div className="space-y-2">

@@ -41,6 +41,7 @@ class FakeSchedulerManager:
         cron_expression: str,
         enabled: bool = True,
         device_group_id: str | None = None,
+        execution_mode: str = "classic",
     ) -> ScheduledTask:
         task = ScheduledTask(
             name=name,
@@ -49,6 +50,7 @@ class FakeSchedulerManager:
             device_group_id=device_group_id,
             cron_expression=cron_expression,
             enabled=enabled,
+            execution_mode=execution_mode,
         )
         self.tasks[task.id] = task
         if enabled:
@@ -161,7 +163,26 @@ def test_create_scheduled_task_success(client: TestClient) -> None:
     assert created["device_serialnos"] == ["dev-1", "dev-2"]
     assert created["cron_expression"] == "0 8 * * *"
     assert created["enabled"] is True
+    assert created["execution_mode"] == "classic"
     assert created["next_run_time"] == "2026-01-01T08:00:00"
+
+
+def test_create_scheduled_task_supports_layered_execution_mode(
+    client: TestClient,
+) -> None:
+    response = client.post(
+        "/api/scheduled-tasks",
+        json={
+            "name": "Planner",
+            "workflow_uuid": "wf-1",
+            "device_serialnos": ["dev-1"],
+            "cron_expression": "0 8 * * *",
+            "execution_mode": "layered",
+        },
+    )
+
+    assert response.status_code == 200
+    assert response.json()["execution_mode"] == "layered"
 
 
 def test_create_scheduled_task_requires_existing_workflow(
@@ -241,6 +262,18 @@ def test_update_scheduled_task_success(client: TestClient) -> None:
     assert updated["name"] == "Evening"
     assert updated["enabled"] is False
     assert updated["next_run_time"] is None
+
+
+def test_update_scheduled_task_execution_mode(client: TestClient) -> None:
+    created = _create_task(client)
+
+    response = client.put(
+        f"/api/scheduled-tasks/{created['id']}",
+        json={"execution_mode": "layered"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["execution_mode"] == "layered"
 
 
 def test_update_scheduled_task_not_found(client: TestClient) -> None:

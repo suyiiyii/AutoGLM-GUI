@@ -215,3 +215,31 @@ def test_task_manager_marks_running_tasks_interrupted_on_start(tmp_path: Path) -
 
     asyncio.run(manager.shutdown())
     store.close()
+
+
+def test_submit_chat_task_uses_layered_executor_for_layered_sessions(
+    tmp_path: Path,
+) -> None:
+    async def scenario() -> None:
+        store = TaskStore(tmp_path / "tasks.db")
+        manager = TaskManager(store)
+        session = await manager.create_chat_session(
+            device_id="device-a",
+            device_serial="serial-a",
+            mode="layered",
+        )
+
+        task = await manager.submit_chat_task(
+            session_id=str(session["id"]),
+            device_id="device-a",
+            device_serial="serial-a",
+            message="复杂任务",
+        )
+
+        assert task["executor_key"] == "layered_chat"
+        assert task["source"] == "chat"
+
+        await manager.shutdown()
+        store.close()
+
+    asyncio.run(scenario())

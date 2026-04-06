@@ -8,6 +8,7 @@ import time
 import webbrowser
 
 from AutoGLM_GUI import __version__
+from AutoGLM_GUI.adb_terminal_repl import main as adb_terminal_repl_main
 
 # Default configuration
 DEFAULT_MODEL_NAME = "autoglm-phone-9b"
@@ -92,7 +93,11 @@ def main() -> None:
         "--log-file", default="logs/autoglm_{time:YYYY-MM-DD}.log"
     )
     early_parser.add_argument("--no-log-file", action="store_true")
+    early_parser.add_argument("--adb-terminal-repl", action="store_true")
     early_args, _ = early_parser.parse_known_args()
+
+    if early_args.adb_terminal_repl:
+        raise SystemExit(adb_terminal_repl_main())
 
     # Set environment variable for reload mode (subprocess will read this)
     os.environ["AUTOGLM_LOG_LEVEL"] = early_args.log_level
@@ -180,8 +185,16 @@ def main() -> None:
         default=None,
         help="Maximum turns for layered agent mode (default: 50, minimum: 1)",
     )
+    parser.add_argument(
+        "--adb-terminal-repl",
+        action="store_true",
+        help=argparse.SUPPRESS,
+    )
 
     args = parser.parse_args()
+
+    if args.adb_terminal_repl:
+        raise SystemExit(adb_terminal_repl_main())
 
     # Auto-find available port if not specified
     if args.port is None:
@@ -266,6 +279,7 @@ def main() -> None:
 
     # 写入环境变量（供 --reload 模式的子进程使用）
     os.environ["AUTOGLM_ADB_PATH"] = adb_path
+    os.environ["AUTOGLM_SERVER_HOST"] = args.host
 
     # 预先创建 DeviceManager 单例（用正确的 adb_path）
     from AutoGLM_GUI.device_manager import DeviceManager

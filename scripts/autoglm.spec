@@ -40,12 +40,6 @@ a = Analysis(
 
         # Package metadata（运行时需要）
         *copy_metadata('fastmcp'),
-        *copy_metadata('lupa'),
-        *copy_metadata('fakeredis'),
-
-        # fakeredis 数据文件（commands.json 需要在 fakeredis/ 目录下）
-        # 使用 collect_data_files 会自动处理正确的路径
-        *collect_data_files('fakeredis', include_py_files=False),
     ],
 
     # 隐藏导入：PyInstaller 无法自动检测的模块
@@ -69,12 +63,6 @@ a = Analysis(
         'fastapi.responses',
         'fastapi.staticfiles',
 
-        # lupa (fakeredis 依赖) - Lua runtime for Python
-        'lupa',
-        'lupa.lua51',
-        'lupa.lua52',
-        'lupa.lua53',
-        'lupa.lua54',
 
         # 其他可能需要的模块
         # droidrun 通过 importlib 动态加载，需显式收集
@@ -88,7 +76,6 @@ a = Analysis(
     # Runtime hooks: 在主程序运行前执行
     runtime_hooks=[
         str(Path(SPECPATH) / 'pyi_rth_utf8.py'),  # UTF-8 编码（Windows）
-        str(Path(SPECPATH) / 'pyi_rth_fakeredis.py'),  # fakeredis 路径修复
     ],
     excludes=[
         # 排除不需要的模块以减小体积

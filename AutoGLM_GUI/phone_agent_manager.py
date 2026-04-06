@@ -591,6 +591,40 @@ class PhoneAgentManager:
         with self._manager_lock:
             return self._metadata.get(device_id)
 
+    def get_metadata_for_device(self, device_id: str) -> AgentMetadata | None:
+        """Get the most relevant metadata for a device across all contexts.
+
+        Device-level UI cares whether a device has any initialized agent, even when
+        the runtime agent is stored under a contextual key such as
+        ``device_id:chat:<session_id>``.
+        """
+        state_priority = {
+            AgentState.BUSY: 4,
+            AgentState.INITIALIZING: 3,
+            AgentState.ERROR: 2,
+            AgentState.IDLE: 1,
+        }
+        key_prefix = f"{device_id}:"
+
+        with self._manager_lock:
+            candidates = [
+                metadata
+                for key, metadata in self._metadata.items()
+                if key == device_id or key.startswith(key_prefix)
+            ]
+
+        if not candidates:
+            return None
+
+        return max(
+            candidates,
+            key=lambda metadata: (
+                state_priority.get(metadata.state, 0),
+                metadata.last_used,
+                metadata.created_at,
+            ),
+        )
+
     def register_abort_handler(
         self,
         device_id: str,

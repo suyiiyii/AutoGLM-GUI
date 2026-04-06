@@ -16,9 +16,11 @@ from AutoGLM_GUI.schemas import (
     TaskRunListResponse,
     TaskRunResponse,
     TaskSessionCreate,
+    TaskSessionResetResponse,
     TaskSessionResponse,
     TaskSubmitRequest,
 )
+from AutoGLM_GUI.layered_agent_service import reset_session as reset_layered_session
 from AutoGLM_GUI.task_manager import task_manager
 from AutoGLM_GUI.task_store import (
     TERMINAL_TASK_STATUSES,
@@ -98,6 +100,7 @@ async def create_task_session(request: TaskSessionCreate) -> TaskSessionResponse
     session = await task_manager.create_chat_session(
         device_id=request.device_id,
         device_serial=request.device_serial,
+        mode=request.mode,
     )
     return _task_session_response(session)
 
@@ -108,6 +111,38 @@ async def get_task_session(session_id: str) -> TaskSessionResponse:
     if session is None:
         raise HTTPException(status_code=404, detail="Task session not found")
     return _task_session_response(session)
+
+
+@router.post(
+    "/api/task-sessions/{session_id}/reset",
+    response_model=TaskSessionResetResponse,
+)
+async def reset_task_session(session_id: str) -> TaskSessionResetResponse:
+    session = await task_manager.get_session(session_id)
+    if session is None:
+        raise HTTPException(status_code=404, detail="Task session not found")
+
+    active_task = await asyncio.to_thread(
+        task_store.get_latest_active_session_task,
+        session_id,
+    )
+    if active_task is not None:
+        await task_manager.cancel_task(str(active_task["id"]))
+        await task_manager.wait_for_task(str(active_task["id"]))
+
+    if str(session["mode"]) == "layered":
+        reset_layered_session(session_id)
+
+    archived_session = await task_manager.archive_session(session_id)
+    return TaskSessionResetResponse(
+        success=True,
+        message=f"Session {session_id} cleared",
+        session=(
+            _task_session_response(archived_session)
+            if archived_session is not None
+            else None
+        ),
+    )
 
 
 @router.get(

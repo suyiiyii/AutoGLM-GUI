@@ -326,6 +326,35 @@ export interface RemoteDeviceRemoveResponse {
   error?: string;
 }
 
+export interface TerminalSessionCreateRequest {
+  cwd?: string;
+  command?: string[];
+}
+
+export interface TerminalSession {
+  session_id: string;
+  cwd: string;
+  command: string[];
+  status: string;
+  created_at: number;
+  last_active_at: number;
+  exit_code?: number | null;
+  created_by?: string | null;
+  origin?: string | null;
+  owner_token_hash?: string | null;
+  total_output_bytes: number;
+}
+
+export interface TerminalSessionCreateResponse extends TerminalSession {
+  session_token: string;
+}
+
+export interface TerminalSessionCloseResponse {
+  success: boolean;
+  message: string;
+  session_id: string;
+}
+
 export async function listDevices(): Promise<DeviceListResponse> {
   const res = await axios.get<DeviceListResponse>('/api/devices');
   return res.data;
@@ -404,6 +433,42 @@ export async function removeRemoteDevice(
   const res = await axios.post<RemoteDeviceRemoveResponse>(
     '/api/devices/remove_remote',
     { serial }
+  );
+  return res.data;
+}
+
+export async function createTerminalSession(
+  payload: TerminalSessionCreateRequest = {}
+): Promise<TerminalSessionCreateResponse> {
+  const res = await axios.post<TerminalSessionCreateResponse>(
+    '/api/terminal/sessions',
+    payload
+  );
+  return res.data;
+}
+
+export async function getTerminalSession(
+  sessionId: string,
+  sessionToken: string
+): Promise<TerminalSession> {
+  const res = await axios.get<TerminalSession>(
+    `/api/terminal/sessions/${sessionId}`,
+    {
+      params: { token: sessionToken },
+    }
+  );
+  return res.data;
+}
+
+export async function closeTerminalSession(
+  sessionId: string,
+  sessionToken: string
+): Promise<TerminalSessionCloseResponse> {
+  const res = await axios.delete<TerminalSessionCloseResponse>(
+    `/api/terminal/sessions/${sessionId}`,
+    {
+      params: { token: sessionToken },
+    }
   );
   return res.data;
 }
@@ -865,13 +930,21 @@ export interface TaskCancelResponse {
   task: TaskRunResponse | null;
 }
 
+export interface TaskSessionResetResponse {
+  success: boolean;
+  message: string;
+  session: TaskSessionResponse | null;
+}
+
 export async function createTaskSession(
   deviceId: string,
-  deviceSerial: string
+  deviceSerial: string,
+  mode: 'classic' | 'layered' = 'classic'
 ): Promise<TaskSessionResponse> {
   const res = await axios.post<TaskSessionResponse>('/api/task-sessions', {
     device_id: deviceId,
     device_serial: deviceSerial,
+    mode,
   });
   return res.data;
 }
@@ -881,6 +954,15 @@ export async function getTaskSession(
 ): Promise<TaskSessionResponse> {
   const res = await axios.get<TaskSessionResponse>(
     `/api/task-sessions/${sessionId}`
+  );
+  return res.data;
+}
+
+export async function resetTaskSession(
+  sessionId: string
+): Promise<TaskSessionResetResponse> {
+  const res = await axios.post<TaskSessionResetResponse>(
+    `/api/task-sessions/${sessionId}/reset`
   );
   return res.data;
 }
@@ -1062,6 +1144,7 @@ export interface ScheduledTaskResponse {
   device_group_id?: string | null;
   cron_expression: string;
   enabled: boolean;
+  execution_mode: 'classic' | 'layered';
   created_at: string;
   updated_at: string;
   last_run_time: string | null;
@@ -1084,6 +1167,7 @@ export interface ScheduledTaskCreate {
   device_group_id?: string | null;
   cron_expression: string;
   enabled?: boolean;
+  execution_mode?: 'classic' | 'layered';
 }
 
 export interface ScheduledTaskUpdate {
@@ -1093,6 +1177,7 @@ export interface ScheduledTaskUpdate {
   device_group_id?: string | null;
   cron_expression?: string;
   enabled?: boolean;
+  execution_mode?: 'classic' | 'layered';
 }
 
 export async function listScheduledTasks(): Promise<ScheduledTaskListResponse> {
