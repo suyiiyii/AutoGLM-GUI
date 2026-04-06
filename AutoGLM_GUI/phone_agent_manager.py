@@ -666,6 +666,10 @@ class PhoneAgentManager:
     async def abort_streaming_chat_async(self, device_id: str) -> bool:
         """异步中止流式对话 (支持 AsyncAgent)。
 
+        搜索所有与 device_id 相关的 contextual key（如
+        ``device_id:chat:session_id``），找到拥有 abort handler 的 agent
+        并调用其取消逻辑。
+
         Args:
             device_id: 设备标识符
 
@@ -673,13 +677,28 @@ class PhoneAgentManager:
             bool: True 表示发送了中止信号，False 表示没有活跃会话
         """
         with self._manager_lock:
-            metadata = self._metadata.get(device_id)
-            if not metadata or metadata.abort_handler is None:
+            # 查找所有匹配的 contextual key，优先选择有 abort handler 的
+            key_prefix = f"{device_id}:"
+            candidates: list[tuple[str, Any]] = []
+            for key, metadata in self._metadata.items():
+                if (key == device_id or key.startswith(key_prefix)) and metadata.abort_handler is not None:
+                    candidates.append((key, metadata.abort_handler))
+
+            if not candidates:
                 logger.warning(f"No active streaming chat for device {device_id}")
                 return False
 
-            logger.info(f"Aborting async streaming chat for device {device_id}")
-            handler = metadata.abort_handler
+            # 优先使用精确匹配
+            handler = None
+            for key, h in candidates:
+                handler = h
+                if key == device_id:
+                    break
+
+            logger.info(
+                f"Aborting async streaming chat for device {device_id} "
+                f"(found {len(candidates)} active handler(s))"
+            )
 
         # 执行取消 (根据类型选择方式, 在锁外执行避免死锁)
         if isinstance(handler, threading.Event):
@@ -697,5 +716,8 @@ class PhoneAgentManager:
     def is_streaming_active(self, device_id: str) -> bool:
         """检查设备是否有活跃的流式会话."""
         with self._manager_lock:
-            metadata = self._metadata.get(device_id)
-            return metadata is not None and metadata.abort_handler is not None
+            key_prefix = f"{device_id}:"
+            for key, metadata in self._metadata.items():
+                if (key == device_id or key.startswith(key_prefix)) and metadata.abort_handler is not None:
+                    return True
+            return False
