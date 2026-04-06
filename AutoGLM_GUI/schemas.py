@@ -775,6 +775,8 @@ class HistoryListResponse(BaseModel):
 
 # Task Models
 
+from AutoGLM_GUI.task_store import TaskSessionStatus, TaskStatus
+
 
 class TaskSessionCreate(BaseModel):
     """Create chat task session request."""
@@ -806,7 +808,7 @@ class TaskSessionResponse(BaseModel):
     mode: str
     device_id: str
     device_serial: str
-    status: str
+    status: TaskSessionStatus
     created_at: str
     updated_at: str
 
@@ -834,7 +836,7 @@ class TaskRunResponse(BaseModel):
     schedule_fire_id: str | None = None
     device_id: str
     device_serial: str
-    status: str
+    status: TaskStatus
     input_text: str
     final_message: str | None = None
     error_message: str | None = None
@@ -842,6 +844,7 @@ class TaskRunResponse(BaseModel):
     created_at: str
     started_at: str | None = None
     finished_at: str | None = None
+    duration_ms: int | None = None
 
 
 class TaskRunListResponse(BaseModel):

@@ -27,6 +27,8 @@ from AutoGLM_GUI.task_store import (
     TaskEventRecord,
     TaskRecord,
     TaskSessionRecord,
+    TaskSessionStatus,
+    TaskStatus,
     task_store,
 )
 
@@ -34,6 +36,19 @@ router = APIRouter()
 
 
 def _task_run_response(record: TaskRecord) -> TaskRunResponse:
+    started_at = record.get("started_at")
+    finished_at = record.get("finished_at")
+    duration_ms: int | None = None
+    if started_at and finished_at:
+        try:
+            from datetime import datetime
+
+            start = datetime.fromisoformat(str(started_at))
+            end = datetime.fromisoformat(str(finished_at))
+            duration_ms = int((end - start).total_seconds() * 1000)
+        except (ValueError, TypeError):
+            pass
+
     return TaskRunResponse(
         id=str(record["id"]),
         source=str(record["source"]),
@@ -52,7 +67,7 @@ def _task_run_response(record: TaskRecord) -> TaskRunResponse:
         else None,
         device_id=str(record["device_id"]),
         device_serial=str(record["device_serial"]),
-        status=str(record["status"]),
+        status=TaskStatus(str(record["status"])),
         input_text=str(record["input_text"]),
         final_message=str(record["final_message"])
         if record.get("final_message") is not None
@@ -68,6 +83,7 @@ def _task_run_response(record: TaskRecord) -> TaskRunResponse:
         finished_at=str(record["finished_at"])
         if record.get("finished_at") is not None
         else None,
+        duration_ms=duration_ms,
     )
 
 
@@ -78,7 +94,7 @@ def _task_session_response(record: TaskSessionRecord) -> TaskSessionResponse:
         mode=str(record["mode"]),
         device_id=str(record["device_id"]),
         device_serial=str(record["device_serial"]),
-        status=str(record["status"]),
+        status=TaskSessionStatus(str(record["status"])),
         created_at=str(record["created_at"]),
         updated_at=str(record["updated_at"]),
     )
@@ -197,15 +213,24 @@ async def list_tasks(
     status: str | None = None,
     source: str | None = None,
     device_id: str | None = None,
+    device_serial: str | None = None,
     session_id: str | None = None,
     limit: int = Query(default=50, ge=1, le=100),
     offset: int = Query(default=0, ge=0),
 ) -> TaskRunListResponse:
+    if status is not None:
+        valid = {s.value for s in TaskStatus}
+        if status not in valid:
+            raise HTTPException(
+                status_code=422,
+                detail=f"Invalid status '{status}'. Must be one of: {', '.join(sorted(valid))}",
+            )
     tasks, total = await asyncio.to_thread(
         task_store.list_tasks,
         status=status,
         source=source,
         device_id=device_id,
+        device_serial=device_serial,
         session_id=session_id,
         limit=limit,
         offset=offset,
