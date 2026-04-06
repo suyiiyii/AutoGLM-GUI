@@ -4,6 +4,7 @@ import android.content.Intent
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.provider.Settings
+import android.util.Log
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
@@ -23,6 +24,7 @@ class MainActivity : AppCompatActivity() {
 
     private val capturePermissionLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+            Log.i(TAG, "capturePermissionLauncher resultCode=${result.resultCode} hasData=${result.data != null}")
             if (result.resultCode == RESULT_OK && result.data != null) {
                 ContextCompat.startForegroundService(
                     this,
@@ -37,6 +39,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        Log.i(TAG, "onCreate intent=$intent")
         setContentView(R.layout.activity_main)
 
         statusView = findViewById(R.id.statusText)
@@ -82,6 +85,7 @@ class MainActivity : AppCompatActivity() {
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
+        Log.i(TAG, "onNewIntent intent=$intent")
         setIntent(intent)
         maybeRequestCapture(intent)
     }
@@ -125,6 +129,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun requestScreenCapturePermission() {
+        Log.i(TAG, "requestScreenCapturePermission")
         val manager = getSystemService(MediaProjectionManager::class.java)
         capturePermissionLauncher.launch(manager.createScreenCaptureIntent())
     }
@@ -138,6 +143,7 @@ class MainActivity : AppCompatActivity() {
     private fun completeCaptureGrant(resultCode: Int, data: Intent, retries: Int) {
         if (!AgentForegroundService.isProjectionModeEnabled()) {
             if (retries <= 0) {
+                Log.e(TAG, "completeCaptureGrant timed out waiting for projection mode")
                 demoStatusView.text = getString(
                     R.string.capture_failed_template,
                     "foreground service did not enter mediaProjection mode in time.",
@@ -155,7 +161,9 @@ class MainActivity : AppCompatActivity() {
         try {
             ScreenCaptureController.storePermission(this, resultCode, data)
             demoStatusView.text = getString(R.string.capture_granted)
+            Log.i(TAG, "completeCaptureGrant success")
         } catch (error: SecurityException) {
+            Log.e(TAG, "completeCaptureGrant security failure", error)
             demoStatusView.text = getString(
                 R.string.capture_failed_template,
                 error.message ?: error.javaClass.simpleName,
@@ -165,6 +173,7 @@ class MainActivity : AppCompatActivity() {
     }
 
     companion object {
+        private const val TAG = "AutoGLM/Main"
         const val EXTRA_REQUEST_CAPTURE = "request_capture"
     }
 }

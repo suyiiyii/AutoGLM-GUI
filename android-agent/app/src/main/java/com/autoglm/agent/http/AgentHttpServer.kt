@@ -2,6 +2,7 @@ package com.autoglm.agent.http
 
 import android.content.Context
 import android.os.Build
+import android.util.Log
 import com.autoglm.agent.projection.ScreenCaptureController
 import com.autoglm.agent.service.DeviceAccessibilityService
 import fi.iki.elonen.NanoHTTPD
@@ -17,6 +18,7 @@ class AgentHttpServer(
         return try {
             route(session)
         } catch (error: MissingCapabilityException) {
+            Log.w(TAG, "missing capability for ${session.method} ${session.uri}: ${error.code} ${error.message}")
             json(
                 newFixedLengthResponse(
                     Response.Status.SERVICE_UNAVAILABLE,
@@ -28,6 +30,7 @@ class AgentHttpServer(
                 ),
             )
         } catch (error: IllegalArgumentException) {
+            Log.w(TAG, "invalid request for ${session.method} ${session.uri}: ${error.message}")
             json(
                 newFixedLengthResponse(
                     Response.Status.BAD_REQUEST,
@@ -39,6 +42,7 @@ class AgentHttpServer(
                 ),
             )
         } catch (error: Exception) {
+            Log.e(TAG, "internal error for ${session.method} ${session.uri}", error)
             json(
                 newFixedLengthResponse(
                     Response.Status.INTERNAL_ERROR,
@@ -196,6 +200,7 @@ class AgentHttpServer(
     }
 
     companion object {
+        private const val TAG = "AutoGLM/HTTP"
         private const val DEFAULT_DEVICE_ID = "android-local"
         private const val JSON_MIME_TYPE = "application/json"
     }

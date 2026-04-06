@@ -10,6 +10,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.util.Log
 import androidx.core.app.NotificationCompat
 import com.autoglm.agent.MainActivity
 import com.autoglm.agent.R
@@ -20,10 +21,12 @@ class AgentForegroundService : Service() {
 
     override fun onCreate() {
         super.onCreate()
+        Log.i(TAG, "onCreate")
         createNotificationChannel()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        Log.i(TAG, "onStartCommand action=${intent?.action} startId=$startId serverRunning=${server != null}")
         when (intent?.action) {
             ACTION_STOP -> stopAgent()
             ACTION_ENABLE_CAPTURE -> enableCaptureMode()
@@ -33,6 +36,7 @@ class AgentForegroundService : Service() {
     }
 
     override fun onDestroy() {
+        Log.w(TAG, "onDestroy running=$running projectionModeEnabled=$projectionModeEnabled")
         server?.stop()
         server = null
         running = false
@@ -47,9 +51,11 @@ class AgentForegroundService : Service() {
             server = AgentHttpServer(this, DEFAULT_PORT).also {
                 it.start(SOCKET_READ_TIMEOUT, false)
             }
+            Log.i(TAG, "HTTP server started on port=$DEFAULT_PORT")
         }
         startForegroundWithType(captureEnabled = false)
         running = true
+        Log.i(TAG, "startAgent complete captureEnabled=false")
     }
 
     private fun enableCaptureMode() {
@@ -57,13 +63,16 @@ class AgentForegroundService : Service() {
             server = AgentHttpServer(this, DEFAULT_PORT).also {
                 it.start(SOCKET_READ_TIMEOUT, false)
             }
+            Log.i(TAG, "HTTP server started during capture enable on port=$DEFAULT_PORT")
         }
         startForegroundWithType(captureEnabled = true)
         projectionModeEnabled = true
         running = true
+        Log.i(TAG, "enableCaptureMode complete projectionModeEnabled=true")
     }
 
     private fun stopAgent() {
+        Log.i(TAG, "stopAgent")
         stopForeground(STOP_FOREGROUND_REMOVE)
         projectionModeEnabled = false
         stopSelf()
@@ -79,6 +88,7 @@ class AgentForegroundService : Service() {
                 ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
             }
             startForeground(NOTIFICATION_ID, notification, type)
+            Log.i(TAG, "startForeground type=$type captureEnabled=$captureEnabled")
         } else {
             startForeground(NOTIFICATION_ID, notification)
         }
@@ -114,6 +124,7 @@ class AgentForegroundService : Service() {
     }
 
     companion object {
+        private const val TAG = "AutoGLM/FGS"
         private const val ACTION_START = "com.autoglm.agent.action.START"
         private const val ACTION_STOP = "com.autoglm.agent.action.STOP"
         private const val ACTION_ENABLE_CAPTURE = "com.autoglm.agent.action.ENABLE_CAPTURE"
