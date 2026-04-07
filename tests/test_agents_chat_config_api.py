@@ -143,9 +143,16 @@ class FakeConfigManager:
 
 
 class FakeDeviceManager:
+    def __init__(self) -> None:
+        self.serials = {
+            "device-1": "serial-1",
+            "device-2": "serial-2",
+            "device-3": "serial-3",
+            "device-9": "serial-9",
+        }
+
     def get_serial_by_device_id(self, device_id: str) -> str | None:
-        _ = device_id
-        return None
+        return self.serials.get(device_id)
 
 
 @pytest.fixture
@@ -243,6 +250,71 @@ def test_chat_unexpected_error_returns_success_false(env: dict[str, Any]) -> Non
     assert response.status_code == 200
     assert response.json() == {"result": "agent crashed", "steps": 0, "success": False}
     assert env["phone_manager"].release_calls == ["device-2"]
+
+
+def test_chat_switching_selected_device_keeps_tasks_on_current_device(
+    env: dict[str, Any],
+) -> None:
+    env["phone_manager"].agent.stream_events = [
+        {
+            "type": "done",
+            "data": {"message": "task finished", "success": True, "steps": 1},
+        }
+    ]
+
+    first = env["client"].post(
+        "/api/chat",
+        json={"device_id": "device-1", "message": "first-device-message"},
+    )
+    second = env["client"].post(
+        "/api/chat",
+        json={"device_id": "device-2", "message": "second-device-message"},
+    )
+    third = env["client"].post(
+        "/api/chat",
+        json={"device_id": "device-1", "message": "back-to-first-device"},
+    )
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert third.status_code == 200
+
+    sessions = {
+        "device-1": env["task_store"].get_latest_open_chat_session(
+            device_id="device-1",
+            device_serial="serial-1",
+            mode="classic",
+        ),
+        "device-2": env["task_store"].get_latest_open_chat_session(
+            device_id="device-2",
+            device_serial="serial-2",
+            mode="classic",
+        ),
+    }
+
+    assert sessions["device-1"] is not None
+    assert sessions["device-2"] is not None
+    assert sessions["device-1"]["id"] != sessions["device-2"]["id"]
+
+    tasks, total = env["task_store"].list_tasks(limit=10, offset=0)
+    assert total == 3
+    tasks_by_input = {task["input_text"]: task for task in tasks}
+
+    first_task = tasks_by_input["first-device-message"]
+    second_task = tasks_by_input["second-device-message"]
+    third_task = tasks_by_input["back-to-first-device"]
+
+    assert first_task["device_id"] == "device-1"
+    assert first_task["device_serial"] == "serial-1"
+    assert first_task["session_id"] == sessions["device-1"]["id"]
+
+    assert second_task["device_id"] == "device-2"
+    assert second_task["device_serial"] == "serial-2"
+    assert second_task["session_id"] == sessions["device-2"]["id"]
+
+    assert third_task["device_id"] == "device-1"
+    assert third_task["device_serial"] == "serial-1"
+    assert third_task["session_id"] == sessions["device-1"]["id"]
 
 
 def test_chat_stream_emits_error_event_when_device_busy(env: dict[str, Any]) -> None:
