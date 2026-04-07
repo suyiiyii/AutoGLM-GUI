@@ -95,6 +95,23 @@ Expected shape:
 {"status":"ok","service":"android-agent","version":"0.2.0","accessibility_enabled":false,"screen_capture_ready":true}
 ```
 
+### Foreground service presence
+Run after starting the app and tapping `Start agent`:
+
+```bash
+/root/android-sdk/platform-tools/adb -s emulator-5554 shell dumpsys activity services com.autoglm.agent
+```
+
+Key lines from the validation run:
+
+```text
+* ServiceRecord{... com.autoglm.agent/.service.AgentForegroundService ...}
+intent={act=com.autoglm.agent.action.START cmp=com.autoglm.agent/.service.AgentForegroundService}
+startForegroundCount=1
+isForeground=true foregroundId=1001 types=0x00000001
+startRequested=true delayedStop=false stopIfKilled=false callStart=true lastStartId=2
+```
+
 ### Repeated screenshot verification
 The A2 screenshot fix was validated against repeated sequential requests after grant. Example command:
 
