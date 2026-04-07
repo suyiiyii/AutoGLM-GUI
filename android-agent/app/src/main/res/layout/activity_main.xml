@@ -103,6 +103,64 @@
             android:layout_marginTop="12dp"
             android:text="@string/request_screen_capture" />
 
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
+            android:text="@string/reverse_agent_section_label"
+            android:textStyle="bold" />
+
+        <EditText
+            android:id="@+id/reverseServerInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:hint="@string/reverse_server_hint"
+            android:inputType="textUri" />
+
+        <EditText
+            android:id="@+id/pairingCodeInput"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:hint="@string/reverse_pairing_code_hint"
+            android:inputType="textCapCharacters" />
+
+        <Button
+            android:id="@+id/pairButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/reverse_pair_button" />
+
+        <Button
+            android:id="@+id/clearPairingButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/reverse_clear_pairing_button" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/reverse_agent_status_label"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/reverseAgentStatusText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/reverse_status_unpaired" />
+
+        <TextView
+            android:id="@+id/reverseAgentDetailText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/reverse_agent_detail_placeholder" />
+
         <EditText
             android:id="@+id/demoInput"
             android:layout_width="match_parent"

@@ -15,14 +15,17 @@ import androidx.core.app.NotificationCompat
 import com.autoglm.agent.MainActivity
 import com.autoglm.agent.R
 import com.autoglm.agent.http.AgentHttpServer
+import com.autoglm.agent.reverse.ReverseAgentClient
 
 class AgentForegroundService : Service() {
     private var server: AgentHttpServer? = null
+    private lateinit var reverseAgentClient: ReverseAgentClient
 
     override fun onCreate() {
         super.onCreate()
         Log.i(TAG, "onCreate")
         createNotificationChannel()
+        reverseAgentClient = ReverseAgentClient.getInstance(this)
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -39,6 +42,7 @@ class AgentForegroundService : Service() {
         Log.w(TAG, "onDestroy running=$running projectionModeEnabled=$projectionModeEnabled")
         server?.stop()
         server = null
+        reverseAgentClient.stop()
         running = false
         projectionModeEnabled = false
         super.onDestroy()
@@ -54,6 +58,7 @@ class AgentForegroundService : Service() {
             Log.i(TAG, "HTTP server started on port=$DEFAULT_PORT")
         }
         startForegroundWithType(captureEnabled = false)
+        reverseAgentClient.start()
         running = true
         Log.i(TAG, "startAgent complete captureEnabled=false")
     }
@@ -66,6 +71,7 @@ class AgentForegroundService : Service() {
             Log.i(TAG, "HTTP server started during capture enable on port=$DEFAULT_PORT")
         }
         startForegroundWithType(captureEnabled = true)
+        reverseAgentClient.start()
         projectionModeEnabled = true
         running = true
         Log.i(TAG, "enableCaptureMode complete projectionModeEnabled=true")

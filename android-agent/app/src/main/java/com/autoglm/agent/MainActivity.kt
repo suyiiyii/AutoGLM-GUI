@@ -12,6 +12,8 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.autoglm.agent.projection.ScreenCaptureController
+import com.autoglm.agent.reverse.ReverseAgentClient
+import com.autoglm.agent.reverse.ReverseAgentUiState
 import com.autoglm.agent.service.AgentForegroundService
 import com.autoglm.agent.service.DeviceAccessibilityService
 
@@ -21,6 +23,15 @@ class MainActivity : AppCompatActivity() {
     private lateinit var accessibilityView: TextView
     private lateinit var captureView: TextView
     private lateinit var demoStatusView: TextView
+    private lateinit var reverseAgentStatusView: TextView
+    private lateinit var reverseAgentDetailView: TextView
+    private lateinit var reverseServerInput: EditText
+    private lateinit var pairingCodeInput: EditText
+    private lateinit var reverseAgentClient: ReverseAgentClient
+
+    private val reverseStateListener: (ReverseAgentUiState) -> Unit = { state ->
+        runOnUiThread { renderReverseAgentState(state) }
+    }
 
     private val capturePermissionLauncher =
         registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
@@ -47,6 +58,11 @@ class MainActivity : AppCompatActivity() {
         accessibilityView = findViewById(R.id.accessibilityStatusText)
         captureView = findViewById(R.id.captureStatusText)
         demoStatusView = findViewById(R.id.demoStatusText)
+        reverseAgentStatusView = findViewById(R.id.reverseAgentStatusText)
+        reverseAgentDetailView = findViewById(R.id.reverseAgentDetailText)
+        reverseServerInput = findViewById(R.id.reverseServerInput)
+        pairingCodeInput = findViewById(R.id.pairingCodeInput)
+        reverseAgentClient = ReverseAgentClient.getInstance(this)
 
         findViewById<Button>(R.id.startButton).setOnClickListener {
             ContextCompat.startForegroundService(
@@ -67,6 +83,36 @@ class MainActivity : AppCompatActivity() {
 
         findViewById<Button>(R.id.captureButton).setOnClickListener {
             requestScreenCapturePermission()
+        }
+
+        findViewById<Button>(R.id.pairButton).setOnClickListener {
+            ContextCompat.startForegroundService(
+                this,
+                AgentForegroundService.createStartIntent(this),
+            )
+            reverseAgentClient.pair(
+                serverBaseUrl = reverseServerInput.text.toString(),
+                pairingCode = pairingCodeInput.text.toString(),
+            ) { result ->
+                result.onSuccess { session ->
+                    reverseServerInput.setText(session.serverBaseUrl)
+                    pairingCodeInput.text?.clear()
+                    demoStatusView.text = getString(R.string.reverse_pairing_claimed, session.agentId)
+                    refreshState()
+                }.onFailure { error ->
+                    demoStatusView.text = getString(
+                        R.string.reverse_pairing_failed_template,
+                        error.message ?: error.javaClass.simpleName,
+                    )
+                    refreshState()
+                }
+            }
+        }
+
+        findViewById<Button>(R.id.clearPairingButton).setOnClickListener {
+            reverseAgentClient.clearPairing()
+            demoStatusView.text = getString(R.string.reverse_pairing_cleared)
+            refreshState()
         }
 
         findViewById<Button>(R.id.tapTargetButton).setOnClickListener {
@@ -92,7 +138,13 @@ class MainActivity : AppCompatActivity() {
 
     override fun onResume() {
         super.onResume()
+        reverseAgentClient.addListener(reverseStateListener)
         refreshState()
+    }
+
+    override fun onPause() {
+        reverseAgentClient.removeListener(reverseStateListener)
+        super.onPause()
     }
 
     private fun refreshState() {
@@ -116,6 +168,7 @@ class MainActivity : AppCompatActivity() {
                 R.string.capture_missing
             },
         )
+        renderReverseAgentState(reverseAgentClient.currentState())
     }
 
     private fun ensureAgentRunning() {
@@ -170,6 +223,30 @@ class MainActivity : AppCompatActivity() {
             )
         }
         refreshState()
+    }
+
+    private fun renderReverseAgentState(state: ReverseAgentUiState) {
+        reverseAgentStatusView.text = getString(
+            when (state.connectionStatus) {
+                "pairing" -> R.string.reverse_status_pairing
+                "paired" -> R.string.reverse_status_paired
+                "connecting" -> R.string.reverse_status_connecting
+                "connected" -> R.string.reverse_status_connected
+                "stale" -> R.string.reverse_status_stale
+                "error" -> R.string.reverse_status_error
+                else -> R.string.reverse_status_unpaired
+            },
+        )
+        reverseAgentDetailView.text = getString(
+            R.string.reverse_agent_detail_template,
+            state.serverBaseUrl ?: "-",
+            state.agentId ?: "-",
+            state.pairingId ?: "-",
+            state.statusMessage,
+        )
+        if (reverseServerInput.text.isNullOrBlank() && !state.serverBaseUrl.isNullOrBlank()) {
+            reverseServerInput.setText(state.serverBaseUrl)
+        }
     }
 
     companion object {
