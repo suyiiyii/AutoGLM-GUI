@@ -28,15 +28,24 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { QRCodeSVG } from 'qrcode.react';
-import type { Device, MdnsDevice, RemoteDeviceInfo } from '../api';
+import type {
+  Device,
+  MdnsDevice,
+  RemoteDeviceInfo,
+  ReverseAgentInfo,
+  ReverseAgentPairingCreateResponse,
+} from '../api';
 import {
   addRemoteDevice,
   cancelQRPairing,
   connectWifiManual,
+  createReverseAgentPairing,
   discoverMdnsDevices,
   discoverRemoteDevices,
+  getReverseAgent,
   generateQRPairing,
   getQRPairingStatus,
+  listReverseAgents,
   pairWifi,
 } from '../api';
 import { useTranslation } from '../lib/i18n-context';
@@ -176,6 +185,19 @@ export function DeviceSidebar({
     string | null
   >(null);
   const [isConnectingRemote, setIsConnectingRemote] = useState(false);
+  const [isGeneratingReversePairing, setIsGeneratingReversePairing] =
+    useState(false);
+  const [isLoadingReverseRegistry, setIsLoadingReverseRegistry] =
+    useState(false);
+  const [reverseRegistryError, setReverseRegistryError] = useState('');
+  const [reversePairing, setReversePairing] =
+    useState<ReverseAgentPairingCreateResponse | null>(null);
+  const [reverseAgents, setReverseAgents] = useState<ReverseAgentInfo[]>([]);
+  const [selectedReverseAgentId, setSelectedReverseAgentId] = useState<
+    string | null
+  >(null);
+  const [selectedReverseAgent, setSelectedReverseAgent] =
+    useState<ReverseAgentInfo | null>(null);
 
   useEffect(() => {
     localStorage.setItem('sidebar-collapsed', JSON.stringify(isCollapsed));
@@ -509,6 +531,77 @@ export function DeviceSidebar({
     }
   };
 
+  const loadReverseRegistry = useCallback(async () => {
+    setIsLoadingReverseRegistry(true);
+    setReverseRegistryError('');
+    try {
+      const result = await listReverseAgents();
+      setReverseAgents(result.agents);
+
+      const nextSelectedId =
+        selectedReverseAgentId &&
+        result.agents.some(agent => agent.agent_id === selectedReverseAgentId)
+          ? selectedReverseAgentId
+          : result.agents[0]?.agent_id || null;
+
+      setSelectedReverseAgentId(nextSelectedId);
+
+      if (nextSelectedId) {
+        const detail = await getReverseAgent(nextSelectedId);
+        setSelectedReverseAgent(detail);
+      } else {
+        setSelectedReverseAgent(null);
+      }
+    } catch {
+      setReverseRegistryError(
+        t.toasts.reverseAgentLoadError ||
+          t.deviceSidebar.androidAgentLoadError ||
+          '加载 Android Agent 注册表失败'
+      );
+      setReverseAgents([]);
+      setSelectedReverseAgentId(null);
+      setSelectedReverseAgent(null);
+    } finally {
+      setIsLoadingReverseRegistry(false);
+    }
+  }, [selectedReverseAgentId, t]);
+
+  const handleCreateReversePairing = async () => {
+    setIsGeneratingReversePairing(true);
+    setReverseRegistryError('');
+    try {
+      const result = await createReverseAgentPairing();
+      setReversePairing(result);
+      await loadReverseRegistry();
+    } catch {
+      setReverseRegistryError(
+        t.toasts.reverseAgentPairingError ||
+          t.deviceSidebar.androidAgentGenerateError ||
+          '生成 Android Agent 配对码失败'
+      );
+    } finally {
+      setIsGeneratingReversePairing(false);
+    }
+  };
+
+  const handleSelectReverseAgent = useCallback(
+    async (agentId: string) => {
+      setSelectedReverseAgentId(agentId);
+      setReverseRegistryError('');
+      try {
+        const detail = await getReverseAgent(agentId);
+        setSelectedReverseAgent(detail);
+      } catch {
+        setReverseRegistryError(
+          t.toasts.reverseAgentLoadError ||
+            t.deviceSidebar.androidAgentLoadError ||
+            '加载 Android Agent 注册表失败'
+        );
+      }
+    },
+    [t]
+  );
+
   // Cleanup QR session when dialog closes or tab changes
   useEffect(() => {
     if (!showManualConnect || activeTab !== 'pair') {
@@ -524,6 +617,12 @@ export function DeviceSidebar({
     stopQRStatusPolling,
     handleCancelQRPairing,
   ]);
+
+  useEffect(() => {
+    if (showManualConnect && activeTab === 'agent') {
+      void loadReverseRegistry();
+    }
+  }, [showManualConnect, activeTab, loadReverseRegistry]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -776,7 +875,7 @@ export function DeviceSidebar({
               onValueChange={setActiveTab}
               className="w-full"
             >
-              <TabsList className="grid w-full grid-cols-3">
+              <TabsList className="grid w-full grid-cols-4">
                 <TabsTrigger value="direct">
                   {t.deviceSidebar.directConnectTab}
                 </TabsTrigger>
@@ -785,6 +884,9 @@ export function DeviceSidebar({
                 </TabsTrigger>
                 <TabsTrigger value="remote">
                   {t.deviceSidebar.remoteTab || '远程设备'}
+                </TabsTrigger>
+                <TabsTrigger value="agent">
+                  {t.deviceSidebar.androidAgentTab || 'Android Agent'}
                 </TabsTrigger>
               </TabsList>
 
@@ -1367,6 +1469,180 @@ export function DeviceSidebar({
                   </Button>
                 )}
               </TabsContent>
+
+              <TabsContent value="agent" className="space-y-4 mt-4">
+                <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-3">
+                  <div>
+                    <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                      {t.deviceSidebar.androidAgentTitle ||
+                        '添加 Android Agent'}
+                    </h3>
+                    <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                      {t.deviceSidebar.androidAgentDescription ||
+                        '生成配对码后，在 Android Agent App 里完成绑定。'}
+                    </p>
+                  </div>
+
+                  <Button
+                    onClick={handleCreateReversePairing}
+                    disabled={isGeneratingReversePairing}
+                    className="w-full"
+                  >
+                    {isGeneratingReversePairing
+                      ? t.common.loading
+                      : reversePairing
+                        ? t.deviceSidebar.androidAgentRegeneratePairing ||
+                          '重新生成配对码'
+                        : t.deviceSidebar.androidAgentGeneratePairing ||
+                          '生成配对码'}
+                  </Button>
+
+                  {reversePairing && (
+                    <div className="rounded-lg bg-slate-50 dark:bg-slate-900 p-3 space-y-2">
+                      <div>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {t.deviceSidebar.androidAgentPairingCode || '配对码'}
+                        </p>
+                        <p className="text-2xl font-semibold tracking-[0.3em] text-slate-900 dark:text-slate-100">
+                          {reversePairing.pairing_code}
+                        </p>
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {t.deviceSidebar.androidAgentPairingExpiresAt ||
+                          '有效期至'}
+                        ：
+                        {new Date(
+                          reversePairing.expires_at * 1000
+                        ).toLocaleString()}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {t.deviceSidebar.androidAgentHeartbeatInterval ||
+                          '心跳建议间隔'}
+                        ：{reversePairing.heartbeat_interval_seconds}s
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                      {t.deviceSidebar.androidAgentRegistryTitle ||
+                        '已注册 Android Agent'}
+                    </h3>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => void loadReverseRegistry()}
+                      disabled={isLoadingReverseRegistry}
+                    >
+                      {isLoadingReverseRegistry
+                        ? t.deviceSidebar.androidAgentLoadingRegistry ||
+                          '正在加载注册表...'
+                        : t.deviceSidebar.androidAgentRefreshRegistry ||
+                          '刷新注册表'}
+                    </Button>
+                  </div>
+
+                  {reverseRegistryError && (
+                    <div className="rounded-lg bg-red-50 dark:bg-red-950/20 p-3">
+                      <p className="text-sm text-red-700 dark:text-red-300">
+                        {reverseRegistryError}
+                      </p>
+                    </div>
+                  )}
+
+                  {!isLoadingReverseRegistry && reverseAgents.length === 0 && (
+                    <div className="rounded-lg bg-slate-50 dark:bg-slate-900 p-4 text-center">
+                      <Smartphone className="mx-auto h-8 w-8 text-slate-400" />
+                      <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">
+                        {t.deviceSidebar.androidAgentRegistryEmpty ||
+                          '还没有已注册的 Android Agent'}
+                      </p>
+                    </div>
+                  )}
+
+                  {reverseAgents.length > 0 && (
+                    <div className="space-y-2">
+                      {reverseAgents.map(agent => (
+                        <button
+                          key={agent.agent_id}
+                          onClick={() =>
+                            void handleSelectReverseAgent(agent.agent_id)
+                          }
+                          className={`
+                            w-full rounded-lg border p-3 text-left transition-colors
+                            ${
+                              selectedReverseAgentId === agent.agent_id
+                                ? 'border-[#1d9bf0] bg-blue-50 dark:bg-blue-950/20'
+                                : 'border-slate-200 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800'
+                            }
+                          `}
+                        >
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <p className="font-medium text-sm text-slate-900 dark:text-slate-100 truncate">
+                                {agent.display_name || agent.agent_id}
+                              </p>
+                              <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                                {agent.platform}
+                                {agent.app_version
+                                  ? ` · v${agent.app_version}`
+                                  : ''}
+                              </p>
+                            </div>
+                            <span
+                              className={`
+                                inline-flex rounded-full px-2 py-1 text-xs font-medium
+                                ${
+                                  agent.connection_status === 'connected'
+                                    ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-300'
+                                    : agent.connection_status === 'stale'
+                                      ? 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300'
+                                      : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300'
+                                }
+                              `}
+                            >
+                              {agent.connection_status === 'connected'
+                                ? t.deviceSidebar.androidAgentStatusConnected ||
+                                  '已连接'
+                                : agent.connection_status === 'stale'
+                                  ? t.deviceSidebar.androidAgentStatusStale ||
+                                    '连接过期'
+                                  : t.deviceSidebar.androidAgentStatusPaired ||
+                                    '已配对'}
+                            </span>
+                          </div>
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {selectedReverseAgent && (
+                    <div className="rounded-lg border border-slate-200 dark:border-slate-700 p-4 space-y-2">
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                        {selectedReverseAgent.display_name ||
+                          selectedReverseAgent.agent_id}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 break-all">
+                        agent_id: {selectedReverseAgent.agent_id}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                        {t.deviceSidebar.androidAgentLastSeen || '最近心跳'}：
+                        {new Date(
+                          selectedReverseAgent.last_seen_at * 1000
+                        ).toLocaleString()}
+                      </p>
+                      {selectedReverseAgent.capabilities.length > 0 && (
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
+                          {t.deviceSidebar.androidAgentCapabilities || '能力'}：
+                          {selectedReverseAgent.capabilities.join(', ')}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              </TabsContent>
             </Tabs>
 
             <DialogFooter>
@@ -1385,6 +1661,15 @@ export function DeviceSidebar({
                   setConnectionPort('5555');
                   setActiveTab('direct');
                   setDiscoveredDevices([]);
+                  setRemoteBaseUrl('');
+                  setRemoteUrlError('');
+                  setDiscoveredRemoteDevices([]);
+                  setSelectedRemoteDevice(null);
+                  setReverseRegistryError('');
+                  setReversePairing(null);
+                  setReverseAgents([]);
+                  setSelectedReverseAgentId(null);
+                  setSelectedReverseAgent(null);
                 }}
               >
                 {t.common.cancel}
