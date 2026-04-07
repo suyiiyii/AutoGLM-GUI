@@ -146,7 +146,7 @@ class MainActivity : AppCompatActivity() {
                 Log.e(TAG, "completeCaptureGrant timed out waiting for projection mode")
                 demoStatusView.text = getString(
                     R.string.capture_failed_template,
-                    "foreground service did not enter mediaProjection mode in time.",
+                    getString(R.string.capture_foreground_service_timeout),
                 )
                 refreshState()
                 return

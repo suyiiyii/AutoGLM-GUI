@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">AutoGLM Android Agent</string>
+    <string name="app_summary">A2 阶段 MVP：为 Remote Device 协议提供截图、手势、文本输入和当前应用等端点。</string>
+    <string name="server_status_label">服务状态</string>
+    <string name="server_status_running">运行中</string>
+    <string name="server_status_stopped">已停止</string>
+    <string name="server_endpoint_label">服务地址</string>
+    <string name="server_endpoint_template">http://127.0.0.1:%1$d</string>
+    <string name="accessibility_status_label">无障碍服务</string>
+    <string name="accessibility_enabled">已启用</string>
+    <string name="accessibility_disabled">未启用</string>
+    <string name="capture_status_label">录屏权限</string>
+    <string name="capture_ready">已授权</string>
+    <string name="capture_missing">未授权</string>
+    <string name="start_server">启动 Agent</string>
+    <string name="stop_server">停止 Agent</string>
+    <string name="open_accessibility_settings">打开无障碍设置</string>
+    <string name="request_screen_capture">授予录屏权限</string>
+    <string name="notification_channel_name">Agent 运行状态</string>
+    <string name="notification_title">AutoGLM Android Agent 正在运行</string>
+    <string name="notification_content">本地 HTTP 服务正在监听端口 %1$d</string>
+    <string name="accessibility_service_name">AutoGLM Agent 控制服务</string>
+    <string name="demo_input_hint">调用 /type_text 前请先聚焦这里</string>
+    <string name="tap_target_label">点击目标</string>
+    <string name="demo_status_idle">暂未触发本地手势演示。</string>
+    <string name="tap_target_hit">点击目标已触发。</string>
+    <string name="input_focused">输入框已聚焦。</string>
+    <string name="capture_granted">录屏权限已授权。</string>
+    <string name="capture_denied">录屏权限被拒绝。</string>
+    <string name="capture_failed_template">录屏初始化失败：%1$s</string>
+    <string name="capture_foreground_service_timeout">前台服务未能及时进入 mediaProjection 模式。</string>
+    <string name="swipe_area_label">滑动测试区</string>
+    <string name="scroll_content">请在这个区域内滑动，以验证手势事件已经送达。\n\n第 1 行\n第 2 行\n第 3 行\n第 4 行\n第 5 行\n第 6 行\n第 7 行\n第 8 行\n第 9 行\n第 10 行\n第 11 行\n第 12 行\n第 13 行\n第 14 行\n第 15 行\n第 16 行\n第 17 行\n第 18 行\n第 19 行\n第 20 行</string>
+</resources>

@@ -29,6 +29,7 @@
     <string name="capture_granted">Screen capture permission granted.</string>
     <string name="capture_denied">Screen capture permission denied.</string>
     <string name="capture_failed_template">Screen capture setup failed: %1$s</string>
+    <string name="capture_foreground_service_timeout">foreground service did not enter mediaProjection mode in time.</string>
     <string name="swipe_area_label">Swipe sandbox</string>
     <string name="scroll_content">Swipe inside this screen to verify gesture delivery.\n\nLine 1\nLine 2\nLine 3\nLine 4\nLine 5\nLine 6\nLine 7\nLine 8\nLine 9\nLine 10\nLine 11\nLine 12\nLine 13\nLine 14\nLine 15\nLine 16\nLine 17\nLine 18\nLine 19\nLine 20</string>
 </resources>
