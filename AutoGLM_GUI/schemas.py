@@ -3,7 +3,7 @@
 import re
 from typing import Any
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator
 
 from AutoGLM_GUI.device_metadata_manager import DISPLAY_NAME_MAX_LENGTH
 
@@ -1237,3 +1237,89 @@ class TerminalSessionCloseResponse(BaseModel):
     success: bool
     message: str
     session_id: str
+
+
+class ReverseAgentPairingCreateRequest(BaseModel):
+    """Create a reverse-agent pairing code."""
+
+    display_name: str | None = None
+
+
+class ReverseAgentPairingCreateResponse(BaseModel):
+    """Response for reverse-agent pairing creation."""
+
+    pairing_id: str
+    pairing_code: str
+    created_at: float
+    expires_at: float
+    heartbeat_interval_seconds: int
+
+
+class ReverseAgentPairingClaimRequest(BaseModel):
+    """Android Agent claims a server-issued pairing code."""
+
+    pairing_code: str
+    display_name: str | None = None
+    app_version: str | None = None
+    platform: str = "android"
+    capabilities: list[str] = Field(default_factory=list)
+    metadata: dict[str, Any] = Field(default_factory=dict)
+
+    @field_validator("pairing_code")
+    @classmethod
+    def validate_pairing_code(cls, value: str) -> str:
+        normalized = value.strip().upper()
+        if not re.fullmatch(r"[A-Z2-9]{6}", normalized):
+            raise ValueError("pairing_code must be 6 uppercase alphanumeric chars")
+        return normalized
+
+
+class ReverseAgentPairingClaimResponse(BaseModel):
+    """Response returned to a claimed reverse agent."""
+
+    agent_id: str
+    agent_token: str
+    pairing_id: str
+    websocket_path: str
+    heartbeat_interval_seconds: int
+
+
+class ReverseAgentInfo(BaseModel):
+    """Registry snapshot for one reverse Android Agent."""
+
+    agent_id: str
+    pairing_id: str
+    display_name: str | None = None
+    platform: str
+    app_version: str | None = None
+    capabilities: list[str]
+    metadata: dict[str, Any]
+    created_at: float
+    last_seen_at: float
+    last_heartbeat_at: float | None = None
+    connected_at: float | None = None
+    disconnected_at: float | None = None
+    connection_status: str
+
+
+class ReverseAgentRegistryListResponse(BaseModel):
+    """List of registered reverse Android Agents."""
+
+    agents: list[ReverseAgentInfo]
+
+
+class ReverseAgentSessionReady(BaseModel):
+    """Initial websocket session-ready event."""
+
+    type: str
+    agent_id: str
+    heartbeat_interval_seconds: int
+
+
+class ReverseAgentHeartbeatAck(BaseModel):
+    """Ack payload returned after a heartbeat frame."""
+
+    type: str
+    agent_id: str
+    server_time: float
+    connection_status: str
