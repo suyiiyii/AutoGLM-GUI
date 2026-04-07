@@ -78,6 +78,7 @@ def test_create_task_queues_task(tmp_path: Path) -> None:
     fake_tm = _FakeTaskManager(store)
 
     import AutoGLM_GUI.task_manager as tm_mod
+
     original = tm_mod.task_manager
     tm_mod.task_manager = fake_tm
 
@@ -111,6 +112,7 @@ def test_create_task_with_layered_mode(tmp_path: Path) -> None:
     fake_tm = _FakeTaskManager(store)
 
     import AutoGLM_GUI.task_manager as tm_mod
+
     original = tm_mod.task_manager
     tm_mod.task_manager = fake_tm
 
@@ -142,14 +144,11 @@ def test_create_task_with_layered_mode(tmp_path: Path) -> None:
 def test_get_task_returns_task_data(tmp_path: Path) -> None:
     """get_task should return task details including duration_ms."""
     store = TaskStore(tmp_path / "tasks.db")
-    import AutoGLM_GUI.task_store as ts_mod
     original_store = mcp_api.task_store
     mcp_api.task_store = store
 
     try:
-        from datetime import datetime
-
-        created = store.create_task_run(
+        store.create_task_run(
             source="chat",
             executor_key="classic_chat",
             device_id="dev-1",
@@ -174,7 +173,6 @@ def test_get_task_returns_task_data(tmp_path: Path) -> None:
 
 def test_get_task_returns_none_for_unknown() -> None:
     """get_task should return None for a non-existent task."""
-    import AutoGLM_GUI.task_store as ts_mod
 
     class _EmptyStore:
         def get_task(self, task_id: str) -> dict[str, Any] | None:
@@ -197,7 +195,6 @@ def test_get_task_returns_none_for_unknown() -> None:
 
 def test_list_tasks_returns_empty() -> None:
     """list_tasks with no tasks returns empty list."""
-    import AutoGLM_GUI.task_store as ts_mod
 
     class _EmptyStore:
         def list_tasks(self, **kwargs: Any) -> tuple[list, int]:
@@ -339,6 +336,7 @@ def test_cancel_queued_task(tmp_path: Path) -> None:
     fake_tm = _FakeTaskManager(store)
 
     import AutoGLM_GUI.task_manager as tm_mod
+
     original = tm_mod.task_manager
     tm_mod.task_manager = fake_tm
 
@@ -450,7 +448,6 @@ def test_get_task_events_with_after_seq(tmp_path: Path) -> None:
 
 def test_get_task_events_unknown_task() -> None:
     """get_task_events returns error for unknown task."""
-    import AutoGLM_GUI.task_store as ts_mod
 
     class _EmptyStore:
         def get_task(self, task_id: str) -> dict[str, Any] | None:

@@ -567,7 +567,9 @@ class PhoneAgentManager:
             metadata = self._metadata.get(device_id)
             return metadata.state if metadata else AgentState.ERROR
 
-    def set_error_state(self, device_id: str, error_message: str, context: str = "default") -> None:
+    def set_error_state(
+        self, device_id: str, error_message: str, context: str = "default"
+    ) -> None:
         """Mark agent as errored."""
         agent_key = self._make_agent_key(device_id, context)
         with self._manager_lock:
@@ -575,7 +577,9 @@ class PhoneAgentManager:
                 self._metadata[agent_key].state = AgentState.ERROR
                 self._metadata[agent_key].error_message = error_message
 
-            logger.error(f"Agent error for {device_id} (context={context}): {error_message}")
+            logger.error(
+                f"Agent error for {device_id} (context={context}): {error_message}"
+            )
 
     # ==================== Configuration Management ====================
 
@@ -690,7 +694,9 @@ class PhoneAgentManager:
             key_prefix = f"{device_id}:"
             candidates: list[tuple[str, Any]] = []
             for key, metadata in self._metadata.items():
-                if (key == device_id or key.startswith(key_prefix)) and metadata.abort_handler is not None:
+                if (
+                    key == device_id or key.startswith(key_prefix)
+                ) and metadata.abort_handler is not None:
                     candidates.append((key, metadata.abort_handler))
 
             if not candidates:
@@ -727,6 +733,8 @@ class PhoneAgentManager:
         with self._manager_lock:
             key_prefix = f"{device_id}:"
             for key, metadata in self._metadata.items():
-                if (key == device_id or key.startswith(key_prefix)) and metadata.abort_handler is not None:
+                if (
+                    key == device_id or key.startswith(key_prefix)
+                ) and metadata.abort_handler is not None:
                     return True
             return False
