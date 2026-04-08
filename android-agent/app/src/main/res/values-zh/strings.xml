@@ -2,6 +2,8 @@
 <resources>
     <string name="app_name">AutoGLM Android Agent</string>
     <string name="app_summary">A2 阶段 MVP：为 Remote Device 协议提供截图、手势、文本输入和当前应用等端点。</string>
+    <string name="setup_intro_label">引导式初始化</string>
+    <string name="setup_intro_body">请按顺序完成下面的步骤。初始化完成后，再回 AutoGLM-GUI 连接这台设备。</string>
     <string name="setup_section_label">初始化清单</string>
     <string name="setup_summary_default">按下面的步骤完成初始化。5 步都完成后，再回 AutoGLM-GUI 添加这台 Android Agent。</string>
     <string name="setup_summary_ready">初始化已完成。现在回 AutoGLM-GUI 添加这台 Android Agent，再做截图 / current_app / 动作验证。</string>
@@ -39,6 +41,11 @@
     <string name="validation_failure_not_ready">请先完成前 4 步初始化，再运行验证。</string>
     <string name="validation_failure_accessibility">验证时未拿到无障碍服务。</string>
     <string name="validation_failure_capture">验证时未拿到录屏权限。</string>
+    <string name="reverse_pairing_section_summary">把 AutoGLM-GUI 上显示的服务地址和配对码填到这里，再在手机上完成绑定。</string>
+    <string name="technical_state_section_label">技术状态</string>
+    <string name="technical_state_section_summary">这个区域主要给排障和支持使用。正常情况下请优先按上面的引导式清单完成初始化。</string>
+    <string name="local_demo_section_label">本地手势演示</string>
+    <string name="local_demo_section_summary">先在设备本地确认点击、聚焦和滑动仍然正常，再做远程控制联通验证。</string>
     <string name="server_status_label">服务状态</string>
     <string name="server_status_running">运行中</string>
     <string name="server_status_stopped">已停止</string>

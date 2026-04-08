@@ -1,4 +1,30 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.AutoGLMAgent" parent="Theme.AppCompat.Light.NoActionBar" />
+    <style name="Theme.AutoGLMAgent" parent="Theme.Material3.Light.NoActionBar">
+        <item name="colorPrimary">@color/agent_primary</item>
+        <item name="colorOnPrimary">@color/agent_on_primary</item>
+        <item name="colorPrimaryContainer">@color/agent_primary_container</item>
+        <item name="colorOnPrimaryContainer">@color/agent_on_primary_container</item>
+        <item name="colorSecondary">@color/agent_secondary</item>
+        <item name="colorOnSecondary">@color/agent_on_secondary</item>
+        <item name="colorSecondaryContainer">@color/agent_secondary_container</item>
+        <item name="colorOnSecondaryContainer">@color/agent_on_secondary_container</item>
+        <item name="colorTertiary">@color/agent_tertiary</item>
+        <item name="colorOnTertiary">@color/agent_on_tertiary</item>
+        <item name="colorTertiaryContainer">@color/agent_tertiary_container</item>
+        <item name="colorOnTertiaryContainer">@color/agent_on_tertiary_container</item>
+        <item name="colorError">@color/agent_error</item>
+        <item name="colorOnError">@color/agent_on_error</item>
+        <item name="colorErrorContainer">@color/agent_error_container</item>
+        <item name="colorOnErrorContainer">@color/agent_on_error_container</item>
+        <item name="android:colorBackground">@color/agent_background</item>
+        <item name="colorOnBackground">@color/agent_on_background</item>
+        <item name="colorSurface">@color/agent_surface</item>
+        <item name="colorOnSurface">@color/agent_on_surface</item>
+        <item name="colorSurfaceVariant">@color/agent_surface_variant</item>
+        <item name="colorOnSurfaceVariant">@color/agent_on_surface_variant</item>
+        <item name="colorOutline">@color/agent_outline</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@color/agent_background</item>
+    </style>
 </resources>
