@@ -27,6 +27,91 @@
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginTop="24dp"
+            android:text="@string/setup_section_label"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/setupSummaryText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/setup_summary_default" />
+
+        <TextView
+            android:id="@+id/setupChecklistStep1"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
+            android:text="@string/setup_step_agent_pending" />
+
+        <TextView
+            android:id="@+id/setupChecklistStep2"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/setup_step_accessibility_pending" />
+
+        <TextView
+            android:id="@+id/setupChecklistStep3"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/setup_step_capture_pending" />
+
+        <TextView
+            android:id="@+id/setupChecklistStep4"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/setup_step_reverse_pending" />
+
+        <TextView
+            android:id="@+id/setupChecklistStep5"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/setup_step_validation_pending" />
+
+        <Button
+            android:id="@+id/setupPrimaryButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="@string/setup_action_start_agent" />
+
+        <Button
+            android:id="@+id/runValidationButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/setup_action_run_validation" />
+
+        <TextView
+            android:id="@+id/recoveryTitleText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="20dp"
+            android:text="@string/recovery_section_label"
+            android:textStyle="bold" />
+
+        <TextView
+            android:id="@+id/recoveryMessageText"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="8dp"
+            android:text="@string/recovery_default" />
+
+        <Button
+            android:id="@+id/recoveryActionButton"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="12dp"
+            android:text="@string/recovery_action_default" />
+
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="24dp"
             android:text="@string/server_status_label"
             android:textStyle="bold" />
 

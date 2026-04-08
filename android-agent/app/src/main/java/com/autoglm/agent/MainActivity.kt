@@ -12,22 +12,35 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
 import com.autoglm.agent.projection.ScreenCaptureController
+import com.autoglm.agent.projection.ScreenshotPayload
 import com.autoglm.agent.reverse.ReverseAgentClient
 import com.autoglm.agent.reverse.ReverseAgentUiState
 import com.autoglm.agent.service.AgentForegroundService
 import com.autoglm.agent.service.DeviceAccessibilityService
+import kotlin.concurrent.thread
 
 class MainActivity : AppCompatActivity() {
     private lateinit var statusView: TextView
     private lateinit var endpointView: TextView
     private lateinit var accessibilityView: TextView
     private lateinit var captureView: TextView
+    private lateinit var setupSummaryView: TextView
+    private lateinit var setupChecklistStep1View: TextView
+    private lateinit var setupChecklistStep2View: TextView
+    private lateinit var setupChecklistStep3View: TextView
+    private lateinit var setupChecklistStep4View: TextView
+    private lateinit var setupChecklistStep5View: TextView
+    private lateinit var setupPrimaryButton: Button
+    private lateinit var validationButton: Button
+    private lateinit var recoveryMessageView: TextView
+    private lateinit var recoveryActionButton: Button
     private lateinit var demoStatusView: TextView
     private lateinit var reverseAgentStatusView: TextView
     private lateinit var reverseAgentDetailView: TextView
     private lateinit var reverseServerInput: EditText
     private lateinit var pairingCodeInput: EditText
     private lateinit var reverseAgentClient: ReverseAgentClient
+    private var validationState: SetupValidationState = SetupValidationState.idle()
 
     private val reverseStateListener: (ReverseAgentUiState) -> Unit = { state ->
         runOnUiThread { renderReverseAgentState(state) }
@@ -57,6 +70,16 @@ class MainActivity : AppCompatActivity() {
         endpointView = findViewById(R.id.endpointText)
         accessibilityView = findViewById(R.id.accessibilityStatusText)
         captureView = findViewById(R.id.captureStatusText)
+        setupSummaryView = findViewById(R.id.setupSummaryText)
+        setupChecklistStep1View = findViewById(R.id.setupChecklistStep1)
+        setupChecklistStep2View = findViewById(R.id.setupChecklistStep2)
+        setupChecklistStep3View = findViewById(R.id.setupChecklistStep3)
+        setupChecklistStep4View = findViewById(R.id.setupChecklistStep4)
+        setupChecklistStep5View = findViewById(R.id.setupChecklistStep5)
+        setupPrimaryButton = findViewById(R.id.setupPrimaryButton)
+        validationButton = findViewById(R.id.runValidationButton)
+        recoveryMessageView = findViewById(R.id.recoveryMessageText)
+        recoveryActionButton = findViewById(R.id.recoveryActionButton)
         demoStatusView = findViewById(R.id.demoStatusText)
         reverseAgentStatusView = findViewById(R.id.reverseAgentStatusText)
         reverseAgentDetailView = findViewById(R.id.reverseAgentDetailText)
@@ -69,12 +92,12 @@ class MainActivity : AppCompatActivity() {
                 this,
                 AgentForegroundService.createStartIntent(this),
             )
-            refreshState()
+            scheduleRefreshState()
         }
 
         findViewById<Button>(R.id.stopButton).setOnClickListener {
             startService(AgentForegroundService.createStopIntent(this))
-            refreshState()
+            scheduleRefreshState()
         }
 
         findViewById<Button>(R.id.accessibilityButton).setOnClickListener {
@@ -85,32 +108,25 @@ class MainActivity : AppCompatActivity() {
             requestScreenCapturePermission()
         }
 
+        setupPrimaryButton.setOnClickListener {
+            performPrimarySetupAction(reverseAgentClient.currentState())
+        }
+
+        validationButton.setOnClickListener {
+            runFirstConnectValidation()
+        }
+
+        recoveryActionButton.setOnClickListener {
+            performRecoveryAction(reverseAgentClient.currentState())
+        }
+
         findViewById<Button>(R.id.pairButton).setOnClickListener {
-            ContextCompat.startForegroundService(
-                this,
-                AgentForegroundService.createStartIntent(this),
-            )
-            reverseAgentClient.pair(
-                serverBaseUrl = reverseServerInput.text.toString(),
-                pairingCode = pairingCodeInput.text.toString(),
-            ) { result ->
-                result.onSuccess { session ->
-                    reverseServerInput.setText(session.serverBaseUrl)
-                    pairingCodeInput.text?.clear()
-                    demoStatusView.text = getString(R.string.reverse_pairing_claimed, session.agentId)
-                    refreshState()
-                }.onFailure { error ->
-                    demoStatusView.text = getString(
-                        R.string.reverse_pairing_failed_template,
-                        error.message ?: error.javaClass.simpleName,
-                    )
-                    refreshState()
-                }
-            }
+            triggerPairingClaim()
         }
 
         findViewById<Button>(R.id.clearPairingButton).setOnClickListener {
             reverseAgentClient.clearPairing()
+            validationState = SetupValidationState.idle()
             demoStatusView.text = getString(R.string.reverse_pairing_cleared)
             refreshState()
         }
@@ -179,6 +195,7 @@ class MainActivity : AppCompatActivity() {
             this,
             AgentForegroundService.createStartIntent(this),
         )
+        scheduleRefreshState()
     }
 
     private fun requestScreenCapturePermission() {
@@ -190,6 +207,92 @@ class MainActivity : AppCompatActivity() {
     private fun maybeRequestCapture(intent: Intent?) {
         if (intent?.getBooleanExtra(EXTRA_REQUEST_CAPTURE, false) == true) {
             requestScreenCapturePermission()
+        }
+    }
+
+    private fun scheduleRefreshState() {
+        window.decorView.postDelayed({ refreshState() }, 300L)
+    }
+
+    private fun performPrimarySetupAction(state: ReverseAgentUiState) {
+        when (resolvePrimaryAction(state)) {
+            SetupAction.START_AGENT -> {
+                ContextCompat.startForegroundService(
+                    this,
+                    AgentForegroundService.createStartIntent(this),
+                )
+                demoStatusView.text = getString(R.string.setup_action_start_agent)
+                scheduleRefreshState()
+            }
+
+            SetupAction.OPEN_ACCESSIBILITY -> {
+                startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
+            }
+
+            SetupAction.REQUEST_CAPTURE -> {
+                requestScreenCapturePermission()
+            }
+
+            SetupAction.CLAIM_PAIRING -> {
+                triggerPairingClaim()
+            }
+
+            SetupAction.RECONNECT_REVERSE -> {
+                ContextCompat.startForegroundService(
+                    this,
+                    AgentForegroundService.createStartIntent(this),
+                )
+                demoStatusView.text = getString(R.string.setup_action_reconnect)
+                scheduleRefreshState()
+            }
+
+            SetupAction.RUN_VALIDATION -> runFirstConnectValidation()
+            SetupAction.NONE -> Unit
+        }
+    }
+
+    private fun performRecoveryAction(state: ReverseAgentUiState) {
+        when {
+            !AgentForegroundService.isRunning() -> performPrimarySetupAction(state)
+            !DeviceAccessibilityService.isConnected() -> performPrimarySetupAction(state)
+            !ScreenCaptureController.hasPermission() -> performPrimarySetupAction(state)
+            state.connectionStatus == "error" -> {
+                reverseAgentClient.clearPairing()
+                validationState = SetupValidationState.idle()
+                demoStatusView.text = getString(R.string.reverse_pairing_cleared)
+                refreshState()
+            }
+
+            state.connectionStatus == "paired" || state.connectionStatus == "connecting" || state.connectionStatus == "stale" ->
+                performPrimarySetupAction(state)
+
+            validationState.status == ValidationStatus.FAILED -> runFirstConnectValidation()
+            else -> performPrimarySetupAction(state)
+        }
+    }
+
+    private fun triggerPairingClaim() {
+        validationState = SetupValidationState.idle()
+        ContextCompat.startForegroundService(
+            this,
+            AgentForegroundService.createStartIntent(this),
+        )
+        reverseAgentClient.pair(
+            serverBaseUrl = reverseServerInput.text.toString(),
+            pairingCode = pairingCodeInput.text.toString(),
+        ) { result ->
+            result.onSuccess { session ->
+                reverseServerInput.setText(session.serverBaseUrl)
+                pairingCodeInput.text?.clear()
+                demoStatusView.text = getString(R.string.reverse_pairing_claimed, session.agentId)
+                refreshState()
+            }.onFailure { error ->
+                demoStatusView.text = getString(
+                    R.string.reverse_pairing_failed_template,
+                    error.message ?: error.javaClass.simpleName,
+                )
+                refreshState()
+            }
         }
     }
 
@@ -247,10 +350,222 @@ class MainActivity : AppCompatActivity() {
         if (reverseServerInput.text.isNullOrBlank() && !state.serverBaseUrl.isNullOrBlank()) {
             reverseServerInput.setText(state.serverBaseUrl)
         }
+        renderSetupState(state)
+    }
+
+    private fun renderSetupState(state: ReverseAgentUiState) {
+        val running = AgentForegroundService.isRunning()
+        val accessibilityEnabled = DeviceAccessibilityService.isConnected()
+        val captureReady = ScreenCaptureController.hasPermission()
+        val reverseConnected = state.connectionStatus == "connected"
+        val validationPassed = validationState.status == ValidationStatus.SUCCESS &&
+            running && accessibilityEnabled && captureReady && reverseConnected
+
+        setupChecklistStep1View.text = getString(
+            if (running) R.string.setup_step_agent_done else R.string.setup_step_agent_pending,
+        )
+        setupChecklistStep2View.text = getString(
+            if (accessibilityEnabled) R.string.setup_step_accessibility_done else R.string.setup_step_accessibility_pending,
+        )
+        setupChecklistStep3View.text = getString(
+            if (captureReady) R.string.setup_step_capture_done else R.string.setup_step_capture_pending,
+        )
+        setupChecklistStep4View.text = getString(
+            if (reverseConnected) R.string.setup_step_reverse_done else R.string.setup_step_reverse_pending,
+        )
+        setupChecklistStep5View.text = when (validationState.status) {
+            ValidationStatus.SUCCESS -> getString(R.string.setup_step_validation_done)
+            ValidationStatus.RUNNING -> getString(R.string.validation_running)
+            ValidationStatus.FAILED -> getString(
+                R.string.recovery_validation_failed_template,
+                validationState.message,
+            )
+
+            ValidationStatus.IDLE -> getString(R.string.setup_step_validation_pending)
+        }
+
+        setupSummaryView.text = getString(
+            when {
+                validationPassed -> R.string.setup_summary_ready
+                validationState.status == ValidationStatus.FAILED -> R.string.setup_summary_validation_failed
+                else -> R.string.setup_summary_in_progress
+            },
+        )
+
+        val nextAction = resolvePrimaryAction(state)
+        setupPrimaryButton.text = getString(
+            when (nextAction) {
+                SetupAction.START_AGENT -> R.string.setup_action_start_agent
+                SetupAction.OPEN_ACCESSIBILITY -> R.string.setup_action_enable_accessibility
+                SetupAction.REQUEST_CAPTURE -> R.string.setup_action_grant_capture
+                SetupAction.CLAIM_PAIRING -> R.string.setup_action_pair
+                SetupAction.RECONNECT_REVERSE -> R.string.setup_action_reconnect
+                SetupAction.RUN_VALIDATION -> R.string.setup_action_run_validation
+                SetupAction.NONE -> R.string.setup_action_done
+            },
+        )
+        setupPrimaryButton.isEnabled = nextAction != SetupAction.NONE && (
+            nextAction != SetupAction.CLAIM_PAIRING ||
+                (reverseServerInput.text?.isNotBlank() == true && pairingCodeInput.text?.isNotBlank() == true)
+            )
+
+        validationButton.isEnabled = running && accessibilityEnabled && captureReady && reverseConnected &&
+            validationState.status != ValidationStatus.RUNNING
+
+        recoveryMessageView.text = buildRecoveryMessage(state, running, accessibilityEnabled, captureReady)
+        recoveryActionButton.text = getString(
+            if (state.connectionStatus == "error") {
+                R.string.reverse_clear_pairing_button
+            } else {
+                R.string.recovery_action_default
+            },
+        )
+    }
+
+    private fun buildRecoveryMessage(
+        state: ReverseAgentUiState,
+        running: Boolean,
+        accessibilityEnabled: Boolean,
+        captureReady: Boolean,
+    ): String {
+        return when {
+            !running -> getString(R.string.recovery_agent_missing)
+            !accessibilityEnabled -> getString(R.string.recovery_accessibility_missing)
+            !captureReady -> getString(R.string.recovery_capture_missing)
+            state.connectionStatus == "unpaired" -> getString(R.string.recovery_pairing_missing)
+            state.connectionStatus == "paired" || state.connectionStatus == "connecting" || state.connectionStatus == "stale" ->
+                getString(R.string.recovery_reverse_connecting)
+
+            state.connectionStatus == "error" -> getString(
+                R.string.recovery_reverse_error_template,
+                state.statusMessage,
+            )
+
+            validationState.status == ValidationStatus.FAILED -> getString(
+                R.string.recovery_validation_failed_template,
+                validationState.message,
+            )
+
+            else -> getString(R.string.recovery_default)
+        }
+    }
+
+    private fun resolvePrimaryAction(state: ReverseAgentUiState): SetupAction {
+        return when {
+            !AgentForegroundService.isRunning() -> SetupAction.START_AGENT
+            !DeviceAccessibilityService.isConnected() -> SetupAction.OPEN_ACCESSIBILITY
+            !ScreenCaptureController.hasPermission() -> SetupAction.REQUEST_CAPTURE
+            state.connectionStatus == "unpaired" || state.connectionStatus == "error" -> SetupAction.CLAIM_PAIRING
+            state.connectionStatus == "paired" || state.connectionStatus == "connecting" || state.connectionStatus == "stale" ->
+                SetupAction.RECONNECT_REVERSE
+
+            validationState.status != ValidationStatus.SUCCESS -> SetupAction.RUN_VALIDATION
+            else -> SetupAction.NONE
+        }
+    }
+
+    private fun runFirstConnectValidation() {
+        val state = reverseAgentClient.currentState()
+        if (
+            !AgentForegroundService.isRunning() ||
+            !DeviceAccessibilityService.isConnected() ||
+            !ScreenCaptureController.hasPermission() ||
+            state.connectionStatus != "connected"
+        ) {
+            validationState = SetupValidationState.failed(getString(R.string.validation_failure_not_ready))
+            refreshState()
+            return
+        }
+
+        validationState = SetupValidationState.running()
+        refreshState()
+
+        thread(name = "autoglm-setup-validation") {
+            try {
+                val accessibilityService = DeviceAccessibilityService.instance
+                    ?: throw IllegalStateException(getString(R.string.validation_failure_accessibility))
+                val currentApp = accessibilityService.currentApp()
+                val screenshot = ScreenCaptureController.capture(this, 5_000L)
+                if (!isPayloadUsable(screenshot)) {
+                    throw IllegalStateException(getString(R.string.validation_failure_capture))
+                }
+                validationState = SetupValidationState.success(
+                    getString(
+                        R.string.validation_success_template,
+                        currentApp,
+                        screenshot.width,
+                        screenshot.height,
+                    ),
+                )
+                runOnUiThread {
+                    demoStatusView.text = validationState.message
+                    refreshState()
+                }
+            } catch (error: Exception) {
+                validationState = SetupValidationState.failed(
+                    error.message ?: error.javaClass.simpleName,
+                )
+                runOnUiThread {
+                    demoStatusView.text = getString(
+                        R.string.recovery_validation_failed_template,
+                        validationState.message,
+                    )
+                    refreshState()
+                }
+            }
+        }
+    }
+
+    private fun isPayloadUsable(payload: ScreenshotPayload): Boolean {
+        return payload.width > 0 && payload.height > 0 && payload.base64Data.isNotBlank()
     }
 
     companion object {
         private const val TAG = "AutoGLM/Main"
         const val EXTRA_REQUEST_CAPTURE = "request_capture"
+    }
+}
+
+private enum class SetupAction {
+    START_AGENT,
+    OPEN_ACCESSIBILITY,
+    REQUEST_CAPTURE,
+    CLAIM_PAIRING,
+    RECONNECT_REVERSE,
+    RUN_VALIDATION,
+    NONE,
+}
+
+private enum class ValidationStatus {
+    IDLE,
+    RUNNING,
+    SUCCESS,
+    FAILED,
+}
+
+private data class SetupValidationState(
+    val status: ValidationStatus,
+    val message: String,
+) {
+    companion object {
+        fun idle(): SetupValidationState = SetupValidationState(
+            status = ValidationStatus.IDLE,
+            message = "",
+        )
+
+        fun running(): SetupValidationState = SetupValidationState(
+            status = ValidationStatus.RUNNING,
+            message = "",
+        )
+
+        fun success(message: String): SetupValidationState = SetupValidationState(
+            status = ValidationStatus.SUCCESS,
+            message = message,
+        )
+
+        fun failed(message: String): SetupValidationState = SetupValidationState(
+            status = ValidationStatus.FAILED,
+            message = message,
+        )
     }
 }
