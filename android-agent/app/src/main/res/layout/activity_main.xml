@@ -35,8 +35,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 app:cardBackgroundColor="@android:color/transparent"
-                app:cardCornerRadius="32dp"
-                app:cardElevation="0dp"
+                app:cardCornerRadius="40dp"
+                app:cardElevation="2dp"
                 app:strokeColor="@android:color/transparent"
                 app:strokeWidth="0dp">
 
@@ -79,43 +79,51 @@
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="20dp"
+                        android:layout_marginTop="22dp"
                         android:orientation="horizontal">
 
                         <TextView
-                            android:layout_width="wrap_content"
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:background="@drawable/chip_primary"
-                            android:paddingHorizontal="14dp"
-                            android:paddingVertical="8dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/tonal_tile_primary"
+                            android:gravity="center_vertical"
+                            android:minHeight="84dp"
+                            android:paddingHorizontal="16dp"
+                            android:paddingVertical="14dp"
                             android:text="@string/setup_intro_badge_steps"
-                            android:textAppearance="?textAppearanceLabelLarge"
+                            android:textAppearance="?textAppearanceTitleSmall"
                             android:textColor="@color/agent_on_primary_container"
                             android:textStyle="bold" />
 
                         <TextView
-                            android:layout_width="wrap_content"
+                            android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_marginStart="10dp"
-                            android:background="@drawable/chip_secondary"
-                            android:paddingHorizontal="14dp"
-                            android:paddingVertical="8dp"
+                            android:layout_marginStart="12dp"
+                            android:layout_weight="1"
+                            android:background="@drawable/tonal_tile_secondary"
+                            android:gravity="center_vertical"
+                            android:minHeight="84dp"
+                            android:paddingHorizontal="16dp"
+                            android:paddingVertical="14dp"
                             android:text="@string/setup_intro_badge_recovery"
-                            android:textAppearance="?textAppearanceLabelLarge"
+                            android:textAppearance="?textAppearanceTitleSmall"
                             android:textColor="@color/agent_on_secondary_container"
                             android:textStyle="bold" />
                     </LinearLayout>
 
                     <TextView
-                        android:layout_width="wrap_content"
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="10dp"
-                        android:background="@drawable/chip_secondary"
-                        android:paddingHorizontal="14dp"
-                        android:paddingVertical="8dp"
+                        android:layout_marginTop="12dp"
+                        android:background="@drawable/tonal_tile_tertiary"
+                        android:gravity="center_vertical"
+                        android:minHeight="72dp"
+                        android:paddingHorizontal="18dp"
+                        android:paddingVertical="14dp"
                         android:text="@string/setup_intro_badge_reverse"
-                        android:textAppearance="?textAppearanceLabelLarge"
-                        android:textColor="@color/agent_on_secondary_container"
+                        android:textAppearance="?textAppearanceTitleSmall"
+                        android:textColor="@color/agent_on_tertiary_container"
                         android:textStyle="bold" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -125,8 +133,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 app:cardBackgroundColor="?colorSurface"
-                app:cardCornerRadius="30dp"
-                app:cardElevation="0dp"
+                app:cardCornerRadius="32dp"
+                app:cardElevation="2dp"
                 app:strokeColor="?colorOutline"
                 app:strokeWidth="1dp">
 
@@ -164,6 +172,8 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:background="@drawable/checklist_step_bg"
+                            android:minHeight="76dp"
+                            android:gravity="center_vertical"
                             android:paddingHorizontal="18dp"
                             android:paddingVertical="16dp"
                             android:text="@string/setup_step_agent_pending"
@@ -176,6 +186,8 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="12dp"
                             android:background="@drawable/checklist_step_bg"
+                            android:minHeight="76dp"
+                            android:gravity="center_vertical"
                             android:paddingHorizontal="18dp"
                             android:paddingVertical="16dp"
                             android:text="@string/setup_step_accessibility_pending"
@@ -188,6 +200,8 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="12dp"
                             android:background="@drawable/checklist_step_bg"
+                            android:minHeight="76dp"
+                            android:gravity="center_vertical"
                             android:paddingHorizontal="18dp"
                             android:paddingVertical="16dp"
                             android:text="@string/setup_step_capture_pending"
@@ -200,6 +214,8 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="12dp"
                             android:background="@drawable/checklist_step_bg"
+                            android:minHeight="76dp"
+                            android:gravity="center_vertical"
                             android:paddingHorizontal="18dp"
                             android:paddingVertical="16dp"
                             android:text="@string/setup_step_reverse_pending"
@@ -212,6 +228,8 @@
                             android:layout_height="wrap_content"
                             android:layout_marginTop="12dp"
                             android:background="@drawable/checklist_step_bg"
+                            android:minHeight="76dp"
+                            android:gravity="center_vertical"
                             android:paddingHorizontal="18dp"
                             android:paddingVertical="16dp"
                             android:text="@string/setup_step_validation_pending"
@@ -242,8 +260,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 app:cardBackgroundColor="@android:color/transparent"
-                app:cardCornerRadius="30dp"
-                app:cardElevation="0dp"
+                app:cardCornerRadius="32dp"
+                app:cardElevation="2dp"
                 app:strokeColor="@android:color/transparent"
                 app:strokeWidth="0dp">
 
@@ -300,8 +318,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 app:cardBackgroundColor="@android:color/transparent"
-                app:cardCornerRadius="30dp"
-                app:cardElevation="0dp"
+                app:cardCornerRadius="32dp"
+                app:cardElevation="2dp"
                 app:strokeColor="@android:color/transparent"
                 app:strokeWidth="0dp">
 
@@ -414,8 +432,8 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
                 app:cardBackgroundColor="?colorSurface"
-                app:cardCornerRadius="30dp"
-                app:cardElevation="0dp"
+                app:cardCornerRadius="32dp"
+                app:cardElevation="2dp"
                 app:strokeColor="?colorOutline"
                 app:strokeWidth="1dp">
 
