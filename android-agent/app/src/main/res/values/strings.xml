@@ -3,7 +3,11 @@
     <string name="app_name">AutoGLM Android Agent</string>
     <string name="app_summary">Phase A2 MVP: expose screenshot, gesture, text input, and current-app endpoints for the Remote Device protocol.</string>
     <string name="setup_intro_label">Guided setup</string>
+    <string name="setup_intro_overline">Android Agent setup</string>
     <string name="setup_intro_body">Finish the checklist from top to bottom. When setup is complete, return to AutoGLM-GUI and connect this device.</string>
+    <string name="setup_intro_badge_steps">5-step guided flow</string>
+    <string name="setup_intro_badge_recovery">Failure recovery included</string>
+    <string name="setup_intro_badge_reverse">Reverse connection ready</string>
     <string name="setup_section_label">Setup checklist</string>
     <string name="setup_summary_default">Finish the setup steps below. When all 5 are done, return to AutoGLM-GUI and add this Android Agent.</string>
     <string name="setup_summary_ready">Setup complete. Return to AutoGLM-GUI, add this Android Agent, then run screenshot/current-app/action verification.</string>
@@ -46,6 +50,9 @@
     <string name="technical_state_section_summary">Use this section for debugging and support. Normal setup should follow the guided checklist above.</string>
     <string name="local_demo_section_label">Local gesture demo</string>
     <string name="local_demo_section_summary">Use this demo area to confirm tap, focus, and swipe still work on-device before remote control testing.</string>
+    <string name="section_badge_support">Support view</string>
+    <string name="section_badge_pairing">Desktop pairing</string>
+    <string name="section_badge_demo">On-device check</string>
     <string name="server_status_label">Service status</string>
     <string name="server_status_running">Running</string>
     <string name="server_status_stopped">Stopped</string>
