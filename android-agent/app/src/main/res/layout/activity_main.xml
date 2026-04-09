@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
-    android:background="?android:colorBackground"
+    android:background="?colorSurface"
     android:clipToPadding="false"
     android:fillViewport="true">
 
@@ -35,7 +35,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
-                app:cardBackgroundColor="?colorSecondaryContainer">
+                app:cardBackgroundColor="?colorPrimaryContainer">
 
                 <LinearLayout
                     android:layout_width="match_parent"
@@ -46,6 +46,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         style="@style/SectionOverline"
+                        android:textColor="?colorOnPrimaryContainer"
                         android:text="@string/setup_intro_overline" />
 
                     <LinearLayout
@@ -80,6 +81,7 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 style="@style/CardTitle"
+                                android:textColor="?colorOnPrimaryContainer"
                                 android:text="@string/setup_intro_label" />
 
                             <TextView
@@ -87,6 +89,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="6dp"
                                 style="@style/CardSummary"
+                                android:textColor="?colorOnPrimaryContainer"
                                 android:text="@string/setup_intro_body" />
                         </LinearLayout>
                     </LinearLayout>
@@ -196,6 +199,7 @@
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 style="@style/CardTitle"
+                                android:textColor="?colorOnSurface"
                                 android:text="@string/setup_section_label" />
 
                             <TextView
@@ -204,6 +208,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="6dp"
                                 style="@style/CardSummary"
+                                android:textColor="?colorOnSurfaceVariant"
                                 android:text="@string/setup_summary_default" />
                         </LinearLayout>
                     </LinearLayout>
@@ -537,6 +542,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
                         style="@style/CardTitle"
+                        android:textColor="?colorOnSurface"
                         android:text="@string/technical_state_section_label" />
 
                     <TextView
@@ -544,6 +550,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="6dp"
                         style="@style/CardSummary"
+                        android:textColor="?colorOnSurfaceVariant"
                         android:text="@string/technical_state_section_summary" />
 
                     <TextView

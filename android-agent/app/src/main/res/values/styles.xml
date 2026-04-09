@@ -46,13 +46,11 @@
 
     <style name="CardTitle">
         <item name="android:textAppearance">?textAppearanceTitleLarge</item>
-        <item name="android:textColor">?colorOnSecondaryContainer</item>
         <item name="android:textStyle">bold</item>
     </style>
 
     <style name="CardSummary">
         <item name="android:textAppearance">?textAppearanceBodyMedium</item>
-        <item name="android:textColor">?colorOnSecondaryContainer</item>
         <item name="android:lineSpacingExtra">2dp</item>
     </style>
 
