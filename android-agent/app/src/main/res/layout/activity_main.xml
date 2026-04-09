@@ -170,45 +170,6 @@
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
-                        android:orientation="horizontal">
-
-                        <com.google.android.material.card.MaterialCardView
-                            style="@style/AgentBadgeCard"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_weight="1"
-                            app:cardBackgroundColor="?colorSurfaceContainerHighest">
-
-                            <TextView
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:text="@string/setup_intro_badge_recovery"
-                                android:textAppearance="?textAppearanceTitleSmall"
-                                android:textColor="?colorOnSurface"
-                                android:textStyle="bold" />
-                        </com.google.android.material.card.MaterialCardView>
-
-                        <com.google.android.material.card.MaterialCardView
-                            style="@style/AgentBadgeCard"
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="12dp"
-                            android:layout_weight="1"
-                            app:cardBackgroundColor="?colorSurfaceContainerHighest">
-
-                            <TextView
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:text="@string/setup_intro_badge_reverse"
-                                android:textAppearance="?textAppearanceTitleSmall"
-                                android:textColor="?colorOnSurface"
-                                android:textStyle="bold" />
-                        </com.google.android.material.card.MaterialCardView>
-                    </LinearLayout>
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 

@@ -4,12 +4,9 @@
     <string name="app_summary">Phase A2 MVP: expose screenshot, gesture, text input, and current-app endpoints for the Remote Device protocol.</string>
     <string name="setup_intro_label">Guided setup</string>
     <string name="setup_intro_overline">Android Agent setup</string>
-    <string name="setup_intro_body">Get this phone ready, then return to AutoGLM-GUI to add it as a controllable Android Agent.</string>
-    <string name="setup_intro_badge_steps">What you will finish here</string>
-    <string name="setup_intro_badge_recovery">Failure recovery included</string>
-    <string name="setup_intro_badge_reverse">Reverse connection ready</string>
+    <string name="setup_intro_body">Get this phone ready, then return to AutoGLM-GUI to add it as a controllable device.</string>
     <string name="setup_section_label">Setup checklist</string>
-    <string name="setup_summary_default">Follow these 6 steps in order. Start here on the phone, then finish the device connection in AutoGLM-GUI.</string>
+    <string name="setup_summary_default">Follow these 6 steps in order. Start here on the phone, then finish adding this device in AutoGLM-GUI.</string>
     <string name="setup_summary_ready">This phone is ready. Go back to AutoGLM-GUI, confirm the device is connected, then run screenshot/current-app/action verification.</string>
     <string name="setup_summary_in_progress">Setup is still incomplete. Follow the next step below instead of guessing which permission is missing.</string>
     <string name="setup_summary_validation_failed">Core setup is done, but first-connect verification still failed. Fix the issue below, then run validation again.</string>
@@ -20,7 +17,7 @@
     <string name="setup_step_capture_done">3. Allow screen capture. Done.</string>
     <string name="setup_step_capture_pending">3. Allow screen capture.</string>
     <string name="setup_step_pair_done">4. Add this phone in AutoGLM-GUI. Done.</string>
-    <string name="setup_step_pair_pending">4. In AutoGLM-GUI, add this Android Agent.</string>
+    <string name="setup_step_pair_pending">4. In AutoGLM-GUI, add this device.</string>
     <string name="setup_step_connect_done">5. Wait for the connection. Done.</string>
     <string name="setup_step_connect_pending">5. Keep this app open and wait for the device to connect.</string>
     <string name="setup_step_validation_done">6. Check that screenshot and controls work. Done.</string>
@@ -28,7 +25,7 @@
     <string name="setup_action_start_agent">Start agent runtime</string>
     <string name="setup_action_enable_accessibility">Open accessibility settings</string>
     <string name="setup_action_grant_capture">Grant screen capture</string>
-    <string name="setup_action_pair">Add this phone in AutoGLM-GUI</string>
+    <string name="setup_action_pair">Add this device in AutoGLM-GUI</string>
     <string name="setup_action_reconnect">Wait for connection</string>
     <string name="setup_action_run_validation">Run first-connect validation</string>
     <string name="setup_action_done">Setup complete</string>

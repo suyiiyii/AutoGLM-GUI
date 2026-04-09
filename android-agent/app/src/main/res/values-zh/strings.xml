@@ -4,12 +4,9 @@
     <string name="app_summary">A2 阶段 MVP：为 Remote Device 协议提供截图、手势、文本输入和当前应用等端点。</string>
     <string name="setup_intro_label">引导式初始化</string>
     <string name="setup_intro_overline">Android Agent 初始化</string>
-    <string name="setup_intro_body">先把这台手机准备好，再回 AutoGLM-GUI 把它添加成可控制的 Android Agent。</string>
-    <string name="setup_intro_badge_steps">你将在这里完成</string>
-    <string name="setup_intro_badge_recovery">内置失败恢复</string>
-    <string name="setup_intro_badge_reverse">支持反向连接</string>
+    <string name="setup_intro_body">先把这台手机准备好，再回 AutoGLM-GUI 把它添加成可控制的设备。</string>
     <string name="setup_section_label">初始化清单</string>
-    <string name="setup_summary_default">按顺序完成这 6 步。先在手机上完成准备，再去 AutoGLM-GUI 完成设备接入。</string>
+    <string name="setup_summary_default">按顺序完成这 6 步。先在手机上完成准备，再去 AutoGLM-GUI 添加这台设备。</string>
     <string name="setup_summary_ready">这台手机已经准备好了。现在回 AutoGLM-GUI 确认设备已连接，再做截图 / current_app / 动作验证。</string>
     <string name="setup_summary_in_progress">初始化还未完成。请按下面的“下一步”继续，不要自己猜是哪个权限没开好。</string>
     <string name="setup_summary_validation_failed">核心初始化已经完成，但首次联通验证还没通过。先修复下面的问题，再重新验证。</string>
@@ -20,7 +17,7 @@
     <string name="setup_step_capture_done">3. 允许屏幕捕获。已完成。</string>
     <string name="setup_step_capture_pending">3. 允许屏幕捕获。</string>
     <string name="setup_step_pair_done">4. 在 AutoGLM-GUI 中添加这台手机。已完成。</string>
-    <string name="setup_step_pair_pending">4. 在 AutoGLM-GUI 中添加这台 Android Agent。</string>
+    <string name="setup_step_pair_pending">4. 在 AutoGLM-GUI 中添加这台设备。</string>
     <string name="setup_step_connect_done">5. 等待连接成功。已完成。</string>
     <string name="setup_step_connect_pending">5. 保持这个 App 打开，等待设备连接成功。</string>
     <string name="setup_step_validation_done">6. 检查截图和控制是否可用。已完成。</string>
@@ -28,7 +25,7 @@
     <string name="setup_action_start_agent">启动 Agent 运行服务</string>
     <string name="setup_action_enable_accessibility">打开无障碍设置</string>
     <string name="setup_action_grant_capture">授予录屏权限</string>
-    <string name="setup_action_pair">去 AutoGLM-GUI 添加这台手机</string>
+    <string name="setup_action_pair">去 AutoGLM-GUI 添加这台设备</string>
     <string name="setup_action_reconnect">等待连接成功</string>
     <string name="setup_action_run_validation">运行首次联通验证</string>
     <string name="setup_action_done">初始化已完成</string>
