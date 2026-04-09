@@ -80,8 +80,7 @@
                             <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                style="@style/CardTitle"
-                                android:textColor="?colorOnPrimaryContainer"
+                                style="@style/HeroTitle"
                                 android:text="@string/setup_intro_label" />
 
                             <TextView
@@ -94,25 +93,87 @@
                         </LinearLayout>
                     </LinearLayout>
 
-                    <com.google.android.material.card.MaterialCardView
-                        style="@style/AgentBadgeCard"
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/setupPrimaryButton"
+                        style="@style/Widget.Material3.Button"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="20dp"
+                        android:text="@string/setup_action_start_agent" />
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                style="@style/AgentSurfaceFilledCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <TextView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp">
+                        style="@style/SectionOverline"
+                        android:text="@string/setup_section_label" />
 
-                        <TextView
-                            android:layout_width="wrap_content"
+                    <com.google.android.material.card.MaterialCardView
+                        style="@style/AgentSummaryCard"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="12dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="@string/setup_intro_badge_steps"
-                            android:textAppearance="?textAppearanceTitleSmall"
-                            android:textColor="?colorOnSurface"
-                            android:textStyle="bold" />
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <com.google.android.material.card.MaterialCardView
+                                style="@style/AgentIconCircleCard"
+                                app:cardBackgroundColor="?colorPrimaryContainer">
+
+                                <ImageView
+                                    android:layout_width="24dp"
+                                    android:layout_height="24dp"
+                                    android:layout_gravity="center"
+                                    android:src="@android:drawable/ic_menu_agenda"
+                                    app:tint="?colorOnPrimaryContainer" />
+                            </com.google.android.material.card.MaterialCardView>
+
+                            <LinearLayout
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_marginStart="16dp"
+                                android:layout_weight="1"
+                                android:orientation="vertical">
+
+                                <TextView
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    style="@style/CardTitle"
+                                    android:textColor="?colorOnSecondaryContainer"
+                                    android:text="@string/setup_section_label" />
+
+                                <TextView
+                                    android:id="@+id/setupSummaryText"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:layout_marginTop="6dp"
+                                    style="@style/CardSummary"
+                                    android:textColor="?colorOnSecondaryContainer"
+                                    android:text="@string/setup_summary_default" />
+                            </LinearLayout>
+                        </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
+                        android:layout_marginTop="16dp"
                         android:orientation="horizontal">
 
                         <com.google.android.material.card.MaterialCardView
@@ -161,56 +222,6 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical">
-
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        style="@style/SectionOverline"
-                        android:text="@string/setup_section_label" />
-
-                    <LinearLayout
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
-                        android:gravity="center_vertical"
-                        android:orientation="horizontal">
-
-                        <com.google.android.material.card.MaterialCardView
-                            style="@style/AgentIconCircleCard"
-                            app:cardBackgroundColor="?colorPrimaryContainer">
-
-                            <ImageView
-                                android:layout_width="24dp"
-                                android:layout_height="24dp"
-                                android:layout_gravity="center"
-                                android:src="@android:drawable/ic_menu_agenda"
-                                app:tint="?colorOnPrimaryContainer" />
-                        </com.google.android.material.card.MaterialCardView>
-
-                        <LinearLayout
-                            android:layout_width="0dp"
-                            android:layout_height="wrap_content"
-                            android:layout_marginStart="16dp"
-                            android:layout_weight="1"
-                            android:orientation="vertical">
-
-                            <TextView
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                style="@style/CardTitle"
-                                android:textColor="?colorOnSurface"
-                                android:text="@string/setup_section_label" />
-
-                            <TextView
-                                android:id="@+id/setupSummaryText"
-                                android:layout_width="match_parent"
-                                android:layout_height="wrap_content"
-                                android:layout_marginTop="6dp"
-                                style="@style/CardSummary"
-                                android:textColor="?colorOnSurfaceVariant"
-                                android:text="@string/setup_summary_default" />
-                        </LinearLayout>
-                    </LinearLayout>
 
                     <com.google.android.material.card.MaterialCardView
                         style="@style/AgentMiniCard"
@@ -264,7 +275,7 @@
                             android:id="@+id/setupChecklistStep4"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="@string/setup_step_reverse_pending"
+                            android:text="@string/setup_step_pair_pending"
                             style="@style/StepItemText" />
                     </com.google.android.material.card.MaterialCardView>
 
@@ -278,17 +289,23 @@
                             android:id="@+id/setupChecklistStep5"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="@string/setup_step_validation_pending"
+                            android:text="@string/setup_step_connect_pending"
                             style="@style/StepItemText" />
                     </com.google.android.material.card.MaterialCardView>
 
-                    <com.google.android.material.button.MaterialButton
-                        android:id="@+id/setupPrimaryButton"
-                        style="@style/Widget.Material3.Button"
+                    <com.google.android.material.card.MaterialCardView
+                        style="@style/AgentMiniCard"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="20dp"
-                        android:text="@string/setup_action_start_agent" />
+                        android:layout_marginTop="12dp">
+
+                        <TextView
+                            android:id="@+id/setupChecklistStep6"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:text="@string/setup_step_validation_pending"
+                            style="@style/StepItemText" />
+                    </com.google.android.material.card.MaterialCardView>
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/runValidationButton"

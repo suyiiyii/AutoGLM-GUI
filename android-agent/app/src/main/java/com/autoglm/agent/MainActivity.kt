@@ -30,6 +30,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var setupChecklistStep3View: TextView
     private lateinit var setupChecklistStep4View: TextView
     private lateinit var setupChecklistStep5View: TextView
+    private lateinit var setupChecklistStep6View: TextView
     private lateinit var setupPrimaryButton: Button
     private lateinit var validationButton: Button
     private lateinit var recoveryMessageView: TextView
@@ -76,6 +77,7 @@ class MainActivity : AppCompatActivity() {
         setupChecklistStep3View = findViewById(R.id.setupChecklistStep3)
         setupChecklistStep4View = findViewById(R.id.setupChecklistStep4)
         setupChecklistStep5View = findViewById(R.id.setupChecklistStep5)
+        setupChecklistStep6View = findViewById(R.id.setupChecklistStep6)
         setupPrimaryButton = findViewById(R.id.setupPrimaryButton)
         validationButton = findViewById(R.id.runValidationButton)
         recoveryMessageView = findViewById(R.id.recoveryMessageText)
@@ -357,6 +359,7 @@ class MainActivity : AppCompatActivity() {
         val running = AgentForegroundService.isRunning()
         val accessibilityEnabled = DeviceAccessibilityService.isConnected()
         val captureReady = ScreenCaptureController.hasPermission()
+        val pairingClaimed = state.connectionStatus != "unpaired" && state.connectionStatus != "error"
         val reverseConnected = state.connectionStatus == "connected"
         val validationPassed = validationState.status == ValidationStatus.SUCCESS &&
             running && accessibilityEnabled && captureReady && reverseConnected
@@ -371,9 +374,12 @@ class MainActivity : AppCompatActivity() {
             if (captureReady) R.string.setup_step_capture_done else R.string.setup_step_capture_pending,
         )
         setupChecklistStep4View.text = getString(
-            if (reverseConnected) R.string.setup_step_reverse_done else R.string.setup_step_reverse_pending,
+            if (pairingClaimed) R.string.setup_step_pair_done else R.string.setup_step_pair_pending,
         )
-        setupChecklistStep5View.text = when (validationState.status) {
+        setupChecklistStep5View.text = getString(
+            if (reverseConnected) R.string.setup_step_connect_done else R.string.setup_step_connect_pending,
+        )
+        setupChecklistStep6View.text = when (validationState.status) {
             ValidationStatus.SUCCESS -> getString(R.string.setup_step_validation_done)
             ValidationStatus.RUNNING -> getString(R.string.validation_running)
             ValidationStatus.FAILED -> getString(

@@ -23,6 +23,10 @@
         <item name="cardBackgroundColor">?colorSurfaceContainerHigh</item>
     </style>
 
+    <style name="AgentSummaryCard" parent="@style/AgentFilledCard">
+        <item name="cardBackgroundColor">?colorSecondaryContainer</item>
+    </style>
+
     <style name="AgentMiniCard" parent="@style/Widget.Material3.CardView.Filled">
         <item name="cardCornerRadius">28dp</item>
         <item name="cardElevation">0dp</item>
@@ -73,6 +77,12 @@
         <item name="android:textStyle">bold</item>
         <item name="android:gravity">center_vertical</item>
         <item name="android:minHeight">36dp</item>
+    </style>
+
+    <style name="HeroTitle">
+        <item name="android:textAppearance">?textAppearanceHeadlineSmall</item>
+        <item name="android:textColor">?colorOnPrimaryContainer</item>
+        <item name="android:textStyle">bold</item>
     </style>
 
     <style name="SectionOverline">
