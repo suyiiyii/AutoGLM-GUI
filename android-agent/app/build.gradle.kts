@@ -47,7 +47,7 @@ dependencies {
 materialThemeBuilder {
     themes {
         create("AutoGLMAgent") {
-            primaryColor = "#155EEF"
+            primaryColor = "#3F51B5"
             lightThemeFormat = "Theme.Material3.Light.%s"
             lightThemeParent = "Theme.Material3.Light.NoActionBar"
             darkThemeFormat = "Theme.Material3.Dark.%s"
