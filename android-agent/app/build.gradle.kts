@@ -1,6 +1,7 @@
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
+    id("dev.rikka.tools.materialthemebuilder")
 }
 
 android {
@@ -41,4 +42,18 @@ dependencies {
     implementation("com.google.android.material:material:1.12.0")
     implementation("org.nanohttpd:nanohttpd:2.3.1")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
+}
+
+materialThemeBuilder {
+    themes {
+        create("AutoGLMAgent") {
+            primaryColor = "#155EEF"
+            lightThemeFormat = "Theme.Material3.Light.%s"
+            lightThemeParent = "Theme.Material3.Light.NoActionBar"
+            darkThemeFormat = "Theme.Material3.Dark.%s"
+            darkThemeParent = "Theme.Material3.Dark.NoActionBar"
+        }
+    }
+    generatePalette = true
+    generateTextColors = true
 }

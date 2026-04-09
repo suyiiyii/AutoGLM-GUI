@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.AutoGLMAgent" parent="Theme.Material3.Light.AutoGLMAgent">
+    <style name="Theme.AutoGLMAgent" parent="Theme.Material3.Dark.AutoGLMAgent">
         <item name="android:statusBarColor">?android:colorBackground</item>
         <item name="android:navigationBarColor">?android:colorBackground</item>
         <item name="materialCardViewFilledStyle">@style/AgentFilledCard</item>
