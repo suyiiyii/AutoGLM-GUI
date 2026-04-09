@@ -6,6 +6,7 @@ from typing import Any
 from pydantic import BaseModel, field_validator
 
 from AutoGLM_GUI.device_metadata_manager import DISPLAY_NAME_MAX_LENGTH
+from AutoGLM_GUI.task_store import TaskSessionStatus, TaskStatus
 
 
 class ChatRequest(BaseModel):
@@ -774,8 +775,6 @@ class HistoryListResponse(BaseModel):
 
 
 # Task Models
-
-from AutoGLM_GUI.task_store import TaskSessionStatus, TaskStatus
 
 
 class TaskSessionCreate(BaseModel):

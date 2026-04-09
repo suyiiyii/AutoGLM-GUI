@@ -4,8 +4,7 @@ from __future__ import annotations
 
 import asyncio
 from pathlib import Path
-from typing import Any
-from unittest.mock import AsyncMock, MagicMock
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -56,7 +55,9 @@ def test_abort_streaming_chat_async_finds_contextual_keys(
     asyncio.run(run())
 
 
-def test_abort_streaming_chat_async_prefers_exact_match(monkeypatch: pytest.MonkeyPatch) -> None:
+def test_abort_streaming_chat_async_prefers_exact_match(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """When multiple handlers exist, the one matching the raw device_id wins."""
 
     async def run() -> None:

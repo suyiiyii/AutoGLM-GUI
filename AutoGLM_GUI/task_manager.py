@@ -111,10 +111,13 @@ class TaskManager:
             context = f"chat:{session_id}"
             try:
                 from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
+
                 manager = PhoneAgentManager.get_instance()
                 manager.destroy_agent(device_id, context=context)
             except Exception as exc:
-                logger.debug(f"Contextual agent cleanup skipped for {device_id}/{context}: {exc}")
+                logger.debug(
+                    f"Contextual agent cleanup skipped for {device_id}/{context}: {exc}"
+                )
         return archived
 
     async def submit_chat_task(
@@ -373,7 +376,9 @@ class TaskManager:
                             )
                             step_count = int(event_data.get("steps", step_count))
                         elif event_type == "error":
-                            final_message = str(event_data.get("message", "Task failed"))
+                            final_message = str(
+                                event_data.get("message", "Task failed")
+                            )
                             final_status = TaskStatus.FAILED.value
                         elif event_type == "cancelled":
                             final_message = str(
@@ -388,7 +393,10 @@ class TaskManager:
             # If cancel was requested but the stream exited normally (agent
             # sets _is_running=False without raising CancelledError), override
             # the status so the task is recorded as CANCELLED.
-            if task_id in self._cancel_requested and final_status != TaskStatus.CANCELLED.value:
+            if (
+                task_id in self._cancel_requested
+                and final_status != TaskStatus.CANCELLED.value
+            ):
                 final_message = "Task cancelled by user"
                 final_status = TaskStatus.CANCELLED.value
         except asyncio.CancelledError:
@@ -710,7 +718,10 @@ class TaskManager:
 
             # If cancel was requested but the stream exited normally,
             # override status to CANCELLED.
-            if task_id in self._cancel_requested and final_status != TaskStatus.CANCELLED.value:
+            if (
+                task_id in self._cancel_requested
+                and final_status != TaskStatus.CANCELLED.value
+            ):
                 final_message = "Task cancelled by user"
                 final_status = TaskStatus.CANCELLED.value
         except asyncio.CancelledError:
