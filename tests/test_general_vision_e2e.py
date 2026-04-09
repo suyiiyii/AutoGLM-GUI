@@ -1,16 +1,16 @@
-"""E2E test for Gemini Agent with real API + mock device.
+"""E2E test for the general vision agent with real API + mock device.
 
 Tests the full pipeline:
-  Mock Device → AsyncGeminiAgent → Real Gemini API → Function Calling → Action Execution
+  Mock Device → AsyncGeneralVisionAgent → Real Gemini API → Function Calling → Action Execution
 
 Records timing for each phase.
 """
 
 import asyncio
 import base64
-import os
 import io
 import json
+import os
 import time
 from dataclasses import dataclass
 from typing import Any
@@ -19,12 +19,9 @@ from unittest.mock import MagicMock
 import pytest
 from PIL import Image
 
-from AutoGLM_GUI.agents.gemini.async_agent import AsyncGeminiAgent
+from AutoGLM_GUI.agents.general_vision.async_agent import AsyncGeneralVisionAgent
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.device_protocol import Screenshot
-
-
-# ===== Timing Recorder =====
 
 
 @dataclass
@@ -58,26 +55,19 @@ class TimingTracker:
         return "\n".join(lines)
 
 
-# ===== Mock Device =====
-
-
 def create_mock_device() -> MagicMock:
     """Create a mock device that returns a fake Android home screen screenshot."""
     device = MagicMock()
     device.device_id = "mock-e2e-001"
 
-    # Generate a simple test image (simulating a phone screen)
     img = Image.new("RGB", (1080, 2400), color=(30, 30, 30))
-    # Draw some colored rectangles to simulate app icons
     from PIL import ImageDraw
 
     draw = ImageDraw.Draw(img)
-    # Row of "app icons"
     colors = [(66, 133, 244), (52, 168, 83), (234, 67, 53), (251, 188, 4)]
     for i, color in enumerate(colors):
         x = 100 + i * 250
         draw.rectangle([x, 1800, x + 180, 1980], fill=color)
-    # "WeChat" green icon
     draw.rectangle([100, 1400, 280, 1580], fill=(7, 193, 96))
     draw.text((120, 1590), "WeChat", fill=(255, 255, 255))
 
@@ -106,13 +96,9 @@ def create_mock_device() -> MagicMock:
     return device
 
 
-# ===== E2E Test =====
-
-
 async def run_e2e_test():
     tracker = TimingTracker()
 
-    # 1. Setup
     tracker.start("1. Create mock device")
     device = create_mock_device()
     tracker.stop()
@@ -130,14 +116,13 @@ async def run_e2e_test():
         lang="cn",
         verbose=True,
     )
-    agent = AsyncGeminiAgent(
+    agent = AsyncGeneralVisionAgent(
         model_config=model_config,
         agent_config=agent_config,
         device=device,
     )
     tracker.stop()
 
-    # 2. Run task via stream
     task = "打开微信"
     print(f"\n📱 Task: {task}")
     print("-" * 50)
@@ -183,7 +168,6 @@ async def run_e2e_test():
 
     tracker.stop()
 
-    # 3. Verify results
     tracker.start("4. Verify results")
 
     event_types = [e["type"] for e in events]
@@ -195,7 +179,6 @@ async def run_e2e_test():
     print(f"   Has done: {has_done}")
     print(f"   Total events: {len(events)}")
 
-    # Check device was called
     device_calls = []
     if device.tap.called:
         device_calls.append(f"tap({device.tap.call_args})")
@@ -212,29 +195,27 @@ async def run_e2e_test():
 
     tracker.stop()
 
-    # 4. Print timing summary
     print(tracker.summary())
 
-    # 5. Assertions
     assert has_done, "Should have a 'done' event"
     assert len(events) >= 2, "Should have at least step + done events"
 
     return tracker
 
 
-def test_gemini_e2e_launch_wechat():
-    """E2E: Gemini Agent receives 'open WeChat' task, calls real API, executes on mock device."""
+def test_general_vision_e2e_launch_wechat():
+    """E2E: general vision agent receives 'open WeChat' and executes on mock device."""
     api_key = os.environ.get("OPENAI_API_KEY")
     base_url = os.environ.get("OPENAI_BASE_URL", "")
 
     if not api_key or api_key == "test-key":
         pytest.skip(
-            "Skipping live Gemini E2E: OPENAI_API_KEY is not configured with a real key"
+            "Skipping live general vision E2E: OPENAI_API_KEY is not configured with a real key"
         )
 
     if "api.openai.com" in base_url and not api_key.startswith("sk-"):
         pytest.skip(
-            "Skipping live Gemini E2E: OPENAI_BASE_URL points to OpenAI but key format looks invalid"
+            "Skipping live general vision E2E: OPENAI_BASE_URL points to OpenAI but key format looks invalid"
         )
 
     tracker = asyncio.run(run_e2e_test())

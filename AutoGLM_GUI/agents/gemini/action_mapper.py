@@ -1,4 +1,4 @@
-"""Tool-call to action mapping for Gemini Agent."""
+"""Tool-call to action mapping for the general vision agent."""
 
 from typing import Any
 

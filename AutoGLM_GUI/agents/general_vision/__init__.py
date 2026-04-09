@@ -1,7 +1,11 @@
-"""Legacy compatibility exports for the general vision agent implementation."""
+"""General vision agent exports.
 
-from .async_agent import AsyncGeminiAgent, AsyncGeneralVisionAgent
-from .models import (
+This package is the preferred import path for the OpenAI-compatible
+vision + function-calling agent implementation.
+"""
+
+from ..gemini import (
+    AsyncGeneralVisionAgent,
     BENCHMARKS,
     INCOMPATIBLE_MODELS,
     RECOMMENDED_MODELS,
@@ -11,7 +15,6 @@ from .models import (
 
 __all__ = [
     "AsyncGeneralVisionAgent",
-    "AsyncGeminiAgent",
     "BENCHMARKS",
     "INCOMPATIBLE_MODELS",
     "RECOMMENDED_MODELS",

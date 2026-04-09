@@ -161,7 +161,7 @@ def _create_async_mai_agent(
     )
 
 
-def _create_async_gemini_agent(
+def _create_async_general_vision_agent(
     model_config: ModelConfig,
     agent_config: AgentConfig,
     agent_specific_config: AgentSpecificConfig,  # noqa: ARG001
@@ -169,14 +169,14 @@ def _create_async_gemini_agent(
     takeover_callback: Callable[..., Any] | None = None,
     confirmation_callback: Callable[..., Any] | None = None,
 ) -> AsyncAgent:
-    """Create AsyncGeminiAgent instance.
+    """Create AsyncGeneralVisionAgent instance.
 
     Uses OpenAI-compatible function calling for general vision models
     (Gemini, GPT-4o, Claude, etc.).
     """
-    from .gemini.async_agent import AsyncGeminiAgent
+    from .general_vision.async_agent import AsyncGeneralVisionAgent
 
-    return AsyncGeminiAgent(  # type: ignore[return-value]
+    return AsyncGeneralVisionAgent(  # type: ignore[return-value]
         model_config=model_config,
         agent_config=agent_config,
         device=device,
@@ -188,8 +188,8 @@ def _create_async_gemini_agent(
 register_agent("glm-async", _create_async_glm_agent)
 register_agent("async-glm", _create_async_glm_agent)  # 别名
 register_agent("mai", _create_async_mai_agent)
-register_agent("gemini", _create_async_gemini_agent)
-register_agent("general-vision", _create_async_gemini_agent)  # 通用别名
+register_agent("gemini", _create_async_general_vision_agent)  # 兼容别名
+register_agent("general-vision", _create_async_general_vision_agent)
 
 
 def _create_droidrun_agent(

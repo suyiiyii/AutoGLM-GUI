@@ -1,4 +1,4 @@
-"""Supported models and benchmark results for Gemini Agent.
+"""Supported models and benchmark results for the general vision agent.
 
 All models tested via OpenAI-compatible API.
 Task: "打开微信" with mock Android home screen screenshot.

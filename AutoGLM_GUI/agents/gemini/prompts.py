@@ -1,4 +1,4 @@
-"""System prompt templates for Gemini Agent.
+"""System prompt templates for the general vision agent.
 
 Date is injected dynamically to avoid stale values in long-running processes.
 """

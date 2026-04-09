@@ -1,7 +1,7 @@
-"""Tests for Gemini Agent components."""
+"""Tests for general vision agent components."""
 
-from AutoGLM_GUI.agents.gemini.action_mapper import tool_call_to_action
-from AutoGLM_GUI.agents.gemini.tools import DEVICE_TOOLS
+from AutoGLM_GUI.agents.general_vision.action_mapper import tool_call_to_action
+from AutoGLM_GUI.agents.general_vision.tools import DEVICE_TOOLS
 
 
 class TestDeviceTools:
@@ -119,18 +119,18 @@ class TestActionMapper:
 
 
 class TestAgentRegistration:
-    def test_gemini_registered(self):
+    def test_general_vision_registered(self):
         from AutoGLM_GUI.agents import is_agent_type_registered
 
-        assert is_agent_type_registered("gemini")
         assert is_agent_type_registered("general-vision")
+        assert is_agent_type_registered("gemini")
 
-    def test_gemini_in_list(self):
+    def test_general_vision_in_list(self):
         from AutoGLM_GUI.agents import list_agent_types
 
         types = list_agent_types()
-        assert "gemini" in types
         assert "general-vision" in types
+        assert "gemini" in types
 
 
 class TestEventTypes:

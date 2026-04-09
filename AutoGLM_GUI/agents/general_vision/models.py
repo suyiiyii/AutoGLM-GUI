@@ -1,17 +1,16 @@
-"""Legacy compatibility exports for the general vision agent implementation."""
+"""Preferred model catalog entry point for the general vision agent."""
 
-from .async_agent import AsyncGeminiAgent, AsyncGeneralVisionAgent
-from .models import (
+from ..gemini.models import (
     BENCHMARKS,
     INCOMPATIBLE_MODELS,
     RECOMMENDED_MODELS,
+    ModelBenchmark,
     get_compatible_benchmarks,
     get_fastest_models,
 )
 
 __all__ = [
-    "AsyncGeneralVisionAgent",
-    "AsyncGeminiAgent",
+    "ModelBenchmark",
     "BENCHMARKS",
     "INCOMPATIBLE_MODELS",
     "RECOMMENDED_MODELS",

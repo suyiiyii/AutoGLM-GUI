@@ -1,4 +1,4 @@
-"""AsyncGeminiAgent - 通用视觉模型 Agent，使用 OpenAI 兼容的 function calling。
+"""General vision agent implementation using OpenAI-compatible function calling.
 
 支持 Gemini、GPT-4o、Claude 等任何支持 vision + tool use 的模型，
 通过 OpenAI 兼容 API 端点接入。
@@ -21,7 +21,7 @@ from .prompts import get_system_prompt
 from .tools import DEVICE_TOOLS
 
 
-class AsyncGeminiAgent(AsyncAgentBase):
+class AsyncGeneralVisionAgent(AsyncAgentBase):
     """通用视觉模型 Agent，使用 function calling 而非自定义格式解析。"""
 
     def _get_default_system_prompt(self, lang: str) -> str:
@@ -250,3 +250,7 @@ class AsyncGeminiAgent(AsyncAgentBase):
 
         logger.warning("Model did not return a tool call, treating as finish")
         return thinking, "finish", {"message": thinking or "No action returned"}
+
+
+# Backward-compatible alias. Keep this until external imports migrate.
+AsyncGeminiAgent = AsyncGeneralVisionAgent

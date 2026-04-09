@@ -1,4 +1,4 @@
-"""Tool definitions for Gemini Agent function calling.
+"""Tool definitions for the general vision agent.
 
 Maps device operations to OpenAI-compatible tool schemas.
 Coordinates use 0-1000 relative scale (same as GLM agent).

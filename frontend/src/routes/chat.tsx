@@ -97,7 +97,7 @@ const AGENT_PRESETS = [
     },
   },
   {
-    name: 'gemini',
+    name: 'general-vision',
     displayName: 'General Vision Agent',
     description: '通用视觉模型，支持 Gemini/GPT-4o 等，使用 Function Calling',
     icon: Sparkles,
