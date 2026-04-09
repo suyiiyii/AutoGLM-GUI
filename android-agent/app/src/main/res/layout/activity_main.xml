@@ -95,14 +95,13 @@
                     </LinearLayout>
 
                     <com.google.android.material.card.MaterialCardView
-                        style="@style/AgentMiniCard"
-                        android:layout_width="match_parent"
+                        style="@style/AgentBadgeCard"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
-                        app:cardBackgroundColor="?colorSurfaceContainerHighest">
+                        android:layout_marginTop="16dp">
 
                         <TextView
-                            android:layout_width="match_parent"
+                            android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:text="@string/setup_intro_badge_steps"
                             android:textAppearance="?textAppearanceTitleSmall"
@@ -117,35 +116,35 @@
                         android:orientation="horizontal">
 
                         <com.google.android.material.card.MaterialCardView
-                            style="@style/AgentMiniCard"
+                            style="@style/AgentBadgeCard"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_weight="1"
-                            app:cardBackgroundColor="?colorPrimaryContainer">
+                            app:cardBackgroundColor="?colorSurfaceContainerHighest">
 
                             <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:text="@string/setup_intro_badge_recovery"
                                 android:textAppearance="?textAppearanceTitleSmall"
-                                android:textColor="?colorOnPrimaryContainer"
+                                android:textColor="?colorOnSurface"
                                 android:textStyle="bold" />
                         </com.google.android.material.card.MaterialCardView>
 
                         <com.google.android.material.card.MaterialCardView
-                            style="@style/AgentMiniCard"
+                            style="@style/AgentBadgeCard"
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
                             android:layout_marginStart="12dp"
                             android:layout_weight="1"
-                            app:cardBackgroundColor="?colorTertiaryContainer">
+                            app:cardBackgroundColor="?colorSurfaceContainerHighest">
 
                             <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
                                 android:text="@string/setup_intro_badge_reverse"
                                 android:textAppearance="?textAppearanceTitleSmall"
-                                android:textColor="?colorOnTertiaryContainer"
+                                android:textColor="?colorOnSurface"
                                 android:textStyle="bold" />
                         </com.google.android.material.card.MaterialCardView>
                     </LinearLayout>
@@ -223,11 +222,8 @@
                             android:id="@+id/setupChecklistStep1"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:gravity="center_vertical"
-                            android:minHeight="36dp"
                             android:text="@string/setup_step_agent_pending"
-                            android:textAppearance="?textAppearanceTitleMedium"
-                            android:textColor="?colorOnSurface" />
+                            style="@style/StepItemText" />
                     </com.google.android.material.card.MaterialCardView>
 
                     <com.google.android.material.card.MaterialCardView
@@ -240,11 +236,8 @@
                             android:id="@+id/setupChecklistStep2"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:gravity="center_vertical"
-                            android:minHeight="36dp"
                             android:text="@string/setup_step_accessibility_pending"
-                            android:textAppearance="?textAppearanceTitleMedium"
-                            android:textColor="?colorOnSurface" />
+                            style="@style/StepItemText" />
                     </com.google.android.material.card.MaterialCardView>
 
                     <com.google.android.material.card.MaterialCardView
@@ -257,11 +250,8 @@
                             android:id="@+id/setupChecklistStep3"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:gravity="center_vertical"
-                            android:minHeight="36dp"
                             android:text="@string/setup_step_capture_pending"
-                            android:textAppearance="?textAppearanceTitleMedium"
-                            android:textColor="?colorOnSurface" />
+                            style="@style/StepItemText" />
                     </com.google.android.material.card.MaterialCardView>
 
                     <com.google.android.material.card.MaterialCardView
@@ -274,11 +264,8 @@
                             android:id="@+id/setupChecklistStep4"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:gravity="center_vertical"
-                            android:minHeight="36dp"
                             android:text="@string/setup_step_reverse_pending"
-                            android:textAppearance="?textAppearanceTitleMedium"
-                            android:textColor="?colorOnSurface" />
+                            style="@style/StepItemText" />
                     </com.google.android.material.card.MaterialCardView>
 
                     <com.google.android.material.card.MaterialCardView
@@ -291,11 +278,8 @@
                             android:id="@+id/setupChecklistStep5"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:gravity="center_vertical"
-                            android:minHeight="36dp"
                             android:text="@string/setup_step_validation_pending"
-                            android:textAppearance="?textAppearanceTitleMedium"
-                            android:textColor="?colorOnSurface" />
+                            style="@style/StepItemText" />
                     </com.google.android.material.card.MaterialCardView>
 
                     <com.google.android.material.button.MaterialButton
@@ -390,7 +374,7 @@
             </com.google.android.material.card.MaterialCardView>
 
             <com.google.android.material.card.MaterialCardView
-                style="@style/AgentTertiaryFilledCard"
+                style="@style/AgentSurfaceFilledCard"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp">
@@ -404,8 +388,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         style="@style/SectionOverline"
-                        android:text="@string/section_badge_pairing"
-                        android:textColor="?colorOnTertiaryContainer" />
+                        android:text="@string/section_badge_pairing" />
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -438,7 +421,7 @@
                                 android:layout_height="wrap_content"
                                 style="@style/CardTitle"
                                 android:text="@string/reverse_agent_section_label"
-                                android:textColor="?colorOnTertiaryContainer" />
+                                android:textColor="?colorOnSurface" />
 
                             <TextView
                                 android:layout_width="match_parent"
@@ -446,7 +429,7 @@
                                 android:layout_marginTop="6dp"
                                 style="@style/CardSummary"
                                 android:text="@string/reverse_pairing_section_summary"
-                                android:textColor="?colorOnTertiaryContainer" />
+                                android:textColor="?colorOnSurfaceVariant" />
                         </LinearLayout>
                     </LinearLayout>
 
@@ -497,8 +480,7 @@
                         android:layout_height="wrap_content"
                         android:layout_marginTop="18dp"
                         style="@style/SectionOverline"
-                        android:text="@string/reverse_agent_status_label"
-                        android:textColor="?colorOnTertiaryContainer" />
+                        android:text="@string/reverse_agent_status_label" />
 
                     <TextView
                         android:id="@+id/reverseAgentStatusText"
@@ -507,7 +489,7 @@
                         android:layout_marginTop="6dp"
                         android:text="@string/reverse_status_unpaired"
                         android:textAppearance="?textAppearanceTitleMedium"
-                        android:textColor="?colorOnTertiaryContainer" />
+                        android:textColor="?colorOnSurface" />
 
                     <TextView
                         android:id="@+id/reverseAgentDetailText"
@@ -516,7 +498,7 @@
                         android:layout_marginTop="8dp"
                         style="@style/CardSummary"
                         android:text="@string/reverse_agent_detail_placeholder"
-                        android:textColor="?colorOnTertiaryContainer" />
+                        android:textColor="?colorOnSurfaceVariant" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -644,7 +626,7 @@
             </com.google.android.material.card.MaterialCardView>
 
             <com.google.android.material.card.MaterialCardView
-                style="@style/AgentTertiaryFilledCard"
+                style="@style/AgentSurfaceFilledCard"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="16dp"
@@ -659,8 +641,7 @@
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         style="@style/SectionOverline"
-                        android:text="@string/section_badge_demo"
-                        android:textColor="?colorOnTertiaryContainer" />
+                        android:text="@string/section_badge_demo" />
 
                     <TextView
                         android:layout_width="match_parent"
@@ -668,7 +649,7 @@
                         android:layout_marginTop="12dp"
                         style="@style/CardTitle"
                         android:text="@string/local_demo_section_label"
-                        android:textColor="?colorOnTertiaryContainer" />
+                        android:textColor="?colorOnSurface" />
 
                     <TextView
                         android:layout_width="match_parent"
@@ -676,7 +657,7 @@
                         android:layout_marginTop="6dp"
                         style="@style/CardSummary"
                         android:text="@string/local_demo_section_summary"
-                        android:textColor="?colorOnTertiaryContainer" />
+                        android:textColor="?colorOnSurfaceVariant" />
 
                     <com.google.android.material.textfield.TextInputLayout
                         android:layout_width="match_parent"
@@ -705,15 +686,14 @@
                         android:layout_marginTop="16dp"
                         android:text="@string/demo_status_idle"
                         android:textAppearance="?textAppearanceBodyLarge"
-                        android:textColor="?colorOnTertiaryContainer" />
+                        android:textColor="?colorOnSurface" />
 
                     <TextView
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="18dp"
                         style="@style/SectionOverline"
-                        android:text="@string/swipe_area_label"
-                        android:textColor="?colorOnTertiaryContainer" />
+                        android:text="@string/swipe_area_label" />
 
                     <com.google.android.material.card.MaterialCardView
                         style="@style/AgentMiniCard"
