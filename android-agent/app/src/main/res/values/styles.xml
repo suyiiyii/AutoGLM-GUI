@@ -11,6 +11,10 @@
         <item name="cardBackgroundColor">?colorPrimaryContainer</item>
     </style>
 
+    <style name="AgentHeroCard" parent="@style/AgentFilledCard">
+        <item name="cardBackgroundColor">?colorSurfaceContainerHigh</item>
+    </style>
+
     <style name="AgentTertiaryFilledCard" parent="@style/AgentFilledCard">
         <item name="cardBackgroundColor">?colorTertiaryContainer</item>
     </style>
@@ -20,22 +24,24 @@
     </style>
 
     <style name="AgentSurfaceFilledCard" parent="@style/AgentFilledCard">
-        <item name="cardBackgroundColor">?colorSurfaceContainerHigh</item>
+        <item name="cardBackgroundColor">?colorSurfaceContainer</item>
     </style>
 
     <style name="AgentSummaryCard" parent="@style/AgentFilledCard">
-        <item name="cardBackgroundColor">?colorSecondaryContainer</item>
+        <item name="cardBackgroundColor">?colorSurfaceContainerHighest</item>
+        <item name="contentPaddingTop">18dp</item>
+        <item name="contentPaddingBottom">18dp</item>
     </style>
 
     <style name="AgentMiniCard" parent="@style/Widget.Material3.CardView.Filled">
         <item name="cardCornerRadius">28dp</item>
         <item name="cardElevation">0dp</item>
         <item name="strokeWidth">0dp</item>
-        <item name="contentPaddingStart">20dp</item>
-        <item name="contentPaddingEnd">20dp</item>
-        <item name="contentPaddingTop">20dp</item>
-        <item name="contentPaddingBottom">20dp</item>
-        <item name="cardBackgroundColor">?colorSurfaceContainerHighest</item>
+        <item name="contentPaddingStart">18dp</item>
+        <item name="contentPaddingEnd">18dp</item>
+        <item name="contentPaddingTop">16dp</item>
+        <item name="contentPaddingBottom">16dp</item>
+        <item name="cardBackgroundColor">?colorSurfaceContainerHigh</item>
     </style>
 
     <style name="AgentBadgeCard" parent="@style/Widget.Material3.CardView.Filled">
@@ -66,22 +72,26 @@
         <item name="android:textStyle">bold</item>
     </style>
 
+    <style name="StepTitle">
+        <item name="android:textAppearance">?textAppearanceBodyLarge</item>
+        <item name="android:textColor">?colorOnSurface</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="StepStatus">
+        <item name="android:textAppearance">?textAppearanceLabelLarge</item>
+        <item name="android:textColor">?colorOnSurfaceVariant</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
     <style name="CardSummary">
         <item name="android:textAppearance">?textAppearanceBodyMedium</item>
         <item name="android:lineSpacingExtra">2dp</item>
     </style>
 
-    <style name="StepItemText">
-        <item name="android:textAppearance">?textAppearanceBodyLarge</item>
-        <item name="android:textColor">?colorOnSurface</item>
-        <item name="android:textStyle">bold</item>
-        <item name="android:gravity">center_vertical</item>
-        <item name="android:minHeight">36dp</item>
-    </style>
-
     <style name="HeroTitle">
         <item name="android:textAppearance">?textAppearanceHeadlineSmall</item>
-        <item name="android:textColor">?colorOnPrimaryContainer</item>
+        <item name="android:textColor">?colorOnSurface</item>
         <item name="android:textStyle">bold</item>
     </style>
 

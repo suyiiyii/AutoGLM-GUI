@@ -1,16 +1,21 @@
 package com.autoglm.agent
 
 import android.content.Intent
+import android.content.res.ColorStateList
 import android.media.projection.MediaProjectionManager
 import android.os.Bundle
 import android.provider.Settings
 import android.util.Log
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import com.google.android.material.card.MaterialCardView
+import com.google.android.material.color.MaterialColors
+import com.google.android.material.color.DynamicColors
 import com.autoglm.agent.projection.ScreenCaptureController
 import com.autoglm.agent.projection.ScreenshotPayload
 import com.autoglm.agent.reverse.ReverseAgentClient
@@ -25,12 +30,24 @@ class MainActivity : AppCompatActivity() {
     private lateinit var accessibilityView: TextView
     private lateinit var captureView: TextView
     private lateinit var setupSummaryView: TextView
-    private lateinit var setupChecklistStep1View: TextView
-    private lateinit var setupChecklistStep2View: TextView
-    private lateinit var setupChecklistStep3View: TextView
-    private lateinit var setupChecklistStep4View: TextView
-    private lateinit var setupChecklistStep5View: TextView
-    private lateinit var setupChecklistStep6View: TextView
+    private lateinit var setupChecklistStep1Card: MaterialCardView
+    private lateinit var setupChecklistStep2Card: MaterialCardView
+    private lateinit var setupChecklistStep3Card: MaterialCardView
+    private lateinit var setupChecklistStep4Card: MaterialCardView
+    private lateinit var setupChecklistStep5Card: MaterialCardView
+    private lateinit var setupChecklistStep6Card: MaterialCardView
+    private lateinit var setupChecklistStep1TitleView: TextView
+    private lateinit var setupChecklistStep2TitleView: TextView
+    private lateinit var setupChecklistStep3TitleView: TextView
+    private lateinit var setupChecklistStep4TitleView: TextView
+    private lateinit var setupChecklistStep5TitleView: TextView
+    private lateinit var setupChecklistStep6TitleView: TextView
+    private lateinit var setupChecklistStep1StatusView: TextView
+    private lateinit var setupChecklistStep2StatusView: TextView
+    private lateinit var setupChecklistStep3StatusView: TextView
+    private lateinit var setupChecklistStep4StatusView: TextView
+    private lateinit var setupChecklistStep5StatusView: TextView
+    private lateinit var setupChecklistStep6StatusView: TextView
     private lateinit var setupPrimaryButton: Button
     private lateinit var validationButton: Button
     private lateinit var recoveryMessageView: TextView
@@ -63,6 +80,7 @@ class MainActivity : AppCompatActivity() {
         }
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        DynamicColors.applyToActivityIfAvailable(this)
         super.onCreate(savedInstanceState)
         Log.i(TAG, "onCreate intent=$intent")
         setContentView(R.layout.activity_main)
@@ -72,12 +90,24 @@ class MainActivity : AppCompatActivity() {
         accessibilityView = findViewById(R.id.accessibilityStatusText)
         captureView = findViewById(R.id.captureStatusText)
         setupSummaryView = findViewById(R.id.setupSummaryText)
-        setupChecklistStep1View = findViewById(R.id.setupChecklistStep1)
-        setupChecklistStep2View = findViewById(R.id.setupChecklistStep2)
-        setupChecklistStep3View = findViewById(R.id.setupChecklistStep3)
-        setupChecklistStep4View = findViewById(R.id.setupChecklistStep4)
-        setupChecklistStep5View = findViewById(R.id.setupChecklistStep5)
-        setupChecklistStep6View = findViewById(R.id.setupChecklistStep6)
+        setupChecklistStep1Card = findViewById(R.id.setupChecklistCard1)
+        setupChecklistStep2Card = findViewById(R.id.setupChecklistCard2)
+        setupChecklistStep3Card = findViewById(R.id.setupChecklistCard3)
+        setupChecklistStep4Card = findViewById(R.id.setupChecklistCard4)
+        setupChecklistStep5Card = findViewById(R.id.setupChecklistCard5)
+        setupChecklistStep6Card = findViewById(R.id.setupChecklistCard6)
+        setupChecklistStep1TitleView = findViewById(R.id.setupChecklistStep1Title)
+        setupChecklistStep2TitleView = findViewById(R.id.setupChecklistStep2Title)
+        setupChecklistStep3TitleView = findViewById(R.id.setupChecklistStep3Title)
+        setupChecklistStep4TitleView = findViewById(R.id.setupChecklistStep4Title)
+        setupChecklistStep5TitleView = findViewById(R.id.setupChecklistStep5Title)
+        setupChecklistStep6TitleView = findViewById(R.id.setupChecklistStep6Title)
+        setupChecklistStep1StatusView = findViewById(R.id.setupChecklistStep1Status)
+        setupChecklistStep2StatusView = findViewById(R.id.setupChecklistStep2Status)
+        setupChecklistStep3StatusView = findViewById(R.id.setupChecklistStep3Status)
+        setupChecklistStep4StatusView = findViewById(R.id.setupChecklistStep4Status)
+        setupChecklistStep5StatusView = findViewById(R.id.setupChecklistStep5Status)
+        setupChecklistStep6StatusView = findViewById(R.id.setupChecklistStep6Status)
         setupPrimaryButton = findViewById(R.id.setupPrimaryButton)
         validationButton = findViewById(R.id.runValidationButton)
         recoveryMessageView = findViewById(R.id.recoveryMessageText)
@@ -363,32 +393,54 @@ class MainActivity : AppCompatActivity() {
         val reverseConnected = state.connectionStatus == "connected"
         val validationPassed = validationState.status == ValidationStatus.SUCCESS &&
             running && accessibilityEnabled && captureReady && reverseConnected
+        val nextAction = resolvePrimaryAction(state)
 
-        setupChecklistStep1View.text = getString(
-            if (running) R.string.setup_step_agent_done else R.string.setup_step_agent_pending,
+        renderStepItem(
+            card = setupChecklistStep1Card,
+            titleView = setupChecklistStep1TitleView,
+            statusView = setupChecklistStep1StatusView,
+            titleRes = R.string.setup_step_agent_title,
+            isDone = running,
+            isCurrent = nextAction == SetupAction.START_AGENT,
+            currentStatusRes = R.string.setup_step_status_next,
         )
-        setupChecklistStep2View.text = getString(
-            if (accessibilityEnabled) R.string.setup_step_accessibility_done else R.string.setup_step_accessibility_pending,
+        renderStepItem(
+            card = setupChecklistStep2Card,
+            titleView = setupChecklistStep2TitleView,
+            statusView = setupChecklistStep2StatusView,
+            titleRes = R.string.setup_step_accessibility_title,
+            isDone = accessibilityEnabled,
+            isCurrent = nextAction == SetupAction.OPEN_ACCESSIBILITY,
+            currentStatusRes = R.string.setup_step_status_next,
         )
-        setupChecklistStep3View.text = getString(
-            if (captureReady) R.string.setup_step_capture_done else R.string.setup_step_capture_pending,
+        renderStepItem(
+            card = setupChecklistStep3Card,
+            titleView = setupChecklistStep3TitleView,
+            statusView = setupChecklistStep3StatusView,
+            titleRes = R.string.setup_step_capture_title,
+            isDone = captureReady,
+            isCurrent = nextAction == SetupAction.REQUEST_CAPTURE,
+            currentStatusRes = R.string.setup_step_status_next,
         )
-        setupChecklistStep4View.text = getString(
-            if (pairingClaimed) R.string.setup_step_pair_done else R.string.setup_step_pair_pending,
+        renderStepItem(
+            card = setupChecklistStep4Card,
+            titleView = setupChecklistStep4TitleView,
+            statusView = setupChecklistStep4StatusView,
+            titleRes = R.string.setup_step_pair_title,
+            isDone = pairingClaimed,
+            isCurrent = nextAction == SetupAction.CLAIM_PAIRING,
+            currentStatusRes = R.string.setup_step_status_next,
         )
-        setupChecklistStep5View.text = getString(
-            if (reverseConnected) R.string.setup_step_connect_done else R.string.setup_step_connect_pending,
+        renderStepItem(
+            card = setupChecklistStep5Card,
+            titleView = setupChecklistStep5TitleView,
+            statusView = setupChecklistStep5StatusView,
+            titleRes = R.string.setup_step_connect_title,
+            isDone = reverseConnected,
+            isCurrent = nextAction == SetupAction.RECONNECT_REVERSE,
+            currentStatusRes = R.string.setup_step_status_waiting,
         )
-        setupChecklistStep6View.text = when (validationState.status) {
-            ValidationStatus.SUCCESS -> getString(R.string.setup_step_validation_done)
-            ValidationStatus.RUNNING -> getString(R.string.validation_running)
-            ValidationStatus.FAILED -> getString(
-                R.string.recovery_validation_failed_template,
-                validationState.message,
-            )
-
-            ValidationStatus.IDLE -> getString(R.string.setup_step_validation_pending)
-        }
+        renderValidationStep(nextAction)
 
         setupSummaryView.text = getString(
             when {
@@ -398,18 +450,7 @@ class MainActivity : AppCompatActivity() {
             },
         )
 
-        val nextAction = resolvePrimaryAction(state)
-        setupPrimaryButton.text = getString(
-            when (nextAction) {
-                SetupAction.START_AGENT -> R.string.setup_action_start_agent
-                SetupAction.OPEN_ACCESSIBILITY -> R.string.setup_action_enable_accessibility
-                SetupAction.REQUEST_CAPTURE -> R.string.setup_action_grant_capture
-                SetupAction.CLAIM_PAIRING -> R.string.setup_action_pair
-                SetupAction.RECONNECT_REVERSE -> R.string.setup_action_reconnect
-                SetupAction.RUN_VALIDATION -> R.string.setup_action_run_validation
-                SetupAction.NONE -> R.string.setup_action_done
-            },
-        )
+        setupPrimaryButton.text = getString(if (nextAction == SetupAction.NONE) R.string.setup_action_done else R.string.setup_action_continue)
         setupPrimaryButton.isEnabled = nextAction != SetupAction.NONE && (
             nextAction != SetupAction.CLAIM_PAIRING ||
                 (reverseServerInput.text?.isNotBlank() == true && pairingCodeInput.text?.isNotBlank() == true)
@@ -417,6 +458,11 @@ class MainActivity : AppCompatActivity() {
 
         validationButton.isEnabled = running && accessibilityEnabled && captureReady && reverseConnected &&
             validationState.status != ValidationStatus.RUNNING
+        validationButton.visibility = if (nextAction == SetupAction.RUN_VALIDATION || validationState.status == ValidationStatus.FAILED) {
+            View.VISIBLE
+        } else {
+            View.GONE
+        }
 
         recoveryMessageView.text = buildRecoveryMessage(state, running, accessibilityEnabled, captureReady)
         recoveryActionButton.text = getString(
@@ -425,6 +471,89 @@ class MainActivity : AppCompatActivity() {
             } else {
                 R.string.recovery_action_default
             },
+        )
+    }
+
+    private fun renderValidationStep(nextAction: SetupAction) {
+        setupChecklistStep6TitleView.text = getString(R.string.setup_step_validation_title)
+        when (validationState.status) {
+            ValidationStatus.SUCCESS -> renderStepItem(
+                card = setupChecklistStep6Card,
+                titleView = setupChecklistStep6TitleView,
+                statusView = setupChecklistStep6StatusView,
+                titleRes = R.string.setup_step_validation_title,
+                isDone = true,
+                isCurrent = false,
+                currentStatusRes = R.string.setup_step_status_done,
+            )
+
+            ValidationStatus.RUNNING -> renderStepItem(
+                card = setupChecklistStep6Card,
+                titleView = setupChecklistStep6TitleView,
+                statusView = setupChecklistStep6StatusView,
+                titleRes = R.string.setup_step_validation_title,
+                isDone = false,
+                isCurrent = true,
+                currentStatusRes = R.string.setup_step_status_check,
+            )
+
+            ValidationStatus.FAILED -> renderStepItem(
+                card = setupChecklistStep6Card,
+                titleView = setupChecklistStep6TitleView,
+                statusView = setupChecklistStep6StatusView,
+                titleRes = R.string.setup_step_validation_title,
+                isDone = false,
+                isCurrent = true,
+                currentStatusRes = R.string.setup_step_status_check,
+            )
+
+            ValidationStatus.IDLE -> renderStepItem(
+                card = setupChecklistStep6Card,
+                titleView = setupChecklistStep6TitleView,
+                statusView = setupChecklistStep6StatusView,
+                titleRes = R.string.setup_step_validation_title,
+                isDone = false,
+                isCurrent = nextAction == SetupAction.RUN_VALIDATION,
+                currentStatusRes = R.string.setup_step_status_check,
+            )
+        }
+    }
+
+    private fun renderStepItem(
+        card: MaterialCardView,
+        titleView: TextView,
+        statusView: TextView,
+        titleRes: Int,
+        isDone: Boolean,
+        isCurrent: Boolean,
+        currentStatusRes: Int,
+    ) {
+        titleView.text = getString(titleRes)
+        when {
+            isDone -> {
+                card.setCardBackgroundColor(MaterialColors.getColor(card, com.google.android.material.R.attr.colorSurfaceContainerHigh))
+                statusView.visibility = View.VISIBLE
+                statusView.text = getString(R.string.setup_step_status_done)
+                statusView.setTextColor(MaterialColors.getColor(statusView, com.google.android.material.R.attr.colorOnSurfaceVariant))
+            }
+
+            isCurrent -> {
+                card.setCardBackgroundColor(MaterialColors.getColor(card, com.google.android.material.R.attr.colorSecondaryContainer))
+                statusView.visibility = View.VISIBLE
+                statusView.text = getString(currentStatusRes)
+                statusView.setTextColor(MaterialColors.getColor(statusView, com.google.android.material.R.attr.colorOnSecondaryContainer))
+            }
+
+            else -> {
+                card.setCardBackgroundColor(MaterialColors.getColor(card, com.google.android.material.R.attr.colorSurfaceContainer))
+                statusView.visibility = View.GONE
+            }
+        }
+        titleView.setTextColor(
+            MaterialColors.getColor(
+                titleView,
+                if (isCurrent) com.google.android.material.R.attr.colorOnSecondaryContainer else com.google.android.material.R.attr.colorOnSurface,
+            ),
         )
     }
 

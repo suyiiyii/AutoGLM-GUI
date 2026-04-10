@@ -20,8 +20,7 @@
             android:backgroundTint="@android:color/transparent"
             android:elevation="0dp"
             android:paddingHorizontal="4dp"
-            app:subtitle="@string/app_summary"
-            app:title="@string/app_name"
+            app:title="@string/setup_page_title"
             app:titleCentered="false" />
 
         <LinearLayout
@@ -31,28 +30,19 @@
             android:paddingHorizontal="20dp">
 
             <com.google.android.material.card.MaterialCardView
-                style="@style/AgentFilledCard"
+                style="@style/AgentHeroCard"
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:layout_marginTop="12dp"
-                app:cardBackgroundColor="?colorPrimaryContainer">
+                android:layout_marginTop="12dp">
 
                 <LinearLayout
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:orientation="vertical">
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        style="@style/SectionOverline"
-                        android:textColor="?colorOnPrimaryContainer"
-                        android:text="@string/setup_intro_overline" />
-
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
                         android:gravity="center_vertical"
                         android:orientation="horizontal">
 
@@ -88,7 +78,7 @@
                                 android:layout_height="wrap_content"
                                 android:layout_marginTop="6dp"
                                 style="@style/CardSummary"
-                                android:textColor="?colorOnPrimaryContainer"
+                                android:textColor="?colorOnSurfaceVariant"
                                 android:text="@string/setup_intro_body" />
                         </LinearLayout>
                     </LinearLayout>
@@ -96,10 +86,10 @@
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/setupPrimaryButton"
                         style="@style/Widget.Material3.Button"
-                        android:layout_width="match_parent"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="20dp"
-                        android:text="@string/setup_action_start_agent" />
+                        android:text="@string/setup_action_continue" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -114,14 +104,82 @@
                     android:layout_height="wrap_content"
                     android:orientation="vertical">
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        style="@style/SectionOverline"
-                        android:text="@string/setup_section_label" />
-
                     <com.google.android.material.card.MaterialCardView
                         style="@style/AgentSummaryCard"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="4dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:orientation="vertical">
+
+                            <TextView
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                style="@style/CardTitle"
+                                android:textColor="?colorOnSurface"
+                                android:text="@string/setup_section_label" />
+
+                            <TextView
+                                android:id="@+id/setupSummaryText"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="6dp"
+                                style="@style/CardSummary"
+                                android:textColor="?colorOnSurfaceVariant"
+                                android:text="@string/setup_summary_default" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+
+                </LinearLayout>
+            </com.google.android.material.card.MaterialCardView>
+
+            <com.google.android.material.card.MaterialCardView
+                style="@style/AgentSurfaceFilledCard"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="16dp">
+
+                <LinearLayout
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="vertical">
+
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/setupChecklistCard1"
+                        style="@style/AgentMiniCard"
+                        android:layout_width="match_parent"
+                        android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp">
+
+                        <LinearLayout
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/setupChecklistStep1Title"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/setup_step_agent_title"
+                                style="@style/StepTitle" />
+
+                            <TextView
+                                android:id="@+id/setupChecklistStep1Status"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/setup_step_status_next"
+                                style="@style/StepStatus" />
+                        </LinearLayout>
+                    </com.google.android.material.card.MaterialCardView>
+
+                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/setupChecklistCard2"
+                        style="@style/AgentMiniCard"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp">
@@ -132,146 +190,147 @@
                             android:gravity="center_vertical"
                             android:orientation="horizontal">
 
-                            <com.google.android.material.card.MaterialCardView
-                                style="@style/AgentIconCircleCard"
-                                app:cardBackgroundColor="?colorPrimaryContainer">
-
-                                <ImageView
-                                    android:layout_width="24dp"
-                                    android:layout_height="24dp"
-                                    android:layout_gravity="center"
-                                    android:src="@android:drawable/ic_menu_agenda"
-                                    app:tint="?colorOnPrimaryContainer" />
-                            </com.google.android.material.card.MaterialCardView>
-
-                            <LinearLayout
+                            <TextView
+                                android:id="@+id/setupChecklistStep2Title"
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
-                                android:layout_marginStart="16dp"
                                 android:layout_weight="1"
-                                android:orientation="vertical">
+                                android:text="@string/setup_step_accessibility_title"
+                                style="@style/StepTitle" />
 
-                                <TextView
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    style="@style/CardTitle"
-                                    android:textColor="?colorOnSecondaryContainer"
-                                    android:text="@string/setup_section_label" />
-
-                                <TextView
-                                    android:id="@+id/setupSummaryText"
-                                    android:layout_width="match_parent"
-                                    android:layout_height="wrap_content"
-                                    android:layout_marginTop="6dp"
-                                    style="@style/CardSummary"
-                                    android:textColor="?colorOnSecondaryContainer"
-                                    android:text="@string/setup_summary_default" />
-                            </LinearLayout>
+                            <TextView
+                                android:id="@+id/setupChecklistStep2Status"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/setup_step_status_next"
+                                style="@style/StepStatus" />
                         </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
-                </LinearLayout>
-            </com.google.android.material.card.MaterialCardView>
-
-            <com.google.android.material.card.MaterialCardView
-                style="@style/AgentSurfaceFilledCard"
-                android:layout_width="match_parent"
-                android:layout_height="wrap_content"
-                android:layout_marginTop="16dp">
-
-                <LinearLayout
-                    android:layout_width="match_parent"
-                    android:layout_height="wrap_content"
-                    android:orientation="vertical">
-
                     <com.google.android.material.card.MaterialCardView
-                        style="@style/AgentMiniCard"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="18dp">
-
-                        <TextView
-                            android:id="@+id/setupChecklistStep1"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="@string/setup_step_agent_pending"
-                            style="@style/StepItemText" />
-                    </com.google.android.material.card.MaterialCardView>
-
-                    <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/setupChecklistCard3"
                         style="@style/AgentMiniCard"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp">
 
-                        <TextView
-                            android:id="@+id/setupChecklistStep2"
+                        <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="@string/setup_step_accessibility_pending"
-                            style="@style/StepItemText" />
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/setupChecklistStep3Title"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/setup_step_capture_title"
+                                style="@style/StepTitle" />
+
+                            <TextView
+                                android:id="@+id/setupChecklistStep3Status"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/setup_step_status_next"
+                                style="@style/StepStatus" />
+                        </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
                     <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/setupChecklistCard4"
                         style="@style/AgentMiniCard"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp">
 
-                        <TextView
-                            android:id="@+id/setupChecklistStep3"
+                        <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="@string/setup_step_capture_pending"
-                            style="@style/StepItemText" />
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/setupChecklistStep4Title"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/setup_step_pair_title"
+                                style="@style/StepTitle" />
+
+                            <TextView
+                                android:id="@+id/setupChecklistStep4Status"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/setup_step_status_next"
+                                style="@style/StepStatus" />
+                        </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
                     <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/setupChecklistCard5"
                         style="@style/AgentMiniCard"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp">
 
-                        <TextView
-                            android:id="@+id/setupChecklistStep4"
+                        <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="@string/setup_step_pair_pending"
-                            style="@style/StepItemText" />
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
+
+                            <TextView
+                                android:id="@+id/setupChecklistStep5Title"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/setup_step_connect_title"
+                                style="@style/StepTitle" />
+
+                            <TextView
+                                android:id="@+id/setupChecklistStep5Status"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/setup_step_status_next"
+                                style="@style/StepStatus" />
+                        </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
                     <com.google.android.material.card.MaterialCardView
+                        android:id="@+id/setupChecklistCard6"
                         style="@style/AgentMiniCard"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp">
 
-                        <TextView
-                            android:id="@+id/setupChecklistStep5"
+                        <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:text="@string/setup_step_connect_pending"
-                            style="@style/StepItemText" />
-                    </com.google.android.material.card.MaterialCardView>
+                            android:gravity="center_vertical"
+                            android:orientation="horizontal">
 
-                    <com.google.android.material.card.MaterialCardView
-                        style="@style/AgentMiniCard"
-                        android:layout_width="match_parent"
-                        android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp">
+                            <TextView
+                                android:id="@+id/setupChecklistStep6Title"
+                                android:layout_width="0dp"
+                                android:layout_height="wrap_content"
+                                android:layout_weight="1"
+                                android:text="@string/setup_step_validation_title"
+                                style="@style/StepTitle" />
 
-                        <TextView
-                            android:id="@+id/setupChecklistStep6"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:text="@string/setup_step_validation_pending"
-                            style="@style/StepItemText" />
+                            <TextView
+                                android:id="@+id/setupChecklistStep6Status"
+                                android:layout_width="wrap_content"
+                                android:layout_height="wrap_content"
+                                android:text="@string/setup_step_status_check"
+                                style="@style/StepStatus" />
+                        </LinearLayout>
                     </com.google.android.material.card.MaterialCardView>
 
                     <com.google.android.material.button.MaterialButton
                         android:id="@+id/runValidationButton"
-                        style="@style/Widget.Material3.Button.OutlinedButton"
-                        android:layout_width="match_parent"
+                        style="@style/Widget.Material3.Button"
+                        android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp"
                         android:text="@string/setup_action_run_validation" />
