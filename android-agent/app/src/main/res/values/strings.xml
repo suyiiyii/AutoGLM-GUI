@@ -3,8 +3,8 @@
     <string name="app_name">AutoGLM Android Agent</string>
     <string name="app_summary">Phase A2 MVP: expose screenshot, gesture, text input, and current-app endpoints for the Remote Device protocol.</string>
     <string name="setup_page_title">Set up this device</string>
-    <string name="setup_intro_label">Set up this device</string>
     <string name="setup_intro_body">Finish setup, then add this device in AutoGLM-GUI.</string>
+    <string name="setup_intro_hint">The next missing step is highlighted below.</string>
     <string name="setup_section_label">Setup checklist</string>
     <string name="setup_summary_default">Complete the next missing step below.</string>
     <string name="setup_summary_ready">This device is ready. Return to AutoGLM-GUI and confirm the connection.</string>

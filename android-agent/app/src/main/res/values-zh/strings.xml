@@ -3,8 +3,8 @@
     <string name="app_name">AutoGLM Android Agent</string>
     <string name="app_summary">A2 阶段 MVP：为 Remote Device 协议提供截图、手势、文本输入和当前应用等端点。</string>
     <string name="setup_page_title">设置这台设备</string>
-    <string name="setup_intro_label">设置这台设备</string>
     <string name="setup_intro_body">先完成设置，再回 AutoGLM-GUI 添加这台设备。</string>
+    <string name="setup_intro_hint">下面会高亮当前缺失的下一步。</string>
     <string name="setup_section_label">初始化清单</string>
     <string name="setup_summary_default">先完成下面缺失的下一步。</string>
     <string name="setup_summary_ready">这台设备已经准备好了。现在回 AutoGLM-GUI 确认连接。</string>

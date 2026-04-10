@@ -12,7 +12,7 @@
     </style>
 
     <style name="AgentHeroCard" parent="@style/AgentFilledCard">
-        <item name="cardBackgroundColor">?colorSurfaceContainerHigh</item>
+        <item name="cardBackgroundColor">?colorSurfaceContainerLow</item>
     </style>
 
     <style name="AgentTertiaryFilledCard" parent="@style/AgentFilledCard">
@@ -24,7 +24,7 @@
     </style>
 
     <style name="AgentSurfaceFilledCard" parent="@style/AgentFilledCard">
-        <item name="cardBackgroundColor">?colorSurfaceContainer</item>
+        <item name="cardBackgroundColor">?colorSurfaceContainerLow</item>
     </style>
 
     <style name="AgentSummaryCard" parent="@style/AgentFilledCard">
@@ -37,10 +37,10 @@
         <item name="cardCornerRadius">28dp</item>
         <item name="cardElevation">0dp</item>
         <item name="strokeWidth">0dp</item>
-        <item name="contentPaddingStart">18dp</item>
-        <item name="contentPaddingEnd">18dp</item>
-        <item name="contentPaddingTop">16dp</item>
-        <item name="contentPaddingBottom">16dp</item>
+        <item name="contentPaddingStart">20dp</item>
+        <item name="contentPaddingEnd">20dp</item>
+        <item name="contentPaddingTop">14dp</item>
+        <item name="contentPaddingBottom">14dp</item>
         <item name="cardBackgroundColor">?colorSurfaceContainerHigh</item>
     </style>
 
@@ -79,7 +79,7 @@
     </style>
 
     <style name="StepStatus">
-        <item name="android:textAppearance">?textAppearanceLabelLarge</item>
+        <item name="android:textAppearance">?textAppearanceLabelMedium</item>
         <item name="android:textColor">?colorOnSurfaceVariant</item>
         <item name="android:textStyle">bold</item>
     </style>
@@ -93,6 +93,13 @@
         <item name="android:textAppearance">?textAppearanceHeadlineSmall</item>
         <item name="android:textColor">?colorOnSurface</item>
         <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="HeroSummary">
+        <item name="android:textAppearance">?textAppearanceTitleLarge</item>
+        <item name="android:textColor">?colorOnSurface</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:lineSpacingExtra">1dp</item>
     </style>
 
     <style name="SectionOverline">
