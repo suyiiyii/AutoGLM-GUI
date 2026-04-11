@@ -368,17 +368,23 @@
                     android:layout_height="wrap_content"
                     android:orientation="vertical">
 
-                    <TextView
-                        android:layout_width="wrap_content"
+                    <LinearLayout
+                        android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        style="@style/SectionOverline"
-                        android:text="@string/recovery_section_label"
-                        android:textColor="?colorOnSurfaceVariant" />
+                        android:orientation="vertical"
+                        android:paddingBottom="12dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            style="@style/ChecklistHeaderTitle"
+                            android:text="@string/recovery_section_label" />
+                    </LinearLayout>
 
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp"
+                        android:layout_marginTop="0dp"
                         android:gravity="center_vertical"
                         android:orientation="horizontal">
 
@@ -391,7 +397,7 @@
                                 android:layout_height="20dp"
                                 android:layout_gravity="center"
                                 android:src="@android:drawable/ic_dialog_alert"
-                                app:tint="?colorOnErrorContainer" />
+                                app:tint="?colorError" />
                         </com.google.android.material.card.MaterialCardView>
 
                         <LinearLayout

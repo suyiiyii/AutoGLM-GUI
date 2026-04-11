@@ -97,6 +97,11 @@
         <item name="android:textStyle">normal</item>
     </style>
 
+    <style name="StepTitleActive" parent="@style/StepTitle">
+        <item name="android:textColor">?colorOnSurface</item>
+        <item name="android:textFontWeight">500</item>
+    </style>
+
     <style name="StepStatus">
         <item name="android:textAppearance">?textAppearanceLabelMedium</item>
         <item name="android:textColor">?colorOnSurfaceVariant</item>
