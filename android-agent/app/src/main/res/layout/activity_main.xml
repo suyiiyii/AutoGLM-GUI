@@ -110,27 +110,33 @@
                     android:layout_height="wrap_content"
                     android:orientation="vertical">
 
-                    <TextView
-                        android:layout_width="wrap_content"
-                        android:layout_height="wrap_content"
-                        style="@style/ChecklistHeaderTitle"
-                        android:text="@string/setup_section_label" />
-
-                    <TextView
-                        android:id="@+id/setupSummaryText"
+                    <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
-                        style="@style/CardSummary"
-                        android:text="@string/setup_summary_default"
-                        android:textColor="?colorOnSurfaceVariant" />
+                        android:orientation="vertical"
+                        android:paddingBottom="16dp">
+
+                        <TextView
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            style="@style/ChecklistHeaderTitle"
+                            android:text="@string/setup_section_label" />
+
+                        <TextView
+                            android:id="@+id/setupSummaryText"
+                            android:layout_width="match_parent"
+                            android:layout_height="wrap_content"
+                            android:layout_marginTop="6dp"
+                            style="@style/ChecklistHeaderSummary"
+                            android:text="@string/setup_summary_default" />
+                    </LinearLayout>
 
                     <com.google.android.material.card.MaterialCardView
                         android:id="@+id/setupChecklistCard1"
                         style="@style/AgentChecklistRow"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp">
+                        android:layout_marginTop="0dp">
 
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -381,8 +387,8 @@
                             app:cardBackgroundColor="?colorErrorContainer">
 
                             <ImageView
-                                android:layout_width="18dp"
-                                android:layout_height="18dp"
+                                android:layout_width="20dp"
+                                android:layout_height="20dp"
                                 android:layout_gravity="center"
                                 android:src="@android:drawable/ic_dialog_alert"
                                 app:tint="?colorOnErrorContainer" />

@@ -549,10 +549,6 @@ class MainActivity : AppCompatActivity() {
             statusView,
             com.google.android.material.R.attr.colorSurfaceContainerHigh,
         )
-        val nextTokenBackground = MaterialColors.getColor(
-            statusView,
-            com.google.android.material.R.attr.colorPrimary,
-        )
         titleView.text = getString(titleRes)
         when {
             isDone -> {
@@ -567,8 +563,8 @@ class MainActivity : AppCompatActivity() {
                 card.setCardBackgroundColor(surfaceTransparent)
                 statusView.visibility = View.VISIBLE
                 statusView.text = getString(currentStatusRes)
-                statusView.setTextColor(MaterialColors.getColor(statusView, com.google.android.material.R.attr.colorOnPrimary))
-                statusView.backgroundTintList = ColorStateList.valueOf(nextTokenBackground)
+                statusView.setTextColor(MaterialColors.getColor(statusView, com.google.android.material.R.attr.colorPrimary))
+                statusView.backgroundTintList = null
             }
 
             else -> {

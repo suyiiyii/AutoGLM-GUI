@@ -87,6 +87,10 @@
         <item name="android:textFontWeight">500</item>
     </style>
 
+    <style name="ChecklistHeaderSummary" parent="@style/CardSummary">
+        <item name="android:textColor">?colorOnSurfaceVariant</item>
+    </style>
+
     <style name="StepTitle">
         <item name="android:textAppearance">?textAppearanceBodyLarge</item>
         <item name="android:textColor">?colorOnSurfaceVariant</item>
@@ -97,6 +101,7 @@
         <item name="android:textAppearance">?textAppearanceLabelMedium</item>
         <item name="android:textColor">?colorOnSurfaceVariant</item>
         <item name="android:textStyle">normal</item>
+        <item name="android:textFontWeight">500</item>
         <item name="android:background">@drawable/status_token_background</item>
     </style>
 
