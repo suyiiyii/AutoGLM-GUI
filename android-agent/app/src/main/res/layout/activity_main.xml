@@ -88,7 +88,8 @@
                         style="@style/Widget.Material3.Button"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="20dp"
+                        android:layout_marginStart="72dp"
+                        android:layout_marginTop="16dp"
                         android:text="@string/setup_action_continue" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
@@ -114,7 +115,7 @@
                         android:id="@+id/setupSummaryText"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="6dp"
+                        android:layout_marginTop="8dp"
                         style="@style/CardSummary"
                         android:text="@string/setup_summary_default"
                         android:textColor="?colorOnSurfaceVariant" />
@@ -124,7 +125,7 @@
                         style="@style/AgentMiniCard"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="16dp">
+                        android:layout_marginTop="12dp">
 
                         <LinearLayout
                             android:layout_width="match_parent"
@@ -144,6 +145,10 @@
                                 android:id="@+id/setupChecklistStep1Status"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
+                                android:gravity="center"
+                                android:minWidth="48dp"
+                                android:paddingHorizontal="10dp"
+                                android:paddingVertical="4dp"
                                 android:text="@string/setup_step_status_next"
                                 style="@style/StepStatus" />
                         </LinearLayout>
@@ -174,6 +179,10 @@
                                 android:id="@+id/setupChecklistStep2Status"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
+                                android:gravity="center"
+                                android:minWidth="48dp"
+                                android:paddingHorizontal="10dp"
+                                android:paddingVertical="4dp"
                                 android:text="@string/setup_step_status_next"
                                 style="@style/StepStatus" />
                         </LinearLayout>
@@ -204,6 +213,10 @@
                                 android:id="@+id/setupChecklistStep3Status"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
+                                android:gravity="center"
+                                android:minWidth="48dp"
+                                android:paddingHorizontal="10dp"
+                                android:paddingVertical="4dp"
                                 android:text="@string/setup_step_status_next"
                                 style="@style/StepStatus" />
                         </LinearLayout>
@@ -234,6 +247,10 @@
                                 android:id="@+id/setupChecklistStep4Status"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
+                                android:gravity="center"
+                                android:minWidth="48dp"
+                                android:paddingHorizontal="10dp"
+                                android:paddingVertical="4dp"
                                 android:text="@string/setup_step_status_next"
                                 style="@style/StepStatus" />
                         </LinearLayout>
@@ -264,6 +281,10 @@
                                 android:id="@+id/setupChecklistStep5Status"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
+                                android:gravity="center"
+                                android:minWidth="48dp"
+                                android:paddingHorizontal="10dp"
+                                android:paddingVertical="4dp"
                                 android:text="@string/setup_step_status_next"
                                 style="@style/StepStatus" />
                         </LinearLayout>
@@ -294,6 +315,10 @@
                                 android:id="@+id/setupChecklistStep6Status"
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
+                                android:gravity="center"
+                                android:minWidth="48dp"
+                                android:paddingHorizontal="10dp"
+                                android:paddingVertical="4dp"
                                 android:text="@string/setup_step_status_check"
                                 style="@style/StepStatus" />
                         </LinearLayout>
@@ -330,7 +355,7 @@
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp"
+                        android:layout_marginTop="16dp"
                         android:gravity="center_vertical"
                         android:orientation="horizontal">
 
@@ -365,7 +390,7 @@
                                 android:id="@+id/recoveryMessageText"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:layout_marginTop="6dp"
+                                android:layout_marginTop="8dp"
                                 style="@style/CardSummary"
                                 android:text="@string/recovery_default"
                                 android:textColor="?colorOnSurfaceVariant" />
@@ -377,7 +402,7 @@
                         style="@style/Widget.Material3.Button.TextButton"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="20dp"
+                        android:layout_marginTop="16dp"
                         android:text="@string/recovery_action_default" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>

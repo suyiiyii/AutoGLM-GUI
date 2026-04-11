@@ -39,8 +39,8 @@
         <item name="strokeWidth">0dp</item>
         <item name="contentPaddingStart">20dp</item>
         <item name="contentPaddingEnd">20dp</item>
-        <item name="contentPaddingTop">14dp</item>
-        <item name="contentPaddingBottom">14dp</item>
+        <item name="contentPaddingTop">16dp</item>
+        <item name="contentPaddingBottom">16dp</item>
         <item name="cardBackgroundColor">?colorSurfaceContainerHigh</item>
     </style>
 
@@ -82,6 +82,7 @@
         <item name="android:textAppearance">?textAppearanceLabelMedium</item>
         <item name="android:textColor">?colorOnSurfaceVariant</item>
         <item name="android:textStyle">bold</item>
+        <item name="android:background">@android:color/transparent</item>
     </style>
 
     <style name="CardSummary">
