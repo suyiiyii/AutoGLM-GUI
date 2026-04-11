@@ -528,31 +528,50 @@ class MainActivity : AppCompatActivity() {
         isCurrent: Boolean,
         currentStatusRes: Int,
     ) {
+        val surfaceTransparent = ContextCompat.getColor(this, android.R.color.transparent)
+        val currentRowBackground = MaterialColors.getColor(
+            card,
+            com.google.android.material.R.attr.colorSurfaceContainerHighest,
+        )
+        val doneTokenBackground = MaterialColors.getColor(
+            statusView,
+            com.google.android.material.R.attr.colorSurfaceContainerHigh,
+        )
+        val nextTokenBackground = MaterialColors.getColor(
+            statusView,
+            com.google.android.material.R.attr.colorPrimary,
+        )
         titleView.text = getString(titleRes)
         when {
             isDone -> {
-                card.setCardBackgroundColor(MaterialColors.getColor(card, com.google.android.material.R.attr.colorSurfaceContainerHigh))
+                card.setCardBackgroundColor(surfaceTransparent)
                 statusView.visibility = View.VISIBLE
                 statusView.text = getString(R.string.setup_step_status_done)
                 statusView.setTextColor(MaterialColors.getColor(statusView, com.google.android.material.R.attr.colorOnSurfaceVariant))
+                statusView.backgroundTintList = ColorStateList.valueOf(doneTokenBackground)
             }
 
             isCurrent -> {
-                card.setCardBackgroundColor(MaterialColors.getColor(card, com.google.android.material.R.attr.colorSecondaryContainer))
+                card.setCardBackgroundColor(currentRowBackground)
                 statusView.visibility = View.VISIBLE
                 statusView.text = getString(currentStatusRes)
-                statusView.setTextColor(MaterialColors.getColor(statusView, com.google.android.material.R.attr.colorOnSecondaryContainer))
+                statusView.setTextColor(MaterialColors.getColor(statusView, com.google.android.material.R.attr.colorOnPrimary))
+                statusView.backgroundTintList = ColorStateList.valueOf(nextTokenBackground)
             }
 
             else -> {
-                card.setCardBackgroundColor(MaterialColors.getColor(card, com.google.android.material.R.attr.colorSurfaceContainer))
+                card.setCardBackgroundColor(surfaceTransparent)
                 statusView.visibility = View.GONE
+                statusView.backgroundTintList = null
             }
         }
         titleView.setTextColor(
             MaterialColors.getColor(
                 titleView,
-                if (isCurrent) com.google.android.material.R.attr.colorOnSecondaryContainer else com.google.android.material.R.attr.colorOnSurface,
+                when {
+                    isCurrent || isDone -> com.google.android.material.R.attr.colorOnSurface
+                    else -> com.google.android.material.R.attr.colorOnSurfaceVariant
+                },
             ),
         )
     }

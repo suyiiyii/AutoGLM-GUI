@@ -56,12 +56,20 @@
     </style>
 
     <style name="AgentIconCircleCard" parent="@style/Widget.Material3.CardView.Filled">
-        <item name="android:layout_width">56dp</item>
-        <item name="android:layout_height">56dp</item>
-        <item name="cardCornerRadius">28dp</item>
+        <item name="android:layout_width">44dp</item>
+        <item name="android:layout_height">44dp</item>
+        <item name="cardCornerRadius">22dp</item>
         <item name="cardElevation">0dp</item>
         <item name="strokeWidth">0dp</item>
         <item name="cardBackgroundColor">?colorPrimaryContainer</item>
+        <item name="contentPadding">0dp</item>
+    </style>
+
+    <style name="AgentChecklistRow" parent="@style/Widget.Material3.CardView.Filled">
+        <item name="cardCornerRadius">20dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeWidth">0dp</item>
+        <item name="cardBackgroundColor">@android:color/transparent</item>
         <item name="contentPadding">0dp</item>
     </style>
 
@@ -74,15 +82,15 @@
 
     <style name="StepTitle">
         <item name="android:textAppearance">?textAppearanceBodyLarge</item>
-        <item name="android:textColor">?colorOnSurface</item>
-        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">?colorOnSurfaceVariant</item>
+        <item name="android:textStyle">normal</item>
     </style>
 
     <style name="StepStatus">
         <item name="android:textAppearance">?textAppearanceLabelMedium</item>
         <item name="android:textColor">?colorOnSurfaceVariant</item>
-        <item name="android:textStyle">bold</item>
-        <item name="android:background">@android:color/transparent</item>
+        <item name="android:textStyle">normal</item>
+        <item name="android:background">@drawable/status_token_background</item>
     </style>
 
     <style name="CardSummary">
@@ -99,7 +107,8 @@
     <style name="HeroSummary">
         <item name="android:textAppearance">?textAppearanceTitleLarge</item>
         <item name="android:textColor">?colorOnSurface</item>
-        <item name="android:textStyle">bold</item>
+        <item name="android:textStyle">normal</item>
+        <item name="android:textFontWeight">500</item>
         <item name="android:lineSpacingExtra">1dp</item>
     </style>
 

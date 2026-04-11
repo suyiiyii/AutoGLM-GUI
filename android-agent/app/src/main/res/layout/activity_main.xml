@@ -48,13 +48,11 @@
 
                         <com.google.android.material.card.MaterialCardView
                             style="@style/AgentIconCircleCard"
-                            android:layout_width="56dp"
-                            android:layout_height="56dp"
                             app:cardBackgroundColor="?colorPrimaryContainer">
 
                             <ImageView
-                                android:layout_width="24dp"
-                                android:layout_height="24dp"
+                                android:layout_width="20dp"
+                                android:layout_height="20dp"
                                 android:layout_gravity="center"
                                 android:src="@android:drawable/ic_menu_manage"
                                 app:tint="?colorOnPrimaryContainer" />
@@ -88,9 +86,15 @@
                         style="@style/Widget.Material3.Button"
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
-                        android:layout_marginStart="72dp"
+                        android:layout_gravity="start"
+                        android:layout_marginStart="60dp"
                         android:layout_marginTop="16dp"
-                        android:text="@string/setup_action_continue" />
+                        android:insetTop="0dp"
+                        android:insetBottom="0dp"
+                        android:text="@string/setup_action_continue"
+                        app:icon="@drawable/ic_arrow_forward_20"
+                        app:iconGravity="textStart"
+                        app:iconPadding="8dp" />
                 </LinearLayout>
             </com.google.android.material.card.MaterialCardView>
 
@@ -122,7 +126,7 @@
 
                     <com.google.android.material.card.MaterialCardView
                         android:id="@+id/setupChecklistCard1"
-                        style="@style/AgentMiniCard"
+                        style="@style/AgentChecklistRow"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="12dp">
@@ -130,6 +134,8 @@
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
+                            android:minHeight="52dp"
+                            android:paddingVertical="14dp"
                             android:gravity="center_vertical"
                             android:orientation="horizontal">
 
@@ -156,14 +162,16 @@
 
                     <com.google.android.material.card.MaterialCardView
                         android:id="@+id/setupChecklistCard2"
-                        style="@style/AgentMiniCard"
+                        style="@style/AgentChecklistRow"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp">
+                        android:layout_marginTop="8dp">
 
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
+                            android:minHeight="52dp"
+                            android:paddingVertical="14dp"
                             android:gravity="center_vertical"
                             android:orientation="horizontal">
 
@@ -190,14 +198,16 @@
 
                     <com.google.android.material.card.MaterialCardView
                         android:id="@+id/setupChecklistCard3"
-                        style="@style/AgentMiniCard"
+                        style="@style/AgentChecklistRow"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp">
+                        android:layout_marginTop="8dp">
 
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
+                            android:minHeight="52dp"
+                            android:paddingVertical="14dp"
                             android:gravity="center_vertical"
                             android:orientation="horizontal">
 
@@ -224,14 +234,16 @@
 
                     <com.google.android.material.card.MaterialCardView
                         android:id="@+id/setupChecklistCard4"
-                        style="@style/AgentMiniCard"
+                        style="@style/AgentChecklistRow"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp">
+                        android:layout_marginTop="8dp">
 
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
+                            android:minHeight="52dp"
+                            android:paddingVertical="14dp"
                             android:gravity="center_vertical"
                             android:orientation="horizontal">
 
@@ -258,14 +270,16 @@
 
                     <com.google.android.material.card.MaterialCardView
                         android:id="@+id/setupChecklistCard5"
-                        style="@style/AgentMiniCard"
+                        style="@style/AgentChecklistRow"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp">
+                        android:layout_marginTop="8dp">
 
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
+                            android:minHeight="52dp"
+                            android:paddingVertical="14dp"
                             android:gravity="center_vertical"
                             android:orientation="horizontal">
 
@@ -292,14 +306,16 @@
 
                     <com.google.android.material.card.MaterialCardView
                         android:id="@+id/setupChecklistCard6"
-                        style="@style/AgentMiniCard"
+                        style="@style/AgentChecklistRow"
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:layout_marginTop="12dp">
+                        android:layout_marginTop="8dp">
 
                         <LinearLayout
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
+                            android:minHeight="52dp"
+                            android:paddingVertical="14dp"
                             android:gravity="center_vertical"
                             android:orientation="horizontal">
 
@@ -350,7 +366,7 @@
                         android:layout_height="wrap_content"
                         style="@style/SectionOverline"
                         android:text="@string/recovery_section_label"
-                        android:textColor="?colorError" />
+                        android:textColor="?colorOnSurfaceVariant" />
 
                     <LinearLayout
                         android:layout_width="match_parent"
@@ -361,14 +377,14 @@
 
                         <com.google.android.material.card.MaterialCardView
                             style="@style/AgentIconCircleCard"
-                            app:cardBackgroundColor="?colorError">
+                            app:cardBackgroundColor="?colorErrorContainer">
 
                             <ImageView
-                                android:layout_width="24dp"
-                                android:layout_height="24dp"
+                                android:layout_width="20dp"
+                                android:layout_height="20dp"
                                 android:layout_gravity="center"
                                 android:src="@android:drawable/ic_dialog_alert"
-                                app:tint="?colorOnError" />
+                                app:tint="?colorOnErrorContainer" />
                         </com.google.android.material.card.MaterialCardView>
 
                         <LinearLayout
@@ -436,8 +452,8 @@
                             app:cardBackgroundColor="?colorPrimaryContainer">
 
                             <ImageView
-                                android:layout_width="24dp"
-                                android:layout_height="24dp"
+                                android:layout_width="20dp"
+                                android:layout_height="20dp"
                                 android:layout_gravity="center"
                                 android:src="@android:drawable/ic_menu_share"
                                 app:tint="?colorOnPrimaryContainer" />
