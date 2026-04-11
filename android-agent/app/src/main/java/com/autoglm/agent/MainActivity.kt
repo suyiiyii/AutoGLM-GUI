@@ -13,6 +13,9 @@ import android.widget.TextView
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.core.content.ContextCompat
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.updatePadding
 import com.google.android.material.card.MaterialCardView
 import com.google.android.material.color.MaterialColors
 import com.google.android.material.color.DynamicColors
@@ -175,6 +178,7 @@ class MainActivity : AppCompatActivity() {
 
         ensureAgentRunning()
         maybeRequestCapture(intent)
+        applyWindowInsets()
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -244,6 +248,18 @@ class MainActivity : AppCompatActivity() {
 
     private fun scheduleRefreshState() {
         window.decorView.postDelayed({ refreshState() }, 300L)
+    }
+
+    private fun applyWindowInsets() {
+        val rootScrollView = findViewById<View>(R.id.rootScrollView)
+        val topAppBar = findViewById<View>(R.id.topAppBar)
+        val initialToolbarPaddingTop = topAppBar.paddingTop
+        ViewCompat.setOnApplyWindowInsetsListener(rootScrollView) { _, insets ->
+            val statusInsets = insets.getInsets(WindowInsetsCompat.Type.statusBars())
+            topAppBar.updatePadding(top = initialToolbarPaddingTop + statusInsets.top)
+            insets
+        }
+        ViewCompat.requestApplyInsets(rootScrollView)
     }
 
     private fun performPrimarySetupAction(state: ReverseAgentUiState) {
@@ -529,10 +545,6 @@ class MainActivity : AppCompatActivity() {
         currentStatusRes: Int,
     ) {
         val surfaceTransparent = ContextCompat.getColor(this, android.R.color.transparent)
-        val currentRowBackground = MaterialColors.getColor(
-            card,
-            com.google.android.material.R.attr.colorSurfaceContainerHighest,
-        )
         val doneTokenBackground = MaterialColors.getColor(
             statusView,
             com.google.android.material.R.attr.colorSurfaceContainerHigh,
@@ -552,7 +564,7 @@ class MainActivity : AppCompatActivity() {
             }
 
             isCurrent -> {
-                card.setCardBackgroundColor(currentRowBackground)
+                card.setCardBackgroundColor(surfaceTransparent)
                 statusView.visibility = View.VISIBLE
                 statusView.text = getString(currentStatusRes)
                 statusView.setTextColor(MaterialColors.getColor(statusView, com.google.android.material.R.attr.colorOnPrimary))

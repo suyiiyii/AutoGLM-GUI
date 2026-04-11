@@ -80,6 +80,13 @@
         <item name="android:textStyle">bold</item>
     </style>
 
+    <style name="ChecklistHeaderTitle">
+        <item name="android:textAppearance">?textAppearanceTitleMedium</item>
+        <item name="android:textColor">?colorOnSurface</item>
+        <item name="android:textStyle">normal</item>
+        <item name="android:textFontWeight">500</item>
+    </style>
+
     <style name="StepTitle">
         <item name="android:textAppearance">?textAppearanceBodyLarge</item>
         <item name="android:textColor">?colorOnSurfaceVariant</item>
