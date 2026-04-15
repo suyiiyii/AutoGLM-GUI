@@ -61,6 +61,7 @@ interface DevicePanelProps {
   deviceConnectionType?: string; // Device connection type (usb/wifi/remote)
   isConfigured: boolean;
   isVisible?: boolean; // ✅ 新增：控制视频流行为
+  unlimitedStepsEnabled?: boolean;
 }
 
 function getStepSummary(thinking: string | undefined, action: unknown): string {
@@ -149,6 +150,7 @@ export function DevicePanel({
   deviceConnectionType,
   isConfigured,
   isVisible = true, // ✅ 新增：默认 true 向后兼容
+  unlimitedStepsEnabled = false,
 }: DevicePanelProps) {
   const t = useTranslation();
   const [input, setInput] = useState('');
@@ -460,6 +462,31 @@ export function DevicePanel({
           </div>
 
           <div className="flex items-center gap-2">
+            {loading && unlimitedStepsEnabled && (
+              <Badge
+                variant="secondary"
+                className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+              >
+                无限步数模式
+              </Badge>
+            )}
+            {loading && (
+              <Button
+                onClick={handleAbortChat}
+                disabled={aborting}
+                size="sm"
+                variant="destructive"
+                className="gap-2 rounded-full"
+                title={t.chat.abortChat}
+              >
+                {aborting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Square className="h-4 w-4" />
+                )}
+                <span>{t.chat.abortChat}</span>
+              </Button>
+            )}
             {/* History button with Popover */}
             <Popover
               open={showHistoryPopover}

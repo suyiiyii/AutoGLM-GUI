@@ -251,7 +251,7 @@ function ChatComponent() {
     api_key: '',
     agent_type: 'glm-async',
     agent_config_params: {} as Record<string, unknown>,
-    default_max_steps: 100,
+    default_max_steps: 100 as number | '',
     layered_max_turns: 50,
     decision_base_url: '',
     decision_model_name: '',
@@ -268,7 +268,7 @@ function ChatComponent() {
           api_key: data.api_key || undefined,
           agent_type: data.agent_type || 'glm-async',
           agent_config_params: data.agent_config_params || undefined,
-          default_max_steps: data.default_max_steps || 100,
+          default_max_steps: data.default_max_steps ?? null,
           layered_max_turns: data.layered_max_turns || 50,
           decision_base_url: data.decision_base_url || undefined,
           decision_model_name: data.decision_model_name || undefined,
@@ -286,7 +286,7 @@ function ChatComponent() {
           api_key: data.api_key || '',
           agent_type: data.agent_type || 'glm-async',
           agent_config_params: data.agent_config_params || {},
-          default_max_steps: data.default_max_steps || 100,
+          default_max_steps: data.default_max_steps ?? '',
           layered_max_turns: data.layered_max_turns || 50,
           decision_base_url: data.decision_base_url || '',
           decision_model_name: data.decision_model_name || 'glm-4.7',
@@ -459,7 +459,8 @@ function ChatComponent() {
           Object.keys(tempConfig.agent_config_params).length > 0
             ? tempConfig.agent_config_params
             : undefined,
-        default_max_steps: tempConfig.default_max_steps,
+        default_max_steps:
+          tempConfig.default_max_steps === '' ? null : tempConfig.default_max_steps,
         layered_max_turns: tempConfig.layered_max_turns,
         decision_base_url: tempConfig.decision_base_url || undefined,
         decision_model_name: tempConfig.decision_model_name || undefined,
@@ -475,7 +476,8 @@ function ChatComponent() {
           Object.keys(tempConfig.agent_config_params).length > 0
             ? tempConfig.agent_config_params
             : undefined,
-        default_max_steps: tempConfig.default_max_steps,
+        default_max_steps:
+          tempConfig.default_max_steps === '' ? null : tempConfig.default_max_steps,
         layered_max_turns: tempConfig.layered_max_turns,
         decision_base_url: tempConfig.decision_base_url || undefined,
         decision_model_name: tempConfig.decision_model_name || undefined,
@@ -843,20 +845,26 @@ function ChatComponent() {
                   id="default_max_steps"
                   type="number"
                   min={1}
-                  max={1000}
                   value={tempConfig.default_max_steps}
                   onChange={e => {
-                    const value = parseInt(e.target.value) || 100;
+                    const rawValue = e.target.value.trim();
                     setTempConfig(prev => ({
                       ...prev,
-                      default_max_steps: Math.min(1000, Math.max(1, value)),
+                      default_max_steps:
+                        rawValue === '' ? '' : Math.max(1, parseInt(rawValue, 10) || 1),
                     }));
                   }}
+                  placeholder="留空表示不限制"
                   className="w-full"
                 />
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {t.chat.maxStepsHint || '单次任务最大执行步数（1-1000）'}
-                </p>
+                <div className="space-y-1">
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    设为空表示不限制步数，任务将持续运行直到手动停止。
+                  </p>
+                  <p className="text-xs text-amber-600 dark:text-amber-400">
+                    高级设置：修改后会影响后续任务默认行为，并可能增加执行时长与模型调用成本。
+                  </p>
+                </div>
               </div>
 
               {/* 分层代理最大轮次配置 */}
@@ -1053,7 +1061,7 @@ function ChatComponent() {
                     api_key: config.api_key || '',
                     agent_type: config.agent_type || 'glm-async',
                     agent_config_params: config.agent_config_params || {},
-                    default_max_steps: config.default_max_steps || 100,
+                    default_max_steps: config.default_max_steps ?? '',
                     layered_max_turns: config.layered_max_turns || 50,
                     decision_base_url: config.decision_base_url || '',
                     decision_model_name:
@@ -1191,6 +1199,7 @@ function ChatComponent() {
                         deviceName={device.model}
                         deviceConnectionType={device.connection_type}
                         isVisible={device.id === currentDeviceId}
+                        unlimitedStepsEnabled={config?.default_max_steps == null}
                       />
                     </div>
                   ) : (
@@ -1202,6 +1211,7 @@ function ChatComponent() {
                         deviceConnectionType={device.connection_type}
                         isConfigured={!!config?.base_url}
                         isVisible={device.id === currentDeviceId} // ✅ 新增：传递可见性状态
+                        unlimitedStepsEnabled={config?.default_max_steps == null}
                       />
                     </div>
                   )}

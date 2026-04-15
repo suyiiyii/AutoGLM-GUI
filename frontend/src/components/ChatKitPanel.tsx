@@ -58,6 +58,7 @@ interface ChatKitPanelProps {
   deviceName: string;
   deviceConnectionType?: string;
   isVisible: boolean;
+  unlimitedStepsEnabled?: boolean;
 }
 
 // 执行步骤类型
@@ -252,6 +253,7 @@ export function ChatKitPanel({
   deviceName,
   deviceConnectionType,
   isVisible,
+  unlimitedStepsEnabled = false,
 }: ChatKitPanelProps) {
   const t = useTranslation();
 
@@ -693,6 +695,31 @@ export function ChatKitPanel({
             >
               {t.chatkit?.layeredAgent || '分层代理模式'}
             </Badge>
+            {loading && unlimitedStepsEnabled && (
+              <Badge
+                variant="secondary"
+                className="bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300"
+              >
+                无限步数模式
+              </Badge>
+            )}
+            {loading && (
+              <Button
+                onClick={handleAbort}
+                disabled={aborting}
+                size="sm"
+                variant="destructive"
+                className="gap-2 rounded-full"
+                title={t.chat?.abortChat || '中断任务'}
+              >
+                {aborting ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Square className="h-4 w-4" />
+                )}
+                <span>{t.chat?.abortChat || '中断任务'}</span>
+              </Button>
+            )}
             {/* History button with Popover */}
             <Popover
               open={showHistoryPopover}
