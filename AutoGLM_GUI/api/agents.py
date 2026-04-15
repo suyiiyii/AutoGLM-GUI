@@ -253,7 +253,11 @@ def save_config_endpoint(request: ConfigSaveRequest) -> dict[str, Any]:
             base_url=request.base_url,
             model_name=request.model_name,
             api_key=request.api_key or "EMPTY",
+            default_max_steps=request.default_max_steps,
+            layered_max_turns=request.layered_max_turns,
         )
+
+        provided_fields = request.model_fields_set
 
         # 保存配置（合并模式，不丢失字段）
         success = config_manager.save_file_config(
@@ -268,6 +272,8 @@ def save_config_endpoint(request: ConfigSaveRequest) -> dict[str, Any]:
             decision_model_name=request.decision_model_name,
             decision_api_key=request.decision_api_key,
             merge_mode=True,
+            default_max_steps_set="default_max_steps" in provided_fields,
+            layered_max_turns_set="layered_max_turns" in provided_fields,
         )
 
         if not success:

@@ -8,6 +8,8 @@
 
 import asyncio
 import copy
+import json
+import time
 from abc import ABC, abstractmethod
 from collections.abc import AsyncGenerator
 from typing import Any
@@ -21,6 +23,11 @@ from AutoGLM_GUI.device_protocol import DeviceProtocol
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.model import MessageBuilder
 from AutoGLM_GUI.trace import summarize_text, trace_span
+
+
+WATCHDOG_MAX_RUNTIME_SECONDS = 60 * 60
+WATCHDOG_REPEATED_ACTION_LIMIT = 12
+WATCHDOG_NO_PROGRESS_LIMIT = 20
 
 
 class AsyncAgentBase(ABC):
@@ -151,8 +158,14 @@ class AsyncAgentBase(ABC):
                         task, screenshot.base64_data, current_app
                     )
 
-                while (
-                    self._step_count < self.agent_config.max_steps and self._is_running
+                started_at = time.monotonic()
+                repeated_action_count = 0
+                no_progress_count = 0
+                last_action_signature: str | None = None
+
+                while self._is_running and (
+                    self.agent_config.max_steps is None
+                    or self._step_count < self.agent_config.max_steps
                 ):
                     if self._cancel_event.is_set():
                         raise asyncio.CancelledError()
@@ -177,6 +190,22 @@ class AsyncAgentBase(ABC):
                                         ).get("action"),
                                     }
                                 )
+                            if event["type"] == "step":
+                                action_signature = json.dumps(
+                                    event["data"].get("action"),
+                                    ensure_ascii=False,
+                                    sort_keys=True,
+                                )
+                                if action_signature and action_signature != "null":
+                                    if action_signature == last_action_signature:
+                                        repeated_action_count += 1
+                                    else:
+                                        last_action_signature = action_signature
+                                        repeated_action_count = 1
+                                    no_progress_count = 0
+                                else:
+                                    no_progress_count += 1
+
                             yield event
 
                             if event["type"] == "step" and event["data"].get(
@@ -201,6 +230,63 @@ class AsyncAgentBase(ABC):
                                 }
                                 return
 
+                            if repeated_action_count >= WATCHDOG_REPEATED_ACTION_LIMIT:
+                                stream_span.set_attributes(
+                                    {
+                                        "success": False,
+                                        "steps": self._step_count,
+                                        "error_kind": "watchdog_repeated_actions",
+                                    }
+                                )
+                                yield {
+                                    "type": "done",
+                                    "data": {
+                                        "message": "Watchdog stopped task after repeated actions",
+                                        "steps": self._step_count,
+                                        "success": False,
+                                        "stop_reason": "watchdog_repeated_actions",
+                                    },
+                                }
+                                return
+
+                            if no_progress_count >= WATCHDOG_NO_PROGRESS_LIMIT:
+                                stream_span.set_attributes(
+                                    {
+                                        "success": False,
+                                        "steps": self._step_count,
+                                        "error_kind": "watchdog_no_progress",
+                                    }
+                                )
+                                yield {
+                                    "type": "done",
+                                    "data": {
+                                        "message": "Watchdog stopped task because no progress was detected",
+                                        "steps": self._step_count,
+                                        "success": False,
+                                        "stop_reason": "watchdog_no_progress",
+                                    },
+                                }
+                                return
+
+                            if time.monotonic() - started_at >= WATCHDOG_MAX_RUNTIME_SECONDS:
+                                stream_span.set_attributes(
+                                    {
+                                        "success": False,
+                                        "steps": self._step_count,
+                                        "error_kind": "watchdog_timeout",
+                                    }
+                                )
+                                yield {
+                                    "type": "done",
+                                    "data": {
+                                        "message": "Watchdog stopped task after maximum runtime was reached",
+                                        "steps": self._step_count,
+                                        "success": False,
+                                        "stop_reason": "watchdog_timeout",
+                                    },
+                                }
+                                return
+
                 stream_span.set_attributes(
                     {
                         "success": False,
@@ -214,6 +300,7 @@ class AsyncAgentBase(ABC):
                         "message": "Max steps reached",
                         "steps": self._step_count,
                         "success": False,
+                        "stop_reason": "max_steps_reached",
                     },
                 }
 
@@ -227,7 +314,7 @@ class AsyncAgentBase(ABC):
                 )
                 yield {
                     "type": "cancelled",
-                    "data": {"message": "Task cancelled by user"},
+                    "data": {"message": "Task cancelled by user", "stop_reason": "user_stopped"},
                 }
                 raise
 

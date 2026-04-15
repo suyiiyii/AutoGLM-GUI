@@ -293,6 +293,7 @@ class TaskManager:
         acquired = False
         final_status = TaskStatus.FAILED.value
         final_message = ""
+        stop_reason = "error"
         step_count = 0
         abort_registered = False
 
@@ -350,34 +351,48 @@ class TaskManager:
                             if event_data.get("success", False)
                             else TaskStatus.FAILED.value
                         )
+                        stop_reason = str(
+                            event_data.get(
+                                "stop_reason",
+                                "completed" if event_data.get("success", False) else "error",
+                            )
+                        )
                         step_count = int(event_data.get("steps", step_count))
                     elif event_type == "error":
                         final_message = str(event_data.get("message", "Task failed"))
                         final_status = TaskStatus.FAILED.value
+                        stop_reason = str(event_data.get("stop_reason", "error"))
                     elif event_type == "cancelled":
                         final_message = str(
                             event_data.get("message", "Task cancelled by user")
                         )
                         final_status = TaskStatus.CANCELLED.value
+                        stop_reason = str(event_data.get("stop_reason", "user_stopped"))
 
             if not final_message:
                 final_message = "Task finished without a final response"
                 final_status = TaskStatus.FAILED.value
+                stop_reason = "error"
         except asyncio.CancelledError:
             if task_id in self._cancel_requested:
                 final_message = "Task cancelled by user"
                 final_status = TaskStatus.CANCELLED.value
+                stop_reason = "user_stopped"
                 await asyncio.to_thread(
                     self.store.append_event,
                     task_id=task_id,
                     event_type="cancelled",
-                    payload={"message": final_message},
+                    payload={
+                        "message": final_message,
+                        "stop_reason": stop_reason,
+                    },
                     role="assistant",
                 )
                 await self._finalize_task(
                     task_id=task_id,
                     status=final_status,
                     final_message=final_message,
+                    stop_reason=stop_reason,
                     step_count=step_count,
                 )
                 return
@@ -385,11 +400,12 @@ class TaskManager:
         except DeviceBusyError:
             final_message = f"Device {device_id} is busy. Please wait."
             final_status = TaskStatus.FAILED.value
+            stop_reason = "device_busy"
             await asyncio.to_thread(
                 self.store.append_event,
                 task_id=task_id,
                 event_type="error",
-                payload={"message": final_message},
+                payload={"message": final_message, "stop_reason": stop_reason},
                 role="assistant",
             )
         except AgentInitializationError as exc:
@@ -397,21 +413,23 @@ class TaskManager:
                 f"初始化失败: {exc}. 请检查全局配置 (base_url, api_key, model_name)"
             )
             final_status = TaskStatus.FAILED.value
+            stop_reason = "initialization_failed"
             await asyncio.to_thread(
                 self.store.append_event,
                 task_id=task_id,
                 event_type="error",
-                payload={"message": final_message},
+                payload={"message": final_message, "stop_reason": stop_reason},
                 role="assistant",
             )
         except Exception as exc:
             final_message = str(exc)
             final_status = TaskStatus.FAILED.value
+            stop_reason = "error"
             await asyncio.to_thread(
                 self.store.append_event,
                 task_id=task_id,
                 event_type="error",
-                payload={"message": final_message},
+                payload={"message": final_message, "stop_reason": stop_reason},
                 role="assistant",
             )
         finally:
@@ -430,6 +448,7 @@ class TaskManager:
             task_id=task_id,
             status=final_status,
             final_message=final_message,
+            stop_reason=stop_reason,
             step_count=step_count,
         )
 
@@ -465,6 +484,7 @@ class TaskManager:
         start_time = datetime.now()
         final_status = TaskStatus.FAILED.value
         final_message = ""
+        stop_reason = "error"
         run = None
 
         try:
@@ -494,39 +514,53 @@ class TaskManager:
                             if event_payload.get("success", False)
                             else TaskStatus.FAILED.value
                         )
+                        stop_reason = str(
+                            event_payload.get(
+                                "stop_reason",
+                                "completed" if event_payload.get("success", False) else "error",
+                            )
+                        )
                     elif event_type == "error":
                         final_message = str(event_payload.get("message", "Task failed"))
                         final_status = TaskStatus.FAILED.value
+                        stop_reason = str(event_payload.get("stop_reason", "error"))
                     elif event_type == "cancelled":
                         final_message = str(
                             event_payload.get("message", "Task cancelled by user")
                         )
                         final_status = TaskStatus.CANCELLED.value
+                        stop_reason = str(event_payload.get("stop_reason", "user_stopped"))
 
             if not final_message:
                 final_message = run.final_output
             if not final_message:
                 final_message = "Task finished without a final response"
                 final_status = TaskStatus.FAILED.value
+                stop_reason = "error"
         except Exception as exc:
             if task_id in self._cancel_requested:
                 final_message = "Task cancelled by user"
                 final_status = TaskStatus.CANCELLED.value
+                stop_reason = "user_stopped"
                 await asyncio.to_thread(
                     self.store.append_event,
                     task_id=task_id,
                     event_type="cancelled",
-                    payload={"message": final_message},
+                    payload={
+                        "message": final_message,
+                        "stop_reason": stop_reason,
+                    },
                     role="assistant",
                 )
             else:
                 final_message = str(exc)
                 final_status = TaskStatus.FAILED.value
+                stop_reason = "error"
                 await asyncio.to_thread(
                     self.store.append_event,
                     task_id=task_id,
                     event_type="error",
-                    payload={"message": final_message},
+                    payload={"message": final_message, "stop_reason": stop_reason},
                     role="assistant",
                 )
         finally:
@@ -539,6 +573,7 @@ class TaskManager:
             task_id=task_id,
             status=final_status,
             final_message=final_message,
+            stop_reason=stop_reason,
             step_count=0,
         )
 
@@ -601,6 +636,7 @@ class TaskManager:
         acquired = False
         final_status = TaskStatus.FAILED.value
         final_message = ""
+        stop_reason = "error"
         step_count = 0
         abort_registered = False
 
@@ -657,36 +693,53 @@ class TaskManager:
                         if event_data.get("success", False)
                         else TaskStatus.FAILED.value
                     )
+                    stop_reason = str(
+                        event_data.get(
+                            "stop_reason",
+                            "completed" if event_data.get("success", False) else "error",
+                        )
+                    )
                     step_count = int(event_data.get("steps", step_count))
                 elif event_type == "error":
                     final_message = str(event_data.get("message", "Task failed"))
                     final_status = TaskStatus.FAILED.value
+                    stop_reason = str(event_data.get("stop_reason", "error"))
                     await asyncio.to_thread(
                         self.store.append_event,
                         task_id=task_id,
                         event_type="error",
-                        payload={"message": final_message},
+                        payload={"message": final_message, "stop_reason": stop_reason},
                         role="assistant",
                     )
+                elif event_type == "cancelled":
+                    final_message = str(event_data.get("message", "Task cancelled by user"))
+                    final_status = TaskStatus.CANCELLED.value
+                    stop_reason = str(event_data.get("stop_reason", "user_stopped"))
 
             if not final_message:
                 final_message = "Task finished without a final response"
                 final_status = TaskStatus.FAILED.value
+                stop_reason = "error"
         except asyncio.CancelledError:
             if task_id in self._cancel_requested:
                 final_message = "Task cancelled by user"
                 final_status = TaskStatus.CANCELLED.value
+                stop_reason = "user_stopped"
                 await asyncio.to_thread(
                     self.store.append_event,
                     task_id=task_id,
                     event_type="cancelled",
-                    payload={"message": final_message},
+                    payload={
+                        "message": final_message,
+                        "stop_reason": stop_reason,
+                    },
                     role="assistant",
                 )
                 await self._finalize_task(
                     task_id=task_id,
                     status=final_status,
                     final_message=final_message,
+                    stop_reason=stop_reason,
                     step_count=step_count,
                 )
                 return
@@ -694,11 +747,12 @@ class TaskManager:
         except DeviceBusyError:
             final_message = f"Device {device_id} is busy. Please wait."
             final_status = TaskStatus.FAILED.value
+            stop_reason = "device_busy"
             await asyncio.to_thread(
                 self.store.append_event,
                 task_id=task_id,
                 event_type="error",
-                payload={"message": final_message},
+                payload={"message": final_message, "stop_reason": stop_reason},
                 role="assistant",
             )
         except AgentInitializationError as exc:
@@ -706,21 +760,23 @@ class TaskManager:
                 f"初始化失败: {exc}. 请检查全局配置 (base_url, api_key, model_name)"
             )
             final_status = TaskStatus.FAILED.value
+            stop_reason = "initialization_failed"
             await asyncio.to_thread(
                 self.store.append_event,
                 task_id=task_id,
                 event_type="error",
-                payload={"message": final_message},
+                payload={"message": final_message, "stop_reason": stop_reason},
                 role="assistant",
             )
         except Exception as exc:
             final_message = str(exc)
             final_status = TaskStatus.FAILED.value
+            stop_reason = "error"
             await asyncio.to_thread(
                 self.store.append_event,
                 task_id=task_id,
                 event_type="error",
-                payload={"message": final_message},
+                payload={"message": final_message, "stop_reason": stop_reason},
                 role="assistant",
             )
         finally:
@@ -739,6 +795,7 @@ class TaskManager:
             task_id=task_id,
             status=final_status,
             final_message=final_message,
+            stop_reason=stop_reason,
             step_count=step_count,
         )
 
@@ -749,22 +806,39 @@ class TaskManager:
         status: str,
         final_message: str,
         step_count: int,
+        stop_reason: str | None = None,
     ) -> None:
+        normalized_stop_reason = stop_reason
+        if normalized_stop_reason is None:
+            if status == TaskStatus.SUCCEEDED.value:
+                normalized_stop_reason = "completed"
+            elif status == TaskStatus.CANCELLED.value:
+                normalized_stop_reason = "user_stopped"
+            else:
+                normalized_stop_reason = "error"
+
         if status == TaskStatus.SUCCEEDED.value:
             event_type = "done"
             payload = {
                 "message": final_message,
                 "steps": step_count,
                 "success": True,
+                "stop_reason": normalized_stop_reason,
             }
             error_message = None
         elif status == TaskStatus.CANCELLED.value:
             event_type = "cancelled"
-            payload = {"message": final_message}
+            payload = {
+                "message": final_message,
+                "stop_reason": normalized_stop_reason,
+            }
             error_message = final_message
         else:
             event_type = "error"
-            payload = {"message": final_message}
+            payload = {
+                "message": final_message,
+                "stop_reason": normalized_stop_reason,
+            }
             error_message = final_message
 
         existing_events = await asyncio.to_thread(self.store.list_task_events, task_id)
@@ -783,6 +857,7 @@ class TaskManager:
             status=status,
             final_message=final_message,
             error_message=error_message,
+            stop_reason=normalized_stop_reason,
             step_count=step_count,
         )
         self._mark_task_complete(task_id)
@@ -792,13 +867,14 @@ class TaskManager:
             self.store.append_event,
             task_id=task["id"],
             event_type="error",
-            payload={"message": message},
+            payload={"message": message, "stop_reason": "error"},
             role="assistant",
         )
         await self._finalize_task(
             task_id=task["id"],
             status=TaskStatus.FAILED.value,
             final_message=message,
+            stop_reason="error",
             step_count=int(task.get("step_count", 0)),
         )
 
@@ -807,7 +883,7 @@ class TaskManager:
             self.store.append_event,
             task_id=task["id"],
             event_type="error",
-            payload={"message": message},
+            payload={"message": message, "stop_reason": "service_interrupted"},
             role="assistant",
         )
         await asyncio.to_thread(
@@ -816,6 +892,7 @@ class TaskManager:
             status=TaskStatus.INTERRUPTED.value,
             final_message=message,
             error_message=message,
+            stop_reason="service_interrupted",
             step_count=int(task.get("step_count", 0)),
         )
         self._mark_task_complete(task["id"])

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import json
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Self, cast
@@ -58,8 +58,8 @@ class ConfigFileData(TypedDict, total=False):
     api_key: str
     agent_type: str
     agent_config_params: dict[str, Any]
-    default_max_steps: int
-    layered_max_turns: int
+    default_max_steps: int | None
+    layered_max_turns: int | None
     decision_base_url: str
     decision_model_name: str
     decision_api_key: str
@@ -77,9 +77,9 @@ class ConfigModel(BaseModel):
     agent_config_params: dict[str, Any] | None = None  # Agent-specific configuration
 
     # Agent 执行配置
-    default_max_steps: int = 100  # 单次任务最大执行步数
+    default_max_steps: int | None = 100  # None 表示不限制
 
-    layered_max_turns: int = LAYERED_MAX_TURNS_DEFAULT
+    layered_max_turns: int | None = LAYERED_MAX_TURNS_DEFAULT
 
     # 决策模型配置（用于分层代理）
     decision_base_url: str | None = None
@@ -88,12 +88,12 @@ class ConfigModel(BaseModel):
 
     @field_validator("default_max_steps")
     @classmethod
-    def validate_default_max_steps(cls, v: int) -> int:
+    def validate_default_max_steps(cls, v: int | None) -> int | None:
         """验证 default_max_steps 范围."""
+        if v is None:
+            return v
         if v <= 0:
             raise ValueError("default_max_steps must be positive")
-        if v > 1000:
-            raise ValueError("default_max_steps must be <= 1000")
         return v
 
     @field_validator("base_url")
@@ -134,7 +134,9 @@ class ConfigModel(BaseModel):
 
     @field_validator("layered_max_turns")
     @classmethod
-    def validate_layered_max_turns(cls, v: int) -> int:
+    def validate_layered_max_turns(cls, v: int | None) -> int | None:
+        if v is None:
+            return v
         if v < LAYERED_MAX_TURNS_MIN:
             raise ValueError(f"layered_max_turns must be >= {LAYERED_MAX_TURNS_MIN}")
         return v
@@ -162,43 +164,30 @@ class ConfigLayer:
     decision_api_key: str | None = None
 
     source: ConfigSource = ConfigSource.DEFAULT
+    explicit_keys: set[str] = field(default_factory=set, repr=False)
 
     def has_value(self, key: str) -> bool:
-        """检查此层是否有非 None 的值.
-
-        Args:
-            key: 配置键名
-
-        Returns:
-            bool: 如果有值返回 True
-        """
+        """检查此层是否显式提供了该字段."""
         value = getattr(self, key, None)
-        return value is not None
+        return key in self.explicit_keys or value is not None
 
     def to_dict(self) -> ConfigFileData:
-        """转换为字典，排除 None 值.
-
-        Returns:
-            dict[str, Any]: 配置字典
-        """
+        """转换为字典，保留显式 null 字段."""
+        data = {
+            "base_url": self.base_url,
+            "model_name": self.model_name,
+            "api_key": self.api_key,
+            "agent_type": self.agent_type,
+            "agent_config_params": self.agent_config_params,
+            "default_max_steps": self.default_max_steps,
+            "layered_max_turns": self.layered_max_turns,
+            "decision_base_url": self.decision_base_url,
+            "decision_model_name": self.decision_model_name,
+            "decision_api_key": self.decision_api_key,
+        }
         return cast(
             ConfigFileData,
-            {
-                k: v
-                for k, v in {
-                    "base_url": self.base_url,
-                    "model_name": self.model_name,
-                    "api_key": self.api_key,
-                    "agent_type": self.agent_type,
-                    "agent_config_params": self.agent_config_params,
-                    "default_max_steps": self.default_max_steps,
-                    "layered_max_turns": self.layered_max_turns,
-                    "decision_base_url": self.decision_base_url,
-                    "decision_model_name": self.decision_model_name,
-                    "decision_api_key": self.decision_api_key,
-                }.items()
-                if v is not None
-            },
+            {k: v for k, v in data.items() if k in self.explicit_keys or v is not None},
         )
 
 
@@ -300,6 +289,16 @@ class UnifiedConfigManager:
             api_key=api_key,
             layered_max_turns=layered_max_turns,
             source=ConfigSource.CLI,
+            explicit_keys={
+                key
+                for key, value in {
+                    "base_url": base_url,
+                    "model_name": model_name,
+                    "api_key": api_key,
+                    "layered_max_turns": layered_max_turns,
+                }.items()
+                if value is not None
+            },
         )
         self._effective_config = None  # 清除缓存
         logger.debug(f"CLI config set: {self._cli_layer.to_dict()}")
@@ -315,6 +314,7 @@ class UnifiedConfigManager:
         - AUTOGLM_DECISION_BASE_URL
         - AUTOGLM_DECISION_MODEL_NAME
         - AUTOGLM_DECISION_API_KEY
+        - AUTOGLM_DEFAULT_MAX_STEPS
         - AUTOGLM_LAYERED_MAX_TURNS
         """
         base_url = os.getenv("AUTOGLM_BASE_URL")
@@ -326,6 +326,14 @@ class UnifiedConfigManager:
         decision_model_name = os.getenv("AUTOGLM_DECISION_MODEL_NAME")
         decision_api_key = os.getenv("AUTOGLM_DECISION_API_KEY")
 
+        default_max_steps_str = os.getenv("AUTOGLM_DEFAULT_MAX_STEPS")
+        default_max_steps = None
+        if default_max_steps_str:
+            try:
+                default_max_steps = int(default_max_steps_str)
+            except ValueError:
+                logger.warning("AUTOGLM_DEFAULT_MAX_STEPS must be an integer")
+
         layered_max_turns_str = os.getenv("AUTOGLM_LAYERED_MAX_TURNS")
         layered_max_turns = None
         if layered_max_turns_str:
@@ -334,15 +342,20 @@ class UnifiedConfigManager:
             except ValueError:
                 logger.warning("AUTOGLM_LAYERED_MAX_TURNS must be an integer")
 
+        env_values = {
+            "base_url": base_url if base_url else None,
+            "model_name": model_name if model_name else None,
+            "api_key": api_key if api_key else None,
+            "default_max_steps": default_max_steps,
+            "layered_max_turns": layered_max_turns,
+            "decision_base_url": decision_base_url if decision_base_url else None,
+            "decision_model_name": decision_model_name if decision_model_name else None,
+            "decision_api_key": decision_api_key if decision_api_key else None,
+        }
         self._env_layer = ConfigLayer(
-            base_url=base_url if base_url else None,
-            model_name=model_name if model_name else None,
-            api_key=api_key if api_key else None,
-            layered_max_turns=layered_max_turns,
-            decision_base_url=decision_base_url if decision_base_url else None,
-            decision_model_name=decision_model_name if decision_model_name else None,
-            decision_api_key=decision_api_key if decision_api_key else None,
+            **env_values,
             source=ConfigSource.ENV,
+            explicit_keys={key for key, value in env_values.items() if value is not None},
         )
         self._effective_config = None  # 清除缓存
         logger.debug(f"Environment config loaded: {self._env_layer.to_dict()}")
@@ -398,18 +411,22 @@ class UnifiedConfigManager:
                 raw_agent_type = "glm-async"
 
             # 更新文件层
+            file_values = {
+                "base_url": config_data.get("base_url"),
+                "model_name": config_data.get("model_name"),
+                "api_key": config_data.get("api_key"),
+                "agent_type": raw_agent_type,
+                "agent_config_params": config_data.get("agent_config_params"),
+                "default_max_steps": config_data.get("default_max_steps"),
+                "layered_max_turns": config_data.get("layered_max_turns"),
+                "decision_base_url": config_data.get("decision_base_url"),
+                "decision_model_name": config_data.get("decision_model_name"),
+                "decision_api_key": config_data.get("decision_api_key"),
+            }
             self._file_layer = ConfigLayer(
-                base_url=config_data.get("base_url"),
-                model_name=config_data.get("model_name"),
-                api_key=config_data.get("api_key"),
-                agent_type=raw_agent_type,
-                agent_config_params=config_data.get("agent_config_params"),
-                default_max_steps=config_data.get("default_max_steps"),
-                layered_max_turns=config_data.get("layered_max_turns"),
-                decision_base_url=config_data.get("decision_base_url"),
-                decision_model_name=config_data.get("decision_model_name"),
-                decision_api_key=config_data.get("decision_api_key"),
+                **file_values,
                 source=ConfigSource.FILE,
+                explicit_keys=set(config_data.keys()),
             )
             self._effective_config = None  # 清除缓存
 
@@ -444,6 +461,8 @@ class UnifiedConfigManager:
         decision_model_name: str | None = None,
         decision_api_key: str | None = None,
         merge_mode: bool = True,
+        default_max_steps_set: bool = False,
+        layered_max_turns_set: bool = False,
     ) -> bool:
         """
         保存配置到文件，支持合并模式.
@@ -480,9 +499,13 @@ class UnifiedConfigManager:
                 new_config["agent_type"] = agent_type
             if agent_config_params is not None:
                 new_config["agent_config_params"] = agent_config_params
-            if default_max_steps is not None:
+            if default_max_steps_set:
                 new_config["default_max_steps"] = default_max_steps
-            if layered_max_turns is not None:
+            elif default_max_steps is not None:
+                new_config["default_max_steps"] = default_max_steps
+            if layered_max_turns_set:
+                new_config["layered_max_turns"] = layered_max_turns
+            elif layered_max_turns is not None:
                 new_config["layered_max_turns"] = layered_max_turns
 
             # 决策模型配置
@@ -737,6 +760,16 @@ class UnifiedConfigManager:
         os.environ["AUTOGLM_BASE_URL"] = config.base_url
         os.environ["AUTOGLM_MODEL_NAME"] = config.model_name
         os.environ["AUTOGLM_API_KEY"] = config.api_key
+
+        if config.default_max_steps is None:
+            os.environ.pop("AUTOGLM_DEFAULT_MAX_STEPS", None)
+        else:
+            os.environ["AUTOGLM_DEFAULT_MAX_STEPS"] = str(config.default_max_steps)
+
+        if config.layered_max_turns is None:
+            os.environ.pop("AUTOGLM_LAYERED_MAX_TURNS", None)
+        else:
+            os.environ["AUTOGLM_LAYERED_MAX_TURNS"] = str(config.layered_max_turns)
 
         logger.debug("Configuration synced to environment variables")
 
