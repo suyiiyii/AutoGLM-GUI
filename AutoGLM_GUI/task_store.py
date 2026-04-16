@@ -140,7 +140,10 @@ class TaskStore:
                 ON task_events(task_id, seq);
             """
         )
-        columns = {row[1] for row in self._conn.execute("PRAGMA table_info(task_runs)").fetchall()}
+        columns = {
+            row[1]
+            for row in self._conn.execute("PRAGMA table_info(task_runs)").fetchall()
+        }
         if "stop_reason" not in columns:
             self._conn.execute("ALTER TABLE task_runs ADD COLUMN stop_reason TEXT NULL")
         self._conn.commit()

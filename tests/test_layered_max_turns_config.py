@@ -124,4 +124,3 @@ def test_save_file_config_persists_explicit_null_default_max_steps(
     persisted = json.loads(config_path.read_text(encoding="utf-8"))
     assert "default_max_steps" in persisted
     assert persisted["default_max_steps"] is None
-

@@ -355,7 +355,9 @@ class UnifiedConfigManager:
         self._env_layer = ConfigLayer(
             **env_values,
             source=ConfigSource.ENV,
-            explicit_keys={key for key, value in env_values.items() if value is not None},
+            explicit_keys={
+                key for key, value in env_values.items() if value is not None
+            },
         )
         self._effective_config = None  # 清除缓存
         logger.debug(f"Environment config loaded: {self._env_layer.to_dict()}")

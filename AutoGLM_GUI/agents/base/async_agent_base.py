@@ -268,7 +268,10 @@ class AsyncAgentBase(ABC):
                                 }
                                 return
 
-                            if time.monotonic() - started_at >= WATCHDOG_MAX_RUNTIME_SECONDS:
+                            if (
+                                time.monotonic() - started_at
+                                >= WATCHDOG_MAX_RUNTIME_SECONDS
+                            ):
                                 stream_span.set_attributes(
                                     {
                                         "success": False,
@@ -314,7 +317,10 @@ class AsyncAgentBase(ABC):
                 )
                 yield {
                     "type": "cancelled",
-                    "data": {"message": "Task cancelled by user", "stop_reason": "user_stopped"},
+                    "data": {
+                        "message": "Task cancelled by user",
+                        "stop_reason": "user_stopped",
+                    },
                 }
                 raise
 
