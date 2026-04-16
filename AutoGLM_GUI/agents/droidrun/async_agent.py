@@ -180,7 +180,11 @@ class DroidRunAgent:
         config = DroidConfig()
         config.device = DeviceConfig(serial=self._device.device_id)
         config.telemetry.enabled = False
-        config.agent.max_steps = self.agent_config.max_steps
+        config.agent.max_steps = (
+            self.agent_config.max_steps
+            if self.agent_config.max_steps is not None
+            else 100000
+        )
         config.agent.reasoning = False
 
         # 加载 LLM（OpenAI 兼容接口）
