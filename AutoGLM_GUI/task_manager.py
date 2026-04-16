@@ -347,6 +347,8 @@ class TaskManager:
                     final_message = "Task cancelled by user"
                     final_status = TaskStatus.CANCELLED.value
                 else:
+                    event_type = ""
+                    event_data: dict[str, Any] = {}
                     async for event in agent.stream(task["input_text"]):
                         event_type = event["type"]
                         event_data = dict(event.get("data", {}))
@@ -378,7 +380,9 @@ class TaskManager:
                         stop_reason = str(
                             event_data.get(
                                 "stop_reason",
-                                "completed" if event_data.get("success", False) else "error",
+                                "completed"
+                                if event_data.get("success", False)
+                                else "error",
                             )
                         )
                         step_count = int(event_data.get("steps", step_count))
@@ -554,7 +558,9 @@ class TaskManager:
                         stop_reason = str(
                             event_payload.get(
                                 "stop_reason",
-                                "completed" if event_payload.get("success", False) else "error",
+                                "completed"
+                                if event_payload.get("success", False)
+                                else "error",
                             )
                         )
                     elif event_type == "error":
@@ -566,7 +572,9 @@ class TaskManager:
                             event_payload.get("message", "Task cancelled by user")
                         )
                         final_status = TaskStatus.CANCELLED.value
-                        stop_reason = str(event_payload.get("stop_reason", "user_stopped"))
+                        stop_reason = str(
+                            event_payload.get("stop_reason", "user_stopped")
+                        )
 
             if not final_message:
                 final_message = run.final_output
@@ -739,7 +747,9 @@ class TaskManager:
                         stop_reason = str(
                             event_data.get(
                                 "stop_reason",
-                                "completed" if event_data.get("success", False) else "error",
+                                "completed"
+                                if event_data.get("success", False)
+                                else "error",
                             )
                         )
                         step_count = int(event_data.get("steps", step_count))
@@ -751,11 +761,16 @@ class TaskManager:
                             self.store.append_event,
                             task_id=task_id,
                             event_type="error",
-                            payload={"message": final_message, "stop_reason": stop_reason},
+                            payload={
+                                "message": final_message,
+                                "stop_reason": stop_reason,
+                            },
                             role="assistant",
                         )
                     elif event_type == "cancelled":
-                        final_message = str(event_data.get("message", "Task cancelled by user"))
+                        final_message = str(
+                            event_data.get("message", "Task cancelled by user")
+                        )
                         final_status = TaskStatus.CANCELLED.value
                         stop_reason = str(event_data.get("stop_reason", "user_stopped"))
 

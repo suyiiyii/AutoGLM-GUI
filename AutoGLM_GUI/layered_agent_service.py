@@ -520,10 +520,11 @@ def start_run(
     agent = _ensure_agent()
     session = _get_or_create_session(session_id)
     effective_config = config_manager.get_effective_config()
+    max_turns = effective_config.layered_max_turns
     result = Runner.run_streamed(
         agent,
         message,
-        max_turns=effective_config.layered_max_turns,
+        max_turns=max_turns if max_turns is not None else 100000,
         session=session,
     )
 

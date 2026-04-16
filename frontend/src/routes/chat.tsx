@@ -460,7 +460,9 @@ function ChatComponent() {
             ? tempConfig.agent_config_params
             : undefined,
         default_max_steps:
-          tempConfig.default_max_steps === '' ? null : tempConfig.default_max_steps,
+          tempConfig.default_max_steps === ''
+            ? null
+            : tempConfig.default_max_steps,
         layered_max_turns: tempConfig.layered_max_turns,
         decision_base_url: tempConfig.decision_base_url || undefined,
         decision_model_name: tempConfig.decision_model_name || undefined,
@@ -477,7 +479,9 @@ function ChatComponent() {
             ? tempConfig.agent_config_params
             : undefined,
         default_max_steps:
-          tempConfig.default_max_steps === '' ? null : tempConfig.default_max_steps,
+          tempConfig.default_max_steps === ''
+            ? null
+            : tempConfig.default_max_steps,
         layered_max_turns: tempConfig.layered_max_turns,
         decision_base_url: tempConfig.decision_base_url || undefined,
         decision_model_name: tempConfig.decision_model_name || undefined,
@@ -851,7 +855,9 @@ function ChatComponent() {
                     setTempConfig(prev => ({
                       ...prev,
                       default_max_steps:
-                        rawValue === '' ? '' : Math.max(1, parseInt(rawValue, 10) || 1),
+                        rawValue === ''
+                          ? ''
+                          : Math.max(1, parseInt(rawValue, 10) || 1),
                     }));
                   }}
                   placeholder="留空表示不限制"
@@ -1199,7 +1205,9 @@ function ChatComponent() {
                         deviceName={device.model}
                         deviceConnectionType={device.connection_type}
                         isVisible={device.id === currentDeviceId}
-                        unlimitedStepsEnabled={config?.default_max_steps == null}
+                        unlimitedStepsEnabled={
+                          config?.default_max_steps == null
+                        }
                       />
                     </div>
                   ) : (
@@ -1211,7 +1219,9 @@ function ChatComponent() {
                         deviceConnectionType={device.connection_type}
                         isConfigured={!!config?.base_url}
                         isVisible={device.id === currentDeviceId} // ✅ 新增：传递可见性状态
-                        unlimitedStepsEnabled={config?.default_max_steps == null}
+                        unlimitedStepsEnabled={
+                          config?.default_max_steps == null
+                        }
                       />
                     </div>
                   )}
