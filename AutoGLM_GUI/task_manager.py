@@ -346,6 +346,7 @@ class TaskManager:
                 if task_id in self._cancel_requested:
                     final_message = "Task cancelled by user"
                     final_status = TaskStatus.CANCELLED.value
+                    stop_reason = "user_stopped"
                 else:
                     event_type = ""
                     event_data: dict[str, Any] = {}

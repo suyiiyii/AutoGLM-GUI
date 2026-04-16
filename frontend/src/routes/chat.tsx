@@ -1206,7 +1206,7 @@ function ChatComponent() {
                         deviceConnectionType={device.connection_type}
                         isVisible={device.id === currentDeviceId}
                         unlimitedStepsEnabled={
-                          config?.default_max_steps == null
+                          config?.default_max_steps === null
                         }
                       />
                     </div>
@@ -1220,7 +1220,7 @@ function ChatComponent() {
                         isConfigured={!!config?.base_url}
                         isVisible={device.id === currentDeviceId} // ✅ 新增：传递可见性状态
                         unlimitedStepsEnabled={
-                          config?.default_max_steps == null
+                          config?.default_max_steps === null
                         }
                       />
                     </div>
