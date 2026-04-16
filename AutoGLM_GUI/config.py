@@ -48,14 +48,14 @@ class AgentConfig:
     控制 Agent 的行为参数。
 
     Attributes:
-        max_steps: 单次任务最大执行步数 (默认: 100)
+        max_steps: 单次任务最大执行步数，None 表示不限制
         device_id: 设备标识符 (USB serial 或 IP:port)
         lang: 语言设置 'cn' 或 'en'
         system_prompt: 自定义系统提示词 (None 则使用默认)
         verbose: 是否输出详细日志
     """
 
-    max_steps: int = 100
+    max_steps: int | None = 100
     device_id: str | None = None
     lang: str = "cn"
     system_prompt: str | None = None

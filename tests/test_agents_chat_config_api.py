@@ -250,6 +250,27 @@ def test_chat_unexpected_error_returns_success_false(env: dict[str, Any]) -> Non
     assert env["phone_manager"].release_calls == ["device-2"]
 
 
+def test_save_config_preserves_explicit_null_default_max_steps(
+    env: dict[str, Any],
+) -> None:
+    response = env["client"].post(
+        "/api/config",
+        json={
+            "base_url": "http://localhost:8080/v1",
+            "model_name": "autoglm-phone-9b",
+            "default_max_steps": None,
+            "layered_max_turns": 50,
+        },
+    )
+
+    assert response.status_code == 200
+    assert env["config_manager"].save_kwargs is not None
+    assert env["config_manager"].save_kwargs["default_max_steps"] is None
+    assert env["config_manager"].save_kwargs["default_max_steps_set"] is True
+    assert env["config_manager"].save_kwargs["layered_max_turns"] == 50
+    assert env["config_manager"].save_kwargs["layered_max_turns_set"] is True
+
+
 def test_chat_stream_emits_error_event_when_device_busy(env: dict[str, Any]) -> None:
     env["phone_manager"].acquire_mode = "busy"
 

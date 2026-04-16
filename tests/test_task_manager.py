@@ -133,6 +133,7 @@ def test_task_manager_can_cancel_queued_task(tmp_path: Path) -> None:
         final_queued = await manager.wait_for_task(str(queued["id"]), timeout=2)
         assert final_queued is not None
         assert final_queued["status"] == TaskStatus.CANCELLED.value
+        assert final_queued["stop_reason"] == "user_stopped"
 
         await manager.shutdown()
         store.close()
@@ -185,6 +186,7 @@ def test_task_manager_can_cancel_running_task(tmp_path: Path) -> None:
         final_task = await manager.wait_for_task(str(task["id"]), timeout=2)
         assert final_task is not None
         assert final_task["status"] == TaskStatus.CANCELLED.value
+        assert final_task["stop_reason"] == "user_stopped"
 
         await manager.shutdown()
         store.close()
@@ -211,6 +213,7 @@ def test_task_manager_marks_running_tasks_interrupted_on_start(tmp_path: Path) -
 
     assert recovered is not None
     assert recovered["status"] == TaskStatus.INTERRUPTED.value
+    assert recovered["stop_reason"] == "service_interrupted"
     assert any(event["event_type"] == "error" for event in events)
 
     asyncio.run(manager.shutdown())

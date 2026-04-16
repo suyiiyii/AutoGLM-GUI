@@ -275,10 +275,10 @@ class ConfigResponse(BaseModel):
     agent_config_params: dict[str, Any] | None = None  # Agent-specific configuration
 
     # Agent 执行配置
-    default_max_steps: int = 100  # 单次任务最大执行步数
+    default_max_steps: int | None = 100  # None 表示不限制
 
     # 分层代理配置
-    layered_max_turns: int = 50  # 分层代理模式的最大轮次
+    layered_max_turns: int | None = 50  # None 表示不限制
 
     # 决策模型配置（用于分层代理）
     decision_base_url: str | None = None
@@ -320,8 +320,6 @@ class ConfigSaveRequest(BaseModel):
             return v
         if v <= 0:
             raise ValueError("default_max_steps must be positive")
-        if v > 1000:
-            raise ValueError("default_max_steps must be <= 1000")
         return v
 
     @field_validator("layered_max_turns")
@@ -839,6 +837,7 @@ class TaskRunResponse(BaseModel):
     input_text: str
     final_message: str | None = None
     error_message: str | None = None
+    stop_reason: str | None = None
     step_count: int
     created_at: str
     started_at: str | None = None

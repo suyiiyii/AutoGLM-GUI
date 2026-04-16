@@ -75,6 +75,9 @@ def _task_run_response(record: TaskRecord) -> TaskRunResponse:
         error_message=str(record["error_message"])
         if record.get("error_message") is not None
         else None,
+        stop_reason=str(record.get("stop_reason"))
+        if record.get("stop_reason") is not None
+        else None,
         step_count=int(record["step_count"]),
         created_at=str(record["created_at"]),
         started_at=str(record["started_at"])

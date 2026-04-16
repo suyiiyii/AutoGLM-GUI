@@ -104,6 +104,7 @@ class TaskStore:
                 input_text TEXT NOT NULL,
                 final_message TEXT NULL,
                 error_message TEXT NULL,
+                stop_reason TEXT NULL,
                 step_count INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL,
                 started_at TEXT NULL,
@@ -139,6 +140,9 @@ class TaskStore:
                 ON task_events(task_id, seq);
             """
         )
+        columns = {row[1] for row in self._conn.execute("PRAGMA table_info(task_runs)").fetchall()}
+        if "stop_reason" not in columns:
+            self._conn.execute("ALTER TABLE task_runs ADD COLUMN stop_reason TEXT NULL")
         self._conn.commit()
 
     def _fetchone(self, query: str, params: tuple[Any, ...] = ()) -> sqlite3.Row | None:
@@ -343,8 +347,8 @@ class TaskStore:
                 INSERT INTO task_runs (
                     id, source, executor_key, session_id, scheduled_task_id, workflow_uuid,
                     schedule_fire_id, device_id, device_serial, status, input_text,
-                    final_message, error_message, step_count, created_at, started_at, finished_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, 0, ?, NULL, NULL)
+                    final_message, error_message, stop_reason, step_count, created_at, started_at, finished_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 0, ?, NULL, NULL)
                 """,
                 (
                     record_id,
@@ -521,7 +525,8 @@ class TaskStore:
         status: str,
         final_message: str,
         error_message: str | None,
-        step_count: int,
+        stop_reason: str | None = None,
+        step_count: int = 0,
     ) -> TaskRecord | None:
         self._ensure_ready()
         with self._lock:
@@ -529,13 +534,14 @@ class TaskStore:
             self._conn.execute(
                 """
                 UPDATE task_runs
-                SET status = ?, final_message = ?, error_message = ?, step_count = ?, finished_at = ?
+                SET status = ?, final_message = ?, error_message = ?, stop_reason = ?, step_count = ?, finished_at = ?
                 WHERE id = ?
                 """,
                 (
                     status,
                     final_message,
                     error_message,
+                    stop_reason,
                     step_count,
                     _now_iso(),
                     task_id,
@@ -564,13 +570,14 @@ class TaskStore:
             self._conn.execute(
                 """
                 UPDATE task_runs
-                SET status = ?, final_message = ?, error_message = ?, finished_at = ?
+                SET status = ?, final_message = ?, error_message = ?, stop_reason = ?, finished_at = ?
                 WHERE id = ?
                 """,
                 (
                     TaskStatus.CANCELLED.value,
                     message,
                     message,
+                    "user_stopped",
                     finished_at,
                     task_id,
                 ),
@@ -610,13 +617,14 @@ class TaskStore:
                 self._conn.execute(
                     """
                     UPDATE task_runs
-                    SET status = ?, final_message = ?, error_message = ?, finished_at = ?
+                    SET status = ?, final_message = ?, error_message = ?, stop_reason = ?, finished_at = ?
                     WHERE id = ?
                     """,
                     (
                         TaskStatus.INTERRUPTED.value,
                         message,
                         message,
+                        "service_interrupted",
                         now,
                         task_id,
                     ),
