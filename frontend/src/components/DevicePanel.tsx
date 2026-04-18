@@ -4,10 +4,10 @@ import {
   RotateCcw,
   CheckCircle2,
   AlertCircle,
-  Loader2,
   Sparkles,
   History,
   ListChecks,
+  Loader2,
   Square,
 } from 'lucide-react';
 import { throttle } from 'lodash';
@@ -469,23 +469,6 @@ export function DevicePanel({
               >
                 无限步数模式
               </Badge>
-            )}
-            {loading && (
-              <Button
-                onClick={handleAbortChat}
-                disabled={aborting}
-                size="sm"
-                variant="destructive"
-                className="gap-2 rounded-full"
-                title={t.chat.abortChat}
-              >
-                {aborting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Square className="h-4 w-4" />
-                )}
-                <span>{t.chat.abortChat}</span>
-              </Button>
             )}
             {/* History button with Popover */}
             <Popover
