@@ -9,7 +9,6 @@ import { DeviceMonitor } from './DeviceMonitor';
 import {
   AlertCircle,
   CheckCircle2,
-  Loader2,
   Send,
   RotateCcw,
   Layers,
@@ -19,6 +18,7 @@ import {
   ChevronUp,
   History,
   ListChecks,
+  Loader2,
   Square,
 } from 'lucide-react';
 import type { Workflow, HistoryRecordResponse } from '../api';
@@ -702,23 +702,6 @@ export function ChatKitPanel({
               >
                 无限步数模式
               </Badge>
-            )}
-            {loading && (
-              <Button
-                onClick={handleAbort}
-                disabled={aborting}
-                size="sm"
-                variant="destructive"
-                className="gap-2 rounded-full"
-                title={t.chat?.abortChat || '中断任务'}
-              >
-                {aborting ? (
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                ) : (
-                  <Square className="h-4 w-4" />
-                )}
-                <span>{t.chat?.abortChat || '中断任务'}</span>
-              </Button>
             )}
             {/* History button with Popover */}
             <Popover
