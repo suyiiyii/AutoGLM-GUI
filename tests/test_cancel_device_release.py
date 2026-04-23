@@ -79,6 +79,9 @@ def test_cancel_running_chat_task_restores_device_to_idle(
             device_serial="serial-a",
             mode="classic",
         )
+
+        await manager.start()
+
         task = await manager.submit_chat_task(
             session_id=str(session["id"]),
             device_id=device_id,
