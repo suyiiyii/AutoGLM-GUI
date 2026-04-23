@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <attr name="palettePrimary0" format="color|reference" />
+    <attr name="palettePrimary10" format="color|reference" />
+    <attr name="palettePrimary20" format="color|reference" />
+    <attr name="palettePrimary30" format="color|reference" />
+    <attr name="palettePrimary40" format="color|reference" />
+    <attr name="palettePrimary50" format="color|reference" />
+    <attr name="palettePrimary60" format="color|reference" />
+    <attr name="palettePrimary70" format="color|reference" />
+    <attr name="palettePrimary80" format="color|reference" />
+    <attr name="palettePrimary90" format="color|reference" />
+    <attr name="palettePrimary95" format="color|reference" />
+    <attr name="palettePrimary99" format="color|reference" />
+    <attr name="palettePrimary100" format="color|reference" />
+
+    <attr name="paletteSecondary0" format="color|reference" />
+    <attr name="paletteSecondary10" format="color|reference" />
+    <attr name="paletteSecondary20" format="color|reference" />
+    <attr name="paletteSecondary30" format="color|reference" />
+    <attr name="paletteSecondary40" format="color|reference" />
+    <attr name="paletteSecondary50" format="color|reference" />
+    <attr name="paletteSecondary60" format="color|reference" />
+    <attr name="paletteSecondary70" format="color|reference" />
+    <attr name="paletteSecondary80" format="color|reference" />
+    <attr name="paletteSecondary90" format="color|reference" />
+    <attr name="paletteSecondary95" format="color|reference" />
+    <attr name="paletteSecondary99" format="color|reference" />
+    <attr name="paletteSecondary100" format="color|reference" />
+
+    <attr name="paletteTertiary0" format="color|reference" />
+    <attr name="paletteTertiary10" format="color|reference" />
+    <attr name="paletteTertiary20" format="color|reference" />
+    <attr name="paletteTertiary30" format="color|reference" />
+    <attr name="paletteTertiary40" format="color|reference" />
+    <attr name="paletteTertiary50" format="color|reference" />
+    <attr name="paletteTertiary60" format="color|reference" />
+    <attr name="paletteTertiary70" format="color|reference" />
+    <attr name="paletteTertiary80" format="color|reference" />
+    <attr name="paletteTertiary90" format="color|reference" />
+    <attr name="paletteTertiary95" format="color|reference" />
+    <attr name="paletteTertiary99" format="color|reference" />
+    <attr name="paletteTertiary100" format="color|reference" />
+
+    <attr name="paletteError0" format="color|reference" />
+    <attr name="paletteError10" format="color|reference" />
+    <attr name="paletteError20" format="color|reference" />
+    <attr name="paletteError30" format="color|reference" />
+    <attr name="paletteError40" format="color|reference" />
+    <attr name="paletteError50" format="color|reference" />
+    <attr name="paletteError60" format="color|reference" />
+    <attr name="paletteError70" format="color|reference" />
+    <attr name="paletteError80" format="color|reference" />
+    <attr name="paletteError90" format="color|reference" />
+    <attr name="paletteError95" format="color|reference" />
+    <attr name="paletteError99" format="color|reference" />
+    <attr name="paletteError100" format="color|reference" />
+
+    <attr name="paletteNeutral0" format="color|reference" />
+    <attr name="paletteNeutral10" format="color|reference" />
+    <attr name="paletteNeutral20" format="color|reference" />
+    <attr name="paletteNeutral30" format="color|reference" />
+    <attr name="paletteNeutral40" format="color|reference" />
+    <attr name="paletteNeutral50" format="color|reference" />
+    <attr name="paletteNeutral60" format="color|reference" />
+    <attr name="paletteNeutral70" format="color|reference" />
+    <attr name="paletteNeutral80" format="color|reference" />
+    <attr name="paletteNeutral90" format="color|reference" />
+    <attr name="paletteNeutral95" format="color|reference" />
+    <attr name="paletteNeutral99" format="color|reference" />
+    <attr name="paletteNeutral100" format="color|reference" />
+
+    <attr name="paletteNeutralVariant0" format="color|reference" />
+    <attr name="paletteNeutralVariant10" format="color|reference" />
+    <attr name="paletteNeutralVariant20" format="color|reference" />
+    <attr name="paletteNeutralVariant30" format="color|reference" />
+    <attr name="paletteNeutralVariant40" format="color|reference" />
+    <attr name="paletteNeutralVariant50" format="color|reference" />
+    <attr name="paletteNeutralVariant60" format="color|reference" />
+    <attr name="paletteNeutralVariant70" format="color|reference" />
+    <attr name="paletteNeutralVariant80" format="color|reference" />
+    <attr name="paletteNeutralVariant90" format="color|reference" />
+    <attr name="paletteNeutralVariant95" format="color|reference" />
+    <attr name="paletteNeutralVariant99" format="color|reference" />
+    <attr name="paletteNeutralVariant100" format="color|reference" />
+</resources>
