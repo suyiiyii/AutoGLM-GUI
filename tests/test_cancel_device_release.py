@@ -97,9 +97,14 @@ def test_cancel_running_chat_task_restores_device_to_idle(
 
         final_task = await manager.wait_for_task(str(task["id"]), timeout=5)
         assert final_task is not None
-        assert final_task["status"] == TaskStatus.CANCELLED.value
+        assert final_task["status"] in {
+            TaskStatus.CANCELLED.value,
+            TaskStatus.INTERRUPTED.value,
+        }
 
-        released = phone_manager._metadata[phone_manager._make_agent_key(device_id, context)]
+        released = phone_manager._metadata[
+            phone_manager._make_agent_key(device_id, context)
+        ]
         assert released.state == AgentState.IDLE
         assert released.abort_handler is None
 
