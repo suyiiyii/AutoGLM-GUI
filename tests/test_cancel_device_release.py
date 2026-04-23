@@ -72,6 +72,8 @@ def test_cancel_running_chat_task_restores_device_to_idle(
             lambda requested_device_id, **kwargs: agent,
         )
 
+        await manager.start()
+
         session = await manager.create_chat_session(
             device_id=device_id,
             device_serial="serial-a",
@@ -83,8 +85,6 @@ def test_cancel_running_chat_task_restores_device_to_idle(
             device_serial="serial-a",
             message="cancel me",
         )
-
-        await manager.start()
         await asyncio.wait_for(agent.started.wait(), timeout=2)
 
         context = f"chat:{session['id']}"
@@ -105,10 +105,7 @@ def test_cancel_running_chat_task_restores_device_to_idle(
         released = phone_manager._metadata[
             phone_manager._make_agent_key(device_id, context)
         ]
-        assert released.state in {
-            AgentState.IDLE,
-            AgentState.BUSY,
-        }
+        assert released.state == AgentState.IDLE
         assert released.abort_handler is None
 
         await manager.shutdown()
