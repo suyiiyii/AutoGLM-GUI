@@ -60,6 +60,7 @@
 
 - **分层代理模式** - 🆕 决策模型 + 视觉模型双层协作架构，支持复杂任务规划与精准执行分离
 - **完全无线配对** - 🆕 支持 Android 11+ 二维码扫码配对，无需数据线即可连接设备
+- **Android Agent 统一架构** - 🆕 同时支持局域网直连与 reverse-agent 配对/注册表模式，降低 Android Agent 接入门槛
 - **多设备并发控制** - 同时管理和控制多个 Android 设备，设备间状态完全隔离
 - **对话式任务管理** - 通过聊天界面控制 Android 设备
 - **Workflow 工作流** - 🆕 预定义常用任务，一键快速执行，支持创建、编辑、删除和管理
@@ -250,6 +251,46 @@ autoglm-gui \
 pip install autoglm-gui
 autoglm-gui --base-url http://localhost:8000/v1 --model autoglm-phone-9b
 ```
+
+### ⏱️ 高级执行设置：无限步数
+
+从 `v1.6` 开始，设置面板中的 `max_steps` 支持留空：
+
+- `100` / `500` / `10000`：显式限制单次任务最大执行步数
+- **留空**：表示**不限制步数**
+
+注意事项：
+
+- 这是**高级设置**，修改后会影响后续任务默认行为
+- 留空后，任务会持续运行，直到：
+  - 任务自然完成
+  - 你手动停止
+  - 系统级保护触发
+- 该设置只放宽主执行链；MCP / 工具调用链仍保留独立步数保护
+
+如果你只是在排查复杂长任务，建议先临时留空，确认行为后再恢复为显式数字。
+
+### 🤖 Android Agent 统一架构
+
+当前 Android Agent 接入同时支持两条路径：
+
+1. **局域网直连**
+- AutoGLM-GUI 主动连接 Android Agent
+- 适合本地网络、技术用户、调试场景
+
+2. **Reverse Agent 模式**
+- Android Agent 主动向控制端注册并保持心跳
+- AutoGLM-GUI 通过配对码、注册表、在线状态来发现并管理设备
+- 适合更低摩擦的首次接入流程
+
+当前实现重点放在：
+
+- 配对码创建与认领
+- agent 注册表与在线状态
+- reverse WebSocket 会话
+- 与现有桌面侧设备入口统一
+
+详细实现说明见 [`docs/android-agent-reverse-connection-plan.md`](docs/android-agent-reverse-connection-plan.md)。
 
 ## 🔄 升级指南
 

@@ -23,6 +23,7 @@ Modern Web GUI for AutoGLM Phone Agent - AI-Powered Android Device Automation Ma
 ## ✨ Features
 
 - **Fully Wireless Pairing** - 🆕 Android 11+ QR code pairing, no cable needed
+- **Unified Android Agent Architecture** - 🆕 Supports both LAN direct-connect and reverse-agent pairing/registry mode
 - **Multi-Device Control** - Manage and control multiple Android devices simultaneously with isolated states
 - **Conversational Task Management** - Control Android devices through chat interface
 - **Workflow System** - 🆕 Predefine common tasks for one-click execution, with full CRUD support
@@ -131,6 +132,46 @@ autoglm-gui \
 pip install autoglm-gui
 autoglm-gui --base-url http://localhost:8000/v1 --model autoglm-phone-9b
 ```
+
+### ⏱️ Advanced Execution Setting: Unlimited Steps
+
+Starting from `v1.6`, the settings panel allows leaving `max_steps` empty:
+
+- `100` / `500` / `10000`: explicit upper bound for one task run
+- **empty**: means **no step limit**
+
+Important notes:
+
+- This is an **advanced setting** and changes the default behavior for future tasks
+- With an empty value, a task keeps running until:
+  - it finishes naturally
+  - you stop it manually
+  - a system safety guard stops it
+- This only relaxes the main execution chain; MCP / tool invocation still keeps its own guardrail
+
+If you only need to debug a long task, prefer using an empty value temporarily and then switching back to a numeric limit afterward.
+
+### 🤖 Unified Android Agent Architecture
+
+Android Agent now supports two connection paths:
+
+1. **Direct LAN mode**
+- AutoGLM-GUI actively connects to Android Agent
+- best for local network, debugging, and technical users
+
+2. **Reverse Agent mode**
+- Android Agent actively registers to the control side and keeps heartbeats
+- AutoGLM-GUI discovers and manages the device through pairing, registry, and online state
+- best for lower-friction onboarding
+
+The current implementation focuses on:
+
+- pairing creation and claim
+- agent registry and online status
+- reverse WebSocket session management
+- integration with the existing desktop-side device entry points
+
+See [`docs/android-agent-reverse-connection-plan.md`](docs/android-agent-reverse-connection-plan.md) for the technical design notes.
 
 ### Prerequisites
 
