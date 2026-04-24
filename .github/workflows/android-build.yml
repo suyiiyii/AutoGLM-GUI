@@ -45,15 +45,23 @@ jobs:
       - name: Grant execute permission for gradlew
         run: chmod +x android-agent/gradlew
 
-      - name: Build Debug APK
+      - name: Build Debug APK & Lint
         working-directory: android-agent
-        run: ./gradlew assembleDebug --no-daemon
+        run: ./gradlew assembleDebug lintDebug --no-daemon
 
       - name: Upload Debug APK
         uses: actions/upload-artifact@v4
         with:
           name: autoglm-agent-debug-apk
           path: android-agent/app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+
+      - name: Upload Lint Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-lint-report
+          path: android-agent/app/build/reports/lint-results-debug.html
           retention-days: 7
 
       - name: Run scaffold verification
