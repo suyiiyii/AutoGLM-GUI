@@ -216,6 +216,8 @@ Docker 容器中连接 Android 设备推荐使用 **WiFi 调试**：
 
 远程 Device Agent 的注册信息会保存在本地配置目录中。AutoGLM-GUI 服务端重启后会自动重连已登记的远程设备；如果远端暂时不可达，后续刷新/轮询会继续重试。若远端已重新配对并更换了地址、设备 ID 或令牌，请移除旧远程设备后重新添加。
 
+安全说明：`/api/screenshot`、`/api/control/*`、`/api/video/reset` 这类高权限本地控制接口默认只接受回环地址请求。只有在显式设置 `AUTOGLM_UNSAFE_ALLOW_REMOTE_CONTROL=1` 做调试时才会放开远程访问。
+
 **更多 Docker 配置选项**，请参见下方的 [Docker 部署详细说明](#-docker-部署详细说明)。
 
 ---

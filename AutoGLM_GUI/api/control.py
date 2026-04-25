@@ -2,8 +2,9 @@
 
 import asyncio
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
+from AutoGLM_GUI.api.local_control_auth import require_local_control_access
 from AutoGLM_GUI.devices.adb_device import ADBDevice
 from AutoGLM_GUI.schemas import (
     SwipeRequest,
@@ -22,8 +23,9 @@ router = APIRouter()
 
 
 @router.post("/api/control/tap", response_model=TapResponse)
-async def control_tap(request: TapRequest) -> TapResponse:
+async def control_tap(request: TapRequest, http_request: Request) -> TapResponse:
     """Execute tap at specified device coordinates."""
+    require_local_control_access(http_request)
     try:
         if not request.device_id:
             return TapResponse(success=False, error="device_id is required")
@@ -42,8 +44,9 @@ async def control_tap(request: TapRequest) -> TapResponse:
 
 
 @router.post("/api/control/swipe", response_model=SwipeResponse)
-async def control_swipe(request: SwipeRequest) -> SwipeResponse:
+async def control_swipe(request: SwipeRequest, http_request: Request) -> SwipeResponse:
     """Execute swipe from start to end coordinates."""
+    require_local_control_access(http_request)
     try:
         if not request.device_id:
             return SwipeResponse(success=False, error="device_id is required")
@@ -65,8 +68,11 @@ async def control_swipe(request: SwipeRequest) -> SwipeResponse:
 
 
 @router.post("/api/control/touch/down", response_model=TouchDownResponse)
-async def control_touch_down(request: TouchDownRequest) -> TouchDownResponse:
+async def control_touch_down(
+    request: TouchDownRequest, http_request: Request
+) -> TouchDownResponse:
     """Send touch DOWN event at specified device coordinates."""
+    require_local_control_access(http_request)
     try:
         from AutoGLM_GUI.adb_plus import touch_down_async
 
@@ -83,8 +89,11 @@ async def control_touch_down(request: TouchDownRequest) -> TouchDownResponse:
 
 
 @router.post("/api/control/touch/move", response_model=TouchMoveResponse)
-async def control_touch_move(request: TouchMoveRequest) -> TouchMoveResponse:
+async def control_touch_move(
+    request: TouchMoveRequest, http_request: Request
+) -> TouchMoveResponse:
     """Send touch MOVE event at specified device coordinates."""
+    require_local_control_access(http_request)
     try:
         from AutoGLM_GUI.adb_plus import touch_move_async
 
@@ -101,8 +110,11 @@ async def control_touch_move(request: TouchMoveRequest) -> TouchMoveResponse:
 
 
 @router.post("/api/control/touch/up", response_model=TouchUpResponse)
-async def control_touch_up(request: TouchUpRequest) -> TouchUpResponse:
+async def control_touch_up(
+    request: TouchUpRequest, http_request: Request
+) -> TouchUpResponse:
     """Send touch UP event at specified device coordinates."""
+    require_local_control_access(http_request)
     try:
         from AutoGLM_GUI.adb_plus import touch_up_async
 

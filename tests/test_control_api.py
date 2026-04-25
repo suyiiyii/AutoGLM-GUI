@@ -231,3 +231,30 @@ def test_control_request_validation_is_enforced(control_env: dict) -> None:
     )
 
     assert response.status_code == 422
+
+
+def test_control_rejects_non_loopback_requests_by_default(control_env: dict) -> None:
+    non_local_client = TestClient(control_env["client"].app, client=("203.0.113.7", 1))
+
+    response = non_local_client.post(
+        "/api/control/tap",
+        json={"x": 100, "y": 200, "device_id": "device-1"},
+    )
+
+    assert response.status_code == 403
+    assert "loopback requests" in response.json()["detail"]
+
+
+def test_control_allows_non_loopback_with_explicit_debug_override(
+    control_env: dict, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setenv("AUTOGLM_UNSAFE_ALLOW_REMOTE_CONTROL", "1")
+    non_local_client = TestClient(control_env["client"].app, client=("203.0.113.7", 1))
+
+    response = non_local_client.post(
+        "/api/control/tap",
+        json={"x": 100, "y": 200, "device_id": "device-1"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["success"] is True

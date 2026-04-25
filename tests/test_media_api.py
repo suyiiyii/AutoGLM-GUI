@@ -219,3 +219,31 @@ def test_screenshot_handles_device_not_available_error(
     assert response.status_code == 200
     assert response.json()["success"] is False
     assert response.json()["error"] == "device temporarily offline"
+
+
+def test_screenshot_rejects_non_loopback_requests_by_default(media_env: dict) -> None:
+    non_local_client = TestClient(media_env["client"].app, client=("203.0.113.7", 1))
+
+    response = non_local_client.post(
+        "/api/screenshot",
+        json={"device_id": "local-device"},
+    )
+
+    assert response.status_code == 403
+    assert "loopback requests" in response.json()["detail"]
+
+
+def test_screenshot_allows_non_loopback_with_explicit_debug_override(
+    media_env: dict,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setenv("AUTOGLM_UNSAFE_ALLOW_REMOTE_CONTROL", "1")
+    non_local_client = TestClient(media_env["client"].app, client=("203.0.113.7", 1))
+
+    response = non_local_client.post(
+        "/api/screenshot",
+        json={"device_id": "local-device"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["success"] is True

@@ -5,8 +5,9 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Request
 
+from AutoGLM_GUI.api.local_control_auth import require_local_control_access
 from AutoGLM_GUI.adb_plus import capture_screenshot_async
 from AutoGLM_GUI.exceptions import DeviceNotAvailableError
 from AutoGLM_GUI.logger import logger
@@ -17,8 +18,11 @@ router = APIRouter()
 
 
 @router.post("/api/video/reset")
-async def reset_video_stream(device_id: str | None = None) -> dict[str, Any]:
+async def reset_video_stream(
+    request: Request, device_id: str | None = None
+) -> dict[str, Any]:
     """Reset active scrcpy streams (Socket.IO)."""
+    require_local_control_access(request)
     stop_streamers(device_id=device_id)
     if device_id:
         logger.info("Video stream reset for device %s", device_id)
@@ -31,8 +35,11 @@ async def reset_video_stream(device_id: str | None = None) -> dict[str, Any]:
 
 
 @router.post("/api/screenshot", response_model=ScreenshotResponse)
-async def take_screenshot(request: ScreenshotRequest) -> ScreenshotResponse:
+async def take_screenshot(
+    request: ScreenshotRequest, http_request: Request
+) -> ScreenshotResponse:
     """获取设备截图。此操作无副作用，不影响 PhoneAgent 运行。"""
+    require_local_control_access(http_request)
     from AutoGLM_GUI.device_manager import DeviceManager
 
     try:
