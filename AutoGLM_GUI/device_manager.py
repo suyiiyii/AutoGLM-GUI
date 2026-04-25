@@ -299,8 +299,20 @@ class DeviceManager:
         self._adb_keyboard_setup_lock = threading.Lock()
 
         from AutoGLM_GUI.device_metadata_manager import DeviceMetadataManager
+        from AutoGLM_GUI.remote_device_registry_manager import (
+            RemoteDeviceRegistryManager,
+        )
 
         self._metadata_manager = DeviceMetadataManager.get_instance()
+        self._remote_registry_manager = RemoteDeviceRegistryManager.get_instance()
+        self._remote_device_configs = {
+            serial: RemoteDeviceConfig(
+                base_url=str(config["base_url"]),
+                device_id=str(config["device_id"]),
+            )
+            for serial, config in self._remote_registry_manager.list_configs().items()
+        }
+        self._restore_persisted_remote_devices()
 
     @classmethod
     def get_instance(cls, adb_path: str = "adb") -> DeviceManager:
@@ -405,11 +417,13 @@ class DeviceManager:
         logger.info("Force refreshing device list...")
         try:
             self._poll_devices()
+            self._restore_persisted_remote_devices()
         except Exception as e:
             logger.warning(
                 f"Device poll failed during force refresh: {e}. "
                 f"This is expected in remote-only deployments without local ADB."
             )
+            self._restore_persisted_remote_devices()
 
     # Internal methods
 
@@ -667,6 +681,108 @@ class DeviceManager:
             except Exception as e:
                 logger.debug(f"mDNS discovery failed: {e}")
 
+    def _register_remote_device_runtime(
+        self,
+        *,
+        serial: str,
+        base_url: str,
+        device_id: str,
+        persist: bool,
+    ) -> None:
+        from AutoGLM_GUI.devices.remote_device import RemoteDevice
+
+        remote_device = RemoteDevice(device_id, base_url)
+        remote_device.get_screenshot(timeout=5)
+
+        managed = ManagedDevice(
+            serial=serial,
+            connections=[
+                DeviceConnection(
+                    device_id=f"{base_url}|{device_id}",
+                    connection_type=DeviceConnectionType.REMOTE,
+                    status="device",
+                    last_seen=time.time(),
+                )
+            ],
+            model=device_id,
+            state=DeviceState.ONLINE,
+        )
+
+        display_name = self._metadata_manager.get_display_name(serial)
+        if display_name:
+            managed.display_name = display_name
+
+        self._devices[serial] = managed
+        self._remote_devices[serial] = remote_device
+        self._remote_device_configs[serial] = {
+            "base_url": base_url,
+            "device_id": device_id,
+        }
+        self._device_id_to_serial[managed.primary_device_id] = serial
+
+        if persist:
+            self._remote_registry_manager.set_config(
+                serial, base_url=base_url, device_id=device_id
+            )
+
+    def _ensure_remote_device_placeholder(
+        self, serial: str, config: RemoteDeviceConfig
+    ) -> None:
+        """Expose persisted remote registrations even while the agent is offline."""
+        if serial in self._devices:
+            return
+
+        managed = ManagedDevice(
+            serial=serial,
+            connections=[
+                DeviceConnection(
+                    device_id=f"{config['base_url']}|{config['device_id']}",
+                    connection_type=DeviceConnectionType.REMOTE,
+                    status="offline",
+                    last_seen=time.time(),
+                )
+            ],
+            model=config["device_id"],
+            state=DeviceState.DISCONNECTED,
+        )
+
+        display_name = self._metadata_manager.get_display_name(serial)
+        if display_name:
+            managed.display_name = display_name
+
+        self._devices[serial] = managed
+        self._device_id_to_serial[managed.primary_device_id] = serial
+
+    def _restore_persisted_remote_devices(self) -> None:
+        """Reconnect persisted remote devices when they become reachable again."""
+        with self._devices_lock:
+            for serial, config in self._remote_device_configs.items():
+                self._ensure_remote_device_placeholder(serial, config)
+            pending = [
+                (serial, config)
+                for serial, config in self._remote_device_configs.items()
+                if serial not in self._remote_devices
+            ]
+
+        for serial, config in pending:
+            try:
+                with self._devices_lock:
+                    if serial in self._remote_devices:
+                        continue
+                    self._register_remote_device_runtime(
+                        serial=serial,
+                        base_url=config["base_url"],
+                        device_id=config["device_id"],
+                        persist=False,
+                    )
+                logger.info("Restored persisted remote device: %s", serial)
+            except Exception as exc:
+                logger.debug(
+                    "Deferred remote device restore for %s until next refresh: %s",
+                    serial,
+                    exc,
+                )
+
     def _handle_poll_error(self, error: Exception) -> None:
         """Handle polling failure with exponential backoff."""
         self._consecutive_failures += 1
@@ -923,31 +1039,12 @@ class DeviceManager:
                 return (False, f"Remote device {device_id} already exists", "")
 
             try:
-                remote_device = RemoteDevice(device_id, base_url)
-                remote_device.get_screenshot(timeout=5)
-
-                managed = ManagedDevice(
+                self._register_remote_device_runtime(
                     serial=synthetic_serial,
-                    connections=[
-                        DeviceConnection(
-                            device_id=f"{base_url}|{device_id}",
-                            connection_type=DeviceConnectionType.REMOTE,
-                            status="device",
-                            last_seen=time.time(),
-                        )
-                    ],
-                    model=device_id,
-                    state=DeviceState.ONLINE,
+                    base_url=base_url,
+                    device_id=device_id,
+                    persist=True,
                 )
-
-                self._devices[synthetic_serial] = managed
-                self._remote_devices[synthetic_serial] = remote_device
-                self._remote_device_configs[synthetic_serial] = {
-                    "base_url": base_url,
-                    "device_id": device_id,
-                }
-
-                self._device_id_to_serial[managed.primary_device_id] = synthetic_serial
 
                 logger.info(f"Remote device added: {synthetic_serial}")
                 return (True, "Remote device added successfully", synthetic_serial)
@@ -976,6 +1073,7 @@ class DeviceManager:
             managed = self._devices.pop(serial)
             remote_device = self._remote_devices.pop(serial, None)
             self._remote_device_configs.pop(serial, None)
+            self._remote_registry_manager.remove_config(serial)
 
             for conn in managed.connections:
                 self._device_id_to_serial.pop(conn.device_id, None)
