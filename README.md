@@ -1,3 +1,5 @@
+[![MseeP.ai Security Assessment Badge](https://mseep.net/pr/suyiiyii-autoglm-gui-badge.png)](https://mseep.ai/app/suyiiyii-autoglm-gui)
+
 <div align="center">
 
 <img src="https://github.com/user-attachments/assets/bbdaeb1c-b7f2-4a4b-a11a-34db4de0ba12" alt="autoglm-gui" width="150">
