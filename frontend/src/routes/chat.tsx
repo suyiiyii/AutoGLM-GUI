@@ -148,6 +148,23 @@ const DECISION_PRESETS = [
   },
 ] as const;
 
+function getSelectedVisionPreset(baseUrl: string) {
+  return (
+    VISION_PRESETS.find(
+      preset => preset.name !== 'custom' && preset.config.base_url === baseUrl
+    )?.name ?? 'custom'
+  );
+}
+
+function getSelectedDecisionPreset(baseUrl: string) {
+  return (
+    DECISION_PRESETS.find(
+      preset =>
+        preset.name !== 'custom' && preset.config.decision_base_url === baseUrl
+    )?.name ?? 'custom'
+  );
+}
+
 // Search params type for URL persistence
 type ChatSearchParams = {
   serial?: string;
@@ -257,6 +274,10 @@ function ChatComponent() {
     decision_model_name: '',
     decision_api_key: '',
   });
+  const selectedVisionPreset = getSelectedVisionPreset(tempConfig.base_url);
+  const selectedDecisionPreset = getSelectedDecisionPreset(
+    tempConfig.decision_base_url
+  );
 
   useEffect(() => {
     const loadConfiguration = async () => {
@@ -598,15 +619,22 @@ function ChatComponent() {
                         onClick={() =>
                           setTempConfig(prev => ({
                             ...prev,
-                            base_url: preset.config.base_url,
-                            model_name: preset.config.model_name,
+                            ...(preset.name === 'custom'
+                              ? getSelectedVisionPreset(prev.base_url) ===
+                                'custom'
+                                ? {}
+                                : {
+                                    base_url: preset.config.base_url,
+                                    model_name: preset.config.model_name,
+                                  }
+                              : {
+                                  base_url: preset.config.base_url,
+                                  model_name: preset.config.model_name,
+                                }),
                           }))
                         }
                         className={`w-full text-left p-3 rounded-lg border transition-all ${
-                          tempConfig.base_url === preset.config.base_url &&
-                          (preset.name !== 'custom' ||
-                            (preset.name === 'custom' &&
-                              tempConfig.base_url === ''))
+                          selectedVisionPreset === preset.name
                             ? 'border-[#1d9bf0] bg-[#1d9bf0]/5'
                             : 'border-slate-200 dark:border-slate-700 hover:border-[#1d9bf0]/50 hover:bg-slate-50 dark:hover:bg-slate-800/50'
                         }`}
@@ -614,10 +642,7 @@ function ChatComponent() {
                         <div className="flex items-center gap-2">
                           <Server
                             className={`w-4 h-4 ${
-                              tempConfig.base_url === preset.config.base_url &&
-                              (preset.name !== 'custom' ||
-                                (preset.name === 'custom' &&
-                                  tempConfig.base_url === ''))
+                              selectedVisionPreset === preset.name
                                 ? 'text-[#1d9bf0]'
                                 : 'text-slate-400 dark:text-slate-500'
                             }`}
@@ -922,17 +947,27 @@ function ChatComponent() {
                         onClick={() =>
                           setTempConfig(prev => ({
                             ...prev,
-                            decision_base_url: preset.config.decision_base_url,
-                            decision_model_name:
-                              preset.config.decision_model_name,
+                            ...(preset.name === 'custom'
+                              ? getSelectedDecisionPreset(
+                                  prev.decision_base_url
+                                ) === 'custom'
+                                ? {}
+                                : {
+                                    decision_base_url:
+                                      preset.config.decision_base_url,
+                                    decision_model_name:
+                                      preset.config.decision_model_name,
+                                  }
+                              : {
+                                  decision_base_url:
+                                    preset.config.decision_base_url,
+                                  decision_model_name:
+                                    preset.config.decision_model_name,
+                                }),
                           }))
                         }
                         className={`w-full text-left p-3 rounded-lg border transition-all ${
-                          tempConfig.decision_base_url ===
-                            preset.config.decision_base_url &&
-                          (preset.name !== 'custom' ||
-                            (preset.name === 'custom' &&
-                              tempConfig.decision_base_url === ''))
+                          selectedDecisionPreset === preset.name
                             ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/50'
                             : 'border-slate-200 dark:border-slate-700 hover:border-indigo-500/50 hover:bg-indigo-50 dark:hover:bg-indigo-950/30'
                         }`}
@@ -940,11 +975,7 @@ function ChatComponent() {
                         <div className="flex items-center gap-2">
                           <Server
                             className={`w-4 h-4 ${
-                              tempConfig.decision_base_url ===
-                                preset.config.decision_base_url &&
-                              (preset.name !== 'custom' ||
-                                (preset.name === 'custom' &&
-                                  tempConfig.decision_base_url === ''))
+                              selectedDecisionPreset === preset.name
                                 ? 'text-indigo-600 dark:text-indigo-400'
                                 : 'text-slate-400 dark:text-slate-500'
                             }`}
