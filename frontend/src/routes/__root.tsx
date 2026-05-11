@@ -45,6 +45,11 @@ function Footer() {
         <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
           <span className="flex items-center gap-1.5" title={versionTitle}>
             v{displayedVersion}
+            {__GIT_HASH__ !== 'unknown' && (
+              <span className="font-mono text-xs text-slate-400 dark:text-slate-500">
+                ·{__GIT_HASH__}
+              </span>
+            )}
             {showUpdateBadge && updateInfo?.latest_version && (
               <Badge
                 variant="warning"

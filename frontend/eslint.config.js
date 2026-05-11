@@ -59,6 +59,7 @@ export default [
         cancelAnimationFrame: 'readonly',
         NodeJS: 'readonly',
         __BACKEND_VERSION__: 'readonly',
+        __GIT_HASH__: 'readonly',
         __DEVTOOLS_ENABLED__: 'readonly',
       },
     },
