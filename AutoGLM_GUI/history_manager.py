@@ -11,6 +11,7 @@ from typing import Self
 
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.models.history import ConversationRecord, DeviceHistory
+from AutoGLM_GUI.trace import trace_span
 
 # ADB serialno 合法字符：字母数字、下划线、破折号、冒号、点
 # USB: ABC123DEF456
@@ -103,27 +104,47 @@ class HistoryManager:
         path = self._get_history_path(history.serialno)
         temp_path = path.with_suffix(".tmp")
 
-        try:
-            history.last_updated = datetime.now()
-            with open(temp_path, "w", encoding="utf-8") as f:
-                json.dump(history.to_dict(), f, indent=2, ensure_ascii=False)
-            temp_path.replace(path)
+        with trace_span(
+            "history.file.write",
+            attrs={
+                "serialno": history.serialno,
+                "record_count": len(history.records),
+                "path": path,
+            },
+        ):
+            try:
+                history.last_updated = datetime.now()
+                with open(temp_path, "w", encoding="utf-8") as f:
+                    json.dump(history.to_dict(), f, indent=2, ensure_ascii=False)
+                temp_path.replace(path)
 
-            self._file_cache[history.serialno] = history
-            self._file_mtime[history.serialno] = path.stat().st_mtime
-            logger.debug(f"Saved {len(history.records)} records for {history.serialno}")
-            return True
-        except Exception as e:
-            logger.error(f"Failed to save history for {history.serialno}: {e}")
-            if temp_path.exists():
-                temp_path.unlink()
-            return False
+                self._file_cache[history.serialno] = history
+                self._file_mtime[history.serialno] = path.stat().st_mtime
+                logger.debug(
+                    f"Saved {len(history.records)} records for {history.serialno}"
+                )
+                return True
+            except Exception as e:
+                logger.error(f"Failed to save history for {history.serialno}: {e}")
+                if temp_path.exists():
+                    temp_path.unlink()
+                return False
 
     def add_record(self, serialno: str, record: ConversationRecord) -> None:
-        history = self._load_history(serialno)
-        history.records.insert(0, record)
-        self._save_history(history)
-        logger.info(f"Added history record for {serialno}: {record.id}")
+        with trace_span(
+            "history.record.add",
+            attrs={
+                "serialno": serialno,
+                "record_id": record.id,
+                "source": record.source,
+                "trace_id": record.trace_id,
+                "step_count": record.steps,
+            },
+        ):
+            history = self._load_history(serialno)
+            history.records.insert(0, record)
+            self._save_history(history)
+            logger.info(f"Added history record for {serialno}: {record.id}")
 
     def list_records(
         self, serialno: str, limit: int = 50, offset: int = 0
@@ -136,27 +157,39 @@ class HistoryManager:
         return next((r for r in history.records if r.id == record_id), None)
 
     def delete_record(self, serialno: str, record_id: str) -> bool:
-        history = self._load_history(serialno)
-        original_len = len(history.records)
-        history.records = [r for r in history.records if r.id != record_id]
+        with trace_span(
+            "history.record.delete",
+            attrs={"serialno": serialno, "record_id": record_id},
+        ) as span:
+            history = self._load_history(serialno)
+            original_len = len(history.records)
+            history.records = [r for r in history.records if r.id != record_id]
 
-        if len(history.records) < original_len:
-            self._save_history(history)
-            logger.info(f"Deleted history record {record_id} for {serialno}")
-            return True
+            if len(history.records) < original_len:
+                self._save_history(history)
+                logger.info(f"Deleted history record {record_id} for {serialno}")
+                span.set_attribute("deleted", True)
+                return True
 
-        logger.warning(f"Record {record_id} not found for {serialno}")
-        return False
+            logger.warning(f"Record {record_id} not found for {serialno}")
+            span.set_attribute("deleted", False)
+            return False
 
     def clear_device_history(self, serialno: str) -> bool:
         path = self._get_history_path(serialno)
-        if path.exists():
-            path.unlink()
-            self._file_cache.pop(serialno, None)
-            self._file_mtime.pop(serialno, None)
-            logger.info(f"Cleared all history for {serialno}")
-            return True
-        return False
+        with trace_span(
+            "history.device.clear",
+            attrs={"serialno": serialno, "path": path},
+        ) as span:
+            if path.exists():
+                path.unlink()
+                self._file_cache.pop(serialno, None)
+                self._file_mtime.pop(serialno, None)
+                logger.info(f"Cleared all history for {serialno}")
+                span.set_attribute("cleared", True)
+                return True
+            span.set_attribute("cleared", False)
+            return False
 
     def get_total_count(self, serialno: str) -> int:
         history = self._load_history(serialno)

@@ -11,6 +11,8 @@ from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
+from .trace import current_trace_id, trace_span
+
 
 def _now_iso() -> str:
     return datetime.now().isoformat()
@@ -105,6 +107,7 @@ class TaskStore:
                 final_message TEXT NULL,
                 error_message TEXT NULL,
                 stop_reason TEXT NULL,
+                trace_id TEXT NULL,
                 step_count INTEGER NOT NULL DEFAULT 0,
                 created_at TEXT NOT NULL,
                 started_at TEXT NULL,
@@ -146,6 +149,8 @@ class TaskStore:
         }
         if "stop_reason" not in columns:
             self._conn.execute("ALTER TABLE task_runs ADD COLUMN stop_reason TEXT NULL")
+        if "trace_id" not in columns:
+            self._conn.execute("ALTER TABLE task_runs ADD COLUMN trace_id TEXT NULL")
         self._conn.commit()
 
     def _fetchone(self, query: str, params: tuple[Any, ...] = ()) -> sqlite3.Row | None:
@@ -189,27 +194,38 @@ class TaskStore:
         self._ensure_ready()
         now = _now_iso()
         record_id = session_id or str(uuid4())
-        with self._lock:
-            assert self._conn is not None
-            self._conn.execute(
-                """
-                INSERT INTO task_sessions (
-                    id, kind, mode, device_id, device_serial, status, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                """,
-                (
-                    record_id,
-                    kind,
-                    mode,
-                    device_id,
-                    device_serial,
-                    status,
-                    now,
-                    now,
-                ),
-            )
-            self._conn.commit()
-            return self.get_session(record_id) or {}
+        with trace_span(
+            "task_store.session.create",
+            attrs={
+                "session_id": record_id,
+                "kind": kind,
+                "mode": mode,
+                "device_id": device_id,
+                "device_serial": device_serial,
+                "status": status,
+            },
+        ):
+            with self._lock:
+                assert self._conn is not None
+                self._conn.execute(
+                    """
+                    INSERT INTO task_sessions (
+                        id, kind, mode, device_id, device_serial, status, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        record_id,
+                        kind,
+                        mode,
+                        device_id,
+                        device_serial,
+                        status,
+                        now,
+                        now,
+                    ),
+                )
+                self._conn.commit()
+                return self.get_session(record_id) or {}
 
     def get_session(self, session_id: str) -> TaskSessionRecord | None:
         self._ensure_ready()
@@ -223,13 +239,17 @@ class TaskStore:
 
     def update_session_timestamp(self, session_id: str) -> None:
         self._ensure_ready()
-        with self._lock:
-            assert self._conn is not None
-            self._conn.execute(
-                "UPDATE task_sessions SET updated_at = ? WHERE id = ?",
-                (_now_iso(), session_id),
-            )
-            self._conn.commit()
+        with trace_span(
+            "task_store.session.touch",
+            attrs={"session_id": session_id},
+        ):
+            with self._lock:
+                assert self._conn is not None
+                self._conn.execute(
+                    "UPDATE task_sessions SET updated_at = ? WHERE id = ?",
+                    (_now_iso(), session_id),
+                )
+                self._conn.commit()
 
     def get_latest_open_chat_session(
         self, *, device_id: str, device_serial: str, mode: str = "classic"
@@ -254,18 +274,22 @@ class TaskStore:
 
     def archive_session(self, session_id: str) -> TaskSessionRecord | None:
         self._ensure_ready()
-        with self._lock:
-            assert self._conn is not None
-            self._conn.execute(
-                """
-                UPDATE task_sessions
-                SET status = ?, updated_at = ?
-                WHERE id = ?
-                """,
-                (TaskSessionStatus.ARCHIVED.value, _now_iso(), session_id),
-            )
-            self._conn.commit()
-            return self.get_session(session_id)
+        with trace_span(
+            "task_store.session.archive",
+            attrs={"session_id": session_id},
+        ):
+            with self._lock:
+                assert self._conn is not None
+                self._conn.execute(
+                    """
+                    UPDATE task_sessions
+                    SET status = ?, updated_at = ?
+                    WHERE id = ?
+                    """,
+                    (TaskSessionStatus.ARCHIVED.value, _now_iso(), session_id),
+                )
+                self._conn.commit()
+                return self.get_session(session_id)
 
     def _append_event_locked(
         self,
@@ -314,16 +338,26 @@ class TaskStore:
         role: str = "assistant",
     ) -> TaskEventRecord:
         self._ensure_ready()
-        with self._lock:
-            assert self._conn is not None
-            event = self._append_event_locked(
-                task_id=task_id,
-                event_type=event_type,
-                role=role,
-                payload=payload,
-            )
-            self._conn.commit()
-            return event
+        with trace_span(
+            "task_store.event.append",
+            attrs={
+                "task_id": task_id,
+                "event_type": event_type,
+                "role": role,
+                "payload_keys": sorted(payload.keys()),
+            },
+        ) as span:
+            with self._lock:
+                assert self._conn is not None
+                event = self._append_event_locked(
+                    task_id=task_id,
+                    event_type=event_type,
+                    role=role,
+                    payload=payload,
+                )
+                span.set_attribute("seq", event.get("seq"))
+                self._conn.commit()
+                return event
 
     def create_task_run(
         self,
@@ -339,48 +373,83 @@ class TaskStore:
         schedule_fire_id: str | None = None,
         status: str = TaskStatus.QUEUED.value,
         task_id: str | None = None,
+        trace_id: str | None = None,
     ) -> TaskRecord:
         self._ensure_ready()
         now = _now_iso()
         record_id = task_id or str(uuid4())
-        with self._lock:
-            assert self._conn is not None
-            self._conn.execute(
-                """
-                INSERT INTO task_runs (
-                    id, source, executor_key, session_id, scheduled_task_id, workflow_uuid,
-                    schedule_fire_id, device_id, device_serial, status, input_text,
-                    final_message, error_message, stop_reason, step_count, created_at, started_at, finished_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, 0, ?, NULL, NULL)
-                """,
-                (
-                    record_id,
-                    source,
-                    executor_key,
-                    session_id,
-                    scheduled_task_id,
-                    workflow_uuid,
-                    schedule_fire_id,
-                    device_id,
-                    device_serial,
-                    status,
-                    input_text,
-                    now,
-                ),
-            )
-            if session_id:
+        task_trace_id = trace_id or current_trace_id()
+        with trace_span(
+            "task_store.task.create",
+            attrs={
+                "task_id": record_id,
+                "source": source,
+                "executor_key": executor_key,
+                "session_id": session_id,
+                "scheduled_task_id": scheduled_task_id,
+                "workflow_uuid": workflow_uuid,
+                "schedule_fire_id": schedule_fire_id,
+                "device_id": device_id,
+                "device_serial": device_serial,
+                "status": status,
+                "trace_id": task_trace_id,
+            },
+        ):
+            with self._lock:
+                assert self._conn is not None
                 self._conn.execute(
-                    "UPDATE task_sessions SET updated_at = ? WHERE id = ?",
-                    (now, session_id),
+                    """
+                    INSERT INTO task_runs (
+                        id, source, executor_key, session_id, scheduled_task_id, workflow_uuid,
+                        schedule_fire_id, device_id, device_serial, status, input_text,
+                        final_message, error_message, stop_reason, trace_id, step_count,
+                        created_at, started_at, finished_at
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, NULL, NULL, ?, 0, ?, NULL, NULL)
+                    """,
+                    (
+                        record_id,
+                        source,
+                        executor_key,
+                        session_id,
+                        scheduled_task_id,
+                        workflow_uuid,
+                        schedule_fire_id,
+                        device_id,
+                        device_serial,
+                        status,
+                        input_text,
+                        task_trace_id,
+                        now,
+                    ),
                 )
-            self._append_event_locked(
-                task_id=record_id,
-                event_type="status",
-                role="system",
-                payload={"status": status},
-            )
-            self._conn.commit()
-            return self.get_task(record_id) or {}
+                if session_id:
+                    self._conn.execute(
+                        "UPDATE task_sessions SET updated_at = ? WHERE id = ?",
+                        (now, session_id),
+                    )
+                self._append_event_locked(
+                    task_id=record_id,
+                    event_type="status",
+                    role="system",
+                    payload={"status": status},
+                )
+                self._conn.commit()
+                return self.get_task(record_id) or {}
+
+    def set_task_trace_id(self, task_id: str, trace_id: str) -> TaskRecord | None:
+        self._ensure_ready()
+        with trace_span(
+            "task_store.task.set_trace_id",
+            attrs={"task_id": task_id, "trace_id": trace_id},
+        ):
+            with self._lock:
+                assert self._conn is not None
+                self._conn.execute(
+                    "UPDATE task_runs SET trace_id = ? WHERE id = ?",
+                    (trace_id, task_id),
+                )
+                self._conn.commit()
+                return self.get_task(task_id)
 
     def get_task(self, task_id: str) -> TaskRecord | None:
         self._ensure_ready()
@@ -480,46 +549,53 @@ class TaskStore:
 
     def claim_next_queued_task(self, device_id: str) -> TaskRecord | None:
         self._ensure_ready()
-        with self._lock:
-            assert self._conn is not None
-            row = self._fetchone(
-                """
-                SELECT * FROM task_runs
-                WHERE device_id = ? AND status = ?
-                ORDER BY created_at ASC, id ASC
-                LIMIT 1
-                """,
-                (device_id, TaskStatus.QUEUED.value),
-            )
-            if row is None:
-                return None
+        with trace_span(
+            "task_store.task.claim",
+            attrs={"device_id": device_id, "target_status": TaskStatus.QUEUED.value},
+        ) as span:
+            with self._lock:
+                assert self._conn is not None
+                row = self._fetchone(
+                    """
+                    SELECT * FROM task_runs
+                    WHERE device_id = ? AND status = ?
+                    ORDER BY created_at ASC, id ASC
+                    LIMIT 1
+                    """,
+                    (device_id, TaskStatus.QUEUED.value),
+                )
+                if row is None:
+                    span.set_attribute("claimed", False)
+                    return None
 
-            now = _now_iso()
-            cursor = self._conn.execute(
-                """
-                UPDATE task_runs
-                SET status = ?, started_at = ?
-                WHERE id = ? AND status = ?
-                """,
-                (
-                    TaskStatus.RUNNING.value,
-                    now,
-                    row["id"],
-                    TaskStatus.QUEUED.value,
-                ),
-            )
-            if cursor.rowcount != 1:
-                self._conn.rollback()
-                return None
+                now = _now_iso()
+                cursor = self._conn.execute(
+                    """
+                    UPDATE task_runs
+                    SET status = ?, started_at = ?
+                    WHERE id = ? AND status = ?
+                    """,
+                    (
+                        TaskStatus.RUNNING.value,
+                        now,
+                        row["id"],
+                        TaskStatus.QUEUED.value,
+                    ),
+                )
+                if cursor.rowcount != 1:
+                    self._conn.rollback()
+                    span.set_attribute("claimed", False)
+                    return None
 
-            self._append_event_locked(
-                task_id=row["id"],
-                event_type="status",
-                role="system",
-                payload={"status": TaskStatus.RUNNING.value},
-            )
-            self._conn.commit()
-            return self.get_task(str(row["id"]))
+                self._append_event_locked(
+                    task_id=row["id"],
+                    event_type="status",
+                    role="system",
+                    payload={"status": TaskStatus.RUNNING.value},
+                )
+                self._conn.commit()
+                span.set_attributes({"claimed": True, "task_id": str(row["id"])})
+                return self.get_task(str(row["id"]))
 
     def update_task_terminal(
         self,
@@ -530,105 +606,37 @@ class TaskStore:
         error_message: str | None,
         stop_reason: str | None = None,
         step_count: int = 0,
+        trace_id: str | None = None,
     ) -> TaskRecord | None:
         self._ensure_ready()
-        with self._lock:
-            assert self._conn is not None
-            self._conn.execute(
-                """
-                UPDATE task_runs
-                SET status = ?, final_message = ?, error_message = ?, stop_reason = ?, step_count = ?, finished_at = ?
-                WHERE id = ?
-                """,
-                (
-                    status,
-                    final_message,
-                    error_message,
-                    stop_reason,
-                    step_count,
-                    _now_iso(),
-                    task_id,
-                ),
-            )
-            self._append_event_locked(
-                task_id=task_id,
-                event_type="status",
-                role="system",
-                payload={"status": status},
-            )
-            self._conn.commit()
-            return self.get_task(task_id)
-
-    def cancel_queued_task(
-        self, task_id: str, message: str = "Task cancelled before execution"
-    ) -> TaskRecord | None:
-        self._ensure_ready()
-        with self._lock:
-            assert self._conn is not None
-            row = self._fetchone("SELECT * FROM task_runs WHERE id = ?", (task_id,))
-            if row is None or row["status"] != TaskStatus.QUEUED.value:
-                return None
-
-            finished_at = _now_iso()
-            self._conn.execute(
-                """
-                UPDATE task_runs
-                SET status = ?, final_message = ?, error_message = ?, stop_reason = ?, finished_at = ?
-                WHERE id = ?
-                """,
-                (
-                    TaskStatus.CANCELLED.value,
-                    message,
-                    message,
-                    "user_stopped",
-                    finished_at,
-                    task_id,
-                ),
-            )
-            self._append_event_locked(
-                task_id=task_id,
-                event_type="cancelled",
-                role="assistant",
-                payload={"message": message},
-            )
-            self._append_event_locked(
-                task_id=task_id,
-                event_type="status",
-                role="system",
-                payload={"status": TaskStatus.CANCELLED.value},
-            )
-            self._conn.commit()
-            return self.get_task(task_id)
-
-    def mark_running_tasks_interrupted(
-        self,
-        message: str = "Task interrupted because the service restarted",
-    ) -> int:
-        self._ensure_ready()
-        with self._lock:
-            assert self._conn is not None
-            rows = self._fetchall(
-                "SELECT id FROM task_runs WHERE status = ?",
-                (TaskStatus.RUNNING.value,),
-            )
-            if not rows:
-                return 0
-
-            now = _now_iso()
-            for row in rows:
-                task_id = str(row["id"])
+        task_trace_id = trace_id or current_trace_id()
+        with trace_span(
+            "task_store.task.finish",
+            attrs={
+                "task_id": task_id,
+                "status": status,
+                "stop_reason": stop_reason,
+                "step_count": step_count,
+                "trace_id": task_trace_id,
+            },
+        ):
+            with self._lock:
+                assert self._conn is not None
                 self._conn.execute(
                     """
                     UPDATE task_runs
-                    SET status = ?, final_message = ?, error_message = ?, stop_reason = ?, finished_at = ?
+                    SET status = ?, final_message = ?, error_message = ?, stop_reason = ?,
+                        step_count = ?, trace_id = COALESCE(?, trace_id), finished_at = ?
                     WHERE id = ?
                     """,
                     (
-                        TaskStatus.INTERRUPTED.value,
-                        message,
-                        message,
-                        "service_interrupted",
-                        now,
+                        status,
+                        final_message,
+                        error_message,
+                        stop_reason,
+                        step_count,
+                        task_trace_id,
+                        _now_iso(),
                         task_id,
                     ),
                 )
@@ -636,16 +644,107 @@ class TaskStore:
                     task_id=task_id,
                     event_type="status",
                     role="system",
-                    payload={"status": TaskStatus.INTERRUPTED.value},
+                    payload={"status": status},
+                )
+                self._conn.commit()
+                return self.get_task(task_id)
+
+    def cancel_queued_task(
+        self, task_id: str, message: str = "Task cancelled before execution"
+    ) -> TaskRecord | None:
+        self._ensure_ready()
+        with trace_span(
+            "task_store.task.cancel",
+            attrs={"task_id": task_id},
+        ) as span:
+            with self._lock:
+                assert self._conn is not None
+                row = self._fetchone("SELECT * FROM task_runs WHERE id = ?", (task_id,))
+                if row is None or row["status"] != TaskStatus.QUEUED.value:
+                    span.set_attribute("cancelled", False)
+                    return None
+
+                finished_at = _now_iso()
+                self._conn.execute(
+                    """
+                    UPDATE task_runs
+                    SET status = ?, final_message = ?, error_message = ?, stop_reason = ?, finished_at = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        TaskStatus.CANCELLED.value,
+                        message,
+                        message,
+                        "user_stopped",
+                        finished_at,
+                        task_id,
+                    ),
                 )
                 self._append_event_locked(
                     task_id=task_id,
-                    event_type="error",
+                    event_type="cancelled",
                     role="assistant",
                     payload={"message": message},
                 )
-            self._conn.commit()
-            return len(rows)
+                self._append_event_locked(
+                    task_id=task_id,
+                    event_type="status",
+                    role="system",
+                    payload={"status": TaskStatus.CANCELLED.value},
+                )
+                self._conn.commit()
+                span.set_attribute("cancelled", True)
+                return self.get_task(task_id)
+
+    def mark_running_tasks_interrupted(
+        self,
+        message: str = "Task interrupted because the service restarted",
+    ) -> int:
+        self._ensure_ready()
+        with trace_span("task_store.task.interrupt_running") as span:
+            with self._lock:
+                assert self._conn is not None
+                rows = self._fetchall(
+                    "SELECT id FROM task_runs WHERE status = ?",
+                    (TaskStatus.RUNNING.value,),
+                )
+                if not rows:
+                    span.set_attribute("interrupted_count", 0)
+                    return 0
+
+                now = _now_iso()
+                for row in rows:
+                    task_id = str(row["id"])
+                    self._conn.execute(
+                        """
+                        UPDATE task_runs
+                        SET status = ?, final_message = ?, error_message = ?, stop_reason = ?, finished_at = ?
+                        WHERE id = ?
+                        """,
+                        (
+                            TaskStatus.INTERRUPTED.value,
+                            message,
+                            message,
+                            "service_interrupted",
+                            now,
+                            task_id,
+                        ),
+                    )
+                    self._append_event_locked(
+                        task_id=task_id,
+                        event_type="status",
+                        role="system",
+                        payload={"status": TaskStatus.INTERRUPTED.value},
+                    )
+                    self._append_event_locked(
+                        task_id=task_id,
+                        event_type="error",
+                        role="assistant",
+                        payload={"message": message},
+                    )
+                self._conn.commit()
+                span.set_attribute("interrupted_count", len(rows))
+                return len(rows)
 
     def get_queued_device_ids(self) -> list[str]:
         self._ensure_ready()

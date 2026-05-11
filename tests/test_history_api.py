@@ -427,6 +427,7 @@ def test_history_converts_layered_tool_events_to_messages(
         "input_text": "整理桌面",
         "final_message": "已完成",
         "error_message": None,
+        "trace_id": "trace-layered",
         "step_count": 7,
         "created_at": "2026-02-05T10:00:00",
         "started_at": "2026-02-05T10:00:01",
@@ -473,6 +474,30 @@ def test_history_converts_layered_tool_events_to_messages(
             "payload": {"message": "已完成", "steps": 7, "success": True},
             "created_at": "2026-02-05T10:00:30",
         },
+        {
+            "task_id": "layered-task",
+            "seq": 5,
+            "event_type": "trace_summary",
+            "role": "system",
+            "payload": {
+                "summary": {
+                    "trace_id": "trace-layered",
+                    "steps": 7,
+                    "total_duration_ms": 29000,
+                    "screenshot_duration_ms": 1000,
+                    "current_app_duration_ms": 500,
+                    "llm_duration_ms": 12000,
+                    "parse_action_duration_ms": 200,
+                    "execute_action_duration_ms": 6000,
+                    "update_context_duration_ms": 300,
+                    "adb_duration_ms": 1500,
+                    "sleep_duration_ms": 700,
+                    "other_duration_ms": 800,
+                },
+                "step_summaries": [],
+            },
+            "created_at": "2026-02-05T10:00:31",
+        },
     ]
 
     response = client.get("/api/history/device-1/layered-task")
@@ -489,6 +514,9 @@ def test_history_converts_layered_tool_events_to_messages(
     )
     assert any("已打开设置" in (message.get("content") or "") for message in messages)
     assert any(message.get("content") == "继续下一步" for message in messages)
+    assert data["trace_id"] == "trace-layered"
+    assert data["trace_summary"]["trace_id"] == "trace-layered"
+    assert data["trace_summary"]["llm_duration_ms"] == 12000
 
 
 def test_list_history_validates_limit_and_offset(client: TestClient) -> None:

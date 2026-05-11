@@ -898,6 +898,8 @@ export interface TaskRunResponse {
   input_text: string;
   final_message: string | null;
   error_message: string | null;
+  stop_reason: string | null;
+  trace_id: string | null;
   step_count: number;
   created_at: string;
   started_at: string | null;

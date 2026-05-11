@@ -30,6 +30,7 @@ _MODE_LEGACY_SOURCES: dict[str, set[str]] = {
     "classic": {"chat"},
     "layered": {"layered"},
 }
+_TRACE_SUMMARY_FIELDS = set(TraceSummaryResponse.model_fields)
 
 
 def _build_history_record_response(record: ConversationRecord) -> HistoryRecordResponse:
@@ -76,9 +77,58 @@ def _tool_result_text(payload: dict[str, Any]) -> str:
     return json.dumps(result, ensure_ascii=False)
 
 
+def _trace_summary_from_payload(
+    payload: dict[str, Any],
+) -> TraceSummaryResponse | None:
+    raw_summary = payload.get("summary", payload)
+    if not isinstance(raw_summary, dict):
+        return None
+    summary = {
+        key: raw_summary[key] for key in _TRACE_SUMMARY_FIELDS if key in raw_summary
+    }
+    missing = _TRACE_SUMMARY_FIELDS - set(summary)
+    if missing:
+        return None
+    return TraceSummaryResponse(**summary)
+
+
+def _trace_summary_from_step_timings(
+    trace_id: str | None,
+    step_timings: list[StepTimingSummaryResponse],
+) -> TraceSummaryResponse | None:
+    if not step_timings:
+        return None
+    resolved_trace_id = trace_id or step_timings[0].trace_id
+    return TraceSummaryResponse(
+        trace_id=resolved_trace_id,
+        steps=len(step_timings),
+        total_duration_ms=round(sum(t.total_duration_ms for t in step_timings), 3),
+        screenshot_duration_ms=round(
+            sum(t.screenshot_duration_ms for t in step_timings), 3
+        ),
+        current_app_duration_ms=round(
+            sum(t.current_app_duration_ms for t in step_timings), 3
+        ),
+        llm_duration_ms=round(sum(t.llm_duration_ms for t in step_timings), 3),
+        parse_action_duration_ms=round(
+            sum(t.parse_action_duration_ms for t in step_timings), 3
+        ),
+        execute_action_duration_ms=round(
+            sum(t.execute_action_duration_ms for t in step_timings), 3
+        ),
+        update_context_duration_ms=round(
+            sum(t.update_context_duration_ms for t in step_timings), 3
+        ),
+        adb_duration_ms=round(sum(t.adb_duration_ms for t in step_timings), 3),
+        sleep_duration_ms=round(sum(t.sleep_duration_ms for t in step_timings), 3),
+        other_duration_ms=round(sum(t.other_duration_ms for t in step_timings), 3),
+    )
+
+
 def _build_history_record_from_task(record: dict[str, Any]) -> HistoryRecordResponse:
     events = task_store.list_task_events(record["id"])
     step_timings: list[StepTimingSummaryResponse] = []
+    trace_summary: TraceSummaryResponse | None = None
     messages: list[MessageRecordResponse] = [
         MessageRecordResponse(
             role="user",
@@ -106,6 +156,8 @@ def _build_history_record_from_task(record: dict[str, Any]) -> HistoryRecordResp
             timings = payload.get("timings")
             if isinstance(timings, dict):
                 step_timings.append(StepTimingSummaryResponse(**timings))
+        elif event_type == "trace_summary":
+            trace_summary = _trace_summary_from_payload(payload)
         elif event_type == "tool_call":
             layered_step += 1
             messages.append(
@@ -155,6 +207,11 @@ def _build_history_record_from_task(record: dict[str, Any]) -> HistoryRecordResp
     success = record["status"] == TaskStatus.SUCCEEDED.value
     end_time = record.get("finished_at")
     start_time = record.get("started_at") or record["created_at"]
+    trace_id = str(record["trace_id"]) if record.get("trace_id") is not None else None
+    if trace_summary is None:
+        trace_summary = _trace_summary_from_step_timings(trace_id, step_timings)
+    if trace_id is None and trace_summary is not None:
+        trace_id = trace_summary.trace_id
 
     duration_ms = 0
     if end_time:
@@ -181,9 +238,9 @@ def _build_history_record_from_task(record: dict[str, Any]) -> HistoryRecordResp
         error_message=str(record["error_message"])
         if record.get("error_message") is not None
         else None,
-        trace_id=None,
+        trace_id=trace_id,
         step_timings=step_timings,
-        trace_summary=None,
+        trace_summary=trace_summary,
         messages=messages,
     )
 

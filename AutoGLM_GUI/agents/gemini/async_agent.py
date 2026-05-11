@@ -14,7 +14,7 @@ from AutoGLM_GUI.actions import ActionResult
 from AutoGLM_GUI.agents.base import AsyncAgentBase
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.model import MessageBuilder
-from AutoGLM_GUI.trace import trace_span
+from AutoGLM_GUI.trace import summarize_text, trace_span
 
 from .action_mapper import tool_call_to_action
 from .prompts import get_system_prompt
@@ -127,7 +127,21 @@ class AsyncGeminiAgent(AsyncAgentBase):
             "step.parse_action",
             attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
         ):
-            action = tool_call_to_action(tool_name, tool_args)
+            with trace_span(
+                "tool.call",
+                attrs={
+                    "step": self._step_count,
+                    "caller": "gemini_model",
+                    "tool_name": tool_name,
+                    "tool_arg_keys": sorted(tool_args.keys()),
+                    "tool_args_preview": summarize_text(
+                        json.dumps(tool_args, ensure_ascii=False, default=str),
+                        limit=512,
+                    ),
+                },
+            ) as span:
+                action = tool_call_to_action(tool_name, tool_args)
+                span.set_attribute("action_name", action.get("action"))
 
         if self.agent_config.verbose:
             logger.debug(f"🎯 Tool call: {tool_name}({tool_args})")
@@ -239,7 +253,8 @@ class AsyncGeminiAgent(AsyncAgentBase):
             tool_call = message.tool_calls[0]
             tool_name = tool_call.function.name  # type: ignore[union-attr]
             try:
-                tool_args = json.loads(tool_call.function.arguments)  # type: ignore[union-attr]
+                parsed_args = json.loads(tool_call.function.arguments)  # type: ignore[union-attr]
+                tool_args = parsed_args if isinstance(parsed_args, dict) else {}
             except json.JSONDecodeError as e:
                 logger.warning(
                     f"Failed to parse tool arguments for {tool_name}: {e}. "

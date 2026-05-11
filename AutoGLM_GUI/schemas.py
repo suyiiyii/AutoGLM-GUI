@@ -838,6 +838,7 @@ class TaskRunResponse(BaseModel):
     final_message: str | None = None
     error_message: str | None = None
     stop_reason: str | None = None
+    trace_id: str | None = None
     step_count: int
     created_at: str
     started_at: str | None = None

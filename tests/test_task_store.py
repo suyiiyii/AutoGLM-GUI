@@ -39,6 +39,35 @@ def test_task_store_creates_sessions_and_task_events(tmp_path: Path) -> None:
     assert events[1]["payload"] == {"chunk": "先看屏幕"}
 
 
+def test_task_store_persists_trace_id(tmp_path: Path) -> None:
+    store = TaskStore(tmp_path / "tasks.db")
+
+    task = store.create_task_run(
+        source="chat",
+        executor_key="classic_chat",
+        device_id="device-1",
+        device_serial="serial-1",
+        input_text="打开微信",
+        trace_id="trace-create",
+    )
+    assert task["trace_id"] == "trace-create"
+
+    updated = store.set_task_trace_id(task["id"], "trace-run")
+    assert updated is not None
+    assert updated["trace_id"] == "trace-run"
+
+    finished = store.update_task_terminal(
+        task_id=task["id"],
+        status=TaskStatus.SUCCEEDED.value,
+        final_message="完成",
+        error_message=None,
+        step_count=1,
+        trace_id="trace-finish",
+    )
+    assert finished is not None
+    assert finished["trace_id"] == "trace-finish"
+
+
 def test_task_store_can_cancel_queued_tasks_and_interrupt_running(
     tmp_path: Path,
 ) -> None:
