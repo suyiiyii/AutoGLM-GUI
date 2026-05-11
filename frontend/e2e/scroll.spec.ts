@@ -5,8 +5,10 @@
  * to be running.  The Playwright config starts them via
  * scripts/start_e2e_services.py.
  *
- * Tests that DevicePanel auto-scrolls to the bottom when streaming
- * messages arrive, using the ref + instant scrollTop fix.
+ * Covers issue #346: in classic mode (DevicePanel) the chat must stay pinned
+ * to the latest message while the agent streams its response, as long as the
+ * user has not scrolled up.  DevicePanel renders its messages inside a Radix
+ * <ScrollArea>, so the scrollable element is the viewport node.
  */
 import { test, expect } from '@playwright/test';
 import fs from 'fs';
@@ -24,6 +26,11 @@ declare global {
     __scrollObserver?: MutationObserver;
   }
 }
+
+// The DevicePanel <ScrollArea> roots carry this test id; the element that
+// actually scrolls is the Radix viewport nested inside it.
+const VIEWPORT_SELECTOR =
+  '[data-testid="chat-scroll-container"] [data-slot="scroll-area-viewport"]';
 
 function readServiceUrls(): { backend_url: string; agent_url: string } {
   const urlsPath = path.resolve(__dirname, '.service_urls.json');
@@ -102,28 +109,30 @@ test.describe('DevicePanel auto-scroll', () => {
     const textbox = page.locator('textarea');
     await expect(textbox).toBeVisible({ timeout: 15000 });
 
+    // The Radix ScrollArea viewport should exist before we start tracking.
+    await page.waitForSelector(VIEWPORT_SELECTOR, { timeout: 15000 });
+
     // ── 3. Set up scroll tracking ───────────────────────────────────────
 
-    // Inject a scroll observer that records the max distance from bottom
-    // during the test.  We read this back after streaming completes.
-    await page.evaluate(() => {
+    // Inject a scroll observer that records the distance from bottom over time.
+    // We read it back after streaming completes.
+    await page.evaluate(viewportSelector => {
       window.__scrollReport = {
         maxDistance: 0,
         samples: [] as number[],
       };
 
-      // Find the scroll container that DevicePanel renders
-      const container = document.querySelector(
-        '[data-testid="chat-scroll-container"]'
+      const viewport = document.querySelector(
+        viewportSelector
       ) as HTMLDivElement | null;
-      if (!container) {
-        window.__scrollReport.error = 'No scroll container found';
+      if (!viewport) {
+        window.__scrollReport.error = 'No scroll viewport found';
         return;
       }
 
       const record = () => {
         const d =
-          container.scrollHeight - container.scrollTop - container.clientHeight;
+          viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
         window.__scrollReport.maxDistance = Math.max(
           window.__scrollReport.maxDistance,
           d
@@ -137,13 +146,13 @@ test.describe('DevicePanel auto-scroll', () => {
 
       // Also observe DOM changes to detect new messages
       const observer = new MutationObserver(record);
-      observer.observe(container, {
+      observer.observe(viewport, {
         childList: true,
         subtree: true,
         characterData: true,
       });
       window.__scrollObserver = observer;
-    });
+    }, VIEWPORT_SELECTOR);
 
     // ── 4. Send a message ───────────────────────────────────────────────
 
@@ -153,8 +162,6 @@ test.describe('DevicePanel auto-scroll', () => {
     // ── 5. Wait for streaming to complete ────────────────────────────────
 
     // The agent will stream thinking → step → done events.
-    // Wait for the chat to show a response (assistant message with content).
-    // A sentinel: wait for at least one message bubble from the assistant.
     await page.waitForTimeout(2000);
 
     // Wait for the loading spinner to disappear (agent finished)
@@ -166,14 +173,14 @@ test.describe('DevicePanel auto-scroll', () => {
         // May have already disappeared
       });
 
-    // Extra wait to let all DOM updates + scroll effects settle
-    await page.waitForTimeout(1000);
+    // Extra wait to let all DOM updates + scroll effects (incl. async
+    // screenshot loads and the ResizeObserver re-pin) settle.
+    await page.waitForTimeout(1500);
 
     // ── 6. Read scroll report and verify ────────────────────────────────
 
     const report = await page.evaluate(() => {
       const r = window.__scrollReport;
-      // Stop tracking
       window.__scrollReportStop?.();
       window.__scrollObserver?.disconnect();
       return r;
@@ -185,28 +192,37 @@ test.describe('DevicePanel auto-scroll', () => {
       throw new Error(report.error);
     }
 
-    // Verify the scroll container actually has overflow (content > viewport).
-    // If this fails, the viewport is too tall — reduce height further.
-    const overflow = await page.evaluate(() => {
-      const c = document.querySelector(
-        '[data-testid="chat-scroll-container"]'
+    // Verify the viewport is the real scroll container (content > viewport).
+    // If this fails, the layout is broken (the bug also reported as "missing
+    // scrollbar") or the test viewport is too tall — reduce height further.
+    const overflow = await page.evaluate(viewportSelector => {
+      const v = document.querySelector(
+        viewportSelector
       ) as HTMLDivElement | null;
-      return c
+      return v
         ? {
-            scrollHeight: c.scrollHeight,
-            clientHeight: c.clientHeight,
-            hasOverflow: c.scrollHeight > c.clientHeight,
+            scrollHeight: v.scrollHeight,
+            clientHeight: v.clientHeight,
+            distanceFromBottom: v.scrollHeight - v.scrollTop - v.clientHeight,
+            hasOverflow: v.scrollHeight > v.clientHeight,
           }
         : null;
-    });
-    expect(overflow?.hasOverflow).toBe(true);
+    }, VIEWPORT_SELECTOR);
+    console.log('Viewport state:', JSON.stringify(overflow));
+    if (!overflow) {
+      throw new Error('scroll viewport not found after streaming');
+    }
+    expect(overflow.hasOverflow).toBe(true);
 
-    // Verify: the scroll never drifted more than 5px from the bottom.
-    // The fix uses instant scrollTop = scrollHeight, so there should be
-    // zero drift.  We allow 5px to account for rounding.
-    expect(report.maxDistance).toBeLessThanOrEqual(5);
-
-    // Verify we actually collected data (streaming produced DOM changes)
+    // Verify we actually collected data (streaming produced DOM changes).
     expect(report.samples.length).toBeGreaterThan(0);
+
+    // The chat must never have fallen a full screen behind the latest message
+    // while the user was parked at the bottom.
+    expect(report.maxDistance).toBeLessThan(overflow.clientHeight);
+
+    // And once everything settled, it must be pinned to the very bottom.
+    // Allow a few px for sub-pixel rounding.
+    expect(overflow.distanceFromBottom).toBeLessThanOrEqual(5);
   });
 });
