@@ -15,14 +15,15 @@ class MessageBuilder:
         if image_base64 is None:
             return {"role": "user", "content": text}
 
+        # Image first, then text — matches the official Open-AutoGLM input layout.
         return {
             "role": "user",
             "content": [
-                {"type": "text", "text": text},
                 {
                     "type": "image_url",
                     "image_url": {"url": f"data:image/png;base64,{image_base64}"},
                 },
+                {"type": "text", "text": text},
             ],
         }
 
@@ -51,18 +52,23 @@ class MessageBuilder:
 
     @staticmethod
     def remove_images_from_message(message: dict[str, Any]) -> dict[str, Any]:
-        if message["role"] != "user":
+        """Drop image parts from a message, keeping the text parts as a list.
+
+        Mirrors the official Open-AutoGLM behaviour: after a request the
+        screenshot is stripped from the user turn so that history never
+        carries stale images into later requests. String content (system /
+        assistant turns) is returned unchanged.
+        """
+        content = message.get("content")
+        if not isinstance(content, list):
             return message
 
-        content = message["content"]
-        if isinstance(content, str):
-            return message
-
-        text_parts = [part for part in content if part["type"] == "text"]
-        if len(text_parts) == 1:
-            return {"role": "user", "content": text_parts[0]["text"]}
-
-        return {"role": "user", "content": text_parts}
+        text_parts = [
+            part
+            for part in content
+            if isinstance(part, dict) and part.get("type") == "text"
+        ]
+        return {**message, "content": text_parts}
 
     @staticmethod
     def build_screen_info(current_app: str) -> str:

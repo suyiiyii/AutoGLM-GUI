@@ -19,6 +19,19 @@ from AutoGLM_GUI.trace import trace_span
 from .parser import GLMParser
 
 
+def _count_image_parts(messages: list[dict[str, Any]]) -> int:
+    count = 0
+    for message in messages:
+        content = message.get("content")
+        if isinstance(content, list):
+            count += sum(
+                1
+                for part in content
+                if isinstance(part, dict) and part.get("type") == "image_url"
+            )
+    return count
+
+
 class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
     """异步 GLM Agent，通过流式文本 + 自定义格式解析执行操作。"""
 
@@ -38,6 +51,10 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
             confirmation_callback=confirmation_callback,
             takeover_callback=takeover_callback,
         )
+        # Task text is stashed here and merged into the first per-step user
+        # message (together with that step's screenshot), matching the
+        # official Open-AutoGLM layout.
+        self._pending_task: str | None = None
 
     def _get_default_system_prompt(self, lang: str) -> str:
         return get_system_prompt(lang)
@@ -45,13 +62,10 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
     def _prepare_initial_context(
         self, task: str, screenshot_base64: str, current_app: str
     ) -> None:
-        screen_info = MessageBuilder.build_screen_info(current_app)
-        initial_message = f"{task}\n\n** Screen Info **\n\n{screen_info}"
-        self._context.append(
-            MessageBuilder.create_user_message(
-                text=initial_message, image_base64=screenshot_base64
-            )
-        )
+        # Do not add a screenshot here: the first per-step screenshot is the
+        # current one and it is attached in _execute_step(). This keeps the
+        # invariant that every LLM request carries exactly one image.
+        self._pending_task = task
 
     async def _execute_step(self) -> AsyncGenerator[dict[str, Any], None]:
         """执行单步：获取截图 → 流式调用 LLM → 解析文本 → 执行动作。"""
@@ -90,8 +104,20 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
             "step.build_message",
             attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
         ):
+            # 清除历史消息中残留的截图，保证本次请求只包含当前屏幕这一张图。
+            self._context = [
+                MessageBuilder.remove_images_from_message(message)
+                for message in self._context
+            ]
+
             screen_info = MessageBuilder.build_screen_info(current_app)
-            text_content = f"** Screen Info **\n\n{screen_info}"
+            if self._step_count == 1 and self._pending_task is not None:
+                text_content = (
+                    f"{self._pending_task}\n\n** Screen Info **\n\n{screen_info}"
+                )
+                self._pending_task = None
+            else:
+                text_content = f"** Screen Info **\n\n{screen_info}"
             self._context.append(
                 MessageBuilder.create_user_message(
                     text=text_content, image_base64=screenshot.base64_data
@@ -99,6 +125,14 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
             )
 
         # 3. 流式调用 OpenAI
+        image_count = _count_image_parts(self._context)
+        if image_count != 1:
+            logger.warning(
+                "GLM request should carry exactly one screenshot, got %d (step %d)",
+                image_count,
+                self._step_count,
+            )
+
         try:
             if self.agent_config.verbose:
                 msgs = get_messages(self.agent_config.lang)
