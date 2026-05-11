@@ -178,10 +178,18 @@ export function DevicePanel({
   const contentRef = useRef<HTMLDivElement>(null);
   const prevMessageCountRef = useRef(0);
   const prevMessageSigRef = useRef<string | null>(null);
-  // Tracks whether the user is parked near the bottom of the chat. Stored in a
-  // ref (not state) so the streaming effects below read the latest value
-  // synchronously without being suppressed by an in-flight render.
+  // The chat follows the latest message by default. Only a deliberate upward
+  // scroll by the user turns this off — programmatic re-pins and content that
+  // grows underneath (e.g. screenshots finishing decode) must never flip it,
+  // otherwise the stale scroll events they emit would strand the view.
   const isAtBottomRef = useRef(true);
+  // Timestamp of the last programmatic scroll-to-bottom. Scroll events that
+  // land within this window are the echo of our own pinning (or of the layout
+  // settling afterwards) and are ignored, not treated as the user leaving.
+  const lastPinTimeRef = useRef(0);
+  // Last observed scrollTop. Used to tell a real upward scroll (scrollTop
+  // decreases) apart from content growing underneath (scrollTop stays put).
+  const lastScrollTopRef = useRef(0);
   const [showNewMessageNotice, setShowNewMessageNotice] = useState(false);
 
   // The actual scrollable element lives inside the Radix ScrollArea.
@@ -193,10 +201,11 @@ export function DevicePanel({
     []
   );
 
-  const scrollToBottom = useCallback(
+  const pinToBottom = useCallback(
     (behavior: 'auto' | 'smooth' = 'auto') => {
       const viewport = getScrollViewport();
       if (!viewport) return;
+      lastPinTimeRef.current = performance.now();
       viewport.scrollTo({ top: viewport.scrollHeight, behavior });
     },
     [getScrollViewport]
@@ -208,17 +217,16 @@ export function DevicePanel({
   // re-pins the view to the bottom whenever the content height changes while
   // the user is still following along.
   useEffect(() => {
-    const viewport = getScrollViewport();
     const content = contentRef.current;
-    if (!viewport || !content) return;
+    if (!content) return;
     const observer = new ResizeObserver(() => {
       if (isAtBottomRef.current) {
-        viewport.scrollTop = viewport.scrollHeight;
+        pinToBottom();
       }
     });
     observer.observe(content);
     return () => observer.disconnect();
-  }, [getScrollViewport]);
+  }, [pinToBottom]);
 
   // ✅ 移除 handleInit 函数，不再需要显式初始化
   // Agent 会在首次发送消息时自动初始化
@@ -381,10 +389,7 @@ export function DevicePanel({
     prevMessageSigRef.current = latestSignature;
 
     if (isAtBottomRef.current) {
-      const viewport = getScrollViewport();
-      if (viewport) {
-        viewport.scrollTop = viewport.scrollHeight;
-      }
+      pinToBottom();
       const frameId = requestAnimationFrame(() => {
         setShowNewMessageNotice(false);
       });
@@ -404,7 +409,7 @@ export function DevicePanel({
       });
       return () => cancelAnimationFrame(frameId);
     }
-  }, [messages, getScrollViewport]);
+  }, [messages, pinToBottom]);
 
   // Load workflows
   useEffect(() => {
@@ -424,24 +429,36 @@ export function DevicePanel({
     setShowWorkflowPopover(false);
   };
 
-  // Treat the user as "following" the conversation while they are within a
-  // generous band of the bottom. A tight threshold breaks auto-scroll because
-  // late-loading screenshots routinely nudge the viewport a few hundred pixels
-  // away from the very end between streaming updates.
   const handleMessagesScroll = (event: React.UIEvent<HTMLDivElement>) => {
     const target = event.currentTarget;
+    const scrollTop = target.scrollTop;
+    const prevScrollTop = lastScrollTopRef.current;
+    lastScrollTopRef.current = scrollTop;
+
+    // Ignore the scroll events caused by our own re-pinning and by the
+    // re-layout that late-loading content (screenshots) triggers right after.
+    if (performance.now() - lastPinTimeRef.current < 150) return;
+
     const distanceFromBottom =
-      target.scrollHeight - target.scrollTop - target.clientHeight;
-    const atBottom = distanceFromBottom < 150;
-    isAtBottomRef.current = atBottom;
-    if (atBottom) {
+      target.scrollHeight - scrollTop - target.clientHeight;
+    // A generous band so a few hundred pixels of late-loading content between
+    // streaming updates doesn't break following.
+    if (distanceFromBottom < 150) {
+      isAtBottomRef.current = true;
       setShowNewMessageNotice(false);
+      return;
+    }
+    // Far from the bottom: only treat it as the user opting out if they
+    // actually scrolled upward. Content growing or a programmatic re-pin keeps
+    // (or raises) scrollTop, so the stale events they emit can't trip this.
+    if (scrollTop < prevScrollTop - 4) {
+      isAtBottomRef.current = false;
     }
   };
 
   const handleScrollToLatest = () => {
     isAtBottomRef.current = true;
-    scrollToBottom('smooth');
+    pinToBottom();
     setShowNewMessageNotice(false);
   };
 
