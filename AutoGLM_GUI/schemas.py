@@ -1,12 +1,20 @@
 """Shared Pydantic models for the AutoGLM-GUI API."""
 
+import base64
+import binascii
 import re
 from typing import Any
 
-from pydantic import BaseModel, field_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 
 from AutoGLM_GUI.device_metadata_manager import DISPLAY_NAME_MAX_LENGTH
 from AutoGLM_GUI.task_store import TaskSessionStatus, TaskStatus
+
+
+TASK_IMAGE_ATTACHMENT_MAX_COUNT = 3
+TASK_IMAGE_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024
+TASK_IMAGE_ATTACHMENT_MAX_TOTAL_BYTES = 12 * 1024 * 1024
+TASK_IMAGE_ATTACHMENT_MIME_TYPES = {"image/png", "image/jpeg", "image/webp"}
 
 
 class ChatRequest(BaseModel):
@@ -707,6 +715,7 @@ class MessageRecordResponse(BaseModel):
     thinking: str | None = None
     action: dict[str, Any] | None = None
     step: int | None = None
+    attachments: list[dict[str, Any]] = Field(default_factory=list)
 
 
 class StepTimingSummaryResponse(BaseModel):
@@ -810,17 +819,81 @@ class TaskSessionResponse(BaseModel):
     updated_at: str
 
 
+class TaskImageAttachment(BaseModel):
+    """Base64 image attachment supplied by the user with a chat task."""
+
+    mime_type: str
+    data: str
+    name: str | None = None
+
+    @field_validator("mime_type")
+    @classmethod
+    def validate_mime_type(cls, v: str) -> str:
+        mime_type = v.strip().lower()
+        if mime_type not in TASK_IMAGE_ATTACHMENT_MIME_TYPES:
+            raise ValueError(
+                "unsupported image type; expected image/png, image/jpeg, or image/webp"
+            )
+        return mime_type
+
+    @field_validator("data")
+    @classmethod
+    def validate_base64_data(cls, v: str) -> str:
+        data = v.strip()
+        if not data:
+            raise ValueError("image data cannot be empty")
+        try:
+            decoded = base64.b64decode(data, validate=True)
+        except (binascii.Error, ValueError) as exc:
+            raise ValueError("image data must be valid base64") from exc
+        if not decoded:
+            raise ValueError("image data cannot be empty")
+        if len(decoded) > TASK_IMAGE_ATTACHMENT_MAX_BYTES:
+            raise ValueError("image too large (max 5 MiB)")
+        return data
+
+    @field_validator("name")
+    @classmethod
+    def validate_name(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        name = v.strip()
+        if not name:
+            return None
+        return name[:255]
+
+    def byte_size(self) -> int:
+        return len(base64.b64decode(self.data, validate=True))
+
+
 class TaskSubmitRequest(BaseModel):
-    message: str
+    message: str = ""
+    attachments: list[TaskImageAttachment] = Field(default_factory=list)
 
     @field_validator("message")
     @classmethod
     def validate_message_non_empty(cls, v: str) -> str:
-        if not v or not v.strip():
-            raise ValueError("message cannot be empty")
         if len(v) > 10000:
             raise ValueError("message too long (max 10000 characters)")
         return v.strip()
+
+    @field_validator("attachments")
+    @classmethod
+    def validate_attachments_count(
+        cls, v: list[TaskImageAttachment]
+    ) -> list[TaskImageAttachment]:
+        if len(v) > TASK_IMAGE_ATTACHMENT_MAX_COUNT:
+            raise ValueError("too many images (max 3)")
+        return v
+
+    @model_validator(mode="after")
+    def validate_message_or_attachment(self) -> "TaskSubmitRequest":
+        if not self.message and not self.attachments:
+            raise ValueError("message or image attachment is required")
+        total_bytes = sum(attachment.byte_size() for attachment in self.attachments)
+        if total_bytes > TASK_IMAGE_ATTACHMENT_MAX_TOTAL_BYTES:
+            raise ValueError("images too large in total (max 12 MiB)")
+        return self
 
 
 class TaskRunResponse(BaseModel):

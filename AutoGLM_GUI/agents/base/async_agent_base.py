@@ -2,7 +2,7 @@
 
 子类只需实现:
 - _get_default_system_prompt(lang) → 默认 system prompt
-- _prepare_initial_context(task, screenshot, current_app) → 构建首条消息
+- _prepare_initial_context(task, screenshot, current_app, reference_images) → 构建首条消息
 - _execute_step() → 单步执行（LLM 调用 + action 执行）
 """
 
@@ -77,6 +77,7 @@ class AsyncAgentBase(ABC):
 
         # State
         self._context: list[dict[str, Any]] = [self._initial_system_message]
+        self._user_image_attachments: list[dict[str, str]] = []
         self._step_count = 0
         self._is_running = False
 
@@ -89,7 +90,11 @@ class AsyncAgentBase(ABC):
 
     @abstractmethod
     def _prepare_initial_context(
-        self, task: str, screenshot_base64: str, current_app: str
+        self,
+        task: str,
+        screenshot_base64: str,
+        current_app: str,
+        reference_images: list[dict[str, str]] | None = None,
     ) -> None:
         """构建首条用户消息并添加到 self._context。"""
         ...
@@ -155,7 +160,10 @@ class AsyncAgentBase(ABC):
                     attrs={"agent_type": self.__class__.__name__},
                 ):
                     self._prepare_initial_context(
-                        task, screenshot.base64_data, current_app
+                        task,
+                        screenshot.base64_data,
+                        current_app,
+                        self._user_image_attachments,
                     )
 
                 started_at = time.monotonic()
@@ -325,7 +333,12 @@ class AsyncAgentBase(ABC):
                 raise
 
             finally:
+                self._user_image_attachments = []
                 self._is_running = False
+
+    def set_user_image_attachments(self, attachments: list[dict[str, str]]) -> None:
+        """Set user-supplied reference images for the next streamed task."""
+        self._user_image_attachments = attachments.copy()
 
     async def cancel(self) -> None:
         """取消当前执行。"""
@@ -336,6 +349,7 @@ class AsyncAgentBase(ABC):
     def reset(self) -> None:
         """重置状态。"""
         self._context = [copy.deepcopy(self._initial_system_message)]
+        self._user_image_attachments = []
         self._step_count = 0
         self._is_running = False
         self._cancel_event.clear()

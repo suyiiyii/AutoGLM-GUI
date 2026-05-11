@@ -139,15 +139,30 @@ def _trace_summary_from_step_timings(
     )
 
 
-def _build_history_record_from_task(record: dict[str, Any]) -> HistoryRecordResponse:
+def _build_history_record_from_task(
+    record: dict[str, Any], *, include_attachments: bool = True
+) -> HistoryRecordResponse:
     events = task_store.list_task_events(record["id"])
+    user_message_event = next(
+        (event for event in events if event["event_type"] == "user_message"),
+        None,
+    )
+    user_message_payload = (
+        dict(user_message_event["payload"]) if user_message_event is not None else {}
+    )
+    user_attachments = user_message_payload.get("attachments", [])
+    if not isinstance(user_attachments, list):
+        user_attachments = []
+    if not include_attachments:
+        user_attachments = []
     step_timings: list[StepTimingSummaryResponse] = []
     trace_summary: TraceSummaryResponse | None = None
     messages: list[MessageRecordResponse] = [
         MessageRecordResponse(
             role="user",
-            content=record["input_text"],
+            content=str(user_message_payload.get("message", record["input_text"])),
             timestamp=record["created_at"],
+            attachments=user_attachments,
         )
     ]
     # Sequence index for layered tool-call cycles so the UI can group a tool
@@ -156,6 +171,8 @@ def _build_history_record_from_task(record: dict[str, Any]) -> HistoryRecordResp
     for event in events:
         event_type = event["event_type"]
         payload = event["payload"]
+        if event_type == "user_message":
+            continue
         if event_type == "step":
             messages.append(
                 MessageRecordResponse(
@@ -295,7 +312,7 @@ def _list_merged_history(
         ]
 
     merged = [
-        _build_history_record_from_task(record)
+        _build_history_record_from_task(record, include_attachments=False)
         for record in task_records
         if _is_terminal_task_record(record)
     ]

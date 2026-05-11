@@ -9,16 +9,20 @@ import {
   ListChecks,
   Loader2,
   Square,
+  ImagePlus,
+  X,
 } from 'lucide-react';
 import { DeviceMonitor } from './DeviceMonitor';
 import type {
   StepTimingSummary,
+  TaskImageAttachment,
   Workflow,
   HistoryRecordResponse,
 } from '../api';
 import {
   listWorkflows,
   listHistory,
+  getHistoryRecord,
   clearHistory as clearHistoryApi,
   deleteHistoryRecord,
 } from '../api';
@@ -61,6 +65,35 @@ interface DevicePanelProps {
   isConfigured: boolean;
   isVisible?: boolean; // ✅ 新增：控制视频流行为
   unlimitedStepsEnabled?: boolean;
+}
+
+const IMAGE_ATTACHMENT_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+]);
+const MAX_IMAGE_ATTACHMENTS = 3;
+const MAX_IMAGE_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+
+function readImageAttachment(file: File): Promise<TaskImageAttachment> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('读取图片失败'));
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      const commaIndex = result.indexOf(',');
+      if (commaIndex === -1) {
+        reject(new Error('图片格式无效'));
+        return;
+      }
+      resolve({
+        mime_type: file.type,
+        data: result.slice(commaIndex + 1),
+        name: file.name || null,
+      });
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function getStepSummary(thinking: string | undefined, action: unknown): string {
@@ -153,6 +186,10 @@ export function DevicePanel({
 }: DevicePanelProps) {
   const t = useTranslation();
   const [input, setInput] = useState('');
+  const [attachments, setAttachments] = useState<TaskImageAttachment[]>([]);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [isDraggingAttachment, setIsDraggingAttachment] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // ✅ 移除 initialized 状态，依赖后端自动初始化
   // const [initialized, setInitialized] = useState(false);
   const [showHistoryPopover, setShowHistoryPopover] = useState(false);
@@ -250,76 +287,88 @@ export function DevicePanel({
   }, [showHistoryPopover, deviceSerial]);
 
   const handleSelectHistory = (record: HistoryRecordResponse) => {
-    // Convert backend messages to frontend Message format
-    const newMessages: TaskConversationMessage[] = [];
+    void (async () => {
+      let selectedRecord = record;
+      try {
+        selectedRecord = await getHistoryRecord(deviceSerial, record.id);
+      } catch (error) {
+        console.error('Failed to load history record detail:', error);
+      }
 
-    // Find user message from record
-    const userMsg = record.messages.find(m => m.role === 'user');
-    if (userMsg) {
-      newMessages.push({
-        id: `${record.id}-user`,
-        role: 'user',
-        content: userMsg.content || record.task_text,
-        timestamp: new Date(userMsg.timestamp),
-      });
-    } else {
-      // Fallback to task_text if no user message
-      newMessages.push({
-        id: `${record.id}-user`,
-        role: 'user',
-        content: record.task_text,
-        timestamp: new Date(record.start_time),
-      });
-    }
+      // Convert backend messages to frontend Message format
+      const newMessages: TaskConversationMessage[] = [];
 
-    // Collect thinking and actions from assistant messages
-    const thinkingList: string[] = [];
-    const actionsList: Record<string, unknown>[] = [];
-    const screenshotsList: (string | undefined)[] = [];
-    record.messages
-      .filter(m => m.role === 'assistant')
-      .forEach(m => {
-        if (m.thinking) thinkingList.push(m.thinking);
-        if (m.action) actionsList.push(m.action);
-        // Extract screenshot directly or from loosely typed object
-        const recordData = m as unknown as { screenshot?: string };
-        screenshotsList.push(recordData.screenshot);
-      });
+      // Find user message from record
+      const userMsg = selectedRecord.messages.find(m => m.role === 'user');
+      if (userMsg) {
+        newMessages.push({
+          id: `${selectedRecord.id}-user`,
+          role: 'user',
+          content: userMsg.content || selectedRecord.task_text,
+          timestamp: new Date(userMsg.timestamp),
+          attachments: userMsg.attachments || [],
+        });
+      } else {
+        // Fallback to task_text if no user message
+        newMessages.push({
+          id: `${selectedRecord.id}-user`,
+          role: 'user',
+          content: selectedRecord.task_text,
+          timestamp: new Date(selectedRecord.start_time),
+        });
+      }
 
-    // Create agent message
-    const agentMessage: TaskConversationMessage = {
-      id: `${record.id}-agent`,
-      role: 'assistant',
-      content: record.final_message,
-      timestamp: record.end_time
-        ? new Date(record.end_time)
-        : new Date(record.start_time),
-      steps: record.steps,
-      success: record.success,
-      thinking: thinkingList,
-      actions: actionsList,
-      screenshots: screenshotsList,
-      stepTimings: record.step_timings,
-      isStreaming: false,
-    };
-    newMessages.push(agentMessage);
+      // Collect thinking and actions from assistant messages
+      const thinkingList: string[] = [];
+      const actionsList: Record<string, unknown>[] = [];
+      const screenshotsList: (string | undefined)[] = [];
+      selectedRecord.messages
+        .filter(m => m.role === 'assistant')
+        .forEach(m => {
+          if (m.thinking) thinkingList.push(m.thinking);
+          if (m.action) actionsList.push(m.action);
+          // Extract screenshot directly or from loosely typed object
+          const recordData = m as unknown as { screenshot?: string };
+          screenshotsList.push(recordData.screenshot);
+        });
 
-    setMessages(newMessages);
+      // Create agent message
+      const agentMessage: TaskConversationMessage = {
+        id: `${selectedRecord.id}-agent`,
+        role: 'assistant',
+        content: selectedRecord.final_message,
+        timestamp: selectedRecord.end_time
+          ? new Date(selectedRecord.end_time)
+          : new Date(selectedRecord.start_time),
+        steps: selectedRecord.steps,
+        success: selectedRecord.success,
+        thinking: thinkingList,
+        actions: actionsList,
+        screenshots: screenshotsList,
+        stepTimings: selectedRecord.step_timings,
+        isStreaming: false,
+      };
+      newMessages.push(agentMessage);
 
-    // Reset previous message tracking refs to match the loaded history
-    prevMessageCountRef.current = newMessages.length;
-    prevMessageSigRef.current = [
-      agentMessage.id,
-      agentMessage.content?.length ?? 0,
-      agentMessage.currentThinking?.length ?? 0,
-      agentMessage.thinking ? JSON.stringify(agentMessage.thinking).length : 0,
-      agentMessage.steps ?? '',
-      agentMessage.isStreaming ? 1 : 0,
-    ].join('|');
+      setMessages(newMessages);
 
-    setShowNewMessageNotice(false);
-    isAtBottomRef.current = true;
-    setShowHistoryPopover(false);
+      // Reset previous message tracking refs to match the loaded history
+      prevMessageCountRef.current = newMessages.length;
+      prevMessageSigRef.current = [
+        agentMessage.id,
+        agentMessage.content?.length ?? 0,
+        agentMessage.currentThinking?.length ?? 0,
+        agentMessage.thinking
+          ? JSON.stringify(agentMessage.thinking).length
+          : 0,
+        agentMessage.steps ?? '',
+        agentMessage.isStreaming ? 1 : 0,
+      ].join('|');
+
+      setShowNewMessageNotice(false);
+      isAtBottomRef.current = true;
+      setShowHistoryPopover(false);
+    })();
   };
 
   const handleClearHistory = async () => {
@@ -346,12 +395,113 @@ export function DevicePanel({
   // Note: Configuration is now managed entirely by backend ConfigManager.
   // If user updates config via Settings, they need to manually re-initialize agents.
 
+  const addImageFiles = useCallback(
+    async (files: File[]) => {
+      const imageFiles = files.filter(file =>
+        IMAGE_ATTACHMENT_TYPES.has(file.type)
+      );
+      if (imageFiles.length === 0) {
+        return;
+      }
+
+      if (attachments.length + imageFiles.length > MAX_IMAGE_ATTACHMENTS) {
+        setAttachmentError('最多只能附加 3 张图片');
+        return;
+      }
+
+      const tooLargeFile = imageFiles.find(
+        file => file.size > MAX_IMAGE_ATTACHMENT_BYTES
+      );
+      if (tooLargeFile) {
+        setAttachmentError('单张图片不能超过 5 MiB');
+        return;
+      }
+
+      try {
+        const nextAttachments = await Promise.all(
+          imageFiles.map(file => readImageAttachment(file))
+        );
+        setAttachments(current => [...current, ...nextAttachments]);
+        setAttachmentError(null);
+      } catch (readError) {
+        setAttachmentError(
+          readError instanceof Error ? readError.message : '读取图片失败'
+        );
+      }
+    },
+    [attachments.length]
+  );
+
+  const handleFileInputChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(event.target.files || []);
+      void addImageFiles(files);
+      event.target.value = '';
+    },
+    [addImageFiles]
+  );
+
+  const handlePaste = useCallback(
+    (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      const files = Array.from(event.clipboardData.files || []);
+      const hasImages = files.some(file =>
+        IMAGE_ATTACHMENT_TYPES.has(file.type)
+      );
+      if (!hasImages) {
+        return;
+      }
+      event.preventDefault();
+      void addImageFiles(files);
+    },
+    [addImageFiles]
+  );
+
+  const handleDragOver = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      if (
+        Array.from(event.dataTransfer.items || []).some(item =>
+          IMAGE_ATTACHMENT_TYPES.has(item.type)
+        )
+      ) {
+        event.preventDefault();
+        setIsDraggingAttachment(true);
+      }
+    },
+    []
+  );
+
+  const handleDragLeave = useCallback(() => {
+    setIsDraggingAttachment(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      const files = Array.from(event.dataTransfer.files || []);
+      const hasImages = files.some(file =>
+        IMAGE_ATTACHMENT_TYPES.has(file.type)
+      );
+      if (!hasImages) {
+        return;
+      }
+      event.preventDefault();
+      setIsDraggingAttachment(false);
+      void addImageFiles(files);
+    },
+    [addImageFiles]
+  );
+
+  const removeAttachment = useCallback((index: number) => {
+    setAttachments(current => current.filter((_, idx) => idx !== index));
+  }, []);
+
   const handleSend = useCallback(async () => {
-    const didSend = await sendMessage(input);
+    const didSend = await sendMessage(input, attachments);
     if (didSend) {
       setInput('');
+      setAttachments([]);
+      setAttachmentError(null);
     }
-  }, [input, sendMessage]);
+  }, [attachments, input, sendMessage]);
 
   const handleReset = useCallback(async () => {
     await resetConversation();
@@ -359,6 +509,8 @@ export function DevicePanel({
     isAtBottomRef.current = true;
     prevMessageCountRef.current = 0;
     prevMessageSigRef.current = null;
+    setAttachments([]);
+    setAttachmentError(null);
   }, [resetConversation]);
 
   const handleAbortChat = useCallback(async () => {
@@ -584,10 +736,10 @@ export function DevicePanel({
         </div>
 
         {/* Error message */}
-        {error && (
+        {(error || attachmentError) && (
           <div className="mx-4 mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-600 dark:text-red-400 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            {error}
+            {error || attachmentError}
           </div>
         )}
 
@@ -862,10 +1014,27 @@ export function DevicePanel({
                       </div>
                     ) : (
                       <div className="max-w-[75%]">
-                        <div className="chat-bubble-user px-4 py-3">
-                          <p className="whitespace-pre-wrap">
-                            {message.content}
-                          </p>
+                        <div className="chat-bubble-user px-4 py-3 space-y-2">
+                          {message.attachments &&
+                            message.attachments.length > 0 && (
+                              <div className="grid grid-cols-2 gap-2">
+                                {message.attachments.map((attachment, idx) => (
+                                  <img
+                                    key={`${message.id}-attachment-${idx}`}
+                                    src={`data:${attachment.mime_type};base64,${attachment.data}`}
+                                    alt={
+                                      attachment.name || `Attachment ${idx + 1}`
+                                    }
+                                    className="h-24 w-full rounded-lg object-cover border border-white/20"
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          {message.content && (
+                            <p className="whitespace-pre-wrap">
+                              {message.content}
+                            </p>
+                          )}
                         </div>
                         <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 text-right">
                           {message.timestamp.toLocaleTimeString()}
@@ -892,12 +1061,54 @@ export function DevicePanel({
         </div>
 
         {/* Input area */}
-        <div className="p-4 border-t border-slate-200 dark:border-slate-800">
+        <div
+          className={`p-4 border-t border-slate-200 dark:border-slate-800 ${
+            isDraggingAttachment
+              ? 'bg-sky-50 dark:bg-sky-950/20'
+              : 'bg-transparent'
+          }`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            multiple
+            className="hidden"
+            onChange={handleFileInputChange}
+          />
+          {attachments.length > 0 && (
+            <div className="mb-3 flex flex-wrap gap-2">
+              {attachments.map((attachment, idx) => (
+                <div
+                  key={`${attachment.name || 'image'}-${idx}`}
+                  className="relative h-16 w-16 overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800"
+                >
+                  <img
+                    src={`data:${attachment.mime_type};base64,${attachment.data}`}
+                    alt={attachment.name || `Attachment ${idx + 1}`}
+                    className="h-full w-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(idx)}
+                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-950/70 text-white hover:bg-slate-950"
+                    aria-label="移除图片"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="flex items-end gap-3">
             <Textarea
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleInputKeyDown}
+              onPaste={handlePaste}
               placeholder={
                 !isConfigured
                   ? t.devicePanel.configureFirst
@@ -907,6 +1118,25 @@ export function DevicePanel({
               className="flex-1 min-h-[40px] max-h-[120px] resize-none"
               rows={1}
             />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  disabled={
+                    loading || attachments.length >= MAX_IMAGE_ATTACHMENTS
+                  }
+                  className="h-10 w-10 flex-shrink-0"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <ImagePlus className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={8}>
+                添加图片
+              </TooltipContent>
+            </Tooltip>
             {/* Workflow Quick Run Button */}
             <Tooltip>
               <TooltipTrigger asChild>
@@ -998,7 +1228,9 @@ export function DevicePanel({
             {!loading && (
               <Button
                 onClick={handleSend}
-                disabled={!input.trim() || !sessionReady}
+                disabled={
+                  (!input.trim() && attachments.length === 0) || !sessionReady
+                }
                 size="icon"
                 variant="twitter"
                 className="h-10 w-10 rounded-full flex-shrink-0"

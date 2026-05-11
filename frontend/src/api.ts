@@ -926,6 +926,12 @@ export interface TaskEventListResponse {
   events: TaskEventRecordResponse[];
 }
 
+export interface TaskImageAttachment {
+  mime_type: string;
+  data: string;
+  name?: string | null;
+}
+
 export interface TaskCancelResponse {
   success: boolean;
   message: string;
@@ -983,11 +989,12 @@ export async function listTaskSessionTasks(
 
 export async function submitTaskSessionTask(
   sessionId: string,
-  message: string
+  message: string,
+  attachments: TaskImageAttachment[] = []
 ): Promise<TaskRunResponse> {
   const res = await axios.post<TaskRunResponse>(
     `/api/task-sessions/${sessionId}/tasks`,
-    { message }
+    { message, attachments }
   );
   return res.data;
 }
@@ -1077,6 +1084,7 @@ export interface MessageRecordResponse {
   thinking?: string | null;
   action?: Record<string, unknown> | null;
   step?: number | null;
+  attachments?: TaskImageAttachment[];
 }
 
 export interface HistoryRecordResponse {

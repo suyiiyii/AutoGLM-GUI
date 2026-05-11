@@ -70,7 +70,7 @@ class DroidRunAgent:
             )
             from droidrun.config_manager.config_manager import (  # pyright: ignore[reportMissingImports,reportAttributeAccessIssue]
                 DeviceConfig,
-                DroidConfig,
+                DroidConfig,  # pyright: ignore[reportAttributeAccessIssue]
             )
         except ImportError as e:
             yield {

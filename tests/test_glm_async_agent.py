@@ -4,7 +4,8 @@ Regression coverage for issue #348: a stale initial screenshot leaked into
 every LLM request (the per-step ``remove_images_from_message`` only stripped
 the *last* message), so ``autoglm-phone`` saw two screenshots per turn and
 produced wrong ``Tap`` coordinates. Each request must carry exactly one
-screenshot — the current one — and history must not retain images.
+screenshot — the current one — unless the user explicitly attached reference
+images for the first turn. History must not retain images.
 """
 
 import asyncio
@@ -91,6 +92,25 @@ def test_remove_images_passes_through_string_content():
     assert MessageBuilder.remove_images_from_message(msg) == msg
 
 
+def test_create_user_message_with_images_preserves_order_and_mime_types():
+    msg = MessageBuilder.create_user_message_with_images(
+        "hello",
+        [
+            {"mime_type": "image/png", "data": "screen"},
+            {"mime_type": "image/jpeg", "data": "reference"},
+        ],
+    )
+
+    assert [part["type"] for part in msg["content"]] == [
+        "image_url",
+        "image_url",
+        "text",
+    ]
+    assert msg["content"][0]["image_url"]["url"] == "data:image/png;base64,screen"
+    assert msg["content"][1]["image_url"]["url"] == "data:image/jpeg;base64,reference"
+    assert msg["content"][2]["text"] == "hello"
+
+
 # ---------------------------------------------------------------------------
 # AsyncGLMAgent context invariant
 # ---------------------------------------------------------------------------
@@ -165,3 +185,48 @@ def test_context_retains_no_images_after_step(monkeypatch):
     asyncio.run(run())
 
     assert _count_images(agent._context) == 0
+
+
+def test_user_reference_images_are_sent_on_first_request_only(monkeypatch):
+    agent = _make_agent()
+
+    captured: list[list[dict[str, Any]]] = []
+    raw_responses = iter(
+        [
+            "I will tap.\ndo(action=Tap(element=[500, 500]))",
+            "Done.\nfinish(message=ok)",
+        ]
+    )
+
+    async def fake_stream(messages):
+        captured.append(copy.deepcopy(messages))
+        yield {"type": "raw", "content": next(raw_responses)}
+
+    action_results = iter(
+        [
+            ActionResult(success=True, should_finish=False, message=None),
+            ActionResult(success=True, should_finish=True, message="ok"),
+        ]
+    )
+
+    monkeypatch.setattr(agent, "_stream_openai", fake_stream)
+    monkeypatch.setattr(
+        agent.action_handler, "execute", lambda *a, **k: next(action_results)
+    )
+
+    async def run() -> None:
+        agent._prepare_initial_context(
+            "use the attached image",
+            "img0",
+            "com.android.launcher",
+            reference_images=[{"mime_type": "image/jpeg", "data": "ref1"}],
+        )
+        await _drain(agent._execute_step())
+        await _drain(agent._execute_step())
+
+    asyncio.run(run())
+
+    assert len(captured) == 2
+    assert _count_images(captured[0]) == 2
+    assert _count_images(captured[1]) == 1
+    assert "User attached 1 reference image" in _text_part(captured[0][-1])

@@ -28,12 +28,26 @@ class AsyncGeminiAgent(AsyncAgentBase):
         return get_system_prompt(lang)
 
     def _prepare_initial_context(
-        self, task: str, screenshot_base64: str, current_app: str
+        self,
+        task: str,
+        screenshot_base64: str,
+        current_app: str,
+        reference_images: list[dict[str, str]] | None = None,
     ) -> None:
+        reference_images = reference_images or []
+        reference_notice = MessageBuilder.build_user_reference_images_notice(
+            len(reference_images)
+        )
+        reference_section = (
+            f"\n\nUser reference images: {reference_notice}" if reference_notice else ""
+        )
         self._context.append(
-            MessageBuilder.create_user_message(
-                text=f"{task}\n\nCurrent app: {current_app}",
-                image_base64=screenshot_base64,
+            MessageBuilder.create_user_message_with_images(
+                text=f"{task}{reference_section}\n\nCurrent app: {current_app}",
+                images=[
+                    {"mime_type": "image/png", "data": screenshot_base64},
+                    *reference_images,
+                ],
             )
         )
 

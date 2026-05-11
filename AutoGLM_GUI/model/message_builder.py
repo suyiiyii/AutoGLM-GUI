@@ -15,16 +15,34 @@ class MessageBuilder:
         if image_base64 is None:
             return {"role": "user", "content": text}
 
-        # Image first, then text — matches the official Open-AutoGLM input layout.
-        return {
-            "role": "user",
-            "content": [
+        return MessageBuilder.create_user_message_with_images(
+            text=text,
+            images=[{"mime_type": "image/png", "data": image_base64}],
+        )
+
+    @staticmethod
+    def create_user_message_with_images(
+        text: str, images: list[dict[str, str]]
+    ) -> dict[str, Any]:
+        if not images:
+            return {"role": "user", "content": text}
+
+        content_parts: list[dict[str, Any]] = []
+        for image in images:
+            content_parts.append(
                 {
                     "type": "image_url",
-                    "image_url": {"url": f"data:image/png;base64,{image_base64}"},
-                },
-                {"type": "text", "text": text},
-            ],
+                    "image_url": {
+                        "url": f"data:{image['mime_type']};base64,{image['data']}"
+                    },
+                }
+            )
+
+        # Images first, then text — matches the official Open-AutoGLM input layout.
+        content_parts.append({"type": "text", "text": text})
+        return {
+            "role": "user",
+            "content": content_parts,
         }
 
     @staticmethod
@@ -34,17 +52,25 @@ class MessageBuilder:
         if not image_base64_list:
             return {"role": "user", "content": text}
 
-        content_parts: list[dict[str, Any]] = [{"type": "text", "text": text}]
+        return MessageBuilder.create_user_message_with_images(
+            text=text,
+            images=[
+                {"mime_type": "image/png", "data": image_base64}
+                for image_base64 in image_base64_list
+            ],
+        )
 
-        for image_base64 in image_base64_list:
-            content_parts.append(
-                {
-                    "type": "image_url",
-                    "image_url": {"url": f"data:image/png;base64,{image_base64}"},
-                }
-            )
-
-        return {"role": "user", "content": content_parts}
+    @staticmethod
+    def build_user_reference_images_notice(image_count: int) -> str:
+        if image_count <= 0:
+            return ""
+        image_word = "image" if image_count == 1 else "images"
+        return (
+            f"User attached {image_count} reference {image_word}. "
+            "Image 1 is the current Android screen and is the only image that "
+            "defines tap/swipe coordinates. Use the following attached images "
+            "only as reference material for the user's task."
+        )
 
     @staticmethod
     def create_assistant_message(content: str) -> dict[str, Any]:

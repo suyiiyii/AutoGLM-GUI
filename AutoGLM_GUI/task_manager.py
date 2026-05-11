@@ -6,7 +6,7 @@ import asyncio
 import inspect
 import time
 from collections.abc import Awaitable, Callable
-from typing import Any
+from typing import Any, cast
 
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.metrics import record_trace_latency_metrics
@@ -21,6 +21,7 @@ from AutoGLM_GUI.task_store import (
 import AutoGLM_GUI.trace as trace_module
 
 TaskExecutor = Callable[[TaskRecord], Awaitable[None]]
+TaskImageAttachment = dict[str, Any]
 
 
 class TaskManager:
@@ -127,6 +128,7 @@ class TaskManager:
         device_id: str,
         device_serial: str,
         message: str,
+        attachments: list[TaskImageAttachment] | None = None,
     ) -> TaskRecord:
         session = await self.get_session(session_id)
         if session is None:
@@ -149,9 +151,39 @@ class TaskManager:
             device_serial=device_serial,
             input_text=message,
         )
+        await asyncio.to_thread(
+            self.store.append_event,
+            task_id=task["id"],
+            event_type="user_message",
+            role="user",
+            payload={
+                "message": message,
+                "attachments": attachments or [],
+            },
+        )
         self._completion_events[task["id"]] = asyncio.Event()
         self._ensure_worker(device_id)
         return task
+
+    def _get_task_user_image_attachments(
+        self, task_id: str
+    ) -> list[TaskImageAttachment]:
+        events = self.store.list_task_events(task_id)
+        for event in events:
+            if event["event_type"] != "user_message":
+                continue
+            payload = event.get("payload", {})
+            attachments = payload.get("attachments")
+            if not isinstance(attachments, list):
+                return []
+            return [
+                attachment
+                for attachment in attachments
+                if isinstance(attachment, dict)
+                and isinstance(attachment.get("mime_type"), str)
+                and isinstance(attachment.get("data"), str)
+            ]
+        return []
 
     async def enqueue_scheduled_task(
         self,
@@ -404,6 +436,19 @@ class TaskManager:
                     context=context,
                     agent_type=None,
                 )
+                user_image_attachments = await asyncio.to_thread(
+                    self._get_task_user_image_attachments,
+                    task_id,
+                )
+                image_attachment_setter: (
+                    Callable[[list[TaskImageAttachment]], None] | None
+                ) = None
+                setter_candidate = getattr(agent, "set_user_image_attachments", None)
+                if callable(setter_candidate):
+                    image_attachment_setter = cast(
+                        Callable[[list[TaskImageAttachment]], None],
+                        setter_candidate,
+                    )
 
                 async def cancel_handler() -> None:
                     await agent.cancel()
@@ -423,7 +468,15 @@ class TaskManager:
                     final_message = "Task cancelled by user"
                     final_status = TaskStatus.CANCELLED.value
                     stop_reason = "user_stopped"
+                elif user_image_attachments and image_attachment_setter is None:
+                    final_message = (
+                        "Current agent does not support user image attachments"
+                    )
+                    final_status = TaskStatus.FAILED.value
+                    stop_reason = "unsupported_image_attachments"
                 else:
+                    if user_image_attachments and image_attachment_setter is not None:
+                        image_attachment_setter(user_image_attachments)
                     event_type = ""
                     event_data: dict[str, Any] = {}
                     async for event in agent.stream(task["input_text"]):

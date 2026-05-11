@@ -9,6 +9,7 @@ import {
 import type {
   StepTimingSummary,
   TaskEventRecordResponse,
+  TaskImageAttachment,
   TaskRunResponse,
   TaskStatus,
 } from '../api';
@@ -35,6 +36,7 @@ export interface TaskConversationMessage {
   stepTimings?: (StepTimingSummary | undefined)[];
   isStreaming?: boolean;
   currentThinking?: string;
+  attachments?: TaskImageAttachment[];
 }
 
 interface UseTaskSessionConversationOptions {
@@ -50,7 +52,10 @@ interface UseTaskSessionConversationResult {
   aborting: boolean;
   error: string | null;
   sessionReady: boolean;
-  sendMessage: (input: string) => Promise<boolean>;
+  sendMessage: (
+    input: string,
+    attachments?: TaskImageAttachment[]
+  ) => Promise<boolean>;
   resetConversation: () => Promise<void>;
   abortConversation: () => Promise<void>;
 }
@@ -229,12 +234,27 @@ function buildMessagePair(
   task: TaskRunResponse,
   events: TaskEventRecordResponse[]
 ): TaskConversationMessage[] {
+  const userEvent = events.find(event => event.event_type === 'user_message');
+  const userPayload = userEvent?.payload || {};
+  const eventAttachments = Array.isArray(userPayload.attachments)
+    ? (userPayload.attachments.filter(
+        attachment =>
+          attachment &&
+          typeof attachment === 'object' &&
+          typeof (attachment as TaskImageAttachment).mime_type === 'string' &&
+          typeof (attachment as TaskImageAttachment).data === 'string'
+      ) as TaskImageAttachment[])
+    : [];
+  const eventMessage =
+    typeof userPayload.message === 'string' ? userPayload.message : null;
+
   return [
     {
       id: `${task.id}-user`,
       role: 'user',
-      content: task.input_text,
+      content: eventMessage ?? task.input_text,
       timestamp: new Date(task.created_at),
+      attachments: eventAttachments,
     },
     buildAssistantMessage(task, events),
   ];
@@ -439,16 +459,20 @@ export function useTaskSessionConversation({
   }, [deviceId, deviceSerial, restoreSessionConversation, sessionStorageKey]);
 
   const sendMessage = useCallback(
-    async (input: string) => {
+    async (input: string, attachments: TaskImageAttachment[] = []) => {
       const inputValue = input.trim();
-      if (!inputValue || loading || !sessionId) {
+      if ((!inputValue && attachments.length === 0) || loading || !sessionId) {
         return false;
       }
 
       try {
         setError(null);
         setLoading(true);
-        const task = await submitTaskSessionTask(sessionId, inputValue);
+        const task = await submitTaskSessionTask(
+          sessionId,
+          inputValue,
+          attachments
+        );
         const initialEvents = (await listTaskEvents(task.id)).events;
         const reconciledTask = reconcileTaskRun(task, initialEvents);
 

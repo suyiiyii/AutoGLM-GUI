@@ -55,17 +55,23 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
         # message (together with that step's screenshot), matching the
         # official Open-AutoGLM layout.
         self._pending_task: str | None = None
+        self._pending_reference_images: list[dict[str, str]] = []
 
     def _get_default_system_prompt(self, lang: str) -> str:
         return get_system_prompt(lang)
 
     def _prepare_initial_context(
-        self, task: str, screenshot_base64: str, current_app: str
+        self,
+        task: str,
+        screenshot_base64: str,
+        current_app: str,
+        reference_images: list[dict[str, str]] | None = None,
     ) -> None:
         # Do not add a screenshot here: the first per-step screenshot is the
         # current one and it is attached in _execute_step(). This keeps the
-        # invariant that every LLM request carries exactly one image.
+        # invariant that every LLM request carries the current screen first.
         self._pending_task = task
+        self._pending_reference_images = (reference_images or []).copy()
 
     async def _execute_step(self) -> AsyncGenerator[dict[str, Any], None]:
         """执行单步：获取截图 → 流式调用 LLM → 解析文本 → 执行动作。"""
@@ -112,23 +118,39 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
 
             screen_info = MessageBuilder.build_screen_info(current_app)
             if self._step_count == 1 and self._pending_task is not None:
+                reference_notice = MessageBuilder.build_user_reference_images_notice(
+                    len(self._pending_reference_images)
+                )
+                reference_section = (
+                    f"\n\n** User Reference Images **\n\n{reference_notice}"
+                    if reference_notice
+                    else ""
+                )
                 text_content = (
-                    f"{self._pending_task}\n\n** Screen Info **\n\n{screen_info}"
+                    f"{self._pending_task}{reference_section}"
+                    f"\n\n** Screen Info **\n\n{screen_info}"
                 )
                 self._pending_task = None
+                images = [
+                    {"mime_type": "image/png", "data": screenshot.base64_data},
+                    *self._pending_reference_images,
+                ]
+                self._pending_reference_images = []
             else:
                 text_content = f"** Screen Info **\n\n{screen_info}"
+                images = [{"mime_type": "image/png", "data": screenshot.base64_data}]
             self._context.append(
-                MessageBuilder.create_user_message(
-                    text=text_content, image_base64=screenshot.base64_data
+                MessageBuilder.create_user_message_with_images(
+                    text=text_content,
+                    images=images,
                 )
             )
 
         # 3. 流式调用 OpenAI
         image_count = _count_image_parts(self._context)
-        if image_count != 1:
+        if image_count < 1:
             logger.warning(
-                "GLM request should carry exactly one screenshot, got %d (step %d)",
+                "GLM request should carry at least one screenshot, got %d (step %d)",
                 image_count,
                 self._step_count,
             )

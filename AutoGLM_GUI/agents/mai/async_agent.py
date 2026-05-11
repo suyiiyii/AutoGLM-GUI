@@ -65,7 +65,11 @@ class AsyncMAIAgent(AsyncAgentBase):
         return MAI_MOBILE_SYSTEM_PROMPT
 
     def _prepare_initial_context(
-        self, task: str, screenshot_base64: str, current_app: str
+        self,
+        task: str,
+        screenshot_base64: str,
+        current_app: str,
+        reference_images: list[dict[str, str]] | None = None,
     ) -> None:
         """MAI 不使用基类的 _context 累积，只记录 task_goal。
 

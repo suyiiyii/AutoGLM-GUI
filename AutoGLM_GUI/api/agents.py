@@ -98,7 +98,7 @@ async def chat_stream(request: ChatRequest):
             for event in events:
                 last_seq = int(event["seq"])
                 event_type = str(event["event_type"])
-                if event_type == "status":
+                if event_type in {"status", "user_message"}:
                     continue
                 sse_event = _create_sse_event(
                     event_type,

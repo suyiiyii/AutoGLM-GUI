@@ -1,7 +1,34 @@
 """Tests for Gemini Agent components."""
 
+from typing import Any
+
 from AutoGLM_GUI.agents.gemini.action_mapper import tool_call_to_action
 from AutoGLM_GUI.agents.gemini.tools import DEVICE_TOOLS
+from AutoGLM_GUI.config import AgentConfig, ModelConfig
+from AutoGLM_GUI.device_protocol import Screenshot
+
+
+def _count_images(messages: list[dict[str, Any]]) -> int:
+    count = 0
+    for message in messages:
+        content = message.get("content")
+        if isinstance(content, list):
+            count += sum(
+                1
+                for part in content
+                if isinstance(part, dict) and part.get("type") == "image_url"
+            )
+    return count
+
+
+class _FakeDevice:
+    device_id = "fake-001"
+
+    def get_screenshot(self, timeout: int = 10) -> Screenshot:
+        return Screenshot(base64_data="screen", width=1080, height=2400)
+
+    def get_current_app(self) -> str:
+        return "com.example.app"
 
 
 class TestDeviceTools:
@@ -131,6 +158,34 @@ class TestAgentRegistration:
         types = list_agent_types()
         assert "gemini" in types
         assert "general-vision" in types
+
+
+class TestGeminiImageAttachments:
+    def test_initial_context_includes_reference_images_after_screen(self):
+        from AutoGLM_GUI.agents.gemini.async_agent import AsyncGeminiAgent
+
+        agent = AsyncGeminiAgent(
+            model_config=ModelConfig(),
+            agent_config=AgentConfig(max_steps=10, verbose=False),
+            device=_FakeDevice(),
+        )
+
+        agent._prepare_initial_context(
+            "compare this with the attached screenshot",
+            "screen",
+            "com.example.app",
+            reference_images=[{"mime_type": "image/webp", "data": "reference"}],
+        )
+
+        assert _count_images(agent.context) == 2
+        user_message = agent.context[-1]
+        assert user_message["content"][0]["image_url"]["url"] == (
+            "data:image/png;base64,screen"
+        )
+        assert user_message["content"][1]["image_url"]["url"] == (
+            "data:image/webp;base64,reference"
+        )
+        assert "User attached 1 reference image" in user_message["content"][2]["text"]
 
 
 class TestEventTypes:

@@ -151,6 +151,7 @@ class FakeTaskManager:
     def __init__(self, store: FakeTaskStore) -> None:
         self.store = store
         self.waited_task_ids: list[str] = []
+        self.submitted_attachments: list[dict[str, object]] = []
         self.sessions: dict[str, dict[str, object]] = {
             "session-1": {
                 "id": "session-1",
@@ -190,7 +191,9 @@ class FakeTaskManager:
         device_id: str,
         device_serial: str,
         message: str,
+        attachments: list[dict[str, object]] | None = None,
     ) -> dict[str, object]:
+        self.submitted_attachments = attachments or []
         task = {
             "id": "task-3",
             "source": "chat",
@@ -284,6 +287,31 @@ def test_task_session_create_and_submit(client: TestClient) -> None:
     assert submit_resp.status_code == 200
     assert submit_resp.json()["id"] == "task-3"
     assert submit_resp.json()["status"] == "QUEUED"
+
+
+def test_task_session_submit_accepts_image_attachments(client: TestClient) -> None:
+    submit_resp = client.post(
+        "/api/task-sessions/session-1/tasks",
+        json={
+            "message": "",
+            "attachments": [
+                {
+                    "mime_type": "image/png",
+                    "data": "aGVsbG8=",
+                    "name": "guide.png",
+                }
+            ],
+        },
+    )
+
+    assert submit_resp.status_code == 200
+    assert client.fake_task_manager.submitted_attachments == [  # type: ignore[attr-defined]
+        {
+            "mime_type": "image/png",
+            "data": "aGVsbG8=",
+            "name": "guide.png",
+        }
+    ]
 
 
 def test_task_session_supports_layered_mode(client: TestClient) -> None:

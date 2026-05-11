@@ -210,6 +210,7 @@ async def submit_task_session_task(
         device_id=str(session["device_id"]),
         device_serial=str(session["device_serial"]),
         message=request.message,
+        attachments=[attachment.model_dump() for attachment in request.attachments],
     )
     return _task_run_response(task)
 
