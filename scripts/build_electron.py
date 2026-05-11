@@ -253,7 +253,7 @@ class ElectronBuilder:
 
         # 运行 PyInstaller
         print("\n运行 PyInstaller...")
-        if not run_command(["pyinstaller", "autoglm.spec"], cwd=self.scripts_dir):
+        if not run_command(["uv", "run", "pyinstaller", "autoglm.spec"], cwd=self.scripts_dir):
             return False
 
         # 复制到 resources/backend
