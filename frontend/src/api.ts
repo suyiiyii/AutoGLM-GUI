@@ -1105,10 +1105,11 @@ export interface HistoryListResponse {
 export async function listHistory(
   serialno: string,
   limit: number = 50,
-  offset: number = 0
+  offset: number = 0,
+  mode?: 'classic' | 'layered'
 ): Promise<HistoryListResponse> {
   const res = await axios.get<HistoryListResponse>(`/api/history/${serialno}`, {
-    params: { limit, offset },
+    params: { limit, offset, ...(mode ? { mode } : {}) },
   });
   return res.data;
 }

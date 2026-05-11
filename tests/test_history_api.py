@@ -279,6 +279,218 @@ def test_history_excludes_active_task_records(
     assert all(record["id"] != "task-active" for record in data["records"])
 
 
+def test_list_history_filters_by_classic_mode(
+    client: TestClient, fake_task_store: FakeTaskStore
+) -> None:
+    fake_task_store.tasks["classic-task"] = {
+        "id": "classic-task",
+        "source": "chat",
+        "executor_key": "classic_chat",
+        "session_id": "sess-c",
+        "scheduled_task_id": None,
+        "workflow_uuid": None,
+        "schedule_fire_id": None,
+        "device_id": "dev-1",
+        "device_serial": "device-1",
+        "status": "SUCCEEDED",
+        "input_text": "经典任务",
+        "final_message": "完成",
+        "error_message": None,
+        "step_count": 3,
+        "created_at": "2026-02-01T10:00:00",
+        "started_at": "2026-02-01T10:00:01",
+        "finished_at": "2026-02-01T10:00:05",
+    }
+    fake_task_store.tasks["layered-task"] = {
+        "id": "layered-task",
+        "source": "chat",
+        "executor_key": "layered_chat",
+        "session_id": "sess-l",
+        "scheduled_task_id": None,
+        "workflow_uuid": None,
+        "schedule_fire_id": None,
+        "device_id": "dev-1",
+        "device_serial": "device-1",
+        "status": "SUCCEEDED",
+        "input_text": "分层任务",
+        "final_message": "完成",
+        "error_message": None,
+        "step_count": 6,
+        "created_at": "2026-02-02T10:00:00",
+        "started_at": "2026-02-02T10:00:01",
+        "finished_at": "2026-02-02T10:00:30",
+    }
+
+    response = client.get("/api/history/device-1", params={"mode": "classic"})
+
+    assert response.status_code == 200
+    ids = {record["id"] for record in response.json()["records"]}
+    assert "classic-task" in ids
+    assert "layered-task" not in ids
+    # legacy record rec-1 (source="chat") belongs to classic mode
+    assert "rec-1" in ids
+    # legacy record rec-2 (source="scheduled") is not a classic chat record
+    assert "rec-2" not in ids
+
+
+def test_list_history_filters_by_layered_mode(
+    client: TestClient,
+    fake_task_store: FakeTaskStore,
+    fake_history_manager: FakeHistoryManager,
+) -> None:
+    fake_task_store.tasks["classic-task"] = {
+        "id": "classic-task",
+        "source": "chat",
+        "executor_key": "classic_chat",
+        "session_id": "sess-c",
+        "scheduled_task_id": None,
+        "workflow_uuid": None,
+        "schedule_fire_id": None,
+        "device_id": "dev-1",
+        "device_serial": "device-1",
+        "status": "SUCCEEDED",
+        "input_text": "经典任务",
+        "final_message": "完成",
+        "error_message": None,
+        "step_count": 3,
+        "created_at": "2026-02-01T10:00:00",
+        "started_at": "2026-02-01T10:00:01",
+        "finished_at": "2026-02-01T10:00:05",
+    }
+    fake_task_store.tasks["layered-task"] = {
+        "id": "layered-task",
+        "source": "chat",
+        "executor_key": "layered_chat",
+        "session_id": "sess-l",
+        "scheduled_task_id": None,
+        "workflow_uuid": None,
+        "schedule_fire_id": None,
+        "device_id": "dev-1",
+        "device_serial": "device-1",
+        "status": "SUCCEEDED",
+        "input_text": "分层任务",
+        "final_message": "完成",
+        "error_message": None,
+        "step_count": 6,
+        "created_at": "2026-02-02T10:00:00",
+        "started_at": "2026-02-02T10:00:01",
+        "finished_at": "2026-02-02T10:00:30",
+    }
+    fake_history_manager.records["device-1"].append(
+        ConversationRecord(
+            id="legacy-layered",
+            task_text="旧分层任务",
+            final_message="完成",
+            success=True,
+            steps=0,
+            start_time=datetime(2026, 1, 3, 9, 0, 0),
+            end_time=datetime(2026, 1, 3, 9, 0, 5),
+            duration_ms=5000,
+            source="layered",
+            source_detail="sess-old",
+            messages=[],
+        )
+    )
+
+    response = client.get("/api/history/device-1", params={"mode": "layered"})
+
+    assert response.status_code == 200
+    ids = {record["id"] for record in response.json()["records"]}
+    assert "layered-task" in ids
+    assert "legacy-layered" in ids
+    assert "classic-task" not in ids
+    assert "rec-1" not in ids
+    assert "rec-2" not in ids
+
+
+def test_list_history_rejects_invalid_mode(client: TestClient) -> None:
+    response = client.get("/api/history/device-1", params={"mode": "bogus"})
+
+    assert response.status_code == 400
+    assert response.json()["detail"] == "mode must be 'classic' or 'layered'"
+
+
+def test_history_converts_layered_tool_events_to_messages(
+    client: TestClient, fake_task_store: FakeTaskStore
+) -> None:
+    fake_task_store.tasks["layered-task"] = {
+        "id": "layered-task",
+        "source": "chat",
+        "executor_key": "layered_chat",
+        "session_id": "sess-l",
+        "scheduled_task_id": None,
+        "workflow_uuid": None,
+        "schedule_fire_id": None,
+        "device_id": "dev-1",
+        "device_serial": "device-1",
+        "status": "SUCCEEDED",
+        "input_text": "整理桌面",
+        "final_message": "已完成",
+        "error_message": None,
+        "step_count": 7,
+        "created_at": "2026-02-05T10:00:00",
+        "started_at": "2026-02-05T10:00:01",
+        "finished_at": "2026-02-05T10:00:30",
+    }
+    fake_task_store.events["layered-task"] = [
+        {
+            "task_id": "layered-task",
+            "seq": 1,
+            "event_type": "tool_call",
+            "role": "assistant",
+            "payload": {
+                "tool_name": "chat",
+                "tool_args": {"device_id": "dev-1", "message": "打开设置"},
+            },
+            "created_at": "2026-02-05T10:00:05",
+        },
+        {
+            "task_id": "layered-task",
+            "seq": 2,
+            "event_type": "tool_result",
+            "role": "assistant",
+            "payload": {
+                "tool_name": "chat",
+                "result": "已打开设置",
+                "steps": 4,
+                "success": True,
+            },
+            "created_at": "2026-02-05T10:00:15",
+        },
+        {
+            "task_id": "layered-task",
+            "seq": 3,
+            "event_type": "message",
+            "role": "assistant",
+            "payload": {"content": "继续下一步"},
+            "created_at": "2026-02-05T10:00:16",
+        },
+        {
+            "task_id": "layered-task",
+            "seq": 4,
+            "event_type": "done",
+            "role": "assistant",
+            "payload": {"message": "已完成", "steps": 7, "success": True},
+            "created_at": "2026-02-05T10:00:30",
+        },
+    ]
+
+    response = client.get("/api/history/device-1/layered-task")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["steps"] == 7
+    messages = data["messages"]
+    assert messages[0]["role"] == "user"
+    assert messages[0]["content"] == "整理桌面"
+    tool_call_messages = [message for message in messages if message.get("action")]
+    assert any(
+        message["action"].get("tool_name") == "chat" for message in tool_call_messages
+    )
+    assert any("已打开设置" in (message.get("content") or "") for message in messages)
+    assert any(message.get("content") == "继续下一步" for message in messages)
+
+
 def test_list_history_validates_limit_and_offset(client: TestClient) -> None:
     limit_response = client.get("/api/history/device-1", params={"limit": 101})
     assert limit_response.status_code == 400

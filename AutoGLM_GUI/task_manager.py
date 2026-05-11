@@ -9,7 +9,6 @@ from typing import Any
 
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.metrics import record_trace_latency_metrics
-from AutoGLM_GUI.models.history import ConversationRecord, TraceSummaryRecord
 from AutoGLM_GUI.task_store import (
     TERMINAL_TASK_STATUSES,
     TaskRecord,
@@ -498,7 +497,6 @@ class TaskManager:
         await self._execute_layered_task(
             task,
             session_id=str(task["session_id"] or task["id"]),
-            record_history=True,
             clear_session_after_run=False,
             metrics_source="layered",
         )
@@ -508,14 +506,11 @@ class TaskManager:
         task: TaskRecord,
         *,
         session_id: str,
-        record_history: bool,
         clear_session_after_run: bool,
         metrics_source: str,
     ) -> None:
         from datetime import datetime
 
-        from AutoGLM_GUI.device_manager import DeviceManager
-        from AutoGLM_GUI.history_manager import history_manager
         from AutoGLM_GUI.layered_agent_service import (
             reset_session as reset_layered_session,
             start_run,
@@ -527,6 +522,7 @@ class TaskManager:
         final_status = TaskStatus.FAILED.value
         final_message = ""
         stop_reason = "error"
+        step_count = 0
         run = None
 
         try:
@@ -549,7 +545,11 @@ class TaskManager:
                         role="assistant",
                     )
 
-                    if event_type == "done":
+                    if event_type == "tool_result":
+                        sub_steps = event_payload.get("steps", 0)
+                        if isinstance(sub_steps, (int, float)):
+                            step_count += int(sub_steps)
+                    elif event_type == "done":
                         final_message = str(event_payload.get("content", ""))
                         final_status = (
                             TaskStatus.SUCCEEDED.value
@@ -620,7 +620,7 @@ class TaskManager:
             status=final_status,
             final_message=final_message,
             stop_reason=stop_reason,
-            step_count=0,
+            step_count=step_count,
         )
 
         end_time = datetime.now()
@@ -634,39 +634,12 @@ class TaskManager:
             trace_summary=trace_summary_dict,
             step_summaries=[],
         )
-
-        if record_history:
-            device_manager = DeviceManager.get_instance()
-            serialno = device_manager.get_serial_by_device_id(str(task["device_id"]))
-            if serialno:
-                record = ConversationRecord(
-                    task_text=str(task["input_text"]),
-                    final_message=final_message,
-                    success=final_status == TaskStatus.SUCCEEDED.value,
-                    steps=0,
-                    start_time=start_time,
-                    end_time=end_time,
-                    duration_ms=duration_ms,
-                    source="layered",
-                    source_detail=session_id,
-                    error_message=(
-                        None
-                        if final_status == TaskStatus.SUCCEEDED.value
-                        else final_message
-                    ),
-                    trace_id=trace_id,
-                    trace_summary=TraceSummaryRecord.from_dict(trace_summary_dict)
-                    if trace_summary_dict
-                    else None,
-                )
-                await asyncio.to_thread(history_manager.add_record, serialno, record)
         trace_module.clear_trace_data(trace_id)
 
     async def _execute_scheduled_layered_workflow(self, task: TaskRecord) -> None:
         await self._execute_layered_task(
             task,
             session_id=str(task["id"]),
-            record_history=False,
             clear_session_after_run=True,
             metrics_source="scheduled",
         )

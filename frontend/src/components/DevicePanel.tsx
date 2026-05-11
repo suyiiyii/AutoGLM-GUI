@@ -238,7 +238,7 @@ export function DevicePanel({
     if (showHistoryPopover) {
       const loadItems = async () => {
         try {
-          const data = await listHistory(deviceSerial, 20, 0);
+          const data = await listHistory(deviceSerial, 20, 0, 'classic');
           setHistoryItems(data.records);
         } catch (error) {
           console.error('Failed to load history:', error);

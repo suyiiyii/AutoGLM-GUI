@@ -1,5 +1,6 @@
 """History API routes."""
 
+import json
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -17,6 +18,18 @@ from AutoGLM_GUI.schemas import (
 from AutoGLM_GUI.task_store import TERMINAL_TASK_STATUSES, TaskStatus, task_store
 
 router = APIRouter()
+
+# Maps the chat execution mode to the task-run executor keys and the legacy
+# ``ConversationRecord.source`` values that belong to it.  Used to keep the
+# per-mode history popovers (classic vs. layered) from showing each other's runs.
+_MODE_EXECUTOR_KEYS: dict[str, set[str]] = {
+    "classic": {"classic_chat"},
+    "layered": {"layered_chat"},
+}
+_MODE_LEGACY_SOURCES: dict[str, set[str]] = {
+    "classic": {"chat"},
+    "layered": {"layered"},
+}
 
 
 def _build_history_record_response(record: ConversationRecord) -> HistoryRecordResponse:
@@ -54,6 +67,15 @@ def _build_history_record_response(record: ConversationRecord) -> HistoryRecordR
     )
 
 
+def _tool_result_text(payload: dict[str, Any]) -> str:
+    result = payload.get("result")
+    if isinstance(result, str):
+        return result
+    if result is None:
+        return ""
+    return json.dumps(result, ensure_ascii=False)
+
+
 def _build_history_record_from_task(record: dict[str, Any]) -> HistoryRecordResponse:
     events = task_store.list_task_events(record["id"])
     step_timings: list[StepTimingSummaryResponse] = []
@@ -64,23 +86,59 @@ def _build_history_record_from_task(record: dict[str, Any]) -> HistoryRecordResp
             timestamp=record["created_at"],
         )
     ]
+    # Sequence index for layered tool-call cycles so the UI can group a tool
+    # call together with its result under a single "step".
+    layered_step = 0
     for event in events:
-        if event["event_type"] != "step":
-            continue
+        event_type = event["event_type"]
         payload = event["payload"]
-        messages.append(
-            MessageRecordResponse(
-                role="assistant",
-                content="",
-                timestamp=event["created_at"],
-                thinking=payload.get("thinking"),
-                action=payload.get("action"),
-                step=payload.get("step"),
+        if event_type == "step":
+            messages.append(
+                MessageRecordResponse(
+                    role="assistant",
+                    content="",
+                    timestamp=event["created_at"],
+                    thinking=payload.get("thinking"),
+                    action=payload.get("action"),
+                    step=payload.get("step"),
+                )
             )
-        )
-        timings = payload.get("timings")
-        if isinstance(timings, dict):
-            step_timings.append(StepTimingSummaryResponse(**timings))
+            timings = payload.get("timings")
+            if isinstance(timings, dict):
+                step_timings.append(StepTimingSummaryResponse(**timings))
+        elif event_type == "tool_call":
+            layered_step += 1
+            messages.append(
+                MessageRecordResponse(
+                    role="assistant",
+                    content="",
+                    timestamp=event["created_at"],
+                    action={
+                        "tool_name": payload.get("tool_name"),
+                        "tool_args": payload.get("tool_args", {}),
+                    },
+                    step=layered_step,
+                )
+            )
+        elif event_type == "tool_result":
+            messages.append(
+                MessageRecordResponse(
+                    role="assistant",
+                    content=_tool_result_text(payload),
+                    timestamp=event["created_at"],
+                    step=layered_step or None,
+                )
+            )
+        elif event_type == "message":
+            content = payload.get("content")
+            if content:
+                messages.append(
+                    MessageRecordResponse(
+                        role="assistant",
+                        content=str(content),
+                        timestamp=event["created_at"],
+                    )
+                )
 
     source_detail = record.get("session_id") or ""
     if record["source"] == "scheduled" and record.get("scheduled_task_id"):
@@ -134,12 +192,28 @@ def _is_terminal_task_record(record: dict[str, Any]) -> bool:
     return record["status"] in TERMINAL_TASK_STATUSES
 
 
-def _list_merged_history(serialno: str) -> list[HistoryRecordResponse]:
+def _list_merged_history(
+    serialno: str, mode: str | None = None
+) -> list[HistoryRecordResponse]:
     task_records, _ = task_store.list_tasks(
         device_serial=serialno, limit=10000, offset=0
     )
     history_total = history_manager.get_total_count(serialno)
     legacy_records = history_manager.list_records(serialno, history_total, 0)
+
+    if mode is not None:
+        allowed_executor_keys = _MODE_EXECUTOR_KEYS.get(mode, set())
+        allowed_legacy_sources = _MODE_LEGACY_SOURCES.get(mode, set())
+        task_records = [
+            record
+            for record in task_records
+            if record.get("executor_key") in allowed_executor_keys
+        ]
+        legacy_records = [
+            record
+            for record in legacy_records
+            if record.source in allowed_legacy_sources
+        ]
 
     merged = [
         _build_history_record_from_task(record)
@@ -153,14 +227,18 @@ def _list_merged_history(serialno: str) -> list[HistoryRecordResponse]:
 
 @router.get("/api/history/{serialno}", response_model=HistoryListResponse)
 def list_history(
-    serialno: str, limit: int = 50, offset: int = 0
+    serialno: str, limit: int = 50, offset: int = 0, mode: str | None = None
 ) -> HistoryListResponse:
     if limit < 1 or limit > 100:
         raise HTTPException(status_code=400, detail="limit must be between 1 and 100")
     if offset < 0:
         raise HTTPException(status_code=400, detail="offset must be non-negative")
+    if mode is not None and mode not in _MODE_EXECUTOR_KEYS:
+        raise HTTPException(
+            status_code=400, detail="mode must be 'classic' or 'layered'"
+        )
 
-    merged_records = _list_merged_history(serialno)
+    merged_records = _list_merged_history(serialno, mode)
     total = len(merged_records)
     records = merged_records[offset : offset + limit]
 

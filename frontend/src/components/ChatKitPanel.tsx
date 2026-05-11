@@ -28,6 +28,7 @@ import {
   getTaskSession,
   listWorkflows,
   getErrorMessage,
+  getTask,
   listHistory,
   clearHistory as clearHistoryApi,
   deleteHistoryRecord,
@@ -348,7 +349,7 @@ export function ChatKitPanel({
     if (showHistoryPopover) {
       const loadItems = async () => {
         try {
-          const data = await listHistory(deviceSerial, 20, 0);
+          const data = await listHistory(deviceSerial, 20, 0, 'layered');
           setHistoryItems(data.records);
         } catch (error) {
           console.error('Failed to load history:', error);
@@ -364,14 +365,14 @@ export function ChatKitPanel({
     setShowWorkflowPopover(false);
   };
 
-  const handleSelectHistory = (record: HistoryRecordResponse) => {
+  const handleSelectHistory = async (record: HistoryRecordResponse) => {
     const userMessage: Message = {
       id: `${record.id}-user`,
       role: 'user',
       content: record.task_text,
       timestamp: new Date(record.start_time),
     };
-    const agentMessage: Message = {
+    const fallbackAgentMessage: Message = {
       id: `${record.id}-agent`,
       role: 'assistant',
       content: record.final_message,
@@ -382,10 +383,23 @@ export function ChatKitPanel({
       success: record.success,
       isStreaming: false,
     };
-    setMessages([userMessage, agentMessage]);
+
     setShowHistoryPopover(false);
     setShowScrollToBottom(false);
     isNearBottomRef.current = true;
+
+    // Task-backed records carry their full event trail, so rebuild the
+    // conversation (with the tool-call steps) exactly like the live view.
+    // Older legacy records aren't task-backed, so fall back to a flat render.
+    try {
+      const [task, { events }] = await Promise.all([
+        getTask(record.id),
+        listTaskEvents(record.id),
+      ]);
+      setMessages(buildMessagePair(reconcileTaskRun(task, events), events));
+    } catch {
+      setMessages([userMessage, fallbackAgentMessage]);
+    }
   };
 
   const handleClearHistory = async () => {

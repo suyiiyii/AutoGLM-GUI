@@ -618,6 +618,18 @@ function HistoryComponent() {
                                     </pre>
                                   </div>
                                 )}
+
+                              {/* Assistant text (layered tool results / messages) */}
+                              {msg.content &&
+                                (msg.step === null ||
+                                  msg.step === undefined ||
+                                  expandedSteps.has(msg.step)) && (
+                                  <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-lg">
+                                    <p className="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                                      {msg.content}
+                                    </p>
+                                  </div>
+                                )}
                             </div>
                           </div>
                         )}

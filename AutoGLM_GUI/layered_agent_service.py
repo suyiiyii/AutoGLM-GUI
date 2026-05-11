@@ -387,12 +387,18 @@ class LayeredTaskRun:
                         if self._current_tool_call
                         else "unknown"
                     )
+                    result_text, steps, sub_success = self._parse_tool_output(output)
+                    tool_result_payload: dict[str, Any] = {
+                        "tool_name": tool_name,
+                        "result": result_text,
+                    }
+                    if steps:
+                        tool_result_payload["steps"] = steps
+                    if sub_success is not None:
+                        tool_result_payload["success"] = sub_success
                     yield {
                         "type": "tool_result",
-                        "payload": {
-                            "tool_name": tool_name,
-                            "result": output,
-                        },
+                        "payload": tool_result_payload,
                     }
                     self._current_tool_call = None
                 elif item_type == "message_output_item":
@@ -437,6 +443,27 @@ class LayeredTaskRun:
             with _active_runs_lock:
                 _active_runs.pop(self.task_id, None)
             self.finished = True
+
+    @staticmethod
+    def _parse_tool_output(output: Any) -> tuple[str, int, bool | None]:
+        """Unpack a tool output into ``(text, steps, sub_success)``.
+
+        The ``chat`` tool returns a JSON envelope ``{"result", "steps", "success"}``
+        describing the inner phone-agent run.  Other tools (e.g. ``list_devices``)
+        return plain strings, in which case ``steps`` is ``0`` and ``sub_success``
+        is ``None``.
+        """
+        text = output if isinstance(output, str) else str(output)
+        try:
+            parsed = json.loads(text)
+        except (ValueError, TypeError):
+            return text, 0, None
+        if isinstance(parsed, dict) and "steps" in parsed:
+            raw_steps = parsed.get("steps", 0)
+            steps = int(raw_steps) if isinstance(raw_steps, (int, float)) else 0
+            success = parsed.get("success")
+            return text, steps, success if isinstance(success, bool) else None
+        return text, 0, None
 
     def _parse_tool_call(self, item: Any) -> dict[str, Any]:
         tool_name = "unknown"
