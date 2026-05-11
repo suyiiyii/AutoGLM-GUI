@@ -327,6 +327,7 @@ class TaskManager:
                     stop_reason=stop_reason,
                     step_count=step_count,
                     trace_id=trace_id,
+                    mark_complete=False,
                 )
                 await self._record_trace_artifacts(
                     task_id=task_id,
@@ -335,6 +336,7 @@ class TaskManager:
                     step_count=step_count,
                     total_duration_ms=total_duration_ms,
                 )
+                self._mark_task_complete(task_id)
         finally:
             trace_module.clear_trace_data(trace_id)
 
@@ -858,6 +860,7 @@ class TaskManager:
         step_count: int,
         stop_reason: str | None = None,
         trace_id: str | None = None,
+        mark_complete: bool = True,
     ) -> None:
         normalized_stop_reason = stop_reason
         if normalized_stop_reason is None:
@@ -912,7 +915,8 @@ class TaskManager:
             step_count=step_count,
             trace_id=trace_id,
         )
-        self._mark_task_complete(task_id)
+        if mark_complete:
+            self._mark_task_complete(task_id)
 
     async def _fail_task(self, task: TaskRecord, message: str) -> None:
         await asyncio.to_thread(

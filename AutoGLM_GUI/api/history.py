@@ -92,6 +92,20 @@ def _trace_summary_from_payload(
     return TraceSummaryResponse(**summary)
 
 
+def _step_timings_from_trace_payload(
+    payload: dict[str, Any],
+) -> list[StepTimingSummaryResponse]:
+    raw_step_summaries = payload.get("step_summaries")
+    if not isinstance(raw_step_summaries, list):
+        return []
+
+    step_timings: list[StepTimingSummaryResponse] = []
+    for raw_step_summary in raw_step_summaries:
+        if isinstance(raw_step_summary, dict):
+            step_timings.append(StepTimingSummaryResponse(**raw_step_summary))
+    return step_timings
+
+
 def _trace_summary_from_step_timings(
     trace_id: str | None,
     step_timings: list[StepTimingSummaryResponse],
@@ -158,6 +172,14 @@ def _build_history_record_from_task(record: dict[str, Any]) -> HistoryRecordResp
                 step_timings.append(StepTimingSummaryResponse(**timings))
         elif event_type == "trace_summary":
             trace_summary = _trace_summary_from_payload(payload)
+            existing_timing_keys = {
+                (timing.trace_id, timing.step) for timing in step_timings
+            }
+            for timing in _step_timings_from_trace_payload(payload):
+                timing_key = (timing.trace_id, timing.step)
+                if timing_key not in existing_timing_keys:
+                    step_timings.append(timing)
+                    existing_timing_keys.add(timing_key)
         elif event_type == "tool_call":
             layered_step += 1
             messages.append(
