@@ -50,6 +50,7 @@ interface UseTaskSessionConversationResult {
   setMessages: Dispatch<SetStateAction<TaskConversationMessage[]>>;
   loading: boolean;
   aborting: boolean;
+  waitingForDevice: boolean;
   error: string | null;
   sessionReady: boolean;
   sendMessage: (
@@ -62,6 +63,10 @@ interface UseTaskSessionConversationResult {
 
 function isTaskActive(status: TaskStatus): boolean {
   return status === 'QUEUED' || status === 'RUNNING';
+}
+
+function isTaskWaitingForDevice(task: TaskRunResponse): boolean {
+  return task.status === 'QUEUED';
 }
 
 function applyTaskEventToTask(
@@ -196,23 +201,8 @@ function buildAssistantMessage(
         currentThinking = '';
         break;
       }
-      case 'status': {
-        if (
-          payload.status === 'QUEUED' &&
-          !currentThinking &&
-          !content &&
-          thinking.length === 0
-        ) {
-          currentThinking = 'Waiting for device...';
-        }
-        break;
-      }
     }
   });
-
-  if (task.status === 'QUEUED' && !currentThinking && !content) {
-    currentThinking = 'Waiting for device...';
-  }
 
   return {
     id: `${task.id}-agent`,
@@ -268,6 +258,7 @@ export function useTaskSessionConversation({
   const [messages, setMessages] = useState<TaskConversationMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [aborting, setAborting] = useState(false);
+  const [waitingForDevice, setWaitingForDevice] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const chatStreamRef = useRef<{ close: () => void } | null>(null);
@@ -320,6 +311,7 @@ export function useTaskSessionConversation({
 
       const nextTask = applyTaskEventToTask(currentTask, event);
       taskRunsRef.current[taskId] = nextTask;
+      setWaitingForDevice(isTaskWaitingForDevice(nextTask));
       replaceTaskMessages(taskId);
 
       if (
@@ -328,6 +320,7 @@ export function useTaskSessionConversation({
       ) {
         setLoading(false);
         setAborting(false);
+        setWaitingForDevice(false);
         currentTaskIdRef.current = null;
       }
     },
@@ -349,6 +342,7 @@ export function useTaskSessionConversation({
           setError(message);
           setLoading(false);
           setAborting(false);
+          setWaitingForDevice(false);
           chatStreamRef.current = null;
         },
         afterSeq
@@ -390,6 +384,7 @@ export function useTaskSessionConversation({
       if (activeTask) {
         currentTaskIdRef.current = activeTask.id;
         setLoading(true);
+        setWaitingForDevice(isTaskWaitingForDevice(activeTask));
         const lastSeq =
           taskEventsRef.current[activeTask.id]?.[
             taskEventsRef.current[activeTask.id].length - 1
@@ -398,6 +393,7 @@ export function useTaskSessionConversation({
       } else {
         currentTaskIdRef.current = null;
         setLoading(false);
+        setWaitingForDevice(false);
       }
     },
     [attachTaskStream]
@@ -443,6 +439,7 @@ export function useTaskSessionConversation({
           console.error('Failed to initialize task session:', sessionError);
           setError('Failed to restore chat session');
           setLoading(false);
+          setWaitingForDevice(false);
         }
       }
     };
@@ -481,6 +478,7 @@ export function useTaskSessionConversation({
         currentTaskIdRef.current = isTaskActive(reconciledTask.status)
           ? task.id
           : null;
+        setWaitingForDevice(isTaskWaitingForDevice(reconciledTask));
         replaceTaskMessages(task.id);
 
         if (isTaskActive(reconciledTask.status)) {
@@ -489,6 +487,7 @@ export function useTaskSessionConversation({
         } else {
           setLoading(false);
           setAborting(false);
+          setWaitingForDevice(false);
         }
 
         return true;
@@ -521,6 +520,7 @@ export function useTaskSessionConversation({
       currentTaskIdRef.current = null;
       setMessages([]);
       setLoading(false);
+      setWaitingForDevice(false);
       setError(null);
       setAborting(false);
     } catch (resetError) {
@@ -544,6 +544,7 @@ export function useTaskSessionConversation({
       const response = await cancelTaskRun(taskId);
       if (response.task) {
         taskRunsRef.current[taskId] = response.task;
+        setWaitingForDevice(isTaskWaitingForDevice(response.task));
         replaceTaskMessages(taskId);
       }
     } catch (abortError) {
@@ -570,6 +571,7 @@ export function useTaskSessionConversation({
     setMessages,
     loading,
     aborting,
+    waitingForDevice,
     error,
     sessionReady: sessionId !== null,
     sendMessage,
