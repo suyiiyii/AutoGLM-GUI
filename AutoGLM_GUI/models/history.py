@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Literal
 from uuid import uuid4
 
@@ -40,7 +40,7 @@ class MessageRecord:
             content=data.get("content", ""),
             timestamp=datetime.fromisoformat(data["timestamp"])
             if data.get("timestamp")
-            else datetime.now(),
+            else datetime.now(tz=timezone.utc),
             thinking=data.get("thinking"),
             action=data.get("action"),
             step=data.get("step"),
@@ -226,7 +226,7 @@ class ConversationRecord:
             steps=data.get("steps", 0),
             start_time=datetime.fromisoformat(data["start_time"])
             if data.get("start_time")
-            else datetime.now(),
+            else datetime.now(tz=timezone.utc),
             end_time=datetime.fromisoformat(data["end_time"])
             if data.get("end_time")
             else None,
@@ -270,5 +270,5 @@ class DeviceHistory:
             records=[ConversationRecord.from_dict(r) for r in data.get("records", [])],
             last_updated=datetime.fromisoformat(data["last_updated"])
             if data.get("last_updated")
-            else datetime.now(),
+            else datetime.now(tz=timezone.utc),
         )

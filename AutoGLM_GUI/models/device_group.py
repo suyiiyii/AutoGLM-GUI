@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -45,10 +45,10 @@ class DeviceGroup:
             order=data.get("order", 0),
             created_at=datetime.fromisoformat(data["created_at"])
             if data.get("created_at")
-            else datetime.now(),
+            else datetime.now(tz=timezone.utc),
             updated_at=datetime.fromisoformat(data["updated_at"])
             if data.get("updated_at")
-            else datetime.now(),
+            else datetime.now(tz=timezone.utc),
         )
 
     @classmethod

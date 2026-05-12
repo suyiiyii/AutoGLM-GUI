@@ -71,7 +71,7 @@ def summarize_text(text: str | None, limit: int = 160) -> str | None:
 
 
 def _resolve_trace_path(now: datetime | None = None) -> Path:
-    current_time = now or datetime.now()
+    current_time = now or datetime.now(tz=timezone.utc)
     template = os.getenv("AUTOGLM_TRACE_FILE", "logs/trace_{date}.jsonl")
     path = Path(template.format(date=current_time.strftime("%Y-%m-%d")))
     path.parent.mkdir(parents=True, exist_ok=True)

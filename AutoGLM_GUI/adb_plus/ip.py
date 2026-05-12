@@ -16,7 +16,11 @@ def _run(adb_path: str, device_id: str | None, cmd: list[str]) -> str:
     if device_id:
         base_cmd.extend(["-s", device_id])
     result = subprocess.run(
-        base_cmd + ["shell", *cmd], capture_output=True, text=True, timeout=5
+        base_cmd + ["shell", *cmd],
+        capture_output=True,
+        text=True,
+        timeout=5,
+        check=True,
     )
     return (result.stdout or "") + (result.stderr or "")
 

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import sqlite3
 import threading
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import StrEnum
 from pathlib import Path
 from typing import Any
@@ -15,7 +15,7 @@ from .trace import current_trace_id, trace_span
 
 
 def _now_iso() -> str:
-    return datetime.now().isoformat()
+    return datetime.now(tz=timezone.utc).isoformat()
 
 
 class TaskStatus(StrEnum):
