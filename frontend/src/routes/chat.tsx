@@ -119,6 +119,13 @@ const AGENT_PRESETS = [
       model_family: 'doubao-vision',
     },
   },
+  {
+    name: 'qwen',
+    displayName: 'Qwen Agent',
+    description: 'Qwen3.6系列适配',
+    icon: Layers,
+    defaultConfig: {},
+  },
 ] as const;
 
 // 决策模型预设配置（与视觉模型保持一致）

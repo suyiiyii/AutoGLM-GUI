@@ -250,3 +250,33 @@ def _create_midscene_agent(
 
 
 register_agent("midscene", _create_midscene_agent)
+
+
+def _create_qwen_agent(
+    model_config: ModelConfig,
+    agent_config: AgentConfig,
+    agent_specific_config: AgentSpecificConfig,  # noqa: ARG001
+    device: DeviceProtocol,
+    takeover_callback: Callable[..., Any] | None = None,
+    confirmation_callback: Callable[..., Any] | None = None,
+) -> AsyncAgent:
+    """Create AsyncQwenAgent instance.
+
+    Uses Qwen model inference logic:
+    - <answer> tag parsing for action detection
+    - AST-based action parser with bracket repair
+    - info() action support for user interaction
+    - <thought>/<answer> format prompts
+    """
+    from .qwen.async_agent import AsyncQwenAgent
+
+    return AsyncQwenAgent(  # type: ignore[return-value]
+        model_config=model_config,
+        agent_config=agent_config,
+        device=device,
+        confirmation_callback=confirmation_callback,
+        takeover_callback=takeover_callback,
+    )
+
+
+register_agent("qwen", _create_qwen_agent)
