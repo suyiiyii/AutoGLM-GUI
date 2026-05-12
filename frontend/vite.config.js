@@ -9,7 +9,7 @@ import path from 'path';
 // Appends "-dirty" when there are uncommitted changes to tracked files.
 function resolveBuildCommit() {
   if (process.env.VITE_GIT_HASH) return process.env.VITE_GIT_HASH;
-  const git = cmd =>
+  const git = (cmd) =>
     execSync(cmd, { stdio: ['ignore', 'pipe', 'ignore'] })
       .toString()
       .trim();
@@ -25,16 +25,11 @@ function resolveBuildCommit() {
 // https://vitejs.dev/config/
 export default defineConfig({
   define: {
-    __BACKEND_VERSION__: JSON.stringify(
-      process.env.VITE_BACKEND_VERSION || 'unknown'
-    ),
+    __BACKEND_VERSION__: JSON.stringify(process.env.VITE_BACKEND_VERSION || 'unknown'),
     __GIT_HASH__: JSON.stringify(resolveBuildCommit()),
     __DEVTOOLS_ENABLED__: JSON.stringify(process.env.NODE_ENV !== 'production'),
   },
-  plugins: [
-    tanstackRouter({ target: 'react', autoCodeSplitting: true }),
-    react(),
-  ],
+  plugins: [tanstackRouter({ target: 'react', autoCodeSplitting: true }), react()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

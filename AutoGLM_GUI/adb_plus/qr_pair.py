@@ -12,7 +12,7 @@ import secrets
 import threading
 import uuid
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 
 from zeroconf import ServiceBrowser, ServiceInfo, ServiceListener, Zeroconf
 
@@ -43,7 +43,7 @@ class PairingSession:
     device_id: str | None = None  # Device ID after connection (ip:port)
     error_message: str | None = None  # Error details if status is "error"
     created_at: float = field(
-        default_factory=lambda: datetime.now(datetime.UTC).timestamp()
+        default_factory=lambda: datetime.now(timezone.utc).timestamp()  # noqa: UP017
     )
     expires_at: float = 0.0  # Unix timestamp when session expires
     zeroconf: Zeroconf | None = None  # Zeroconf instance
@@ -222,7 +222,7 @@ class QRPairingManager:
         password = secrets.token_hex(8)  # 16 hex chars (64-bit entropy)
         qr_payload = QR_PAYLOAD_TEMPLATE.format(name=name, password=password)
 
-        now = datetime.now(datetime.UTC).timestamp()
+        now = datetime.now(timezone.utc).timestamp()  # noqa: UP017
         session = PairingSession(
             session_id=session_id,
             name=name,
@@ -263,7 +263,7 @@ class QRPairingManager:
 
                 # Wait until timeout or connected
                 deadline = session.expires_at
-                while datetime.now(datetime.UTC).timestamp() < deadline:
+                while datetime.now(timezone.utc).timestamp() < deadline:  # noqa: UP017
                     if listener.connected:
                         logger.info("[QR Pair] Listener detected connection, stopping")
                         break
@@ -362,7 +362,7 @@ class QRPairingManager:
         logger.info("[QR Pair] Starting cleanup task")
         while True:
             await asyncio.sleep(60)  # Check every minute
-            now = datetime.now(datetime.UTC).timestamp()
+            now = datetime.now(timezone.utc).timestamp()  # noqa: UP017
             expired = [
                 sid for sid, sess in self._sessions.items() if now > sess.expires_at
             ]

@@ -167,6 +167,8 @@ class MAIParser:
                 "long_press": "Long Press",
                 "double_click": "Double Tap",
             }
+            if action_type is None:
+                return {"_metadata": "do", "action": "Tap", "element": [x, y]}
             action_name = _coord_action_map.get(action_type)
             if action_name is not None:
                 return {
