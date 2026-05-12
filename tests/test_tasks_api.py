@@ -84,12 +84,15 @@ class FakeTaskStore:
                     "role": "assistant",
                     "payload": {"step": 1, "thinking": "正在打开应用"},
                     "created_at": "2026-01-02T09:00:02",
-                }
+                },
             ],
         }
 
     def list_session_tasks(
-        self, session_id: str, limit: int = 50, offset: int = 0
+        self,
+        session_id: str,
+        limit: int = 50,
+        offset: int = 0,
     ) -> tuple[list[dict[str, object]], int]:
         tasks = [
             task for task in self.tasks.values() if task["session_id"] == session_id
@@ -124,7 +127,11 @@ class FakeTaskStore:
         return self.tasks.get(task_id)
 
     def list_task_events(
-        self, task_id: str, *, after_seq: int = 0, **_: object
+        self,
+        task_id: str,
+        *,
+        after_seq: int = 0,
+        **_: object,
     ) -> list[dict[str, object]]:
         return [
             event
@@ -133,7 +140,8 @@ class FakeTaskStore:
         ]
 
     def get_latest_active_session_task(
-        self, session_id: str
+        self,
+        session_id: str,
     ) -> dict[str, object] | None:
         tasks = [
             task
@@ -162,11 +170,15 @@ class FakeTaskManager:
                 "status": "open",
                 "created_at": "2026-01-01T07:59:00",
                 "updated_at": "2026-01-01T08:00:03",
-            }
+            },
         }
 
     async def create_chat_session(
-        self, *, device_id: str, device_serial: str, mode: str = "classic"
+        self,
+        *,
+        device_id: str,
+        device_serial: str,
+        mode: str = "classic",
     ) -> dict[str, object]:
         session = {
             "id": "session-2",
@@ -232,7 +244,9 @@ class FakeTaskManager:
         return task
 
     async def wait_for_task(
-        self, task_id: str, timeout: float | None = None
+        self,
+        task_id: str,
+        timeout: float | None = None,
     ) -> dict[str, object] | None:
         _ = timeout
         self.waited_task_ids.append(task_id)
@@ -299,7 +313,7 @@ def test_task_session_submit_accepts_image_attachments(client: TestClient) -> No
                     "mime_type": "image/png",
                     "data": "aGVsbG8=",
                     "name": "guide.png",
-                }
+                },
             ],
         },
     )
@@ -310,7 +324,7 @@ def test_task_session_submit_accepts_image_attachments(client: TestClient) -> No
             "mime_type": "image/png",
             "data": "aGVsbG8=",
             "name": "guide.png",
-        }
+        },
     ]
 
 

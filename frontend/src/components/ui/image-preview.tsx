@@ -1,27 +1,27 @@
-import * as React from 'react';
-import { X, ZoomIn } from 'lucide-react';
-import { cn } from '@/lib/utils';
+import * as React from 'react'
+import { X, ZoomIn } from 'lucide-react'
+import { cn } from '@/lib/utils'
 import {
   Dialog,
   DialogContent,
   DialogOverlay,
   DialogPortal,
   DialogClose,
-} from '@/components/ui/dialog';
+} from '@/components/ui/dialog'
 
 interface ImagePreviewProps {
   /** 图片源（支持 base64 data URI 或普通 URL） */
-  src: string;
+  src: string
   /** 图片描述文字 */
-  alt: string;
+  alt: string
   /** 缩略图容器样式 */
-  className?: string;
+  className?: string
   /** 缩略图 img 元素样式 */
-  thumbnailClassName?: string;
+  thumbnailClassName?: string
   /** 缩略图最大高度 */
-  maxHeight?: string;
+  maxHeight?: string
   /** 叠加层内容（如点击位置指示器） */
-  children?: React.ReactNode;
+  children?: React.ReactNode
 }
 
 /**
@@ -39,7 +39,7 @@ export function ImagePreview({
   maxHeight = '350px',
   children,
 }: ImagePreviewProps) {
-  const [isOpen, setIsOpen] = React.useState(false);
+  const [isOpen, setIsOpen] = React.useState(false)
 
   return (
     <>
@@ -47,7 +47,7 @@ export function ImagePreview({
       <div
         className={cn(
           'relative inline-block border border-slate-200 dark:border-slate-700 rounded overflow-hidden shadow-sm cursor-pointer group',
-          className
+          className,
         )}
         onClick={() => setIsOpen(true)}
       >
@@ -66,7 +66,10 @@ export function ImagePreview({
       </div>
 
       {/* 全屏预览 */}
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <Dialog
+        open={isOpen}
+        onOpenChange={setIsOpen}
+      >
         <DialogPortal>
           <DialogOverlay className="bg-black/80" />
           <DialogContent
@@ -86,5 +89,5 @@ export function ImagePreview({
         </DialogPortal>
       </Dialog>
     </>
-  );
+  )
 }

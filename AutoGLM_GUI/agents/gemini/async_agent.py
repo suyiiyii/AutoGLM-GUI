@@ -36,7 +36,7 @@ class AsyncGeminiAgent(AsyncAgentBase):
     ) -> None:
         reference_images = reference_images or []
         reference_notice = MessageBuilder.build_user_reference_images_notice(
-            len(reference_images)
+            len(reference_images),
         )
         reference_section = (
             f"\n\nUser reference images: {reference_notice}" if reference_notice else ""
@@ -48,7 +48,7 @@ class AsyncGeminiAgent(AsyncAgentBase):
                     {"mime_type": "image/png", "data": screenshot_base64},
                     *reference_images,
                 ],
-            )
+            ),
         )
 
     async def _execute_step(self) -> AsyncGenerator[dict[str, Any], None]:
@@ -98,7 +98,7 @@ class AsyncGeminiAgent(AsyncAgentBase):
                     MessageBuilder.create_user_message(
                         text=f"Current app: {current_app}",
                         image_base64=screenshot.base64_data,
-                    )
+                    ),
                 )
 
         # 2. 调用 LLM with tools
@@ -140,22 +140,21 @@ class AsyncGeminiAgent(AsyncAgentBase):
         with trace_span(
             "step.parse_action",
             attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
-        ):
-            with trace_span(
-                "tool.call",
-                attrs={
-                    "step": self._step_count,
-                    "caller": "gemini_model",
-                    "tool_name": tool_name,
-                    "tool_arg_keys": sorted(tool_args.keys()),
-                    "tool_args_preview": summarize_text(
-                        json.dumps(tool_args, ensure_ascii=False, default=str),
-                        limit=512,
-                    ),
-                },
-            ) as span:
-                action = tool_call_to_action(tool_name, tool_args)
-                span.set_attribute("action_name", action.get("action"))
+        ), trace_span(
+            "tool.call",
+            attrs={
+                "step": self._step_count,
+                "caller": "gemini_model",
+                "tool_name": tool_name,
+                "tool_arg_keys": sorted(tool_args.keys()),
+                "tool_args_preview": summarize_text(
+                    json.dumps(tool_args, ensure_ascii=False, default=str),
+                    limit=512,
+                ),
+            },
+        ) as span:
+            action = tool_call_to_action(tool_name, tool_args)
+            span.set_attribute("action_name", action.get("action"))
 
         if self.agent_config.verbose:
             logger.debug(f"🎯 Tool call: {tool_name}({tool_args})")
@@ -199,7 +198,7 @@ class AsyncGeminiAgent(AsyncAgentBase):
         ):
             if len(self._context) > 1:
                 self._context[-1] = MessageBuilder.remove_images_from_message(
-                    self._context[-1]
+                    self._context[-1],
                 )
 
             self._context.append(
@@ -214,18 +213,18 @@ class AsyncGeminiAgent(AsyncAgentBase):
                                 "name": tool_name,
                                 "arguments": json.dumps(tool_args),
                             },
-                        }
+                        },
                     ],
-                }
+                },
             )
             self._context.append(
                 {
                     "role": "tool",
                     "tool_call_id": f"call_{self._step_count}",
                     "content": json.dumps(
-                        {"success": result.success, "message": result.message or "OK"}
+                        {"success": result.success, "message": result.message or "OK"},
                     ),
-                }
+                },
             )
 
         # 6. 检查完成
@@ -272,7 +271,7 @@ class AsyncGeminiAgent(AsyncAgentBase):
             except json.JSONDecodeError as e:
                 logger.warning(
                     f"Failed to parse tool arguments for {tool_name}: {e}. "
-                    f"Raw: {tool_call.function.arguments!r}"  # type: ignore[union-attr]
+                    f"Raw: {tool_call.function.arguments!r}",  # type: ignore[union-attr]
                 )
                 tool_args = {}
             return thinking, tool_name, tool_args

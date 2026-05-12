@@ -64,7 +64,10 @@ class TestRemoteDeviceWithStateMachine:
     """Tests with state machine backing."""
 
     def test_tap_triggers_state_transition(
-        self, mock_agent_server: str, test_client, sample_test_case
+        self,
+        mock_agent_server: str,
+        test_client,
+        sample_test_case,
     ):
         """Test that tap triggers state machine transition."""
         test_client.load_scenario(str(sample_test_case))
@@ -78,7 +81,10 @@ class TestRemoteDeviceWithStateMachine:
         test_client.assert_state("message")
 
     def test_screenshot_returns_state_image(
-        self, mock_agent_server: str, test_client, sample_test_case
+        self,
+        mock_agent_server: str,
+        test_client,
+        sample_test_case,
     ):
         """Test that screenshot returns current state's image."""
         test_client.load_scenario(str(sample_test_case))
@@ -91,7 +97,10 @@ class TestRemoteDeviceWithStateMachine:
         assert len(screenshot.base64_data) > 0
 
     def test_current_app_from_state(
-        self, mock_agent_server: str, test_client, sample_test_case
+        self,
+        mock_agent_server: str,
+        test_client,
+        sample_test_case,
     ):
         """Test that current_app returns state machine's app."""
         test_client.load_scenario(str(sample_test_case))
@@ -102,7 +111,10 @@ class TestRemoteDeviceWithStateMachine:
         assert app == "com.sankuai.meituan"
 
     def test_tap_in_region_assertion(
-        self, mock_agent_server: str, test_client, sample_test_case
+        self,
+        mock_agent_server: str,
+        test_client,
+        sample_test_case,
     ):
         """Test tap region assertion helper."""
         test_client.load_scenario(str(sample_test_case))

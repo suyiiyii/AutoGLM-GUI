@@ -170,7 +170,7 @@ def get_planner_model() -> str:
     if not model_name:
         raise ValueError(
             "决策模型未配置。使用分层代理模式需要配置决策模型。\n"
-            "请在全局配置中设置决策模型的 Base URL、模型名称和 API Key。"
+            "请在全局配置中设置决策模型的 Base URL、模型名称和 API Key。",
         )
 
     logger.info(f"[LayeredAgent] Using decision model: {model_name}")
@@ -187,7 +187,7 @@ def _setup_openai_client() -> AsyncOpenAI:
     if not decision_base_url:
         raise ValueError(
             "决策模型 Base URL 未配置。使用分层代理模式需要配置决策模型。\n"
-            "请在全局配置中设置决策模型的 Base URL、模型名称和 API Key。"
+            "请在全局配置中设置决策模型的 Base URL、模型名称和 API Key。",
         )
 
     planner_model = get_planner_model()
@@ -244,7 +244,7 @@ async def chat(device_id: str, message: str) -> str:
         },
     ) as tool_span:
         logger.info(
-            f"[LayeredAgent] chat tool called: device_id={device_id}, message={message}"
+            f"[LayeredAgent] chat tool called: device_id={device_id}, message={message}",
         )
 
         manager = PhoneAgentManager.get_instance()
@@ -302,10 +302,12 @@ async def chat(device_id: str, message: str) -> str:
                             "success": False,
                             "steps": mcp_max_steps,
                             "error_kind": "max_steps",
-                        }
+                        },
                     )
                     context_json = json.dumps(
-                        agent.context, ensure_ascii=False, indent=2
+                        agent.context,
+                        ensure_ascii=False,
+                        indent=2,
                     )
                     return json.dumps(
                         {
@@ -359,7 +361,7 @@ async def chat(device_id: str, message: str) -> str:
                         manager.release_device(device_id, context="layered")
                 except BaseException as exc:  # pragma: no cover - safety net
                     logger.error(
-                        f"Failed to release device lock for {device_id}: {exc}"
+                        f"Failed to release device lock for {device_id}: {exc}",
                     )
 
 
@@ -394,14 +396,14 @@ def _ensure_agent() -> Agent[Any]:
     if _agent is None or _cached_config_hash != current_hash:
         if _agent is not None and _cached_config_hash != current_hash:
             logger.info(
-                f"[LayeredAgent] Config changed (hash: {_cached_config_hash} -> {current_hash}), reloading agent..."
+                f"[LayeredAgent] Config changed (hash: {_cached_config_hash} -> {current_hash}), reloading agent...",
             )
 
         _client = _setup_openai_client()
         _agent = _create_planner_agent(_client)
         _cached_config_hash = current_hash
         logger.info(
-            f"[LayeredAgent] Agent initialized/reloaded with config hash: {current_hash}"
+            f"[LayeredAgent] Agent initialized/reloaded with config hash: {current_hash}",
         )
 
     return _agent
@@ -463,7 +465,7 @@ class LayeredTaskRun:
                                 "raw_event_count": raw_event_count,
                                 "last_raw_event_type": raw_event_type
                                 or type(raw_data).__name__,
-                            }
+                            },
                         )
                         continue
 
@@ -499,7 +501,7 @@ class LayeredTaskRun:
                                         ),
                                         limit=512,
                                     ),
-                                }
+                                },
                             )
                             self._current_tool_call = {
                                 "name": event_payload["tool_name"],
@@ -526,14 +528,14 @@ class LayeredTaskRun:
                             },
                         ) as span:
                             result_text, steps, sub_success = self._parse_tool_output(
-                                output
+                                output,
                             )
                             span.set_attributes(
                                 {
                                     "steps": steps,
                                     "success": sub_success,
                                     "result_preview": summarize_text(result_text, 512),
-                                }
+                                },
                             )
                             tool_result_payload: dict[str, Any] = {
                                 "tool_name": tool_name,
@@ -581,7 +583,7 @@ class LayeredTaskRun:
                             self.final_output,
                             512,
                         ),
-                    }
+                    },
                 )
                 yield {
                     "type": "done",
@@ -645,10 +647,12 @@ class LayeredTaskRun:
             raw = item.raw_item
             if isinstance(raw, dict):
                 tool_name = raw.get(
-                    "name", raw.get("function", {}).get("name", "unknown")
+                    "name",
+                    raw.get("function", {}).get("name", "unknown"),
                 )
                 args_str = raw.get(
-                    "arguments", raw.get("function", {}).get("arguments", "{}")
+                    "arguments",
+                    raw.get("function", {}).get("arguments", "{}"),
                 )
                 tool_args = self._parse_json_args(args_str)
             else:
@@ -682,7 +686,7 @@ class LayeredTaskRun:
                         tool_args = self._parse_json_args(call.arguments)
 
         logger.info(
-            f"[LayeredAgent] Tool call: {tool_name}, args keys: {list(tool_args.keys())}"
+            f"[LayeredAgent] Tool call: {tool_name}, args keys: {list(tool_args.keys())}",
         )
         return {
             "tool_name": tool_name,

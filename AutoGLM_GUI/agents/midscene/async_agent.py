@@ -22,6 +22,7 @@ from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.logger import logger
 
 from .log_parser import MidsceneLogParser
+import contextlib
 
 
 class AsyncMidsceneAgent:
@@ -66,7 +67,7 @@ class AsyncMidsceneAgent:
                         "未检测到 npx 命令，请先安装 Node.js。\n"
                         "macOS: brew install node\n"
                         "https://nodejs.org/"
-                    )
+                    ),
                 },
             }
             return
@@ -97,7 +98,10 @@ class AsyncMidsceneAgent:
                 connect_args.extend(["--deviceId", device_id])
 
             ok, output = await self._run_command(
-                connect_args, env, work_dir, timeout=120
+                connect_args,
+                env,
+                work_dir,
+                timeout=120,
             )
             if not ok:
                 yield {
@@ -149,19 +153,15 @@ class AsyncMidsceneAgent:
                 timeout=30,
             )
             # Clean up temp dir
-            try:
+            with contextlib.suppress(OSError):
                 os.rmdir(work_dir)
-            except OSError:
-                pass
 
     async def cancel(self) -> None:
         """Cancel the current execution."""
         self._cancel_event.set()
         if self._process is not None:
-            try:
+            with contextlib.suppress(ProcessLookupError):
                 self._process.terminate()
-            except ProcessLookupError:
-                pass
 
     async def run(self, task: str) -> str:
         """Run the full task, return final message."""
@@ -305,7 +305,8 @@ class AsyncMidsceneAgent:
                 cwd=cwd,
             )
             stdout_bytes, _ = await asyncio.wait_for(
-                proc.communicate(), timeout=timeout
+                proc.communicate(),
+                timeout=timeout,
             )
             output = (
                 stdout_bytes.decode("utf-8", errors="replace") if stdout_bytes else ""
@@ -362,7 +363,8 @@ class AsyncMidsceneAgent:
 
                 try:
                     line_bytes = await asyncio.wait_for(
-                        self._process.stdout.readline(), timeout=300
+                        self._process.stdout.readline(),
+                        timeout=300,
                     )
                 except asyncio.TimeoutError:
                     self._process.terminate()
@@ -395,7 +397,7 @@ class AsyncMidsceneAgent:
                         plan = event.get("data")
                         if not isinstance(plan, dict):
                             logger.warning(
-                                f"[Midscene] Skipping invalid planResult: {type(plan)}"
+                                f"[Midscene] Skipping invalid planResult: {type(plan)}",
                             )
                             continue
                         self._step_count += 1
@@ -410,7 +412,7 @@ class AsyncMidsceneAgent:
                         logger.info(
                             f"[Midscene] Step {self._step_count}: "
                             f"action={action_type}, "
-                            f"thought={thought[:80]}"
+                            f"thought={thought[:80]}",
                         )
 
                         action_display: dict[str, Any] = {
@@ -429,7 +431,8 @@ class AsyncMidsceneAgent:
                                 "action": action_display,
                                 "success": True,
                                 "finished": not plan.get(
-                                    "shouldContinuePlanning", True
+                                    "shouldContinuePlanning",
+                                    True,
                                 ),
                                 "message": log_msg,
                             },
@@ -481,7 +484,7 @@ class AsyncMidsceneAgent:
                 full_msg = f"Midscene 执行失败 (code={exit_code})：\n{error_detail}"
                 logger.error(
                     "[Midscene] Act failed. Last 20 lines:\n"
-                    + "\n".join(all_output_lines[-20:])
+                    + "\n".join(all_output_lines[-20:]),
                 )
                 yield {
                     "type": "error",

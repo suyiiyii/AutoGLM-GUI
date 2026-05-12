@@ -182,7 +182,9 @@ def create_app() -> FastAPI:
 
     # Create FastAPI app with combined lifespan
     app = FastAPI(
-        title="AutoGLM-GUI API", version=APP_VERSION, lifespan=combined_lifespan
+        title="AutoGLM-GUI API",
+        version=APP_VERSION,
+        lifespan=combined_lifespan,
     )
 
     app.add_middleware(
@@ -216,7 +218,9 @@ def create_app() -> FastAPI:
         if assets_dir.exists():
             # Vite builds assets with content hashes, so we can cache them long-term
             app.mount(
-                "/assets", _FrontendStaticFiles(directory=assets_dir), name="assets"
+                "/assets",
+                _FrontendStaticFiles(directory=assets_dir),
+                name="assets",
             )
 
         # Define SPA serving function

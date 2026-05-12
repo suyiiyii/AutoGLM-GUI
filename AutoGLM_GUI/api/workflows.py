@@ -42,7 +42,8 @@ def create_workflow(request: WorkflowCreate) -> WorkflowResponse:
 
     try:
         workflow = workflow_manager.create_workflow(
-            name=request.name, text=request.text
+            name=request.name,
+            text=request.text,
         )
         return WorkflowResponse(**workflow)
     except Exception as e:
@@ -55,7 +56,9 @@ def update_workflow(workflow_uuid: str, request: WorkflowUpdate) -> WorkflowResp
     from AutoGLM_GUI.workflow_manager import workflow_manager
 
     workflow = workflow_manager.update_workflow(
-        uuid=workflow_uuid, name=request.name, text=request.text
+        uuid=workflow_uuid,
+        name=request.name,
+        text=request.text,
     )
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")

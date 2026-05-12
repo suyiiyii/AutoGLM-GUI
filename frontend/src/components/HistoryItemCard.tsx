@@ -1,62 +1,58 @@
-import React from 'react';
-import { CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import type { HistoryRecordResponse } from '../api';
-import { useTranslation } from '../lib/i18n-context';
+import React from 'react'
+import { CheckCircle2, AlertCircle, Trash2 } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import type { HistoryRecordResponse } from '../api'
+import { useTranslation } from '../lib/i18n-context'
 
 interface HistoryItemCardProps {
-  item: HistoryRecordResponse;
-  onSelect: (item: HistoryRecordResponse) => void;
-  onDelete: (itemId: string) => void;
+  item: HistoryRecordResponse
+  onSelect: (item: HistoryRecordResponse) => void
+  onDelete: (itemId: string) => void
 }
 
 function formatHistoryTime(timestamp: string): string {
-  const date = new Date(timestamp);
-  const now = new Date();
-  const diffMs = now.getTime() - date.getTime();
-  const diffMinutes = Math.floor(diffMs / 60000);
-  const diffHours = Math.floor(diffMs / 3600000);
-  const diffDays = Math.floor(diffMs / 86400000);
+  const date = new Date(timestamp)
+  const now = new Date()
+  const diffMs = now.getTime() - date.getTime()
+  const diffMinutes = Math.floor(diffMs / 60000)
+  const diffHours = Math.floor(diffMs / 3600000)
+  const diffDays = Math.floor(diffMs / 86400000)
 
-  if (diffMinutes < 1) return 'Just now';
-  if (diffMinutes < 60) return `${diffMinutes}m ago`;
-  if (diffHours < 24) return `${diffHours}h ago`;
-  if (diffDays < 7) return `${diffDays}d ago`;
+  if (diffMinutes < 1) return 'Just now'
+  if (diffMinutes < 60) return `${diffMinutes}m ago`
+  if (diffHours < 24) return `${diffHours}h ago`
+  if (diffDays < 7) return `${diffDays}d ago`
 
   return date.toLocaleString('en-US', {
     month: 'short',
     day: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
-  });
+  })
 }
 
 function formatDuration(ms: number): string {
-  const totalSeconds = Math.floor(ms / 1000);
-  const minutes = Math.floor(totalSeconds / 60);
-  const seconds = totalSeconds % 60;
+  const totalSeconds = Math.floor(ms / 1000)
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
 
   if (minutes === 0) {
-    return `${seconds}s`;
+    return `${seconds}s`
   }
-  return `${minutes}m ${seconds}s`;
+  return `${minutes}m ${seconds}s`
 }
 
-export function HistoryItemCard({
-  item,
-  onSelect,
-  onDelete,
-}: HistoryItemCardProps) {
-  const t = useTranslation();
+export function HistoryItemCard({ item, onSelect, onDelete }: HistoryItemCardProps) {
+  const t = useTranslation()
 
   const handleDelete = (e: React.MouseEvent) => {
-    e.stopPropagation(); // 阻止冒泡，避免触发 onSelect
+    e.stopPropagation() // 阻止冒泡，避免触发 onSelect
     if (confirm(t.history.deleteConfirm)) {
-      onDelete(item.id);
+      onDelete(item.id)
     }
-  };
+  }
 
   return (
     <Card
@@ -114,5 +110,5 @@ export function HistoryItemCard({
         </div>
       </div>
     </Card>
-  );
+  )
 }

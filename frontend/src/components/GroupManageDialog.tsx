@@ -1,13 +1,5 @@
-import React, { useState, useEffect, useCallback } from 'react';
-import {
-  FolderOpen,
-  Plus,
-  Edit,
-  Trash2,
-  GripVertical,
-  Loader2,
-  AlertCircle,
-} from 'lucide-react';
+import React, { useState, useEffect, useCallback } from 'react'
+import { FolderOpen, Plus, Edit, Trash2, GripVertical, Loader2, AlertCircle } from 'lucide-react'
 import {
   Dialog,
   DialogContent,
@@ -15,27 +7,27 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '@/components/ui/dialog';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { ConfirmDialog } from './ConfirmDialog';
-import type { DeviceGroup } from '../api';
+} from '@/components/ui/dialog'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { ConfirmDialog } from './ConfirmDialog'
+import type { DeviceGroup } from '../api'
 import {
   listDeviceGroups,
   createDeviceGroup,
   updateDeviceGroup,
   deleteDeviceGroup,
   reorderDeviceGroups,
-} from '../api';
-import { useTranslation } from '../lib/i18n-context';
-import type { ToastType } from './Toast';
+} from '../api'
+import { useTranslation } from '../lib/i18n-context'
+import type { ToastType } from './Toast'
 
 interface GroupManageDialogProps {
-  isOpen: boolean;
-  onClose: () => void;
-  onGroupsChanged?: () => void;
-  showToast?: (message: string, type: ToastType) => void;
+  isOpen: boolean
+  onClose: () => void
+  onGroupsChanged?: () => void
+  showToast?: (message: string, type: ToastType) => void
 }
 
 export function GroupManageDialog({
@@ -44,174 +36,172 @@ export function GroupManageDialog({
   onGroupsChanged,
   showToast,
 }: GroupManageDialogProps) {
-  const t = useTranslation();
-  const [groups, setGroups] = useState<DeviceGroup[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const t = useTranslation()
+  const [groups, setGroups] = useState<DeviceGroup[]>([])
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
   // Create group state
-  const [showCreateDialog, setShowCreateDialog] = useState(false);
-  const [newGroupName, setNewGroupName] = useState('');
-  const [creating, setCreating] = useState(false);
+  const [showCreateDialog, setShowCreateDialog] = useState(false)
+  const [newGroupName, setNewGroupName] = useState('')
+  const [creating, setCreating] = useState(false)
 
   // Edit group state
-  const [editingGroup, setEditingGroup] = useState<DeviceGroup | null>(null);
-  const [editingName, setEditingName] = useState('');
-  const [saving, setSaving] = useState(false);
+  const [editingGroup, setEditingGroup] = useState<DeviceGroup | null>(null)
+  const [editingName, setEditingName] = useState('')
+  const [saving, setSaving] = useState(false)
 
   // Delete group state
-  const [deletingGroup, setDeletingGroup] = useState<DeviceGroup | null>(null);
-  const [deleting, setDeleting] = useState(false);
+  const [deletingGroup, setDeletingGroup] = useState<DeviceGroup | null>(null)
+  const [deleting, setDeleting] = useState(false)
 
   // Drag and drop state
-  const [draggedGroupId, setDraggedGroupId] = useState<string | null>(null);
+  const [draggedGroupId, setDraggedGroupId] = useState<string | null>(null)
 
   const fetchGroups = useCallback(async () => {
-    setLoading(true);
-    setError(null);
+    setLoading(true)
+    setError(null)
     try {
-      const response = await listDeviceGroups();
-      setGroups(response.groups.sort((a, b) => a.order - b.order));
+      const response = await listDeviceGroups()
+      setGroups(response.groups.sort((a, b) => a.order - b.order))
     } catch (err) {
-      console.error('Failed to fetch groups:', err);
-      setError(t.deviceGroups?.fetchError || '获取分组失败');
+      console.error('Failed to fetch groups:', err)
+      setError(t.deviceGroups?.fetchError || '获取分组失败')
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  }, [t.deviceGroups?.fetchError]);
+  }, [t.deviceGroups?.fetchError])
 
   useEffect(() => {
     if (isOpen) {
-      fetchGroups();
+      fetchGroups()
     }
-  }, [isOpen, fetchGroups]);
+  }, [isOpen, fetchGroups])
 
   const handleCreateGroup = async () => {
-    if (!newGroupName.trim()) return;
+    if (!newGroupName.trim()) return
 
-    setCreating(true);
+    setCreating(true)
     try {
-      await createDeviceGroup(newGroupName.trim());
-      setShowCreateDialog(false);
-      setNewGroupName('');
-      await fetchGroups();
-      if (onGroupsChanged) onGroupsChanged();
+      await createDeviceGroup(newGroupName.trim())
+      setShowCreateDialog(false)
+      setNewGroupName('')
+      await fetchGroups()
+      if (onGroupsChanged) onGroupsChanged()
       if (showToast) {
-        showToast(t.deviceGroups?.createSuccess || '分组创建成功', 'success');
+        showToast(t.deviceGroups?.createSuccess || '分组创建成功', 'success')
       }
     } catch (err) {
-      console.error('Failed to create group:', err);
+      console.error('Failed to create group:', err)
       if (showToast) {
-        showToast(t.deviceGroups?.createError || '创建分组失败', 'error');
+        showToast(t.deviceGroups?.createError || '创建分组失败', 'error')
       }
     } finally {
-      setCreating(false);
+      setCreating(false)
     }
-  };
+  }
 
   const handleUpdateGroup = async () => {
-    if (!editingGroup || !editingName.trim()) return;
+    if (!editingGroup || !editingName.trim()) return
 
-    setSaving(true);
+    setSaving(true)
     try {
-      await updateDeviceGroup(editingGroup.id, editingName.trim());
-      setEditingGroup(null);
-      setEditingName('');
-      await fetchGroups();
-      if (onGroupsChanged) onGroupsChanged();
+      await updateDeviceGroup(editingGroup.id, editingName.trim())
+      setEditingGroup(null)
+      setEditingName('')
+      await fetchGroups()
+      if (onGroupsChanged) onGroupsChanged()
       if (showToast) {
-        showToast(t.deviceGroups?.updateSuccess || '分组更新成功', 'success');
+        showToast(t.deviceGroups?.updateSuccess || '分组更新成功', 'success')
       }
     } catch (err) {
-      console.error('Failed to update group:', err);
+      console.error('Failed to update group:', err)
       if (showToast) {
-        showToast(t.deviceGroups?.updateError || '更新分组失败', 'error');
+        showToast(t.deviceGroups?.updateError || '更新分组失败', 'error')
       }
     } finally {
-      setSaving(false);
+      setSaving(false)
     }
-  };
+  }
 
   const handleDeleteGroup = async () => {
-    if (!deletingGroup) return;
+    if (!deletingGroup) return
 
-    setDeleting(true);
+    setDeleting(true)
     try {
-      const result = await deleteDeviceGroup(deletingGroup.id);
+      const result = await deleteDeviceGroup(deletingGroup.id)
       if (result.success) {
-        setDeletingGroup(null);
-        await fetchGroups();
-        if (onGroupsChanged) onGroupsChanged();
+        setDeletingGroup(null)
+        await fetchGroups()
+        if (onGroupsChanged) onGroupsChanged()
         if (showToast) {
-          showToast(t.deviceGroups?.deleteSuccess || '分组删除成功', 'success');
+          showToast(t.deviceGroups?.deleteSuccess || '分组删除成功', 'success')
         }
       } else {
         if (showToast) {
-          showToast(
-            result.message || t.deviceGroups?.deleteError || '删除分组失败',
-            'error'
-          );
+          showToast(result.message || t.deviceGroups?.deleteError || '删除分组失败', 'error')
         }
       }
     } catch (err) {
-      console.error('Failed to delete group:', err);
+      console.error('Failed to delete group:', err)
       if (showToast) {
-        showToast(t.deviceGroups?.deleteError || '删除分组失败', 'error');
+        showToast(t.deviceGroups?.deleteError || '删除分组失败', 'error')
       }
     } finally {
-      setDeleting(false);
+      setDeleting(false)
     }
-  };
+  }
 
   const handleDragStart = (groupId: string) => {
-    setDraggedGroupId(groupId);
-  };
+    setDraggedGroupId(groupId)
+  }
 
   const handleDragOver = (e: React.DragEvent, targetGroupId: string) => {
-    e.preventDefault();
-    if (!draggedGroupId || draggedGroupId === targetGroupId) return;
+    e.preventDefault()
+    if (!draggedGroupId || draggedGroupId === targetGroupId) return
 
     // Reorder locally for visual feedback
-    const newGroups = [...groups];
-    const draggedIndex = newGroups.findIndex(g => g.id === draggedGroupId);
-    const targetIndex = newGroups.findIndex(g => g.id === targetGroupId);
+    const newGroups = [...groups]
+    const draggedIndex = newGroups.findIndex((g) => g.id === draggedGroupId)
+    const targetIndex = newGroups.findIndex((g) => g.id === targetGroupId)
 
-    if (draggedIndex === -1 || targetIndex === -1) return;
+    if (draggedIndex === -1 || targetIndex === -1) return
 
-    const [removed] = newGroups.splice(draggedIndex, 1);
-    newGroups.splice(targetIndex, 0, removed);
+    const [removed] = newGroups.splice(draggedIndex, 1)
+    newGroups.splice(targetIndex, 0, removed)
 
-    setGroups(newGroups);
-  };
+    setGroups(newGroups)
+  }
 
   const handleDragEnd = async () => {
-    if (!draggedGroupId) return;
+    if (!draggedGroupId) return
 
     // Save the new order
-    const groupIds = groups.map(g => g.id);
+    const groupIds = groups.map((g) => g.id)
     try {
-      await reorderDeviceGroups(groupIds);
-      if (onGroupsChanged) onGroupsChanged();
+      await reorderDeviceGroups(groupIds)
+      if (onGroupsChanged) onGroupsChanged()
     } catch (err) {
-      console.error('Failed to reorder groups:', err);
+      console.error('Failed to reorder groups:', err)
       // Refresh to get the correct order
-      await fetchGroups();
+      await fetchGroups()
       if (showToast) {
-        showToast(t.deviceGroups?.reorderError || '调整顺序失败', 'error');
+        showToast(t.deviceGroups?.reorderError || '调整顺序失败', 'error')
       }
     } finally {
-      setDraggedGroupId(null);
+      setDraggedGroupId(null)
     }
-  };
+  }
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
+      <Dialog
+        open={isOpen}
+        onOpenChange={(open) => !open && onClose()}
+      >
         <DialogContent className="sm:max-w-md max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle>
-              {t.deviceGroups?.manageTitle || '管理设备分组'}
-            </DialogTitle>
+            <DialogTitle>{t.deviceGroups?.manageTitle || '管理设备分组'}</DialogTitle>
             <DialogDescription>
               {t.deviceGroups?.manageDescription ||
                 '创建、编辑、删除和排序设备分组。拖拽分组可调整顺序。'}
@@ -226,9 +216,7 @@ export function GroupManageDialog({
             ) : error ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <AlertCircle className="h-8 w-8 text-red-500 mb-2" />
-                <p className="text-sm text-red-600 dark:text-red-400">
-                  {error}
-                </p>
+                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -240,12 +228,12 @@ export function GroupManageDialog({
               </div>
             ) : (
               <div className="space-y-2">
-                {groups.map(group => (
+                {groups.map((group) => (
                   <div
                     key={group.id}
                     draggable={!group.is_default}
                     onDragStart={() => handleDragStart(group.id)}
-                    onDragOver={e => handleDragOver(e, group.id)}
+                    onDragOver={(e) => handleDragOver(e, group.id)}
                     onDragEnd={handleDragEnd}
                     className={`
                       flex items-center gap-2 p-3 rounded-lg border
@@ -271,8 +259,7 @@ export function GroupManageDialog({
                         {group.name}
                       </span>
                       <span className="text-xs text-slate-400 dark:text-slate-500">
-                        {group.device_count}{' '}
-                        {t.deviceGroups?.deviceCount || '台设备'}
+                        {group.device_count} {t.deviceGroups?.deviceCount || '台设备'}
                         {group.is_default && (
                           <span className="ml-2 text-slate-400">
                             ({t.deviceGroups?.defaultGroup || '默认'})
@@ -288,8 +275,8 @@ export function GroupManageDialog({
                         size="icon"
                         className="h-7 w-7 text-slate-400 hover:text-[#1d9bf0]"
                         onClick={() => {
-                          setEditingGroup(group);
-                          setEditingName(group.name);
+                          setEditingGroup(group)
+                          setEditingName(group.name)
                         }}
                       >
                         <Edit className="w-3.5 h-3.5" />
@@ -322,7 +309,10 @@ export function GroupManageDialog({
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={onClose}>
+            <Button
+              variant="outline"
+              onClick={onClose}
+            >
               {t.common?.close || '关闭'}
             </Button>
           </DialogFooter>
@@ -330,32 +320,29 @@ export function GroupManageDialog({
       </Dialog>
 
       {/* Create Group Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+      <Dialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+      >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>
-              {t.deviceGroups?.createTitle || '新建分组'}
-            </DialogTitle>
+            <DialogTitle>{t.deviceGroups?.createTitle || '新建分组'}</DialogTitle>
             <DialogDescription>
               {t.deviceGroups?.createDescription || '为设备创建一个新的分组。'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="new-group-name">
-                {t.deviceGroups?.groupNameLabel || '分组名称'}
-              </Label>
+              <Label htmlFor="new-group-name">{t.deviceGroups?.groupNameLabel || '分组名称'}</Label>
               <Input
                 id="new-group-name"
                 value={newGroupName}
-                onChange={e => setNewGroupName(e.target.value)}
-                placeholder={
-                  t.deviceGroups?.groupNamePlaceholder || '请输入分组名称'
-                }
+                onChange={(e) => setNewGroupName(e.target.value)}
+                placeholder={t.deviceGroups?.groupNamePlaceholder || '请输入分组名称'}
                 maxLength={50}
-                onKeyDown={e => {
+                onKeyDown={(e) => {
                   if (e.key === 'Enter' && !creating) {
-                    handleCreateGroup();
+                    handleCreateGroup()
                   }
                 }}
               />
@@ -389,7 +376,7 @@ export function GroupManageDialog({
       {/* Edit Group Dialog */}
       <Dialog
         open={!!editingGroup}
-        onOpenChange={open => !open && setEditingGroup(null)}
+        onOpenChange={(open) => !open && setEditingGroup(null)}
       >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -406,14 +393,12 @@ export function GroupManageDialog({
               <Input
                 id="edit-group-name"
                 value={editingName}
-                onChange={e => setEditingName(e.target.value)}
-                placeholder={
-                  t.deviceGroups?.groupNamePlaceholder || '请输入分组名称'
-                }
+                onChange={(e) => setEditingName(e.target.value)}
+                placeholder={t.deviceGroups?.groupNamePlaceholder || '请输入分组名称'}
                 maxLength={50}
-                onKeyDown={e => {
+                onKeyDown={(e) => {
                   if (e.key === 'Enter' && !saving) {
-                    handleUpdateGroup();
+                    handleUpdateGroup()
                   }
                 }}
               />
@@ -449,22 +434,15 @@ export function GroupManageDialog({
         isOpen={!!deletingGroup}
         title={t.deviceGroups?.deleteTitle || '删除分组'}
         content={
-          t.deviceGroups?.deleteContent?.replace(
-            '{name}',
-            deletingGroup?.name || ''
-          ) ||
+          t.deviceGroups?.deleteContent?.replace('{name}', deletingGroup?.name || '') ||
           `确定要删除分组 "${deletingGroup?.name}" 吗？该分组内的设备将被移回默认分组。`
         }
         onConfirm={handleDeleteGroup}
         onCancel={() => setDeletingGroup(null)}
-        confirmText={
-          deleting
-            ? t.common?.loading || '加载中...'
-            : t.common?.delete || '删除'
-        }
+        confirmText={deleting ? t.common?.loading || '加载中...' : t.common?.delete || '删除'}
         confirmVariant="destructive"
         disabled={deleting}
       />
     </>
-  );
+  )
 }

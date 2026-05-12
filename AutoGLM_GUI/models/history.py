@@ -93,10 +93,10 @@ class StepTimingRecord:
             llm_duration_ms=float(data.get("llm_duration_ms", 0.0)),
             parse_action_duration_ms=float(data.get("parse_action_duration_ms", 0.0)),
             execute_action_duration_ms=float(
-                data.get("execute_action_duration_ms", 0.0)
+                data.get("execute_action_duration_ms", 0.0),
             ),
             update_context_duration_ms=float(
-                data.get("update_context_duration_ms", 0.0)
+                data.get("update_context_duration_ms", 0.0),
             ),
             adb_duration_ms=float(data.get("adb_duration_ms", 0.0)),
             sleep_duration_ms=float(data.get("sleep_duration_ms", 0.0)),
@@ -150,10 +150,10 @@ class TraceSummaryRecord:
             llm_duration_ms=float(data.get("llm_duration_ms", 0.0)),
             parse_action_duration_ms=float(data.get("parse_action_duration_ms", 0.0)),
             execute_action_duration_ms=float(
-                data.get("execute_action_duration_ms", 0.0)
+                data.get("execute_action_duration_ms", 0.0),
             ),
             update_context_duration_ms=float(
-                data.get("update_context_duration_ms", 0.0)
+                data.get("update_context_duration_ms", 0.0),
             ),
             adb_duration_ms=float(data.get("adb_duration_ms", 0.0)),
             sleep_duration_ms=float(data.get("sleep_duration_ms", 0.0)),

@@ -56,8 +56,8 @@ class _FakePlannerStreamingResult:
                 {
                     "role": "user",
                     "content": "打开微信，搜索张三，发送你好",
-                }
-            ]
+                },
+            ],
         )
         await session.get_items()
 
@@ -84,54 +84,52 @@ class _FakePlannerStreamingResult:
         with trace_span(
             "layered.tool.chat.run_agent",
             attrs={"device_id": self.device_id, "agent_type": "TraceFakeAgent"},
+        ), trace_span(
+            "agent.step",
+            attrs={"step": 1, "agent_type": "TraceFakeAgent"},
         ):
             with trace_span(
-                "agent.step",
+                "step.capture_screenshot",
                 attrs={"step": 1, "agent_type": "TraceFakeAgent"},
             ):
-                with trace_span(
-                    "step.capture_screenshot",
-                    attrs={"step": 1, "agent_type": "TraceFakeAgent"},
-                ):
-                    pass
-                with trace_span(
-                    "step.llm",
-                    attrs={
-                        "step": 1,
-                        "agent_type": "TraceFakeAgent",
-                        "model_name": "mock-glm-model",
-                        "message_count": 1,
-                    },
-                ):
-                    await asyncio.sleep(0.01)
-                with trace_span(
-                    "step.parse_action",
-                    attrs={"step": 1, "agent_type": "TraceFakeAgent"},
-                ):
-                    pass
-                with trace_span(
-                    "step.execute_action",
-                    attrs={
-                        "step": 1,
-                        "agent_type": "TraceFakeAgent",
-                        "action_name": "Tap",
-                    },
-                ):
-                    result = ActionHandler(ADBDevice(self.device_id)).execute(
-                        {"_metadata": "do", "action": "Tap", "element": [500, 500]},
-                        screen_width=1000,
-                        screen_height=1000,
-                    )
-                    assert result.success is True
-                with trace_span(
-                    "step.update_context",
-                    attrs={"step": 1, "agent_type": "TraceFakeAgent"},
-                ):
-                    with trace_span(
-                        "memory.write",
-                        attrs={"step": 1, "memory_type": "fake_agent_context"},
-                    ):
-                        pass
+                pass
+            with trace_span(
+                "step.llm",
+                attrs={
+                    "step": 1,
+                    "agent_type": "TraceFakeAgent",
+                    "model_name": "mock-glm-model",
+                    "message_count": 1,
+                },
+            ):
+                await asyncio.sleep(0.01)
+            with trace_span(
+                "step.parse_action",
+                attrs={"step": 1, "agent_type": "TraceFakeAgent"},
+            ):
+                pass
+            with trace_span(
+                "step.execute_action",
+                attrs={
+                    "step": 1,
+                    "agent_type": "TraceFakeAgent",
+                    "action_name": "Tap",
+                },
+            ):
+                result = ActionHandler(ADBDevice(self.device_id)).execute(
+                    {"_metadata": "do", "action": "Tap", "element": [500, 500]},
+                    screen_width=1000,
+                    screen_height=1000,
+                )
+                assert result.success is True
+            with trace_span(
+                "step.update_context",
+                attrs={"step": 1, "agent_type": "TraceFakeAgent"},
+            ), trace_span(
+                "memory.write",
+                attrs={"step": 1, "memory_type": "fake_agent_context"},
+            ):
+                pass
 
         yield RunItemStreamEvent(
             name="tool_output",
@@ -154,8 +152,8 @@ class _FakePlannerStreamingResult:
                     content=[
                         SimpleNamespace(
                             text="我已经确认消息发送完成。",
-                        )
-                    ]
+                        ),
+                    ],
                 ),
             ),
         )

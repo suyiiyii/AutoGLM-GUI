@@ -58,7 +58,7 @@ class MAIParser:
 
         if "coordinate" in mai_action:
             mai_action["coordinate"] = self._normalize_coordinate_to_0_1(
-                mai_action["coordinate"]
+                mai_action["coordinate"],
             )
 
         return {
@@ -68,7 +68,8 @@ class MAIParser:
         }
 
     def _normalize_coordinate_to_0_1(
-        self, coordinate: list[int | float]
+        self,
+        coordinate: list[int | float],
     ) -> list[float]:
         if len(coordinate) == 2:
             x, y = coordinate
@@ -78,7 +79,7 @@ class MAIParser:
             y = (y1 + y2) / 2
         else:
             raise MAIParseError(
-                f"Invalid coordinate format: expected 2 or 4 values, got {len(coordinate)}"
+                f"Invalid coordinate format: expected 2 or 4 values, got {len(coordinate)}",
             )
 
         return [x / SCALE_FACTOR, y / SCALE_FACTOR]
@@ -239,7 +240,10 @@ class MAIParser:
         return int((value / SCALE_FACTOR) * 1000)
 
     def _calculate_swipe_coordinates(
-        self, direction: str, x: int, y: int
+        self,
+        direction: str,
+        x: int,
+        y: int,
     ) -> tuple[list[int], list[int]]:
         """Calculate start and end coordinates for swipe based on direction."""
         swipe_distance = 300

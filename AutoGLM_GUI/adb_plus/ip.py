@@ -16,7 +16,10 @@ def _run(adb_path: str, device_id: str | None, cmd: list[str]) -> str:
     if device_id:
         base_cmd.extend(["-s", device_id])
     result = subprocess.run(
-        base_cmd + ["shell", *cmd], capture_output=True, text=True, timeout=5
+        base_cmd + ["shell", *cmd],
+        capture_output=True,
+        text=True,
+        timeout=5,
     )
     return (result.stdout or "") + (result.stderr or "")
 
@@ -86,13 +89,16 @@ def get_wifi_ip(adb_path: str = "adb", device_id: str | None = None) -> str | No
 
 
 async def get_wifi_ip_async(
-    adb_path: str = "adb", device_id: str | None = None
+    adb_path: str = "adb",
+    device_id: str | None = None,
 ) -> str | None:
     """Async variant of ``get_wifi_ip`` for non-blocking request flows."""
     try:
         route_result = await run_cmd_silently(
             _build_shell_cmd(
-                adb_path, device_id, ["ip", "-4", "route", "get", "8.8.8.8"]
+                adb_path,
+                device_id,
+                ["ip", "-4", "route", "get", "8.8.8.8"],
             ),
             timeout=5,
         )
@@ -123,7 +129,9 @@ async def get_wifi_ip_async(
     try:
         addr_result = await run_cmd_silently(
             _build_shell_cmd(
-                adb_path, device_id, ["ip", "-4", "addr", "show", "wlan0"]
+                adb_path,
+                device_id,
+                ["ip", "-4", "addr", "show", "wlan0"],
             ),
             timeout=5,
         )

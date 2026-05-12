@@ -39,7 +39,7 @@ class ADBKeyboardInstaller:
             self.adb_prefix.extend(["-s", device_id])
 
         logger.debug(
-            f"Initialized ADBKeyboardInstaller for device: {device_id or 'default'}"
+            f"Initialized ADBKeyboardInstaller for device: {device_id or 'default'}",
         )
 
     def is_installed(self) -> bool:
@@ -51,10 +51,10 @@ class ADBKeyboardInstaller:
         """
         try:
             logger.debug(
-                f"Checking if ADB Keyboard is installed on device {self.device_id or 'default'}"
+                f"Checking if ADB Keyboard is installed on device {self.device_id or 'default'}",
             )
             result = asyncio.run(
-                run_cmd_silently(self.adb_prefix + ["shell", "pm", "list", "packages"])
+                run_cmd_silently(self.adb_prefix + ["shell", "pm", "list", "packages"]),
             )
             package_list = result.stdout.strip()
             installed = ADB_KEYBOARD_PACKAGE in package_list
@@ -75,11 +75,11 @@ class ADBKeyboardInstaller:
         """
         try:
             logger.debug(
-                f"Checking if ADB Keyboard is enabled on device {self.device_id or 'default'}"
+                f"Checking if ADB Keyboard is enabled on device {self.device_id or 'default'}",
             )
             # Use ime list -s to check only enabled input methods
             result = asyncio.run(
-                run_cmd_silently(self.adb_prefix + ["shell", "ime", "list", "-s"])
+                run_cmd_silently(self.adb_prefix + ["shell", "ime", "list", "-s"]),
             )
             ime_list_enabled = result.stdout.strip()
             enabled = ADB_KEYBOARD_IME in ime_list_enabled
@@ -192,7 +192,7 @@ class ADBKeyboardInstaller:
         try:
             logger.info(f"Installing ADB Keyboard from {apk_path}")
             result = asyncio.run(
-                run_cmd_silently(self.adb_prefix + ["install", "-r", str(apk_path)])
+                run_cmd_silently(self.adb_prefix + ["install", "-r", str(apk_path)]),
             )
 
             if "Success" in result.stdout or result.returncode == 0:
@@ -224,8 +224,8 @@ class ADBKeyboardInstaller:
             # Enable keyboard
             result = asyncio.run(
                 run_cmd_silently(
-                    self.adb_prefix + ["shell", "ime", "enable", ADB_KEYBOARD_IME]
-                )
+                    self.adb_prefix + ["shell", "ime", "enable", ADB_KEYBOARD_IME],
+                ),
             )
 
             if result.returncode == 0:

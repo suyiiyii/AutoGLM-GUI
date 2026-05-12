@@ -1,11 +1,11 @@
-import * as React from 'react';
-import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { useTranslation } from '../lib/i18n-context';
-import { DeviceMonitor } from './DeviceMonitor';
+import * as React from 'react'
+import { Card } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { useTranslation } from '../lib/i18n-context'
+import { DeviceMonitor } from './DeviceMonitor'
 import {
   AlertCircle,
   CheckCircle2,
@@ -20,8 +20,8 @@ import {
   ListChecks,
   Loader2,
   Square,
-} from 'lucide-react';
-import type { Workflow, HistoryRecordResponse } from '../api';
+} from 'lucide-react'
+import type { Workflow, HistoryRecordResponse } from '../api'
 import {
   cancelTaskRun,
   createTaskSession,
@@ -40,119 +40,103 @@ import {
   type TaskEventRecordResponse,
   type TaskRunResponse,
   type TaskStatus,
-} from '../api';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { HistoryItemCard } from './HistoryItemCard';
+} from '../api'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { HistoryItemCard } from './HistoryItemCard'
 
 interface ChatKitPanelProps {
-  deviceId: string;
-  deviceSerial: string; // Used for history storage
-  deviceName: string;
-  deviceConnectionType?: string;
-  isVisible: boolean;
-  unlimitedStepsEnabled?: boolean;
+  deviceId: string
+  deviceSerial: string // Used for history storage
+  deviceName: string
+  deviceConnectionType?: string
+  isVisible: boolean
+  unlimitedStepsEnabled?: boolean
 }
 
 // 执行步骤类型
 interface ExecutionStep {
-  id: string;
-  type: 'user' | 'thinking' | 'tool_call' | 'tool_result' | 'assistant';
-  content: string;
-  toolName?: string;
-  toolArgs?: Record<string, unknown>;
-  toolResult?: string;
-  timestamp: Date;
-  isExpanded?: boolean;
+  id: string
+  type: 'user' | 'thinking' | 'tool_call' | 'tool_result' | 'assistant'
+  content: string
+  toolName?: string
+  toolArgs?: Record<string, unknown>
+  toolResult?: string
+  timestamp: Date
+  isExpanded?: boolean
 }
 
 // 消息类型
 interface Message {
-  id: string;
-  role: 'user' | 'assistant';
-  content: string;
-  timestamp: Date;
-  steps?: ExecutionStep[];
-  isStreaming?: boolean;
-  success?: boolean;
+  id: string
+  role: 'user' | 'assistant'
+  content: string
+  timestamp: Date
+  steps?: ExecutionStep[]
+  isStreaming?: boolean
+  success?: boolean
 }
 
 function isTaskActive(status: TaskStatus): boolean {
-  return status === 'QUEUED' || status === 'RUNNING';
+  return status === 'QUEUED' || status === 'RUNNING'
 }
 
 function applyTaskEventToTask(
   task: TaskRunResponse,
-  event: TaskEventRecordResponse
+  event: TaskEventRecordResponse,
 ): TaskRunResponse {
-  const nextTask = { ...task };
-  const payload = event.payload;
+  const nextTask = { ...task }
+  const payload = event.payload
 
   if (event.event_type === 'status') {
     if (typeof payload.status === 'string') {
-      nextTask.status = payload.status as TaskStatus;
+      nextTask.status = payload.status as TaskStatus
       if (!isTaskActive(nextTask.status) && !nextTask.finished_at) {
-        nextTask.finished_at = event.created_at;
+        nextTask.finished_at = event.created_at
       }
     }
   } else if (event.event_type === 'done') {
-    nextTask.status = 'SUCCEEDED';
+    nextTask.status = 'SUCCEEDED'
     nextTask.final_message =
       typeof payload.content === 'string'
         ? payload.content
         : typeof payload.message === 'string'
           ? payload.message
-          : null;
-    nextTask.error_message = null;
-    nextTask.finished_at = event.created_at;
+          : null
+    nextTask.error_message = null
+    nextTask.finished_at = event.created_at
   } else if (event.event_type === 'error') {
-    nextTask.status = 'FAILED';
-    nextTask.final_message =
-      typeof payload.message === 'string' ? payload.message : null;
-    nextTask.error_message =
-      typeof payload.message === 'string' ? payload.message : null;
-    nextTask.finished_at = event.created_at;
+    nextTask.status = 'FAILED'
+    nextTask.final_message = typeof payload.message === 'string' ? payload.message : null
+    nextTask.error_message = typeof payload.message === 'string' ? payload.message : null
+    nextTask.finished_at = event.created_at
   } else if (event.event_type === 'cancelled') {
-    nextTask.status = 'CANCELLED';
-    nextTask.final_message =
-      typeof payload.message === 'string' ? payload.message : null;
-    nextTask.error_message =
-      typeof payload.message === 'string' ? payload.message : null;
-    nextTask.finished_at = event.created_at;
+    nextTask.status = 'CANCELLED'
+    nextTask.final_message = typeof payload.message === 'string' ? payload.message : null
+    nextTask.error_message = typeof payload.message === 'string' ? payload.message : null
+    nextTask.finished_at = event.created_at
   }
 
-  return nextTask;
+  return nextTask
 }
 
 function reconcileTaskRun(
   task: TaskRunResponse,
-  events: TaskEventRecordResponse[]
+  events: TaskEventRecordResponse[],
 ): TaskRunResponse {
-  return events.reduce(
-    (currentTask, event) => applyTaskEventToTask(currentTask, event),
-    { ...task }
-  );
+  return events.reduce((currentTask, event) => applyTaskEventToTask(currentTask, event), {
+    ...task,
+  })
 }
 
-function buildExecutionSteps(
-  events: TaskEventRecordResponse[]
-): ExecutionStep[] {
-  const steps: ExecutionStep[] = [];
+function buildExecutionSteps(events: TaskEventRecordResponse[]): ExecutionStep[] {
+  const steps: ExecutionStep[] = []
 
-  events.forEach(event => {
-    const payload = event.payload;
+  events.forEach((event) => {
+    const payload = event.payload
 
     if (event.event_type === 'tool_call') {
-      const toolName =
-        typeof payload.tool_name === 'string' ? payload.tool_name : 'unknown';
+      const toolName = typeof payload.tool_name === 'string' ? payload.tool_name : 'unknown'
       steps.push({
         id: `step-${event.task_id}-${event.seq}`,
         type: 'tool_call',
@@ -163,19 +147,16 @@ function buildExecutionSteps(
               ? '获取设备列表'
               : `调用工具: ${toolName}`,
         toolName,
-        toolArgs:
-          (payload.tool_args as Record<string, unknown> | undefined) || {},
+        toolArgs: (payload.tool_args as Record<string, unknown> | undefined) || {},
         timestamp: new Date(event.created_at),
         isExpanded: true,
-      });
+      })
     } else if (event.event_type === 'tool_result') {
-      const toolName =
-        typeof payload.tool_name === 'string' ? payload.tool_name : 'unknown';
+      const toolName = typeof payload.tool_name === 'string' ? payload.tool_name : 'unknown'
       steps.push({
         id: `step-${event.task_id}-${event.seq}`,
         type: 'tool_result',
-        content:
-          toolName === 'chat' ? 'Phone Agent 执行结果' : `${toolName} 结果`,
+        content: toolName === 'chat' ? 'Phone Agent 执行结果' : `${toolName} 结果`,
         toolName,
         toolResult:
           typeof payload.result === 'string'
@@ -183,35 +164,32 @@ function buildExecutionSteps(
             : JSON.stringify(payload.result ?? '', null, 2),
         timestamp: new Date(event.created_at),
         isExpanded: true,
-      });
+      })
     }
-  });
+  })
 
-  return steps;
+  return steps
 }
 
-function buildAssistantMessage(
-  task: TaskRunResponse,
-  events: TaskEventRecordResponse[]
-): Message {
-  const steps = buildExecutionSteps(events);
-  let content = task.final_message || task.error_message || '';
+function buildAssistantMessage(task: TaskRunResponse, events: TaskEventRecordResponse[]): Message {
+  const steps = buildExecutionSteps(events)
+  let content = task.final_message || task.error_message || ''
 
   for (const event of events) {
-    const payload = event.payload;
+    const payload = event.payload
     if (event.event_type === 'message' && typeof payload.content === 'string') {
-      content = payload.content;
+      content = payload.content
     } else if (event.event_type === 'done') {
       if (typeof payload.content === 'string') {
-        content = payload.content;
+        content = payload.content
       } else if (typeof payload.message === 'string') {
-        content = payload.message;
+        content = payload.message
       }
     } else if (
       (event.event_type === 'error' || event.event_type === 'cancelled') &&
       typeof payload.message === 'string'
     ) {
-      content = payload.message;
+      content = payload.message
     }
   }
 
@@ -225,18 +203,13 @@ function buildAssistantMessage(
     success:
       task.status === 'SUCCEEDED'
         ? true
-        : task.status === 'FAILED' ||
-            task.status === 'CANCELLED' ||
-            task.status === 'INTERRUPTED'
+        : task.status === 'FAILED' || task.status === 'CANCELLED' || task.status === 'INTERRUPTED'
           ? false
           : undefined,
-  };
+  }
 }
 
-function buildMessagePair(
-  task: TaskRunResponse,
-  events: TaskEventRecordResponse[]
-): Message[] {
+function buildMessagePair(task: TaskRunResponse, events: TaskEventRecordResponse[]): Message[] {
   return [
     {
       id: `${task.id}-user`,
@@ -245,7 +218,7 @@ function buildMessagePair(
       timestamp: new Date(task.created_at),
     },
     buildAssistantMessage(task, events),
-  ];
+  ]
 }
 
 export function ChatKitPanel({
@@ -256,55 +229,45 @@ export function ChatKitPanel({
   isVisible,
   unlimitedStepsEnabled = false,
 }: ChatKitPanelProps) {
-  const t = useTranslation();
+  const t = useTranslation()
 
   // Chat state
-  const [messages, setMessages] = React.useState<Message[]>([]);
-  const [input, setInput] = React.useState('');
-  const [loading, setLoading] = React.useState(false);
-  const [aborting, setAborting] = React.useState(false);
-  const [error, setError] = React.useState<string | null>(null);
-  const [sessionId, setSessionId] = React.useState<string | null>(null);
-  const messagesEndRef = React.useRef<HTMLDivElement>(null);
-  const scrollAreaRef = React.useRef<HTMLDivElement>(null);
-  const isNearBottomRef = React.useRef(true);
-  const [showScrollToBottom, setShowScrollToBottom] = React.useState(false);
-  const taskStreamRef = React.useRef<{ close: () => void } | null>(null);
-  const currentTaskIdRef = React.useRef<string | null>(null);
-  const taskRunsRef = React.useRef<Record<string, TaskRunResponse>>({});
-  const taskEventsRef = React.useRef<Record<string, TaskEventRecordResponse[]>>(
-    {}
-  );
-  const sessionStorageKey = React.useMemo(
-    () => `layered-task-session:${deviceId}`,
-    [deviceId]
-  );
+  const [messages, setMessages] = React.useState<Message[]>([])
+  const [input, setInput] = React.useState('')
+  const [loading, setLoading] = React.useState(false)
+  const [aborting, setAborting] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+  const [sessionId, setSessionId] = React.useState<string | null>(null)
+  const messagesEndRef = React.useRef<HTMLDivElement>(null)
+  const scrollAreaRef = React.useRef<HTMLDivElement>(null)
+  const isNearBottomRef = React.useRef(true)
+  const [showScrollToBottom, setShowScrollToBottom] = React.useState(false)
+  const taskStreamRef = React.useRef<{ close: () => void } | null>(null)
+  const currentTaskIdRef = React.useRef<string | null>(null)
+  const taskRunsRef = React.useRef<Record<string, TaskRunResponse>>({})
+  const taskEventsRef = React.useRef<Record<string, TaskEventRecordResponse[]>>({})
+  const sessionStorageKey = React.useMemo(() => `layered-task-session:${deviceId}`, [deviceId])
 
   // Workflow state
-  const [workflows, setWorkflows] = React.useState<Workflow[]>([]);
-  const [showWorkflowPopover, setShowWorkflowPopover] = React.useState(false);
+  const [workflows, setWorkflows] = React.useState<Workflow[]>([])
+  const [showWorkflowPopover, setShowWorkflowPopover] = React.useState(false)
 
   // History state
-  const [historyItems, setHistoryItems] = React.useState<
-    HistoryRecordResponse[]
-  >([]);
-  const [showHistoryPopover, setShowHistoryPopover] = React.useState(false);
+  const [historyItems, setHistoryItems] = React.useState<HistoryRecordResponse[]>([])
+  const [showHistoryPopover, setShowHistoryPopover] = React.useState(false)
 
   // Handle scroll position tracking
-  const handleScroll = React.useCallback(
-    (event: React.UIEvent<HTMLDivElement>) => {
-      const target = event.currentTarget;
-      const scrollHeight = target.scrollHeight;
-      const scrollTop = target.scrollTop;
-      const clientHeight = target.clientHeight;
-      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+  const handleScroll = React.useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    const target = event.currentTarget
+    const scrollHeight = target.scrollHeight
+    const scrollTop = target.scrollTop
+    const clientHeight = target.clientHeight
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight
 
-      const nearBottom = distanceFromBottom < 200;
-      isNearBottomRef.current = nearBottom;
-      setShowScrollToBottom(!nearBottom);
-    },
-    []
-  );
+    const nearBottom = distanceFromBottom < 200
+    isNearBottomRef.current = nearBottom
+    setShowScrollToBottom(!nearBottom)
+  }, [])
 
   // Auto-scroll to bottom only if user was near bottom before the update.
   // Uses a ref (not state) to avoid the race condition where smooth-scroll
@@ -312,58 +275,58 @@ export function ChatKitPanel({
   React.useEffect(() => {
     if (isNearBottomRef.current) {
       const viewport = scrollAreaRef.current?.querySelector(
-        '[data-slot="scroll-area-viewport"]'
-      ) as HTMLDivElement | null;
+        '[data-slot="scroll-area-viewport"]',
+      ) as HTMLDivElement | null
       if (viewport) {
-        viewport.scrollTop = viewport.scrollHeight;
+        viewport.scrollTop = viewport.scrollHeight
       }
     }
     if (messages.length === 0) {
-      setShowScrollToBottom(false);
+      setShowScrollToBottom(false)
     }
-  }, [messages]);
+  }, [messages])
 
   React.useEffect(() => {
     return () => {
       if (taskStreamRef.current) {
-        taskStreamRef.current.close();
+        taskStreamRef.current.close()
       }
-    };
-  }, []);
+    }
+  }, [])
 
   // Load workflows
   React.useEffect(() => {
     const loadWorkflows = async () => {
       try {
-        const data = await listWorkflows();
-        setWorkflows(data.workflows);
+        const data = await listWorkflows()
+        setWorkflows(data.workflows)
       } catch (error) {
-        console.error('Failed to load workflows:', error);
+        console.error('Failed to load workflows:', error)
       }
-    };
-    loadWorkflows();
-  }, []);
+    }
+    loadWorkflows()
+  }, [])
 
   // Load history items when popover opens
   React.useEffect(() => {
     if (showHistoryPopover) {
       const loadItems = async () => {
         try {
-          const data = await listHistory(deviceSerial, 20, 0, 'layered');
-          setHistoryItems(data.records);
+          const data = await listHistory(deviceSerial, 20, 0, 'layered')
+          setHistoryItems(data.records)
         } catch (error) {
-          console.error('Failed to load history:', error);
-          setHistoryItems([]);
+          console.error('Failed to load history:', error)
+          setHistoryItems([])
         }
-      };
-      loadItems();
+      }
+      loadItems()
     }
-  }, [showHistoryPopover, deviceSerial]);
+  }, [showHistoryPopover, deviceSerial])
 
   const handleExecuteWorkflow = (workflow: Workflow) => {
-    setInput(workflow.text);
-    setShowWorkflowPopover(false);
-  };
+    setInput(workflow.text)
+    setShowWorkflowPopover(false)
+  }
 
   const handleSelectHistory = async (record: HistoryRecordResponse) => {
     const userMessage: Message = {
@@ -371,333 +334,300 @@ export function ChatKitPanel({
       role: 'user',
       content: record.task_text,
       timestamp: new Date(record.start_time),
-    };
+    }
     const fallbackAgentMessage: Message = {
       id: `${record.id}-agent`,
       role: 'assistant',
       content: record.final_message,
-      timestamp: record.end_time
-        ? new Date(record.end_time)
-        : new Date(record.start_time),
+      timestamp: record.end_time ? new Date(record.end_time) : new Date(record.start_time),
       steps: [],
       success: record.success,
       isStreaming: false,
-    };
+    }
 
-    setShowHistoryPopover(false);
-    setShowScrollToBottom(false);
-    isNearBottomRef.current = true;
+    setShowHistoryPopover(false)
+    setShowScrollToBottom(false)
+    isNearBottomRef.current = true
 
     // Task-backed records carry their full event trail, so rebuild the
     // conversation (with the tool-call steps) exactly like the live view.
     // Older legacy records aren't task-backed, so fall back to a flat render.
     try {
-      const [task, { events }] = await Promise.all([
-        getTask(record.id),
-        listTaskEvents(record.id),
-      ]);
-      setMessages(buildMessagePair(reconcileTaskRun(task, events), events));
+      const [task, { events }] = await Promise.all([getTask(record.id), listTaskEvents(record.id)])
+      setMessages(buildMessagePair(reconcileTaskRun(task, events), events))
     } catch {
-      setMessages([userMessage, fallbackAgentMessage]);
+      setMessages([userMessage, fallbackAgentMessage])
     }
-  };
+  }
 
   const handleClearHistory = async () => {
     if (confirm(t.history?.clearAllConfirm || 'Clear all history?')) {
       try {
-        await clearHistoryApi(deviceSerial);
-        setHistoryItems([]);
+        await clearHistoryApi(deviceSerial)
+        setHistoryItems([])
       } catch (error) {
-        console.error('Failed to clear history:', error);
+        console.error('Failed to clear history:', error)
       }
     }
-  };
+  }
 
   const handleDeleteHistoryItem = async (itemId: string) => {
     try {
-      await deleteHistoryRecord(deviceSerial, itemId);
-      setHistoryItems(prev => prev.filter(item => item.id !== itemId));
+      await deleteHistoryRecord(deviceSerial, itemId)
+      setHistoryItems((prev) => prev.filter((item) => item.id !== itemId))
     } catch (error) {
-      console.error('Failed to delete history item:', error);
+      console.error('Failed to delete history item:', error)
     }
-  };
+  }
 
   // Toggle step expansion
   const toggleStepExpansion = (messageId: string, stepId: string) => {
-    setMessages(prev =>
-      prev.map(msg =>
+    setMessages((prev) =>
+      prev.map((msg) =>
         msg.id === messageId
           ? {
               ...msg,
-              steps: msg.steps?.map(step =>
-                step.id === stepId
-                  ? { ...step, isExpanded: !step.isExpanded }
-                  : step
+              steps: msg.steps?.map((step) =>
+                step.id === stepId ? { ...step, isExpanded: !step.isExpanded } : step,
               ),
             }
-          : msg
-      )
-    );
-  };
+          : msg,
+      ),
+    )
+  }
 
   const replaceTaskMessages = React.useCallback(() => {
     const orderedTasks = Object.values(taskRunsRef.current).sort(
-      (left, right) =>
-        new Date(left.created_at).getTime() -
-        new Date(right.created_at).getTime()
-    );
+      (left, right) => new Date(left.created_at).getTime() - new Date(right.created_at).getTime(),
+    )
     setMessages(
-      orderedTasks.flatMap(task =>
-        buildMessagePair(task, taskEventsRef.current[task.id] || [])
-      )
-    );
-  }, []);
+      orderedTasks.flatMap((task) => buildMessagePair(task, taskEventsRef.current[task.id] || [])),
+    )
+  }, [])
 
   const attachTaskStream = React.useCallback(
     (taskId: string, afterSeq: number = 0) => {
       if (taskStreamRef.current) {
-        taskStreamRef.current.close();
+        taskStreamRef.current.close()
       }
 
       taskStreamRef.current = streamTaskEvents(
         taskId,
-        event => {
-          const existingEvents = taskEventsRef.current[taskId] || [];
-          taskEventsRef.current[taskId] = [...existingEvents, event];
-          const task = taskRunsRef.current[taskId];
+        (event) => {
+          const existingEvents = taskEventsRef.current[taskId] || []
+          taskEventsRef.current[taskId] = [...existingEvents, event]
+          const task = taskRunsRef.current[taskId]
           if (task) {
-            taskRunsRef.current[taskId] = applyTaskEventToTask(task, event);
+            taskRunsRef.current[taskId] = applyTaskEventToTask(task, event)
           }
-          replaceTaskMessages();
+          replaceTaskMessages()
 
-          const nextTask = taskRunsRef.current[taskId];
+          const nextTask = taskRunsRef.current[taskId]
           if (nextTask && !isTaskActive(nextTask.status)) {
-            currentTaskIdRef.current = null;
-            setLoading(false);
-            setAborting(false);
+            currentTaskIdRef.current = null
+            setLoading(false)
+            setAborting(false)
           }
         },
-        message => {
-          setError(message);
-          setLoading(false);
-          setAborting(false);
+        (message) => {
+          setError(message)
+          setLoading(false)
+          setAborting(false)
         },
-        afterSeq
-      );
+        afterSeq,
+      )
     },
-    [replaceTaskMessages]
-  );
+    [replaceTaskMessages],
+  )
 
   const restoreSessionConversation = React.useCallback(
     async (nextSessionId: string) => {
       if (taskStreamRef.current) {
-        taskStreamRef.current.close();
-        taskStreamRef.current = null;
+        taskStreamRef.current.close()
+        taskStreamRef.current = null
       }
 
-      const { tasks } = await listTaskSessionTasks(nextSessionId);
+      const { tasks } = await listTaskSessionTasks(nextSessionId)
       const orderedTasks = [...tasks].sort(
-        (left, right) =>
-          new Date(left.created_at).getTime() -
-          new Date(right.created_at).getTime()
-      );
+        (left, right) => new Date(left.created_at).getTime() - new Date(right.created_at).getTime(),
+      )
 
       const reconciledTasks = await Promise.all(
-        orderedTasks.map(async task => {
-          const events = (await listTaskEvents(task.id)).events;
-          taskEventsRef.current[task.id] = events;
-          return reconcileTaskRun(task, events);
-        })
-      );
+        orderedTasks.map(async (task) => {
+          const events = (await listTaskEvents(task.id)).events
+          taskEventsRef.current[task.id] = events
+          return reconcileTaskRun(task, events)
+        }),
+      )
 
-      taskRunsRef.current = Object.fromEntries(
-        reconciledTasks.map(task => [task.id, task])
-      );
-      replaceTaskMessages();
+      taskRunsRef.current = Object.fromEntries(reconciledTasks.map((task) => [task.id, task]))
+      replaceTaskMessages()
 
-      const activeTask = [...reconciledTasks]
-        .reverse()
-        .find(task => isTaskActive(task.status));
+      const activeTask = [...reconciledTasks].reverse().find((task) => isTaskActive(task.status))
       if (activeTask) {
-        currentTaskIdRef.current = activeTask.id;
-        setLoading(true);
+        currentTaskIdRef.current = activeTask.id
+        setLoading(true)
         const lastSeq =
-          taskEventsRef.current[activeTask.id]?.[
-            taskEventsRef.current[activeTask.id].length - 1
-          ]?.seq || 0;
-        attachTaskStream(activeTask.id, lastSeq);
+          taskEventsRef.current[activeTask.id]?.[taskEventsRef.current[activeTask.id].length - 1]
+            ?.seq || 0
+        attachTaskStream(activeTask.id, lastSeq)
       } else {
-        currentTaskIdRef.current = null;
-        setLoading(false);
+        currentTaskIdRef.current = null
+        setLoading(false)
       }
     },
-    [attachTaskStream, replaceTaskMessages]
-  );
+    [attachTaskStream, replaceTaskMessages],
+  )
 
   React.useEffect(() => {
-    let disposed = false;
+    let disposed = false
 
     const initializeSession = async () => {
       try {
-        setError(null);
-        const storedSessionId = sessionStorage.getItem(sessionStorageKey);
-        let nextSessionId = storedSessionId;
+        setError(null)
+        const storedSessionId = sessionStorage.getItem(sessionStorageKey)
+        let nextSessionId = storedSessionId
 
         if (storedSessionId) {
           try {
-            const existingSession = await getTaskSession(storedSessionId);
+            const existingSession = await getTaskSession(storedSessionId)
             if (
               existingSession.device_id !== deviceId ||
               existingSession.device_serial !== deviceSerial ||
               existingSession.mode !== 'layered' ||
               existingSession.status !== 'open'
             ) {
-              nextSessionId = null;
+              nextSessionId = null
             }
           } catch {
-            nextSessionId = null;
+            nextSessionId = null
           }
         }
 
         if (!nextSessionId) {
-          const session = await createTaskSession(
-            deviceId,
-            deviceSerial,
-            'layered'
-          );
-          nextSessionId = session.id;
-          sessionStorage.setItem(sessionStorageKey, nextSessionId);
+          const session = await createTaskSession(deviceId, deviceSerial, 'layered')
+          nextSessionId = session.id
+          sessionStorage.setItem(sessionStorageKey, nextSessionId)
         }
 
         if (disposed || !nextSessionId) {
-          return;
+          return
         }
 
-        setSessionId(nextSessionId);
-        await restoreSessionConversation(nextSessionId);
+        setSessionId(nextSessionId)
+        await restoreSessionConversation(nextSessionId)
       } catch (sessionError) {
         if (!disposed) {
-          console.error(
-            'Failed to initialize layered task session:',
-            sessionError
-          );
-          setError('Failed to restore layered chat session');
-          setLoading(false);
+          console.error('Failed to initialize layered task session:', sessionError)
+          setError('Failed to restore layered chat session')
+          setLoading(false)
         }
       }
-    };
+    }
 
-    void initializeSession();
+    void initializeSession()
 
     return () => {
-      disposed = true;
+      disposed = true
       if (taskStreamRef.current) {
-        taskStreamRef.current.close();
-        taskStreamRef.current = null;
+        taskStreamRef.current.close()
+        taskStreamRef.current = null
       }
-    };
-  }, [deviceId, deviceSerial, restoreSessionConversation, sessionStorageKey]);
+    }
+  }, [deviceId, deviceSerial, restoreSessionConversation, sessionStorageKey])
 
   const handleSend = React.useCallback(async () => {
-    const inputValue = input.trim();
-    if (!inputValue || loading || !sessionId) return;
+    const inputValue = input.trim()
+    if (!inputValue || loading || !sessionId) return
 
-    setInput('');
-    setLoading(true);
-    setError(null);
+    setInput('')
+    setLoading(true)
+    setError(null)
 
     try {
-      const task = await submitTaskSessionTask(sessionId, inputValue);
-      const initialEvents = (await listTaskEvents(task.id)).events;
-      const reconciledTask = reconcileTaskRun(task, initialEvents);
-      taskRunsRef.current[task.id] = reconciledTask;
-      taskEventsRef.current[task.id] = initialEvents;
-      currentTaskIdRef.current = isTaskActive(reconciledTask.status)
-        ? task.id
-        : null;
-      replaceTaskMessages();
+      const task = await submitTaskSessionTask(sessionId, inputValue)
+      const initialEvents = (await listTaskEvents(task.id)).events
+      const reconciledTask = reconcileTaskRun(task, initialEvents)
+      taskRunsRef.current[task.id] = reconciledTask
+      taskEventsRef.current[task.id] = initialEvents
+      currentTaskIdRef.current = isTaskActive(reconciledTask.status) ? task.id : null
+      replaceTaskMessages()
 
       if (isTaskActive(reconciledTask.status)) {
-        const lastSeq = initialEvents[initialEvents.length - 1]?.seq || 0;
-        attachTaskStream(task.id, lastSeq);
+        const lastSeq = initialEvents[initialEvents.length - 1]?.seq || 0
+        attachTaskStream(task.id, lastSeq)
       } else {
-        setLoading(false);
-        setAborting(false);
+        setLoading(false)
+        setAborting(false)
       }
     } catch (err) {
-      console.error('Failed to submit layered task:', err);
-      const errorMessage = getErrorMessage(err);
-      setError(errorMessage);
+      console.error('Failed to submit layered task:', err)
+      const errorMessage = getErrorMessage(err)
+      setError(errorMessage)
     } finally {
-      setLoading(false);
-      setAborting(false);
+      setLoading(false)
+      setAborting(false)
     }
-  }, [attachTaskStream, input, loading, replaceTaskMessages, sessionId]);
+  }, [attachTaskStream, input, loading, replaceTaskMessages, sessionId])
 
   const handleAbort = React.useCallback(() => {
-    const taskId = currentTaskIdRef.current;
-    if (!taskId) return;
+    const taskId = currentTaskIdRef.current
+    if (!taskId) return
 
-    setAborting(true);
+    setAborting(true)
 
     void (async () => {
       try {
-        const response = await cancelTaskRun(taskId);
+        const response = await cancelTaskRun(taskId)
         if (response.task) {
-          taskRunsRef.current[taskId] = response.task;
-          replaceTaskMessages();
+          taskRunsRef.current[taskId] = response.task
+          replaceTaskMessages()
         }
       } catch (abortError) {
-        console.error('Failed to abort chat:', abortError);
-        setError(getErrorMessage(abortError));
+        console.error('Failed to abort chat:', abortError)
+        setError(getErrorMessage(abortError))
       }
     })().finally(() => {
-      setLoading(false);
-      setAborting(false);
-    });
-  }, [replaceTaskMessages]);
+      setLoading(false)
+      setAborting(false)
+    })
+  }, [replaceTaskMessages])
 
   const handleReset = React.useCallback(async () => {
     try {
       if (taskStreamRef.current) {
-        taskStreamRef.current.close();
-        taskStreamRef.current = null;
+        taskStreamRef.current.close()
+        taskStreamRef.current = null
       }
 
       if (sessionId) {
-        await resetTaskSession(sessionId);
+        await resetTaskSession(sessionId)
       }
 
-      const nextSession = await createTaskSession(
-        deviceId,
-        deviceSerial,
-        'layered'
-      );
-      sessionStorage.setItem(sessionStorageKey, nextSession.id);
-      setSessionId(nextSession.id);
-      taskRunsRef.current = {};
-      taskEventsRef.current = {};
-      currentTaskIdRef.current = null;
-      setMessages([]);
-      setShowScrollToBottom(false);
-      isNearBottomRef.current = true;
-      setLoading(false);
-      setError(null);
-      setAborting(false);
+      const nextSession = await createTaskSession(deviceId, deviceSerial, 'layered')
+      sessionStorage.setItem(sessionStorageKey, nextSession.id)
+      setSessionId(nextSession.id)
+      taskRunsRef.current = {}
+      taskEventsRef.current = {}
+      currentTaskIdRef.current = null
+      setMessages([])
+      setShowScrollToBottom(false)
+      isNearBottomRef.current = true
+      setLoading(false)
+      setError(null)
+      setAborting(false)
     } catch (resetError) {
-      console.error('Failed to reset layered task session:', resetError);
-      setError(getErrorMessage(resetError));
+      console.error('Failed to reset layered task session:', resetError)
+      setError(getErrorMessage(resetError))
     }
-  }, [deviceId, deviceSerial, sessionId, sessionStorageKey]);
+  }, [deviceId, deviceSerial, sessionId, sessionStorageKey])
 
-  const handleInputKeyDown = (
-    event: React.KeyboardEvent<HTMLTextAreaElement>
-  ) => {
+  const handleInputKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-      event.preventDefault();
-      handleSend();
+      event.preventDefault()
+      handleSend()
     }
-  };
+  }
 
   return (
     <div className="flex-1 flex gap-4 p-4 items-stretch justify-center min-h-0">
@@ -749,7 +679,11 @@ export function ChatKitPanel({
                 </Button>
               </PopoverTrigger>
 
-              <PopoverContent className="w-96 p-0" align="end" sideOffset={8}>
+              <PopoverContent
+                className="w-96 p-0"
+                align="end"
+                sideOffset={8}
+              >
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800">
                   <h3 className="font-semibold text-sm text-slate-900 dark:text-slate-100">
@@ -771,7 +705,7 @@ export function ChatKitPanel({
                 <ScrollArea className="h-[400px]">
                   <div className="p-4 space-y-2">
                     {historyItems.length > 0 ? (
-                      historyItems.map(item => (
+                      historyItems.map((item) => (
                         <HistoryItemCard
                           key={item.id}
                           item={item}
@@ -837,15 +771,16 @@ export function ChatKitPanel({
                   </p>
                 </div>
               ) : (
-                messages.map(message => (
-                  <div key={message.id} className="space-y-2">
+                messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className="space-y-2"
+                  >
                     {message.role === 'user' ? (
                       <div className="flex justify-end">
                         <div className="max-w-[80%]">
                           <div className="bg-purple-600 text-white px-4 py-2 rounded-2xl rounded-br-sm">
-                            <p className="whitespace-pre-wrap">
-                              {message.content}
-                            </p>
+                            <p className="whitespace-pre-wrap">{message.content}</p>
                           </div>
                           <p className="text-xs text-slate-400 mt-1 text-right">
                             {message.timestamp.toLocaleTimeString()}
@@ -864,9 +799,7 @@ export function ChatKitPanel({
                               >
                                 {/* Step Header */}
                                 <button
-                                  onClick={() =>
-                                    toggleStepExpansion(message.id, step.id)
-                                  }
+                                  onClick={() => toggleStepExpansion(message.id, step.id)}
                                   className="w-full flex items-center justify-between p-3 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                                 >
                                   <div className="flex items-center gap-2">
@@ -897,55 +830,40 @@ export function ChatKitPanel({
                                 {/* Step Content */}
                                 {step.isExpanded && (
                                   <div className="px-3 pb-3 space-y-2">
-                                    {step.type === 'tool_call' &&
-                                      step.toolArgs && (
-                                        <div className="bg-white dark:bg-slate-900 rounded-lg p-3 text-sm">
-                                          <p className="text-xs text-slate-500 mb-1 font-medium">
-                                            {step.toolName === 'chat'
-                                              ? '发送给 Phone Agent 的指令:'
-                                              : '工具参数:'}
+                                    {step.type === 'tool_call' && step.toolArgs && (
+                                      <div className="bg-white dark:bg-slate-900 rounded-lg p-3 text-sm">
+                                        <p className="text-xs text-slate-500 mb-1 font-medium">
+                                          {step.toolName === 'chat'
+                                            ? '发送给 Phone Agent 的指令:'
+                                            : '工具参数:'}
+                                        </p>
+                                        {step.toolName === 'chat' ? (
+                                          <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                                            {(
+                                              step.toolArgs as {
+                                                message?: string
+                                              }
+                                            ).message || JSON.stringify(step.toolArgs, null, 2)}
                                           </p>
-                                          {step.toolName === 'chat' ? (
-                                            <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
-                                              {(
-                                                step.toolArgs as {
-                                                  message?: string;
-                                                }
-                                              ).message ||
-                                                JSON.stringify(
-                                                  step.toolArgs,
-                                                  null,
-                                                  2
-                                                )}
-                                            </p>
-                                          ) : (
-                                            <pre className="text-xs text-slate-600 dark:text-slate-400 overflow-x-auto">
-                                              {JSON.stringify(
-                                                step.toolArgs,
-                                                null,
-                                                2
-                                              )}
-                                            </pre>
-                                          )}
-                                        </div>
-                                      )}
-                                    {step.type === 'tool_result' &&
-                                      step.toolResult && (
-                                        <div className="bg-white dark:bg-slate-900 rounded-lg p-3 text-sm">
-                                          <p className="text-xs text-slate-500 mb-1 font-medium">
-                                            执行结果:
-                                          </p>
-                                          <pre className="text-xs text-slate-600 dark:text-slate-400 overflow-x-auto whitespace-pre-wrap">
-                                            {typeof step.toolResult === 'string'
-                                              ? step.toolResult
-                                              : JSON.stringify(
-                                                  step.toolResult,
-                                                  null,
-                                                  2
-                                                )}
+                                        ) : (
+                                          <pre className="text-xs text-slate-600 dark:text-slate-400 overflow-x-auto">
+                                            {JSON.stringify(step.toolArgs, null, 2)}
                                           </pre>
-                                        </div>
-                                      )}
+                                        )}
+                                      </div>
+                                    )}
+                                    {step.type === 'tool_result' && step.toolResult && (
+                                      <div className="bg-white dark:bg-slate-900 rounded-lg p-3 text-sm">
+                                        <p className="text-xs text-slate-500 mb-1 font-medium">
+                                          执行结果:
+                                        </p>
+                                        <pre className="text-xs text-slate-600 dark:text-slate-400 overflow-x-auto whitespace-pre-wrap">
+                                          {typeof step.toolResult === 'string'
+                                            ? step.toolResult
+                                            : JSON.stringify(step.toolResult, null, 2)}
+                                        </pre>
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </div>
@@ -967,15 +885,11 @@ export function ChatKitPanel({
                                 {message.success !== undefined && (
                                   <CheckCircle2
                                     className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
-                                      message.success
-                                        ? 'text-green-500'
-                                        : 'text-red-500'
+                                      message.success ? 'text-green-500' : 'text-red-500'
                                     }`}
                                   />
                                 )}
-                                <p className="whitespace-pre-wrap">
-                                  {message.content}
-                                </p>
+                                <p className="whitespace-pre-wrap">{message.content}</p>
                               </div>
                             </div>
                           </div>
@@ -1001,16 +915,16 @@ export function ChatKitPanel({
               <Button
                 onClick={() => {
                   const viewport = scrollAreaRef.current?.querySelector(
-                    '[data-slot="scroll-area-viewport"]'
-                  ) as HTMLDivElement | null;
+                    '[data-slot="scroll-area-viewport"]',
+                  ) as HTMLDivElement | null
                   if (viewport) {
                     viewport.scrollTo({
                       top: viewport.scrollHeight,
                       behavior: 'smooth',
-                    });
+                    })
                   }
-                  setShowScrollToBottom(false);
-                  isNearBottomRef.current = true;
+                  setShowScrollToBottom(false)
+                  isNearBottomRef.current = true
                 }}
                 size="sm"
                 className="pointer-events-auto shadow-lg bg-[#1d9bf0] text-white hover:bg-[#1a8cd8]"
@@ -1026,7 +940,7 @@ export function ChatKitPanel({
           <div className="flex items-end gap-3">
             <Textarea
               value={input}
-              onChange={e => setInput(e.target.value)}
+              onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleInputKeyDown}
               placeholder="描述你想要完成的任务... (Cmd+Enter 发送)"
               disabled={loading}
@@ -1049,7 +963,10 @@ export function ChatKitPanel({
                       <ListChecks className="w-4 h-4" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent align="start" className="w-72 p-3">
+                  <PopoverContent
+                    align="start"
+                    className="w-72 p-3"
+                  >
                     <div className="space-y-2">
                       <h4 className="font-medium text-sm">
                         {t.workflows?.selectWorkflow || 'Select Workflow'}
@@ -1071,15 +988,13 @@ export function ChatKitPanel({
                       ) : (
                         <ScrollArea className="h-64">
                           <div className="space-y-1">
-                            {workflows.map(workflow => (
+                            {workflows.map((workflow) => (
                               <button
                                 key={workflow.uuid}
                                 onClick={() => handleExecuteWorkflow(workflow)}
                                 className="w-full text-left p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                               >
-                                <div className="font-medium text-sm">
-                                  {workflow.name}
-                                </div>
+                                <div className="font-medium text-sm">{workflow.name}</div>
                                 <div className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
                                   {workflow.text}
                                 </div>
@@ -1092,11 +1007,14 @@ export function ChatKitPanel({
                   </PopoverContent>
                 </Popover>
               </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={8} className="max-w-xs">
+              <TooltipContent
+                side="top"
+                sideOffset={8}
+                className="max-w-xs"
+              >
                 <div className="space-y-1">
                   <p className="font-medium">
-                    {t.devicePanel?.tooltips?.workflowButton ||
-                      'Quick Workflow'}
+                    {t.devicePanel?.tooltips?.workflowButton || 'Quick Workflow'}
                   </p>
                   <p className="text-xs opacity-80">
                     {t.devicePanel?.tooltips?.workflowButtonDesc ||
@@ -1144,5 +1062,5 @@ export function ChatKitPanel({
         isVisible={isVisible}
       />
     </div>
-  );
+  )
 }

@@ -14,20 +14,24 @@ pytestmark = [pytest.mark.contract, pytest.mark.release_gate]
 
 
 def test_assets_js_mime_type_is_javascript_when_guess_type_fails(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     static_dir = tmp_path / "static"
     assets_dir = static_dir / "assets"
     assets_dir.mkdir(parents=True)
 
     (static_dir / "index.html").write_text(
-        "<!doctype html><html></html>", encoding="utf-8"
+        "<!doctype html><html></html>",
+        encoding="utf-8",
     )
     (assets_dir / "index-test.js").write_text("console.log('ok');", encoding="utf-8")
 
     # Simulate environments where system mime db is missing and FileResponse falls back to text/plain.
     monkeypatch.setattr(
-        starlette_responses, "guess_type", lambda *_args, **_kwargs: (None, None)
+        starlette_responses,
+        "guess_type",
+        lambda *_args, **_kwargs: (None, None),
     )
     monkeypatch.setattr(api_module, "_get_static_dir", lambda: static_dir)
 
@@ -41,19 +45,23 @@ def test_assets_js_mime_type_is_javascript_when_guess_type_fails(
 
 
 def test_assets_css_mime_type_when_guess_type_fails(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     static_dir = tmp_path / "static"
     assets_dir = static_dir / "assets"
     assets_dir.mkdir(parents=True)
 
     (static_dir / "index.html").write_text(
-        "<!doctype html><html></html>", encoding="utf-8"
+        "<!doctype html><html></html>",
+        encoding="utf-8",
     )
     (assets_dir / "style.css").write_text("body { margin: 0; }", encoding="utf-8")
 
     monkeypatch.setattr(
-        starlette_responses, "guess_type", lambda *_args, **_kwargs: (None, None)
+        starlette_responses,
+        "guess_type",
+        lambda *_args, **_kwargs: (None, None),
     )
     monkeypatch.setattr(api_module, "_get_static_dir", lambda: static_dir)
 
@@ -67,18 +75,22 @@ def test_assets_css_mime_type_when_guess_type_fails(
 
 
 def test_spa_favicon_mime_type_when_guess_type_fails(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     static_dir = tmp_path / "static"
     static_dir.mkdir(parents=True)
 
     (static_dir / "index.html").write_text(
-        "<!doctype html><html></html>", encoding="utf-8"
+        "<!doctype html><html></html>",
+        encoding="utf-8",
     )
     (static_dir / "favicon.ico").write_bytes(b"\x00\x00\x01\x00")
 
     monkeypatch.setattr(
-        starlette_responses, "guess_type", lambda *_args, **_kwargs: (None, None)
+        starlette_responses,
+        "guess_type",
+        lambda *_args, **_kwargs: (None, None),
     )
     monkeypatch.setattr(api_module, "_get_static_dir", lambda: static_dir)
 
@@ -92,13 +104,15 @@ def test_spa_favicon_mime_type_when_guess_type_fails(
 
 
 def test_spa_path_traversal_does_not_escape_static_root(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     static_dir = tmp_path / "static"
     static_dir.mkdir(parents=True)
 
     (static_dir / "index.html").write_text(
-        "<!doctype html><html><body>index</body></html>", encoding="utf-8"
+        "<!doctype html><html><body>index</body></html>",
+        encoding="utf-8",
     )
     secret_file = tmp_path / "secret.txt"
     secret_file.write_text("top-secret", encoding="utf-8")

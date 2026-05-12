@@ -1,15 +1,15 @@
-import { useEffect, useRef, useState } from 'react';
-import { getScreenshot, type ScreenshotResponse } from '../api';
-import { usePageVisibility } from './usePageVisibility';
+import { useEffect, useRef, useState } from 'react'
+import { getScreenshot, type ScreenshotResponse } from '../api'
+import { usePageVisibility } from './usePageVisibility'
 
 interface UseScreenshotPollingOptions {
-  deviceId: string;
-  enabled: boolean;
-  pollDelayMs: number;
+  deviceId: string
+  enabled: boolean
+  pollDelayMs: number
 }
 
 interface UseScreenshotPollingResult {
-  screenshot: ScreenshotResponse | null;
+  screenshot: ScreenshotResponse | null
 }
 
 export function useScreenshotPolling({
@@ -17,59 +17,59 @@ export function useScreenshotPolling({
   enabled,
   pollDelayMs,
 }: UseScreenshotPollingOptions): UseScreenshotPollingResult {
-  const isPageVisible = usePageVisibility();
-  const [screenshot, setScreenshot] = useState<ScreenshotResponse | null>(null);
-  const isFetchingRef = useRef(false);
+  const isPageVisible = usePageVisibility()
+  const [screenshot, setScreenshot] = useState<ScreenshotResponse | null>(null)
+  const isFetchingRef = useRef(false)
 
   useEffect(() => {
     if (!deviceId || !enabled || !isPageVisible) {
-      return;
+      return
     }
 
-    let isCancelled = false;
-    let timeoutId: number | null = null;
+    let isCancelled = false
+    let timeoutId: number | null = null
 
     const fetchScreenshot = async () => {
       if (isFetchingRef.current || isCancelled) {
-        return;
+        return
       }
 
-      isFetchingRef.current = true;
+      isFetchingRef.current = true
       try {
-        const data = await getScreenshot(deviceId);
+        const data = await getScreenshot(deviceId)
         if (!isCancelled && data.success) {
-          setScreenshot(data);
+          setScreenshot(data)
         }
       } catch (error) {
         if (!isCancelled) {
-          console.error('Failed to fetch screenshot:', error);
+          console.error('Failed to fetch screenshot:', error)
         }
       } finally {
-        isFetchingRef.current = false;
+        isFetchingRef.current = false
       }
-    };
+    }
 
     const pollScreenshots = async () => {
-      await fetchScreenshot();
+      await fetchScreenshot()
 
       if (isCancelled) {
-        return;
+        return
       }
 
       timeoutId = window.setTimeout(() => {
-        void pollScreenshots();
-      }, pollDelayMs);
-    };
+        void pollScreenshots()
+      }, pollDelayMs)
+    }
 
-    void pollScreenshots();
+    void pollScreenshots()
 
     return () => {
-      isCancelled = true;
+      isCancelled = true
       if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
+        window.clearTimeout(timeoutId)
       }
-    };
-  }, [deviceId, enabled, isPageVisible, pollDelayMs]);
+    }
+  }, [deviceId, enabled, isPageVisible, pollDelayMs])
 
-  return { screenshot };
+  return { screenshot }
 }

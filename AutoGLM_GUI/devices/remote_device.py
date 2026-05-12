@@ -41,7 +41,9 @@ class RemoteDevice(DeviceProtocol):
         return self._device_id
 
     def _post(
-        self, endpoint: str, json: dict[str, Any] | None = None
+        self,
+        endpoint: str,
+        json: dict[str, Any] | None = None,
     ) -> dict[str, Any]:
         """POST request helper."""
         url = f"{self._base_url}/device/{self._device_id}{endpoint}"
@@ -90,10 +92,15 @@ class RemoteDevice(DeviceProtocol):
         self._post("/double_tap", {"x": x, "y": y, "delay": delay})
 
     def long_press(
-        self, x: int, y: int, duration_ms: int = 3000, delay: float | None = None
+        self,
+        x: int,
+        y: int,
+        duration_ms: int = 3000,
+        delay: float | None = None,
     ) -> None:
         self._post(
-            "/long_press", {"x": x, "y": y, "duration_ms": duration_ms, "delay": delay}
+            "/long_press",
+            {"x": x, "y": y, "duration_ms": duration_ms, "delay": delay},
         )
 
     def swipe(
@@ -181,13 +188,16 @@ class RemoteDeviceManager(DeviceManagerProtocol):
     def get_device(self, device_id: str) -> RemoteDevice:
         if device_id not in self._devices:
             self._devices[device_id] = RemoteDevice(
-                device_id, self._base_url, self._timeout
+                device_id,
+                self._base_url,
+                self._timeout,
             )
         return self._devices[device_id]
 
     def connect(self, address: str, timeout: int = 10) -> tuple[bool, str]:
         resp = self._client.post(
-            f"{self._base_url}/connect", json={"address": address, "timeout": timeout}
+            f"{self._base_url}/connect",
+            json={"address": address, "timeout": timeout},
         )
         data = resp.json()
         return data.get("success", False), data.get("message", "")
@@ -195,7 +205,8 @@ class RemoteDeviceManager(DeviceManagerProtocol):
     def disconnect(self, device_id: str) -> tuple[bool, str]:
         self._devices.pop(device_id, None)
         resp = self._client.post(
-            f"{self._base_url}/disconnect", json={"device_id": device_id}
+            f"{self._base_url}/disconnect",
+            json={"device_id": device_id},
         )
         data = resp.json()
         return data.get("success", True), data.get("message", "Disconnected")

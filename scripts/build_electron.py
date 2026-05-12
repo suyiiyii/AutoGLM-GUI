@@ -177,7 +177,8 @@ class ElectronBuilder:
         """同步 Python 开发依赖（含 droidrun 可选依赖）"""
         print_step("同步 Python 开发依赖", 7, 2)
         return run_command(
-            ["uv", "sync", "--dev", "--extra", "droidrun"], cwd=self.root_dir
+            ["uv", "sync", "--dev", "--extra", "droidrun"],
+            cwd=self.root_dir,
         )
 
     def build_frontend(self) -> bool:
@@ -254,7 +255,8 @@ class ElectronBuilder:
         # 运行 PyInstaller
         print("\n运行 PyInstaller...")
         if not run_command(
-            ["uv", "run", "pyinstaller", "autoglm.spec"], cwd=self.scripts_dir
+            ["uv", "run", "pyinstaller", "autoglm.spec"],
+            cwd=self.scripts_dir,
         ):
             return False
 
@@ -304,7 +306,7 @@ class ElectronBuilder:
             return True
 
         print_warning(
-            "Electron dist 异常（缺失或 symlink 结构不正确），正在重新下载..."
+            "Electron dist 异常（缺失或 symlink 结构不正确），正在重新下载...",
         )
         if dist_dir.exists():
             shutil.rmtree(dist_dir)

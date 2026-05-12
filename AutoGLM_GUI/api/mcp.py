@@ -328,7 +328,7 @@ async def list_tasks(
         valid = {s.value for s in TaskStatus}
         if status not in valid:
             raise ValueError(
-                f"Invalid status '{status}'. Must be one of: {', '.join(sorted(valid))}"
+                f"Invalid status '{status}'. Must be one of: {', '.join(sorted(valid))}",
             )
 
     limit = max(1, min(limit, 100))
@@ -395,7 +395,9 @@ async def get_task_events(
     from AutoGLM_GUI.api.tasks import _task_event_response
 
     events = await asyncio.to_thread(
-        task_store.list_task_events, task_id, after_seq=after_seq
+        task_store.list_task_events,
+        task_id,
+        after_seq=after_seq,
     )
 
     return {

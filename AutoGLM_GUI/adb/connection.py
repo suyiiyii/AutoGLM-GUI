@@ -127,7 +127,11 @@ class ADBConnection:
                 cmd.append(address)
 
             result = subprocess.run(
-                cmd, capture_output=True, text=True, encoding="utf-8", timeout=5
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=5,
             )
 
             output = result.stdout + result.stderr
@@ -177,7 +181,7 @@ class ADBConnection:
                             status=status,
                             connection_type=conn_type,
                             model=model,
-                        )
+                        ),
                     )
 
             return devices
@@ -231,7 +235,9 @@ class ADBConnection:
         return any(d.device_id == device_id and d.status == "device" for d in devices)
 
     def enable_tcpip(
-        self, port: int = 5555, device_id: str | None = None
+        self,
+        port: int = 5555,
+        device_id: str | None = None,
     ) -> tuple[bool, str]:
         """
         Enable TCP/IP debugging on a USB-connected device.
@@ -256,7 +262,11 @@ class ADBConnection:
             cmd.extend(["tcpip", str(port)])
 
             result = subprocess.run(
-                cmd, capture_output=True, text=True, encoding="utf-8", timeout=10
+                cmd,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=10,
             )
 
             output = result.stdout + result.stderr
@@ -294,14 +304,18 @@ class ADBConnection:
         try:
             # Kill server
             subprocess.run(
-                [self.adb_path, "kill-server"], capture_output=True, timeout=5
+                [self.adb_path, "kill-server"],
+                capture_output=True,
+                timeout=5,
             )
 
             time.sleep(TIMING_CONFIG.connection.server_restart_delay)
 
             # Start server
             subprocess.run(
-                [self.adb_path, "start-server"], capture_output=True, timeout=5
+                [self.adb_path, "start-server"],
+                capture_output=True,
+                timeout=5,
             )
 
             return True, "ADB server restarted"

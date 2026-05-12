@@ -12,7 +12,8 @@ import AutoGLM_GUI.adb_terminal_service as terminal_service
 
 
 def test_build_terminal_environment_includes_project_tools(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     project_root = tmp_path / "project"
     project_root.mkdir()
@@ -59,7 +60,8 @@ def test_resolve_default_shell_command_uses_cli_flag_for_non_python_executable(
 
 @pytest.mark.anyio
 async def test_create_session_defaults_to_project_root(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     project_root = tmp_path / "project"
     project_root.mkdir()
@@ -84,7 +86,7 @@ async def test_create_session_defaults_to_project_root(
     assert isinstance(env, dict)
     assert env["AUTOGLM_PROJECT_ROOT"] == str(project_root)
     assert session.owner_token_hash == terminal_service._hash_session_token(
-        session_token
+        session_token,
     )
     assert manager.authenticate_session(session.session_id, session_token) is session
 
@@ -99,7 +101,8 @@ async def test_create_session_rejects_custom_command() -> None:
 
 @pytest.mark.anyio
 async def test_create_session_removes_registry_entries_when_start_fails(
-    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+    monkeypatch: pytest.MonkeyPatch,
+    tmp_path: Path,
 ) -> None:
     project_root = tmp_path / "project"
     project_root.mkdir()

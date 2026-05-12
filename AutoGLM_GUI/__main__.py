@@ -15,7 +15,9 @@ DEFAULT_MODEL_NAME = "autoglm-phone-9b"
 
 
 def find_available_port(
-    start_port: int = 8000, max_attempts: int = 100, host: str = "127.0.0.1"
+    start_port: int = 8000,
+    max_attempts: int = 100,
+    host: str = "127.0.0.1",
 ) -> int:
     """Find an available port starting from start_port.
 
@@ -41,12 +43,15 @@ def find_available_port(
             continue
 
     raise RuntimeError(
-        f"Could not find available port in range {start_port}-{start_port + max_attempts - 1}"
+        f"Could not find available port in range {start_port}-{start_port + max_attempts - 1}",
     )
 
 
 def open_browser(
-    host: str, port: int, use_ssl: bool = False, delay: float = 1.5
+    host: str,
+    port: int,
+    use_ssl: bool = False,
+    delay: float = 1.5,
 ) -> None:
     """Open browser after a delay to ensure server is ready.
 
@@ -90,7 +95,8 @@ def main() -> None:
         default="INFO",
     )
     early_parser.add_argument(
-        "--log-file", default="logs/autoglm_{time:YYYY-MM-DD}.log"
+        "--log-file",
+        default="logs/autoglm_{time:YYYY-MM-DD}.log",
     )
     early_parser.add_argument("--no-log-file", action="store_true")
     early_parser.add_argument("--adb-terminal-repl", action="store_true")
@@ -115,7 +121,7 @@ def main() -> None:
     )
 
     parser = argparse.ArgumentParser(
-        description="AutoGLM-GUI - Web GUI for AutoGLM Phone Agent"
+        description="AutoGLM-GUI - Web GUI for AutoGLM Phone Agent",
     )
     parser.add_argument(
         "--base-url",

@@ -91,7 +91,8 @@ def test_default_max_steps_env_var_parsing(monkeypatch) -> None:
 
 
 def test_save_file_config_persists_explicit_null_default_max_steps(
-    tmp_path, monkeypatch
+    tmp_path,
+    monkeypatch,
 ) -> None:
     from AutoGLM_GUI.config_manager import UnifiedConfigManager
 

@@ -45,7 +45,7 @@ class TestRunner:
     def load_test_case(self) -> None:
         """Load the test case from YAML file."""
         self.state_machine, self.instruction, self.max_steps = load_test_case(
-            self.test_case_path
+            self.test_case_path,
         )
         self.mock_device = MockDevice("mock_device", self.state_machine)
         print(f"[TestRunner] Loaded test case: {self.test_case_path.name}")
@@ -164,17 +164,17 @@ class TestRunner:
             if action_type == "tap":
                 print(
                     f"    {i}. tap({action['x']}, {action['y']}) "
-                    f"in state '{action['state']}'"
+                    f"in state '{action['state']}'",
                 )
             elif action_type == "swipe":
                 print(
                     f"    {i}. swipe({action['start_x']}, {action['start_y']} -> "
-                    f"{action['end_x']}, {action['end_y']}) in state '{action['state']}'"
+                    f"{action['end_x']}, {action['end_y']}) in state '{action['state']}'",
                 )
             elif action_type == "finish":
                 print(
                     f"    {i}. finish('{action.get('message', '')}') "
-                    f"in state '{action['state']}'"
+                    f"in state '{action['state']}'",
                 )
 
         print("=" * 60 + "\n")

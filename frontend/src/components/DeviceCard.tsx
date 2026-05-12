@@ -1,20 +1,8 @@
-import React, { useState } from 'react';
-import {
-  Edit,
-  Loader2,
-  Server,
-  Smartphone,
-  Trash2,
-  Wifi,
-  WifiOff,
-} from 'lucide-react';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import React, { useState } from 'react'
+import { Edit, Loader2, Server, Smartphone, Trash2, Wifi, WifiOff } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import {
   Dialog,
   DialogContent,
@@ -22,29 +10,29 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '@/components/ui/dialog';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { ConfirmDialog } from './ConfirmDialog';
-import { useTranslation } from '../lib/i18n-context';
-import { removeRemoteDevice, updateDeviceName } from '../api';
-import type { AgentStatus } from '../api';
-import type { ToastType } from './Toast';
+} from '@/components/ui/dialog'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { ConfirmDialog } from './ConfirmDialog'
+import { useTranslation } from '../lib/i18n-context'
+import { removeRemoteDevice, updateDeviceName } from '../api'
+import type { AgentStatus } from '../api'
+import type { ToastType } from './Toast'
 
 interface DeviceCardProps {
-  id: string;
-  serial: string;
-  model: string;
-  status: string;
-  connectionType?: string;
-  displayName?: string | null;
-  agent?: AgentStatus | null;
-  isActive: boolean;
-  onClick: () => void;
-  onConnectWifi?: () => Promise<void>;
-  onDisconnectWifi?: () => Promise<void>;
-  onNameUpdated?: () => void;
-  showToast?: (message: string, type: ToastType) => void;
+  id: string
+  serial: string
+  model: string
+  status: string
+  connectionType?: string
+  displayName?: string | null
+  agent?: AgentStatus | null
+  isActive: boolean
+  onClick: () => void
+  onConnectWifi?: () => Promise<void>
+  onDisconnectWifi?: () => Promise<void>
+  onNameUpdated?: () => void
+  showToast?: (message: string, type: ToastType) => void
 }
 
 export function DeviceCard({
@@ -62,126 +50,126 @@ export function DeviceCard({
   onNameUpdated,
   showToast,
 }: DeviceCardProps) {
-  const t = useTranslation();
-  const isOnline = status === 'device';
-  const isUsb = connectionType === 'usb';
-  const isWifi = connectionType === 'wifi';
-  const isRemote = connectionType === 'remote';
-  const [loading, setLoading] = useState(false);
-  const [showWifiConfirm, setShowWifiConfirm] = useState(false);
-  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
-  const [showEditDialog, setShowEditDialog] = useState(false);
-  const [editingName, setEditingName] = useState('');
-  const [saving, setSaving] = useState(false);
+  const t = useTranslation()
+  const isOnline = status === 'device'
+  const isUsb = connectionType === 'usb'
+  const isWifi = connectionType === 'wifi'
+  const isRemote = connectionType === 'remote'
+  const [loading, setLoading] = useState(false)
+  const [showWifiConfirm, setShowWifiConfirm] = useState(false)
+  const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false)
+  const [showEditDialog, setShowEditDialog] = useState(false)
+  const [editingName, setEditingName] = useState('')
+  const [saving, setSaving] = useState(false)
 
-  const actualDisplayName = displayName || model || t.deviceCard.unknownDevice;
+  const actualDisplayName = displayName || model || t.deviceCard.unknownDevice
 
   // Determine agent status indicator class and tooltip
   const getAgentStatusClass = () => {
-    if (!isOnline) return 'status-agent-none';
-    if (!agent) return 'status-agent-none';
+    if (!isOnline) return 'status-agent-none'
+    if (!agent) return 'status-agent-none'
     switch (agent.state) {
       case 'idle':
-        return 'status-agent-idle';
+        return 'status-agent-idle'
       case 'busy':
-        return 'status-agent-busy';
+        return 'status-agent-busy'
       case 'error':
-        return 'status-agent-error';
+        return 'status-agent-error'
       case 'initializing':
-        return 'status-agent-initializing';
+        return 'status-agent-initializing'
       default:
-        return 'status-agent-none';
+        return 'status-agent-none'
     }
-  };
+  }
 
   const getCurrentStatusText = () => {
-    if (!isOnline) return t.deviceCard.statusTooltip.none;
-    if (!agent) return t.deviceCard.statusTooltip.none;
+    if (!isOnline) return t.deviceCard.statusTooltip.none
+    if (!agent) return t.deviceCard.statusTooltip.none
     switch (agent.state) {
       case 'idle':
-        return t.deviceCard.statusTooltip.idle;
+        return t.deviceCard.statusTooltip.idle
       case 'busy':
-        return t.deviceCard.statusTooltip.busy;
+        return t.deviceCard.statusTooltip.busy
       case 'error':
-        return t.deviceCard.statusTooltip.error;
+        return t.deviceCard.statusTooltip.error
       case 'initializing':
-        return t.deviceCard.statusTooltip.initializing;
+        return t.deviceCard.statusTooltip.initializing
       default:
-        return t.deviceCard.statusTooltip.none;
+        return t.deviceCard.statusTooltip.none
     }
-  };
+  }
 
   const handleWifiClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (loading || !onConnectWifi) return;
-    setShowWifiConfirm(true);
-  };
+    e.stopPropagation()
+    if (loading || !onConnectWifi) return
+    setShowWifiConfirm(true)
+  }
 
   const handleDisconnectClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (loading || !onDisconnectWifi) return;
-    setShowDisconnectConfirm(true);
-  };
+    e.stopPropagation()
+    if (loading || !onDisconnectWifi) return
+    setShowDisconnectConfirm(true)
+  }
 
   const handleConfirmWifi = async () => {
-    setShowWifiConfirm(false);
-    setLoading(true);
+    setShowWifiConfirm(false)
+    setLoading(true)
     try {
       if (onConnectWifi) {
-        await onConnectWifi();
+        await onConnectWifi()
       }
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const handleConfirmDisconnect = async () => {
-    setShowDisconnectConfirm(false);
-    setLoading(true);
+    setShowDisconnectConfirm(false)
+    setLoading(true)
     try {
       if (onDisconnectWifi) {
-        await onDisconnectWifi();
+        await onDisconnectWifi()
       }
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const handleEditClick = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    setEditingName(displayName || model || '');
-    setShowEditDialog(true);
-  };
+    e.stopPropagation()
+    setEditingName(displayName || model || '')
+    setShowEditDialog(true)
+  }
 
   const handleSaveName = async () => {
     try {
-      setSaving(true);
-      const trimmedName = editingName.trim();
-      const response = await updateDeviceName(serial, trimmedName || null);
+      setSaving(true)
+      const trimmedName = editingName.trim()
+      const response = await updateDeviceName(serial, trimmedName || null)
 
       if (!response.success) {
         if (showToast) {
-          showToast(response.error || t.deviceCard.saveNameError, 'error');
+          showToast(response.error || t.deviceCard.saveNameError, 'error')
         }
-        return;
+        return
       }
 
-      setShowEditDialog(false);
+      setShowEditDialog(false)
       if (onNameUpdated) {
-        onNameUpdated();
+        onNameUpdated()
       }
       if (showToast) {
-        showToast(t.deviceCard.saveNameSuccess, 'success');
+        showToast(t.deviceCard.saveNameSuccess, 'success')
       }
     } catch (error) {
-      console.error('Failed to update device name:', error);
+      console.error('Failed to update device name:', error)
       if (showToast) {
-        showToast(t.deviceCard.saveNameError, 'error');
+        showToast(t.deviceCard.saveNameError, 'error')
       }
     } finally {
-      setSaving(false);
+      setSaving(false)
     }
-  };
+  }
 
   return (
     <>
@@ -189,9 +177,9 @@ export function DeviceCard({
         onClick={onClick}
         role="button"
         tabIndex={0}
-        onKeyDown={e => {
+        onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
-            onClick();
+            onClick()
           }
         }}
         className={`
@@ -205,9 +193,7 @@ export function DeviceCard({
         `}
       >
         {/* Active indicator bar */}
-        {isActive && (
-          <div className="absolute left-0 top-2 bottom-2 w-1 bg-[#1d9bf0] rounded-r" />
-        )}
+        {isActive && <div className="absolute left-0 top-2 bottom-2 w-1 bg-[#1d9bf0] rounded-r" />}
 
         <div className="flex items-center gap-3 pl-2">
           {/* Agent status indicator with tooltip */}
@@ -219,7 +205,11 @@ export function DeviceCard({
                 }`}
               />
             </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={8} className="max-w-xs">
+            <TooltipContent
+              side="right"
+              sideOffset={8}
+              className="max-w-xs"
+            >
               <div className="space-y-1.5">
                 <p className="font-medium">
                   {t.deviceCard.statusTooltip.title}
@@ -240,9 +230,7 @@ export function DeviceCard({
             <div className="flex items-center gap-2">
               <Smartphone
                 className={`w-4 h-4 flex-shrink-0 ${
-                  isActive
-                    ? 'text-[#1d9bf0]'
-                    : 'text-slate-400 dark:text-slate-500'
+                  isActive ? 'text-[#1d9bf0]' : 'text-slate-400 dark:text-slate-500'
                 }`}
               />
               <span
@@ -294,7 +282,7 @@ export function DeviceCard({
                     <Server className="w-2.5 h-2.5 mr-1" />
                     {t.deviceCard.remote || 'Remote'}
                   </Badge>
-                );
+                )
               } else if (isWifi) {
                 return (
                   <Badge
@@ -304,7 +292,7 @@ export function DeviceCard({
                     <Wifi className="w-2.5 h-2.5 mr-1" />
                     {t.deviceCard.wifi || 'WiFi'}
                   </Badge>
-                );
+                )
               } else if (isUsb) {
                 return (
                   <Badge
@@ -313,9 +301,9 @@ export function DeviceCard({
                   >
                     USB
                   </Badge>
-                );
+                )
               }
-              return null;
+              return null
             })()}
           </div>
 
@@ -369,16 +357,16 @@ export function DeviceCard({
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={async e => {
-                  e.stopPropagation();
-                  setLoading(true);
+                onClick={async (e) => {
+                  e.stopPropagation()
+                  setLoading(true)
                   try {
-                    await removeRemoteDevice(serial);
+                    await removeRemoteDevice(serial)
                     // Refresh will happen via polling
                   } catch (error) {
-                    console.error('Failed to remove remote device:', error);
+                    console.error('Failed to remove remote device:', error)
                   } finally {
-                    setLoading(false);
+                    setLoading(false)
                   }
                 }}
                 disabled={loading}
@@ -415,28 +403,27 @@ export function DeviceCard({
       />
 
       {/* Device Name Edit Dialog */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+      <Dialog
+        open={showEditDialog}
+        onOpenChange={setShowEditDialog}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{t.deviceCard.editNameDialogTitle}</DialogTitle>
-            <DialogDescription>
-              {t.deviceCard.editNameDialogDescription}
-            </DialogDescription>
+            <DialogDescription>{t.deviceCard.editNameDialogDescription}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="device-name">
-                {t.deviceCard.deviceNameLabel}
-              </Label>
+              <Label htmlFor="device-name">{t.deviceCard.deviceNameLabel}</Label>
               <Input
                 id="device-name"
                 value={editingName}
-                onChange={e => setEditingName(e.target.value)}
+                onChange={(e) => setEditingName(e.target.value)}
                 placeholder={t.deviceCard.deviceNamePlaceholder}
                 maxLength={100}
-                onKeyDown={e => {
+                onKeyDown={(e) => {
                   if (e.key === 'Enter' && !saving) {
-                    handleSaveName();
+                    handleSaveName()
                   }
                 }}
               />
@@ -453,7 +440,10 @@ export function DeviceCard({
             >
               {t.common.cancel}
             </Button>
-            <Button onClick={handleSaveName} disabled={saving}>
+            <Button
+              onClick={handleSaveName}
+              disabled={saving}
+            >
               {saving ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -467,5 +457,5 @@ export function DeviceCard({
         </DialogContent>
       </Dialog>
     </>
-  );
+  )
 }

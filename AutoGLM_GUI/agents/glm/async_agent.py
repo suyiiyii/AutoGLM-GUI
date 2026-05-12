@@ -63,8 +63,8 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
     def _prepare_initial_context(
         self,
         task: str,
-        screenshot_base64: str,
-        current_app: str,
+        screenshot_base64: str,  # noqa: ARG002
+        current_app: str,  # noqa: ARG002
         reference_images: list[dict[str, str]] | None = None,
     ) -> None:
         # Do not add a screenshot here: the first per-step screenshot is the
@@ -119,7 +119,7 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
             screen_info = MessageBuilder.build_screen_info(current_app)
             if self._step_count == 1 and self._pending_task is not None:
                 reference_notice = MessageBuilder.build_user_reference_images_notice(
-                    len(self._pending_reference_images)
+                    len(self._pending_reference_images),
                 )
                 reference_section = (
                     f"\n\n** User Reference Images **\n\n{reference_notice}"
@@ -143,7 +143,7 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
                 MessageBuilder.create_user_message_with_images(
                     text=text_content,
                     images=images,
-                )
+                ),
             )
 
         # 3. 流式调用 OpenAI
@@ -261,12 +261,12 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
             attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
         ):
             self._context[-1] = MessageBuilder.remove_images_from_message(
-                self._context[-1]
+                self._context[-1],
             )
             self._context.append(
                 MessageBuilder.create_assistant_message(
-                    f"<think>{thinking}</think><answer>{action_str}</answer>"
-                )
+                    f"<think>{thinking}</think><answer>{action_str}</answer>",
+                ),
             )
 
         # 7. 检查完成
@@ -275,7 +275,7 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
             msgs = get_messages(self.agent_config.lang)
             logger.debug(
                 f"✅ {msgs['task_completed']}: "
-                f"{result.message or action.get('message', msgs['done'])}"
+                f"{result.message or action.get('message', msgs['done'])}",
             )
 
         # 8. 返回步骤结果
@@ -293,7 +293,8 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
         }
 
     async def _stream_openai(
-        self, messages: list[dict[str, Any]]
+        self,
+        messages: list[dict[str, Any]],
     ) -> AsyncGenerator[dict[str, str], None]:
         """流式调用 OpenAI，yield thinking chunks。"""
         stream = await self.openai_client.chat.completions.create(

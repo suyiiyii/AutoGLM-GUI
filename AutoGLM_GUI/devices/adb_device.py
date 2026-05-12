@@ -77,7 +77,11 @@ class ADBDevice(DeviceProtocol):
             adb.double_tap(x, y, self._device_id, delay)
 
     def long_press(
-        self, x: int, y: int, duration_ms: int = 3000, delay: float | None = None
+        self,
+        x: int,
+        y: int,
+        duration_ms: int = 3000,
+        delay: float | None = None,
     ) -> None:
         """Long press at specified coordinates."""
         with trace_span(
@@ -115,7 +119,13 @@ class ADBDevice(DeviceProtocol):
             },
         ):
             adb.swipe(
-                start_x, start_y, end_x, end_y, duration_ms, self._device_id, delay
+                start_x,
+                start_y,
+                end_x,
+                end_y,
+                duration_ms,
+                self._device_id,
+                delay,
             )
 
     def type_text(self, text: str) -> None:
@@ -238,7 +248,7 @@ class ADBDeviceManager(DeviceManagerProtocol):
                     model=dev.model,
                     platform="android",
                     connection_type=dev.connection_type.value,
-                )
+                ),
             )
 
         return result

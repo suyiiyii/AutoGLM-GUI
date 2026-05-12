@@ -1,12 +1,12 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect } from 'react'
 
 interface ResizableHandleProps {
-  onResize: (deltaX: number) => void;
-  onResizeStart?: () => void;
-  onResizeEnd?: () => void;
-  minWidth?: number;
-  maxWidth?: number;
-  className?: string;
+  onResize: (deltaX: number) => void
+  onResizeStart?: () => void
+  onResizeEnd?: () => void
+  minWidth?: number
+  maxWidth?: number
+  className?: string
 }
 
 export function ResizableHandle({
@@ -17,52 +17,49 @@ export function ResizableHandle({
   maxWidth = 640,
   className = '',
 }: ResizableHandleProps) {
-  const [isDragging, setIsDragging] = useState(false);
-  const startX = useRef(0);
-  const startWidth = useRef(0);
-  const containerRef = useRef<HTMLDivElement>(null);
+  const [isDragging, setIsDragging] = useState(false)
+  const startX = useRef(0)
+  const startWidth = useRef(0)
+  const containerRef = useRef<HTMLDivElement>(null)
 
   const handleMouseDown = (e: React.MouseEvent) => {
-    e.preventDefault();
-    setIsDragging(true);
-    startX.current = e.clientX;
+    e.preventDefault()
+    setIsDragging(true)
+    startX.current = e.clientX
 
     // Get current width from parent container
     if (containerRef.current?.parentElement) {
-      const rect = containerRef.current.parentElement.getBoundingClientRect();
-      startWidth.current = rect.width;
+      const rect = containerRef.current.parentElement.getBoundingClientRect()
+      startWidth.current = rect.width
     }
 
-    onResizeStart?.();
-  };
+    onResizeStart?.()
+  }
 
   // Global mouse move and up handlers
   useEffect(() => {
-    if (!isDragging) return;
+    if (!isDragging) return
 
     const handleMouseMove = (e: MouseEvent) => {
-      const deltaX = e.clientX - startX.current;
-      const newWidth = Math.min(
-        maxWidth,
-        Math.max(minWidth, startWidth.current + deltaX)
-      );
+      const deltaX = e.clientX - startX.current
+      const newWidth = Math.min(maxWidth, Math.max(minWidth, startWidth.current + deltaX))
 
-      onResize(newWidth - startWidth.current);
-    };
+      onResize(newWidth - startWidth.current)
+    }
 
     const handleMouseUp = () => {
-      setIsDragging(false);
-      onResizeEnd?.();
-    };
+      setIsDragging(false)
+      onResizeEnd?.()
+    }
 
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
+    document.addEventListener('mousemove', handleMouseMove)
+    document.addEventListener('mouseup', handleMouseUp)
 
     return () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-    };
-  }, [isDragging, minWidth, maxWidth, onResize, onResizeEnd]);
+      document.removeEventListener('mousemove', handleMouseMove)
+      document.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isDragging, minWidth, maxWidth, onResize, onResizeEnd])
 
   return (
     <div
@@ -77,5 +74,5 @@ export function ResizableHandle({
         <div className="w-1 h-8 bg-primary rounded-full" />
       </div>
     </div>
-  );
+  )
 }

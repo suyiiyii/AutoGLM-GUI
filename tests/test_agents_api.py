@@ -51,7 +51,8 @@ def fake_manager() -> FakePhoneAgentManager:
 
 @pytest.fixture
 def client(
-    monkeypatch: pytest.MonkeyPatch, fake_manager: FakePhoneAgentManager
+    monkeypatch: pytest.MonkeyPatch,
+    fake_manager: FakePhoneAgentManager,
 ) -> TestClient:
     monkeypatch.setattr(
         phone_agent_manager_module.PhoneAgentManager,
@@ -65,7 +66,8 @@ def client(
 
 
 def test_status_without_device_reports_global_initialization(
-    client: TestClient, fake_manager: FakePhoneAgentManager
+    client: TestClient,
+    fake_manager: FakePhoneAgentManager,
 ) -> None:
     fake_manager.agents["dev-1"] = FakeAgent(step_count=3)
 
@@ -91,7 +93,8 @@ def test_status_with_unknown_device_returns_uninitialized(client: TestClient) ->
 
 
 def test_status_with_initialized_device_returns_step_count(
-    client: TestClient, fake_manager: FakePhoneAgentManager
+    client: TestClient,
+    fake_manager: FakePhoneAgentManager,
 ) -> None:
     fake_manager.agents["dev-2"] = FakeAgent(step_count=7)
 
@@ -106,7 +109,8 @@ def test_status_with_initialized_device_returns_step_count(
 
 
 def test_reset_agent_success(
-    client: TestClient, fake_manager: FakePhoneAgentManager
+    client: TestClient,
+    fake_manager: FakePhoneAgentManager,
 ) -> None:
     fake_manager.agents["dev-3"] = FakeAgent(step_count=5)
 
@@ -130,7 +134,8 @@ def test_reset_agent_not_found_returns_404(client: TestClient) -> None:
 
 
 def test_abort_chat_success(
-    client: TestClient, fake_manager: FakePhoneAgentManager
+    client: TestClient,
+    fake_manager: FakePhoneAgentManager,
 ) -> None:
     fake_manager.abort_results["dev-4"] = True
 

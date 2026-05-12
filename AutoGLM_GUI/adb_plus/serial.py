@@ -106,7 +106,7 @@ def get_device_serial(device_id: str, adb_path: str = "adb") -> str:
     # that don't expose serial number via getprop
     logger.warning(
         f"Could not get hardware serial for {device_id}, "
-        f"using device_id as serial (emulator/restricted device)"
+        f"using device_id as serial (emulator/restricted device)",
     )
     return device_id
 
@@ -136,6 +136,6 @@ async def get_device_serial_async(device_id: str, adb_path: str = "adb") -> str:
 
     logger.warning(
         f"Could not get hardware serial for {device_id}, "
-        f"using device_id as serial (emulator/restricted device)"
+        f"using device_id as serial (emulator/restricted device)",
     )
     return device_id

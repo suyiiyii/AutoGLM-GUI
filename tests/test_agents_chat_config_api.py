@@ -88,7 +88,10 @@ class FakePhoneAgentManager:
         return list(self.destroy_candidates)
 
     def set_error_state(
-        self, device_id: str, error_message: str, **kwargs: Any
+        self,
+        device_id: str,
+        error_message: str,
+        **kwargs: Any,
     ) -> None:
         pass
 
@@ -113,7 +116,7 @@ class FakeConfigManager:
             decision_api_key="secret",
         )
         self.source = SimpleNamespace(
-            value="config file (~/.config/autoglm/config.json)"
+            value="config file (~/.config/autoglm/config.json)",
         )
         self.conflicts: list[SimpleNamespace] = []
         self.save_result = True
@@ -195,7 +198,7 @@ def test_chat_success_contract(env: dict[str, Any]) -> None:
         {
             "type": "done",
             "data": {"message": "task finished", "success": True, "steps": 3},
-        }
+        },
     ]
     env["phone_manager"].agent.step_count = 3
 
@@ -302,7 +305,8 @@ def test_chat_stream_emits_error_event_on_initialization_error(
 
 
 def test_chat_stream_emits_sse_events(
-    env: dict[str, Any], monkeypatch: pytest.MonkeyPatch
+    env: dict[str, Any],
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
         trace_module,
@@ -397,7 +401,7 @@ def test_get_config_masks_empty_api_key_and_maps_conflicts(
             file_value="http://file",
             override_value="http://env",
             override_source=SimpleNamespace(value="environment variables"),
-        )
+        ),
     ]
 
     response = env["client"].get("/api/config")
@@ -412,7 +416,7 @@ def test_get_config_masks_empty_api_key_and_maps_conflicts(
             "file_value": "http://file",
             "override_value": "http://env",
             "override_source": "environment variables",
-        }
+        },
     ]
 
 
@@ -425,7 +429,7 @@ def test_save_config_success_with_warnings_and_restart_required(
             file_value="A",
             override_value="B",
             override_source=SimpleNamespace(value="CLI arguments"),
-        )
+        ),
     ]
     response = env["client"].post(
         "/api/config",

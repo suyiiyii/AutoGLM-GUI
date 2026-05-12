@@ -25,7 +25,9 @@ if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
             if not os.path.exists(file):
                 # 尝试在 sys._MEIPASS 中查找
                 commands_json_path = os.path.join(
-                    sys._MEIPASS, "fakeredis", "commands.json"
+                    sys._MEIPASS,
+                    "fakeredis",
+                    "commands.json",
                 )
                 if os.path.exists(commands_json_path):
                     print(

@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import React, { useRef, useEffect, useCallback, useState } from 'react'
 import {
   Send,
   RotateCcw,
@@ -11,168 +11,153 @@ import {
   Square,
   ImagePlus,
   X,
-} from 'lucide-react';
-import { DeviceMonitor } from './DeviceMonitor';
+} from 'lucide-react'
+import { DeviceMonitor } from './DeviceMonitor'
 import type {
   StepTimingSummary,
   TaskImageAttachment,
   Workflow,
   HistoryRecordResponse,
-} from '../api';
+} from '../api'
 import {
   listWorkflows,
   listHistory,
   getHistoryRecord,
   clearHistory as clearHistoryApi,
   deleteHistoryRecord,
-} from '../api';
-import { Button } from '@/components/ui/button';
-import { Textarea } from '@/components/ui/textarea';
-import { Badge } from '@/components/ui/badge';
-import { Card } from '@/components/ui/card';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { useTranslation } from '../lib/i18n-context';
-import { HistoryItemCard } from './HistoryItemCard';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { ImagePreview } from '@/components/ui/image-preview';
+} from '../api'
+import { Button } from '@/components/ui/button'
+import { Textarea } from '@/components/ui/textarea'
+import { Badge } from '@/components/ui/badge'
+import { Card } from '@/components/ui/card'
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
+import { ScrollArea } from '@/components/ui/scroll-area'
+import { useTranslation } from '../lib/i18n-context'
+import { HistoryItemCard } from './HistoryItemCard'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { ImagePreview } from '@/components/ui/image-preview'
 import {
   useTaskSessionConversation,
   type TaskConversationMessage,
-} from '../hooks/useTaskSessionConversation';
+} from '../hooks/useTaskSessionConversation'
 
 interface ActionPayload {
-  action?: string;
-  element?: [number, number];
-  start?: [number, number];
-  end?: [number, number];
-  [key: string]: unknown;
+  action?: string
+  element?: [number, number]
+  start?: [number, number]
+  end?: [number, number]
+  [key: string]: unknown
 }
 
 interface DevicePanelProps {
-  deviceId: string; // Used for API calls
-  deviceSerial: string; // Used for history storage
-  deviceName: string;
-  deviceConnectionType?: string; // Device connection type (usb/wifi/remote)
-  isConfigured: boolean;
-  isVisible?: boolean; // ✅ 新增：控制视频流行为
-  unlimitedStepsEnabled?: boolean;
+  deviceId: string // Used for API calls
+  deviceSerial: string // Used for history storage
+  deviceName: string
+  deviceConnectionType?: string // Device connection type (usb/wifi/remote)
+  isConfigured: boolean
+  isVisible?: boolean // ✅ 新增：控制视频流行为
+  unlimitedStepsEnabled?: boolean
 }
 
-const IMAGE_ATTACHMENT_TYPES = new Set([
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-]);
-const MAX_IMAGE_ATTACHMENTS = 3;
-const MAX_IMAGE_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+const IMAGE_ATTACHMENT_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp'])
+const MAX_IMAGE_ATTACHMENTS = 3
+const MAX_IMAGE_ATTACHMENT_BYTES = 5 * 1024 * 1024
 
 function readImageAttachment(file: File): Promise<TaskImageAttachment> {
   return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onerror = () => reject(new Error('读取图片失败'));
+    const reader = new FileReader()
+    reader.onerror = () => reject(new Error('读取图片失败'))
     reader.onload = () => {
-      const result = typeof reader.result === 'string' ? reader.result : '';
-      const commaIndex = result.indexOf(',');
+      const result = typeof reader.result === 'string' ? reader.result : ''
+      const commaIndex = result.indexOf(',')
       if (commaIndex === -1) {
-        reject(new Error('图片格式无效'));
-        return;
+        reject(new Error('图片格式无效'))
+        return
       }
       resolve({
         mime_type: file.type,
         data: result.slice(commaIndex + 1),
         name: file.name || null,
-      });
-    };
-    reader.readAsDataURL(file);
-  });
+      })
+    }
+    reader.readAsDataURL(file)
+  })
 }
 
 function getStepSummary(thinking: string | undefined, action: unknown): string {
   if (thinking && thinking.trim().length > 0) {
-    return thinking;
+    return thinking
   }
 
   if (action && typeof action === 'object') {
-    const actionRecord = action as Record<string, unknown>;
-    const metadata = actionRecord['_metadata'];
+    const actionRecord = action as Record<string, unknown>
+    const metadata = actionRecord['_metadata']
 
     if (metadata === 'finish') {
-      const finishMessage = actionRecord['message'];
-      if (
-        typeof finishMessage === 'string' &&
-        finishMessage.trim().length > 0
-      ) {
-        return `Finish: ${finishMessage}`;
+      const finishMessage = actionRecord['message']
+      if (typeof finishMessage === 'string' && finishMessage.trim().length > 0) {
+        return `Finish: ${finishMessage}`
       }
-      return 'Finish task';
+      return 'Finish task'
     }
 
-    const actionName = actionRecord['action'];
+    const actionName = actionRecord['action']
     if (typeof actionName === 'string' && actionName.trim().length > 0) {
-      return `Action: ${actionName}`;
+      return `Action: ${actionName}`
     }
   }
 
-  return 'Action executed';
+  return 'Action executed'
 }
 
 function formatDuration(ms: number): string {
   if (ms < 1000) {
-    return `${Math.round(ms)}ms`;
+    return `${Math.round(ms)}ms`
   }
-  return `${(ms / 1000).toFixed(1)}s`;
+  return `${(ms / 1000).toFixed(1)}s`
 }
 
 function getTimingChips(
-  timings: StepTimingSummary | undefined
+  timings: StepTimingSummary | undefined,
 ): Array<{ label: string; value: string }> {
   if (!timings) {
-    return [];
+    return []
   }
 
   const chips = [
     { label: 'Total', value: formatDuration(timings.total_duration_ms) },
     { label: 'LLM', value: formatDuration(timings.llm_duration_ms) },
-  ];
+  ]
 
   if (timings.screenshot_duration_ms > 0) {
     chips.push({
       label: 'Shot',
       value: formatDuration(timings.screenshot_duration_ms),
-    });
+    })
   }
 
   if (timings.current_app_duration_ms > 0) {
     chips.push({
       label: 'App',
       value: formatDuration(timings.current_app_duration_ms),
-    });
+    })
   }
 
   if (timings.execute_action_duration_ms > 0) {
     chips.push({
       label: 'Action',
       value: formatDuration(timings.execute_action_duration_ms),
-    });
+    })
   }
 
   if (timings.sleep_duration_ms > 0) {
     chips.push({
       label: 'Sleep',
       value: formatDuration(timings.sleep_duration_ms),
-    });
+    })
   }
 
-  return chips;
+  return chips
 }
 
 export function DevicePanel({
@@ -184,18 +169,18 @@ export function DevicePanel({
   isVisible = true, // ✅ 新增：默认 true 向后兼容
   unlimitedStepsEnabled = false,
 }: DevicePanelProps) {
-  const t = useTranslation();
-  const [input, setInput] = useState('');
-  const [attachments, setAttachments] = useState<TaskImageAttachment[]>([]);
-  const [attachmentError, setAttachmentError] = useState<string | null>(null);
-  const [isDraggingAttachment, setIsDraggingAttachment] = useState(false);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const t = useTranslation()
+  const [input, setInput] = useState('')
+  const [attachments, setAttachments] = useState<TaskImageAttachment[]>([])
+  const [attachmentError, setAttachmentError] = useState<string | null>(null)
+  const [isDraggingAttachment, setIsDraggingAttachment] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   // ✅ 移除 initialized 状态，依赖后端自动初始化
   // const [initialized, setInitialized] = useState(false);
-  const [showHistoryPopover, setShowHistoryPopover] = useState(false);
-  const [historyItems, setHistoryItems] = useState<HistoryRecordResponse[]>([]);
-  const [workflows, setWorkflows] = useState<Workflow[]>([]);
-  const [showWorkflowPopover, setShowWorkflowPopover] = useState(false);
+  const [showHistoryPopover, setShowHistoryPopover] = useState(false)
+  const [historyItems, setHistoryItems] = useState<HistoryRecordResponse[]>([])
+  const [workflows, setWorkflows] = useState<Workflow[]>([])
+  const [showWorkflowPopover, setShowWorkflowPopover] = useState(false)
   const {
     messages,
     setMessages,
@@ -210,43 +195,43 @@ export function DevicePanel({
     deviceId,
     deviceSerial,
     sessionStorageKey: `autoglm:classic-session:${deviceSerial}`,
-  });
-  const scrollAreaRef = useRef<HTMLDivElement>(null);
-  const contentRef = useRef<HTMLDivElement>(null);
-  const prevMessageCountRef = useRef(0);
-  const prevMessageSigRef = useRef<string | null>(null);
+  })
+  const scrollAreaRef = useRef<HTMLDivElement>(null)
+  const contentRef = useRef<HTMLDivElement>(null)
+  const prevMessageCountRef = useRef(0)
+  const prevMessageSigRef = useRef<string | null>(null)
   // The chat follows the latest message by default. Only a deliberate upward
   // scroll by the user turns this off — programmatic re-pins and content that
   // grows underneath (e.g. screenshots finishing decode) must never flip it,
   // otherwise the stale scroll events they emit would strand the view.
-  const isAtBottomRef = useRef(true);
+  const isAtBottomRef = useRef(true)
   // Timestamp of the last programmatic scroll-to-bottom. Scroll events that
   // land within this window are the echo of our own pinning (or of the layout
   // settling afterwards) and are ignored, not treated as the user leaving.
-  const lastPinTimeRef = useRef(0);
+  const lastPinTimeRef = useRef(0)
   // Last observed scrollTop. Used to tell a real upward scroll (scrollTop
   // decreases) apart from content growing underneath (scrollTop stays put).
-  const lastScrollTopRef = useRef(0);
-  const [showNewMessageNotice, setShowNewMessageNotice] = useState(false);
+  const lastScrollTopRef = useRef(0)
+  const [showNewMessageNotice, setShowNewMessageNotice] = useState(false)
 
   // The actual scrollable element lives inside the Radix ScrollArea.
   const getScrollViewport = useCallback(
     () =>
       (scrollAreaRef.current?.querySelector(
-        '[data-slot="scroll-area-viewport"]'
+        '[data-slot="scroll-area-viewport"]',
       ) as HTMLDivElement | null) ?? null,
-    []
-  );
+    [],
+  )
 
   const pinToBottom = useCallback(
     (behavior: 'auto' | 'smooth' = 'auto') => {
-      const viewport = getScrollViewport();
-      if (!viewport) return;
-      lastPinTimeRef.current = performance.now();
-      viewport.scrollTo({ top: viewport.scrollHeight, behavior });
+      const viewport = getScrollViewport()
+      if (!viewport) return
+      lastPinTimeRef.current = performance.now()
+      viewport.scrollTo({ top: viewport.scrollHeight, behavior })
     },
-    [getScrollViewport]
-  );
+    [getScrollViewport],
+  )
 
   // Step screenshots load asynchronously and grow the content after the
   // streaming effect already scrolled, which would otherwise leave the chat
@@ -254,16 +239,16 @@ export function DevicePanel({
   // re-pins the view to the bottom whenever the content height changes while
   // the user is still following along.
   useEffect(() => {
-    const content = contentRef.current;
-    if (!content) return;
+    const content = contentRef.current
+    if (!content) return
     const observer = new ResizeObserver(() => {
       if (isAtBottomRef.current) {
-        pinToBottom();
+        pinToBottom()
       }
-    });
-    observer.observe(content);
-    return () => observer.disconnect();
-  }, [pinToBottom]);
+    })
+    observer.observe(content)
+    return () => observer.disconnect()
+  }, [pinToBottom])
 
   // ✅ 移除 handleInit 函数，不再需要显式初始化
   // Agent 会在首次发送消息时自动初始化
@@ -275,31 +260,31 @@ export function DevicePanel({
     if (showHistoryPopover) {
       const loadItems = async () => {
         try {
-          const data = await listHistory(deviceSerial, 20, 0, 'classic');
-          setHistoryItems(data.records);
+          const data = await listHistory(deviceSerial, 20, 0, 'classic')
+          setHistoryItems(data.records)
         } catch (error) {
-          console.error('Failed to load history:', error);
-          setHistoryItems([]);
+          console.error('Failed to load history:', error)
+          setHistoryItems([])
         }
-      };
-      loadItems();
+      }
+      loadItems()
     }
-  }, [showHistoryPopover, deviceSerial]);
+  }, [showHistoryPopover, deviceSerial])
 
   const handleSelectHistory = (record: HistoryRecordResponse) => {
     void (async () => {
-      let selectedRecord = record;
+      let selectedRecord = record
       try {
-        selectedRecord = await getHistoryRecord(deviceSerial, record.id);
+        selectedRecord = await getHistoryRecord(deviceSerial, record.id)
       } catch (error) {
-        console.error('Failed to load history record detail:', error);
+        console.error('Failed to load history record detail:', error)
       }
 
       // Convert backend messages to frontend Message format
-      const newMessages: TaskConversationMessage[] = [];
+      const newMessages: TaskConversationMessage[] = []
 
       // Find user message from record
-      const userMsg = selectedRecord.messages.find(m => m.role === 'user');
+      const userMsg = selectedRecord.messages.find((m) => m.role === 'user')
       if (userMsg) {
         newMessages.push({
           id: `${selectedRecord.id}-user`,
@@ -307,7 +292,7 @@ export function DevicePanel({
           content: userMsg.content || selectedRecord.task_text,
           timestamp: new Date(userMsg.timestamp),
           attachments: userMsg.attachments || [],
-        });
+        })
       } else {
         // Fallback to task_text if no user message
         newMessages.push({
@@ -315,22 +300,22 @@ export function DevicePanel({
           role: 'user',
           content: selectedRecord.task_text,
           timestamp: new Date(selectedRecord.start_time),
-        });
+        })
       }
 
       // Collect thinking and actions from assistant messages
-      const thinkingList: string[] = [];
-      const actionsList: Record<string, unknown>[] = [];
-      const screenshotsList: (string | undefined)[] = [];
+      const thinkingList: string[] = []
+      const actionsList: Record<string, unknown>[] = []
+      const screenshotsList: (string | undefined)[] = []
       selectedRecord.messages
-        .filter(m => m.role === 'assistant')
-        .forEach(m => {
-          if (m.thinking) thinkingList.push(m.thinking);
-          if (m.action) actionsList.push(m.action);
+        .filter((m) => m.role === 'assistant')
+        .forEach((m) => {
+          if (m.thinking) thinkingList.push(m.thinking)
+          if (m.action) actionsList.push(m.action)
           // Extract screenshot directly or from loosely typed object
-          const recordData = m as unknown as { screenshot?: string };
-          screenshotsList.push(recordData.screenshot);
-        });
+          const recordData = m as unknown as { screenshot?: string }
+          screenshotsList.push(recordData.screenshot)
+        })
 
       // Create agent message
       const agentMessage: TaskConversationMessage = {
@@ -347,181 +332,164 @@ export function DevicePanel({
         screenshots: screenshotsList,
         stepTimings: selectedRecord.step_timings,
         isStreaming: false,
-      };
-      newMessages.push(agentMessage);
+      }
+      newMessages.push(agentMessage)
 
-      setMessages(newMessages);
+      setMessages(newMessages)
 
       // Reset previous message tracking refs to match the loaded history
-      prevMessageCountRef.current = newMessages.length;
+      prevMessageCountRef.current = newMessages.length
       prevMessageSigRef.current = [
         agentMessage.id,
         agentMessage.content?.length ?? 0,
         agentMessage.currentThinking?.length ?? 0,
-        agentMessage.thinking
-          ? JSON.stringify(agentMessage.thinking).length
-          : 0,
+        agentMessage.thinking ? JSON.stringify(agentMessage.thinking).length : 0,
         agentMessage.steps ?? '',
         agentMessage.isStreaming ? 1 : 0,
-      ].join('|');
+      ].join('|')
 
-      setShowNewMessageNotice(false);
-      isAtBottomRef.current = true;
-      setShowHistoryPopover(false);
-    })();
-  };
+      setShowNewMessageNotice(false)
+      isAtBottomRef.current = true
+      setShowHistoryPopover(false)
+    })()
+  }
 
   const handleClearHistory = async () => {
     if (confirm(t.history.clearAllConfirm)) {
       try {
-        await clearHistoryApi(deviceSerial);
-        setHistoryItems([]);
+        await clearHistoryApi(deviceSerial)
+        setHistoryItems([])
       } catch (error) {
-        console.error('Failed to clear history:', error);
+        console.error('Failed to clear history:', error)
       }
     }
-  };
+  }
 
   const handleDeleteItem = async (itemId: string) => {
     try {
-      await deleteHistoryRecord(deviceSerial, itemId);
+      await deleteHistoryRecord(deviceSerial, itemId)
       // 从列表中移除已删除的项
-      setHistoryItems(prev => prev.filter(item => item.id !== itemId));
+      setHistoryItems((prev) => prev.filter((item) => item.id !== itemId))
     } catch (error) {
-      console.error('Failed to delete history item:', error);
+      console.error('Failed to delete history item:', error)
     }
-  };
+  }
 
   // Note: Configuration is now managed entirely by backend ConfigManager.
   // If user updates config via Settings, they need to manually re-initialize agents.
 
   const addImageFiles = useCallback(
     async (files: File[]) => {
-      const imageFiles = files.filter(file =>
-        IMAGE_ATTACHMENT_TYPES.has(file.type)
-      );
+      const imageFiles = files.filter((file) => IMAGE_ATTACHMENT_TYPES.has(file.type))
       if (imageFiles.length === 0) {
-        return;
+        return
       }
 
       if (attachments.length + imageFiles.length > MAX_IMAGE_ATTACHMENTS) {
-        setAttachmentError('最多只能附加 3 张图片');
-        return;
+        setAttachmentError('最多只能附加 3 张图片')
+        return
       }
 
-      const tooLargeFile = imageFiles.find(
-        file => file.size > MAX_IMAGE_ATTACHMENT_BYTES
-      );
+      const tooLargeFile = imageFiles.find((file) => file.size > MAX_IMAGE_ATTACHMENT_BYTES)
       if (tooLargeFile) {
-        setAttachmentError('单张图片不能超过 5 MiB');
-        return;
+        setAttachmentError('单张图片不能超过 5 MiB')
+        return
       }
 
       try {
         const nextAttachments = await Promise.all(
-          imageFiles.map(file => readImageAttachment(file))
-        );
-        setAttachments(current => [...current, ...nextAttachments]);
-        setAttachmentError(null);
+          imageFiles.map((file) => readImageAttachment(file)),
+        )
+        setAttachments((current) => [...current, ...nextAttachments])
+        setAttachmentError(null)
       } catch (readError) {
-        setAttachmentError(
-          readError instanceof Error ? readError.message : '读取图片失败'
-        );
+        setAttachmentError(readError instanceof Error ? readError.message : '读取图片失败')
       }
     },
-    [attachments.length]
-  );
+    [attachments.length],
+  )
 
   const handleFileInputChange = useCallback(
     (event: React.ChangeEvent<HTMLInputElement>) => {
-      const files = Array.from(event.target.files || []);
-      void addImageFiles(files);
-      event.target.value = '';
+      const files = Array.from(event.target.files || [])
+      void addImageFiles(files)
+      event.target.value = ''
     },
-    [addImageFiles]
-  );
+    [addImageFiles],
+  )
 
   const handlePaste = useCallback(
     (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
-      const files = Array.from(event.clipboardData.files || []);
-      const hasImages = files.some(file =>
-        IMAGE_ATTACHMENT_TYPES.has(file.type)
-      );
+      const files = Array.from(event.clipboardData.files || [])
+      const hasImages = files.some((file) => IMAGE_ATTACHMENT_TYPES.has(file.type))
       if (!hasImages) {
-        return;
+        return
       }
-      event.preventDefault();
-      void addImageFiles(files);
+      event.preventDefault()
+      void addImageFiles(files)
     },
-    [addImageFiles]
-  );
+    [addImageFiles],
+  )
 
-  const handleDragOver = useCallback(
-    (event: React.DragEvent<HTMLDivElement>) => {
-      if (
-        Array.from(event.dataTransfer.items || []).some(item =>
-          IMAGE_ATTACHMENT_TYPES.has(item.type)
-        )
-      ) {
-        event.preventDefault();
-        setIsDraggingAttachment(true);
-      }
-    },
-    []
-  );
+  const handleDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    if (
+      Array.from(event.dataTransfer.items || []).some((item) =>
+        IMAGE_ATTACHMENT_TYPES.has(item.type),
+      )
+    ) {
+      event.preventDefault()
+      setIsDraggingAttachment(true)
+    }
+  }, [])
 
   const handleDragLeave = useCallback(() => {
-    setIsDraggingAttachment(false);
-  }, []);
+    setIsDraggingAttachment(false)
+  }, [])
 
   const handleDrop = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
-      const files = Array.from(event.dataTransfer.files || []);
-      const hasImages = files.some(file =>
-        IMAGE_ATTACHMENT_TYPES.has(file.type)
-      );
+      const files = Array.from(event.dataTransfer.files || [])
+      const hasImages = files.some((file) => IMAGE_ATTACHMENT_TYPES.has(file.type))
       if (!hasImages) {
-        return;
+        return
       }
-      event.preventDefault();
-      setIsDraggingAttachment(false);
-      void addImageFiles(files);
+      event.preventDefault()
+      setIsDraggingAttachment(false)
+      void addImageFiles(files)
     },
-    [addImageFiles]
-  );
+    [addImageFiles],
+  )
 
   const removeAttachment = useCallback((index: number) => {
-    setAttachments(current => current.filter((_, idx) => idx !== index));
-  }, []);
+    setAttachments((current) => current.filter((_, idx) => idx !== index))
+  }, [])
 
   const handleSend = useCallback(async () => {
-    const didSend = await sendMessage(input, attachments);
+    const didSend = await sendMessage(input, attachments)
     if (didSend) {
-      setInput('');
-      setAttachments([]);
-      setAttachmentError(null);
+      setInput('')
+      setAttachments([])
+      setAttachmentError(null)
     }
-  }, [attachments, input, sendMessage]);
+  }, [attachments, input, sendMessage])
 
   const handleReset = useCallback(async () => {
-    await resetConversation();
-    setShowNewMessageNotice(false);
-    isAtBottomRef.current = true;
-    prevMessageCountRef.current = 0;
-    prevMessageSigRef.current = null;
-    setAttachments([]);
-    setAttachmentError(null);
-  }, [resetConversation]);
+    await resetConversation()
+    setShowNewMessageNotice(false)
+    isAtBottomRef.current = true
+    prevMessageCountRef.current = 0
+    prevMessageSigRef.current = null
+    setAttachments([])
+    setAttachmentError(null)
+  }, [resetConversation])
 
   const handleAbortChat = useCallback(async () => {
-    await abortConversation();
-  }, [abortConversation]);
+    await abortConversation()
+  }, [abortConversation])
 
   useEffect(() => {
-    const latest = messages[messages.length - 1];
-    const thinkingSignature = latest?.thinking
-      ? JSON.stringify(latest.thinking).length
-      : 0;
+    const latest = messages[messages.length - 1]
+    const thinkingSignature = latest?.thinking ? JSON.stringify(latest.thinking).length : 0
     const latestSignature = latest
       ? [
           latest.id,
@@ -531,97 +499,93 @@ export function DevicePanel({
           latest.steps ?? '',
           latest.isStreaming ? 1 : 0,
         ].join('|')
-      : null;
+      : null
 
-    const isNewMessage = messages.length > prevMessageCountRef.current;
-    const hasLatestChanged =
-      latestSignature !== prevMessageSigRef.current && messages.length > 0;
+    const isNewMessage = messages.length > prevMessageCountRef.current
+    const hasLatestChanged = latestSignature !== prevMessageSigRef.current && messages.length > 0
 
-    prevMessageCountRef.current = messages.length;
-    prevMessageSigRef.current = latestSignature;
+    prevMessageCountRef.current = messages.length
+    prevMessageSigRef.current = latestSignature
 
     if (isAtBottomRef.current) {
-      pinToBottom();
+      pinToBottom()
       const frameId = requestAnimationFrame(() => {
-        setShowNewMessageNotice(false);
-      });
-      return () => cancelAnimationFrame(frameId);
+        setShowNewMessageNotice(false)
+      })
+      return () => cancelAnimationFrame(frameId)
     }
 
     if (messages.length === 0) {
       const frameId = requestAnimationFrame(() => {
-        setShowNewMessageNotice(false);
-      });
-      return () => cancelAnimationFrame(frameId);
+        setShowNewMessageNotice(false)
+      })
+      return () => cancelAnimationFrame(frameId)
     }
 
     if (isNewMessage || hasLatestChanged) {
       const frameId = requestAnimationFrame(() => {
-        setShowNewMessageNotice(true);
-      });
-      return () => cancelAnimationFrame(frameId);
+        setShowNewMessageNotice(true)
+      })
+      return () => cancelAnimationFrame(frameId)
     }
-  }, [messages, pinToBottom]);
+  }, [messages, pinToBottom])
 
   // Load workflows
   useEffect(() => {
     const loadWorkflows = async () => {
       try {
-        const data = await listWorkflows();
-        setWorkflows(data.workflows);
+        const data = await listWorkflows()
+        setWorkflows(data.workflows)
       } catch (error) {
-        console.error('Failed to load workflows:', error);
+        console.error('Failed to load workflows:', error)
       }
-    };
-    loadWorkflows();
-  }, []);
+    }
+    loadWorkflows()
+  }, [])
 
   const handleExecuteWorkflow = (workflow: Workflow) => {
-    setInput(workflow.text);
-    setShowWorkflowPopover(false);
-  };
+    setInput(workflow.text)
+    setShowWorkflowPopover(false)
+  }
 
   const handleMessagesScroll = (event: React.UIEvent<HTMLDivElement>) => {
-    const target = event.currentTarget;
-    const scrollTop = target.scrollTop;
-    const prevScrollTop = lastScrollTopRef.current;
-    lastScrollTopRef.current = scrollTop;
+    const target = event.currentTarget
+    const scrollTop = target.scrollTop
+    const prevScrollTop = lastScrollTopRef.current
+    lastScrollTopRef.current = scrollTop
 
     // Ignore the scroll events caused by our own re-pinning and by the
     // re-layout that late-loading content (screenshots) triggers right after.
-    if (performance.now() - lastPinTimeRef.current < 150) return;
+    if (performance.now() - lastPinTimeRef.current < 150) return
 
-    const distanceFromBottom =
-      target.scrollHeight - scrollTop - target.clientHeight;
+    const distanceFromBottom = target.scrollHeight - scrollTop - target.clientHeight
     // A generous band so a few hundred pixels of late-loading content between
     // streaming updates doesn't break following.
     if (distanceFromBottom < 150) {
-      isAtBottomRef.current = true;
-      setShowNewMessageNotice(false);
-      return;
+      isAtBottomRef.current = true
+      setShowNewMessageNotice(false)
+      return
     }
     // Far from the bottom: only treat it as the user opting out if they
     // actually scrolled upward. Content growing or a programmatic re-pin keeps
     // (or raises) scrollTop, so the stale events they emit can't trip this.
     if (scrollTop < prevScrollTop - 4) {
-      isAtBottomRef.current = false;
+      isAtBottomRef.current = false
     }
-  };
+  }
 
   const handleScrollToLatest = () => {
-    isAtBottomRef.current = true;
-    pinToBottom();
-    setShowNewMessageNotice(false);
-  };
+    isAtBottomRef.current = true
+    pinToBottom()
+    setShowNewMessageNotice(false)
+  }
 
-  const handleInputKeyDown = (
-    event: React.KeyboardEvent<HTMLTextAreaElement>
-  ) => {
+  const handleInputKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
-      event.preventDefault();
-      handleSend();
+      event.preventDefault()
+      handleSend()
     }
-  };
+  }
 
   return (
     <div className="flex-1 flex gap-4 p-4 items-stretch justify-center min-h-0">
@@ -635,13 +599,9 @@ export function DevicePanel({
             </div>
             <div className="group">
               <div className="flex items-center gap-1">
-                <h2 className="font-bold text-slate-900 dark:text-slate-100">
-                  {deviceName}
-                </h2>
+                <h2 className="font-bold text-slate-900 dark:text-slate-100">{deviceName}</h2>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                {deviceId}
-              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">{deviceId}</p>
             </div>
           </div>
 
@@ -670,7 +630,11 @@ export function DevicePanel({
                 </Button>
               </PopoverTrigger>
 
-              <PopoverContent className="w-96 p-0" align="end" sideOffset={8}>
+              <PopoverContent
+                className="w-96 p-0"
+                align="end"
+                sideOffset={8}
+              >
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800">
                   <h3 className="font-semibold text-sm text-slate-900 dark:text-slate-100">
@@ -692,7 +656,7 @@ export function DevicePanel({
                 <ScrollArea className="h-[400px]">
                   <div className="p-4 space-y-2">
                     {historyItems.length > 0 ? (
-                      historyItems.map(item => (
+                      historyItems.map((item) => (
                         <HistoryItemCard
                           key={item.id}
                           item={item}
@@ -751,7 +715,10 @@ export function DevicePanel({
             data-testid="chat-scroll-container"
             onScroll={handleMessagesScroll}
           >
-            <div className="p-4" ref={contentRef}>
+            <div
+              className="p-4"
+              ref={contentRef}
+            >
               {messages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center min-h-[calc(100%-1rem)]">
                   <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
@@ -765,12 +732,10 @@ export function DevicePanel({
                   </p>
                 </div>
               ) : (
-                messages.map(message => (
+                messages.map((message) => (
                   <div
                     key={message.id}
-                    className={`flex ${
-                      message.role === 'user' ? 'justify-end' : 'justify-start'
-                    }`}
+                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
                     {message.role === 'assistant' ? (
                       <div className="max-w-[85%] space-y-3">
@@ -779,19 +744,16 @@ export function DevicePanel({
                           {
                             length: Math.max(
                               message.thinking?.length || 0,
-                              message.actions?.length || 0
+                              message.actions?.length || 0,
                             ),
                           },
-                          (_, idx) => idx
-                        ).map(idx => {
-                          const stepThinking = message.thinking?.[idx];
-                          const stepAction = message.actions?.[idx];
-                          const stepScreenshot = message.screenshots?.[idx];
-                          const stepTimings = message.stepTimings?.[idx];
-                          const stepSummary = getStepSummary(
-                            stepThinking,
-                            stepAction
-                          );
+                          (_, idx) => idx,
+                        ).map((idx) => {
+                          const stepThinking = message.thinking?.[idx]
+                          const stepAction = message.actions?.[idx]
+                          const stepScreenshot = message.screenshots?.[idx]
+                          const stepTimings = message.stepTimings?.[idx]
+                          const stepSummary = getStepSummary(stepThinking, stepAction)
 
                           return (
                             <div
@@ -812,7 +774,7 @@ export function DevicePanel({
 
                               {stepTimings && (
                                 <div className="mt-3 flex flex-wrap gap-2">
-                                  {getTimingChips(stepTimings).map(chip => (
+                                  {getTimingChips(stepTimings).map((chip) => (
                                     <Badge
                                       key={`${idx}-${chip.label}`}
                                       variant="secondary"
@@ -833,36 +795,28 @@ export function DevicePanel({
                                   >
                                     {stepAction &&
                                       (() => {
-                                        const parsedAction =
-                                          stepAction as ActionPayload;
-                                        const actionName = parsedAction.action;
+                                        const parsedAction = stepAction as ActionPayload
+                                        const actionName = parsedAction.action
 
                                         if (
                                           actionName &&
-                                          [
-                                            'Tap',
-                                            'Double Tap',
-                                            'Long Press',
-                                          ].includes(actionName)
+                                          ['Tap', 'Double Tap', 'Long Press'].includes(actionName)
                                         ) {
-                                          const element = parsedAction.element;
-                                          if (
-                                            Array.isArray(element) &&
-                                            element.length === 2
-                                          ) {
-                                            const left = `${(Math.max(0, Math.min(element[0], 1000)) / 1000) * 100}%`;
-                                            const top = `${(Math.max(0, Math.min(element[1], 1000)) / 1000) * 100}%`;
+                                          const element = parsedAction.element
+                                          if (Array.isArray(element) && element.length === 2) {
+                                            const left = `${(Math.max(0, Math.min(element[0], 1000)) / 1000) * 100}%`
+                                            const top = `${(Math.max(0, Math.min(element[1], 1000)) / 1000) * 100}%`
                                             return (
                                               <div
                                                 className="absolute w-8 h-8 rounded-full border-[3px] border-red-500 bg-red-500/20 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]"
                                                 style={{ left, top }}
                                               />
-                                            );
+                                            )
                                           }
                                         }
                                         if (actionName === 'Swipe') {
-                                          const start = parsedAction.start;
-                                          const end = parsedAction.end;
+                                          const start = parsedAction.start
+                                          const end = parsedAction.end
                                           if (
                                             Array.isArray(start) &&
                                             start.length === 2 &&
@@ -870,33 +824,13 @@ export function DevicePanel({
                                             end.length === 2
                                           ) {
                                             const x1 =
-                                              (Math.max(
-                                                0,
-                                                Math.min(start[0], 1000)
-                                              ) /
-                                                1000) *
-                                              100;
+                                              (Math.max(0, Math.min(start[0], 1000)) / 1000) * 100
                                             const y1 =
-                                              (Math.max(
-                                                0,
-                                                Math.min(start[1], 1000)
-                                              ) /
-                                                1000) *
-                                              100;
+                                              (Math.max(0, Math.min(start[1], 1000)) / 1000) * 100
                                             const x2 =
-                                              (Math.max(
-                                                0,
-                                                Math.min(end[0], 1000)
-                                              ) /
-                                                1000) *
-                                              100;
+                                              (Math.max(0, Math.min(end[0], 1000)) / 1000) * 100
                                             const y2 =
-                                              (Math.max(
-                                                0,
-                                                Math.min(end[1], 1000)
-                                              ) /
-                                                1000) *
-                                              100;
+                                              (Math.max(0, Math.min(end[1], 1000)) / 1000) * 100
                                             return (
                                               <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
                                                 <defs>
@@ -931,10 +865,10 @@ export function DevicePanel({
                                                   strokeDasharray="5 3"
                                                 />
                                               </svg>
-                                            );
+                                            )
                                           }
                                         }
-                                        return null;
+                                        return null
                                       })()}
                                   </ImagePreview>
                                 </div>
@@ -951,7 +885,7 @@ export function DevicePanel({
                                 </details>
                               )}
                             </div>
-                          );
+                          )
                         })}
 
                         {/* Current thinking being streamed */}
@@ -986,15 +920,11 @@ export function DevicePanel({
                           >
                             <CheckCircle2
                               className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
-                                message.success === false
-                                  ? 'text-red-500'
-                                  : 'text-green-500'
+                                message.success === false ? 'text-red-500' : 'text-green-500'
                               }`}
                             />
                             <div>
-                              <p className="whitespace-pre-wrap">
-                                {message.content}
-                              </p>
+                              <p className="whitespace-pre-wrap">{message.content}</p>
                               {message.steps !== undefined && (
                                 <p className="text-xs mt-2 opacity-60 text-slate-500 dark:text-slate-400">
                                   {message.steps} steps completed
@@ -1015,25 +945,20 @@ export function DevicePanel({
                     ) : (
                       <div className="max-w-[75%]">
                         <div className="chat-bubble-user px-4 py-3 space-y-2">
-                          {message.attachments &&
-                            message.attachments.length > 0 && (
-                              <div className="grid grid-cols-2 gap-2">
-                                {message.attachments.map((attachment, idx) => (
-                                  <img
-                                    key={`${message.id}-attachment-${idx}`}
-                                    src={`data:${attachment.mime_type};base64,${attachment.data}`}
-                                    alt={
-                                      attachment.name || `Attachment ${idx + 1}`
-                                    }
-                                    className="h-24 w-full rounded-lg object-cover border border-white/20"
-                                  />
-                                ))}
-                              </div>
-                            )}
+                          {message.attachments && message.attachments.length > 0 && (
+                            <div className="grid grid-cols-2 gap-2">
+                              {message.attachments.map((attachment, idx) => (
+                                <img
+                                  key={`${message.id}-attachment-${idx}`}
+                                  src={`data:${attachment.mime_type};base64,${attachment.data}`}
+                                  alt={attachment.name || `Attachment ${idx + 1}`}
+                                  className="h-24 w-full rounded-lg object-cover border border-white/20"
+                                />
+                              ))}
+                            </div>
+                          )}
                           {message.content && (
-                            <p className="whitespace-pre-wrap">
-                              {message.content}
-                            </p>
+                            <p className="whitespace-pre-wrap">{message.content}</p>
                           )}
                         </div>
                         <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 text-right">
@@ -1063,9 +988,7 @@ export function DevicePanel({
         {/* Input area */}
         <div
           className={`p-4 border-t border-slate-200 dark:border-slate-800 ${
-            isDraggingAttachment
-              ? 'bg-sky-50 dark:bg-sky-950/20'
-              : 'bg-transparent'
+            isDraggingAttachment ? 'bg-sky-50 dark:bg-sky-950/20' : 'bg-transparent'
           }`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -1106,14 +1029,10 @@ export function DevicePanel({
           <div className="flex items-end gap-3">
             <Textarea
               value={input}
-              onChange={e => setInput(e.target.value)}
+              onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleInputKeyDown}
               onPaste={handlePaste}
-              placeholder={
-                !isConfigured
-                  ? t.devicePanel.configureFirst
-                  : t.devicePanel.whatToDo
-              }
+              placeholder={!isConfigured ? t.devicePanel.configureFirst : t.devicePanel.whatToDo}
               disabled={loading}
               className="flex-1 min-h-[40px] max-h-[120px] resize-none"
               rows={1}
@@ -1124,16 +1043,17 @@ export function DevicePanel({
                   type="button"
                   variant="outline"
                   size="icon"
-                  disabled={
-                    loading || attachments.length >= MAX_IMAGE_ATTACHMENTS
-                  }
+                  disabled={loading || attachments.length >= MAX_IMAGE_ATTACHMENTS}
                   className="h-10 w-10 flex-shrink-0"
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <ImagePlus className="w-4 h-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={8}>
+              <TooltipContent
+                side="top"
+                sideOffset={8}
+              >
                 添加图片
               </TooltipContent>
             </Tooltip>
@@ -1153,11 +1073,12 @@ export function DevicePanel({
                       <ListChecks className="w-4 h-4" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent align="start" className="w-72 p-3">
+                  <PopoverContent
+                    align="start"
+                    className="w-72 p-3"
+                  >
                     <div className="space-y-2">
-                      <h4 className="font-medium text-sm">
-                        {t.workflows.selectWorkflow}
-                      </h4>
+                      <h4 className="font-medium text-sm">{t.workflows.selectWorkflow}</h4>
                       {workflows.length === 0 ? (
                         <div className="text-sm text-slate-500 dark:text-slate-400 space-y-1">
                           <p>{t.workflows.empty}</p>
@@ -1175,15 +1096,13 @@ export function DevicePanel({
                       ) : (
                         <ScrollArea className="h-64">
                           <div className="space-y-1">
-                            {workflows.map(workflow => (
+                            {workflows.map((workflow) => (
                               <button
                                 key={workflow.uuid}
                                 onClick={() => handleExecuteWorkflow(workflow)}
                                 className="w-full text-left p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                               >
-                                <div className="font-medium text-sm">
-                                  {workflow.name}
-                                </div>
+                                <div className="font-medium text-sm">{workflow.name}</div>
                                 <div className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
                                   {workflow.text}
                                 </div>
@@ -1196,14 +1115,14 @@ export function DevicePanel({
                   </PopoverContent>
                 </Popover>
               </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={8} className="max-w-xs">
+              <TooltipContent
+                side="top"
+                sideOffset={8}
+                className="max-w-xs"
+              >
                 <div className="space-y-1">
-                  <p className="font-medium">
-                    {t.devicePanel.tooltips.workflowButton}
-                  </p>
-                  <p className="text-xs opacity-80">
-                    {t.devicePanel.tooltips.workflowButtonDesc}
-                  </p>
+                  <p className="font-medium">{t.devicePanel.tooltips.workflowButton}</p>
+                  <p className="text-xs opacity-80">{t.devicePanel.tooltips.workflowButtonDesc}</p>
                 </div>
               </TooltipContent>
             </Tooltip>
@@ -1228,9 +1147,7 @@ export function DevicePanel({
             {!loading && (
               <Button
                 onClick={handleSend}
-                disabled={
-                  (!input.trim() && attachments.length === 0) || !sessionReady
-                }
+                disabled={(!input.trim() && attachments.length === 0) || !sessionReady}
                 size="icon"
                 variant="twitter"
                 className="h-10 w-10 rounded-full flex-shrink-0"
@@ -1249,5 +1166,5 @@ export function DevicePanel({
         isVisible={isVisible} // ✅ 修改：传递实际的 isVisible（原为硬编码 true）
       />
     </div>
-  );
+  )
 }

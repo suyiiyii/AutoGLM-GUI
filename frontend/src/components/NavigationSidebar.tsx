@@ -1,5 +1,5 @@
-import React from 'react';
-import { Link, useMatchRoute } from '@tanstack/react-router';
+import React from 'react'
+import { Link, useMatchRoute } from '@tanstack/react-router'
 import {
   MessageSquare,
   ListChecks,
@@ -8,29 +8,25 @@ import {
   Clock,
   Terminal,
   type LucideIcon,
-} from 'lucide-react';
-import {
-  Tooltip,
-  TooltipTrigger,
-  TooltipContent,
-} from '@/components/ui/tooltip';
-import { useTranslation } from '../lib/i18n-context';
-import logoImage from '@/assets/logo.png';
+} from 'lucide-react'
+import { Tooltip, TooltipTrigger, TooltipContent } from '@/components/ui/tooltip'
+import { useTranslation } from '../lib/i18n-context'
+import logoImage from '@/assets/logo.png'
 
 interface NavigationItem {
-  id: string;
-  icon: LucideIcon;
-  label: string;
-  path: string;
+  id: string
+  icon: LucideIcon
+  label: string
+  path: string
 }
 
 interface NavigationSidebarProps {
-  className?: string;
+  className?: string
 }
 
 export function NavigationSidebar({ className }: NavigationSidebarProps) {
-  const t = useTranslation();
-  const matchRoute = useMatchRoute();
+  const t = useTranslation()
+  const matchRoute = useMatchRoute()
 
   const navigationItems: NavigationItem[] = [
     {
@@ -69,7 +65,7 @@ export function NavigationSidebar({ className }: NavigationSidebarProps) {
       label: t.navigation.terminal,
       path: '/terminal',
     },
-  ];
+  ]
 
   return (
     <nav
@@ -80,7 +76,10 @@ export function NavigationSidebar({ className }: NavigationSidebarProps) {
         <div className="mb-4 pb-4 border-b border-slate-200 dark:border-slate-800 w-full flex justify-center">
           <Tooltip>
             <TooltipTrigger asChild>
-              <Link to="/chat" className="block">
+              <Link
+                to="/chat"
+                className="block"
+              >
                 <img
                   src={logoImage}
                   alt="AutoGLM Logo"
@@ -88,16 +87,19 @@ export function NavigationSidebar({ className }: NavigationSidebarProps) {
                 />
               </Link>
             </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={8}>
+            <TooltipContent
+              side="right"
+              sideOffset={8}
+            >
               返回首页
             </TooltipContent>
           </Tooltip>
         </div>
 
         {/* Navigation items */}
-        {navigationItems.map(item => {
-          const Icon = item.icon;
-          const isActive = matchRoute({ to: item.path });
+        {navigationItems.map((item) => {
+          const Icon = item.icon
+          const isActive = matchRoute({ to: item.path })
 
           return (
             <Tooltip key={item.id}>
@@ -113,13 +115,16 @@ export function NavigationSidebar({ className }: NavigationSidebarProps) {
                   <Icon className="w-5 h-5" />
                 </Link>
               </TooltipTrigger>
-              <TooltipContent side="right" sideOffset={8}>
+              <TooltipContent
+                side="right"
+                sideOffset={8}
+              >
                 {item.label}
               </TooltipContent>
             </Tooltip>
-          );
+          )
         })}
       </div>
     </nav>
-  );
+  )
 }

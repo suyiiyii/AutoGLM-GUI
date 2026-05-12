@@ -71,7 +71,9 @@ def _configure_mock_llm(access_url: str, llm_url: str) -> None:
 
 
 def _wait_for_task_completion(
-    access_url: str, task_id: str, timeout: float = 30.0
+    access_url: str,
+    task_id: str,
+    timeout: float = 30.0,
 ) -> dict:
     """Poll a task until it reaches a terminal state."""
     start = time.time()
@@ -249,7 +251,7 @@ class TestTaskSystemE2E:
                 finish(message="已进入消息页面。")""",
                 """我看到当前已经在消息页面，无需重复点击。
                 finish(message="已确认当前仍在消息页面。")""",
-            ]
+            ],
         )
 
         session_resp = httpx.post(

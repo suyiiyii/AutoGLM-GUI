@@ -11,11 +11,5 @@
       "@/*": ["./src/*"]
     }
   },
-  "exclude": [
-    "e2e",
-    "test-results",
-    "node_modules",
-    "playwright.config.ts",
-    "vitest.config.ts"
-  ]
+  "exclude": ["e2e", "test-results", "node_modules", "playwright.config.ts", "vitest.config.ts"]
 }

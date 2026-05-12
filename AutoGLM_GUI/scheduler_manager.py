@@ -233,7 +233,7 @@ class SchedulerManager:
                 role="user",
                 content=workflow["text"],
                 timestamp=start_time,
-            )
+            ),
         ]
 
         result_message = ""
@@ -254,7 +254,7 @@ class SchedulerManager:
                             thinking=step_data.get("thinking", ""),
                             action=step_data.get("action", {}),
                             step=step_data.get("step", 0),
-                        )
+                        ),
                     )
                 elif event["type"] == "done":
                     result_message = step_data.get("message", "Task completed")
@@ -362,7 +362,7 @@ class SchedulerManager:
         device_serialnos = self._resolve_device_serialnos(task)
 
         logger.info(
-            f"Executing scheduled task: {task.name} on {len(device_serialnos)} device(s)"
+            f"Executing scheduled task: {task.name} on {len(device_serialnos)} device(s)",
         )
 
         from AutoGLM_GUI.device_manager import DeviceManager
@@ -437,7 +437,7 @@ class SchedulerManager:
                     step_count=0,
                 )
                 logger.warning(
-                    f"Scheduled task {task.name} skipped offline device {serialno}"
+                    f"Scheduled task {task.name} skipped offline device {serialno}",
                 )
                 continue
 
@@ -463,7 +463,7 @@ class SchedulerManager:
             return
 
         logger.info(
-            f"Scheduled task {task.name} enqueued {created_count}/{total_count} task run(s)"
+            f"Scheduled task {task.name} enqueued {created_count}/{total_count} task run(s)",
         )
 
     def _record_run(

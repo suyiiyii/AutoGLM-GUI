@@ -249,7 +249,9 @@ class AutoGLMLinter:
         return result
 
     def lint_frontend(
-        self, fix: bool = False, check_only: bool = False
+        self,
+        fix: bool = False,
+        check_only: bool = False,
     ) -> list[LintResult]:
         """运行前端所有检查"""
         print("\n📱 前端代码检查")
@@ -272,7 +274,9 @@ class AutoGLMLinter:
         return results
 
     def lint_backend(
-        self, fix: bool = False, check_only: bool = False
+        self,
+        fix: bool = False,
+        check_only: bool = False,
     ) -> list[LintResult]:
         """运行后端所有检查"""
         print("\n🐍 后端代码检查")

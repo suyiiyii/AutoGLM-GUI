@@ -119,7 +119,7 @@ class ConfigModel(BaseModel):
         if v is not None:
             if not v.startswith(("http://", "https://")):
                 raise ValueError(
-                    "decision_base_url must start with http:// or https://"
+                    "decision_base_url must start with http:// or https://",
                 )
             return v.rstrip("/")
         return v
@@ -408,7 +408,7 @@ class UnifiedConfigManager:
             raw_agent_type = config_data.get("agent_type", "glm-async")
             if raw_agent_type == "glm":
                 logger.warning(
-                    "Deprecated agent_type 'glm' detected in config file, auto-migrating to 'glm-async'."
+                    "Deprecated agent_type 'glm' detected in config file, auto-migrating to 'glm-async'.",
                 )
                 raw_agent_type = "glm-async"
 
@@ -501,13 +501,9 @@ class UnifiedConfigManager:
                 new_config["agent_type"] = agent_type
             if agent_config_params is not None:
                 new_config["agent_config_params"] = agent_config_params
-            if default_max_steps_set:
+            if default_max_steps_set or default_max_steps is not None:
                 new_config["default_max_steps"] = default_max_steps
-            elif default_max_steps is not None:
-                new_config["default_max_steps"] = default_max_steps
-            if layered_max_turns_set:
-                new_config["layered_max_turns"] = layered_max_turns
-            elif layered_max_turns is not None:
+            if layered_max_turns_set or layered_max_turns is not None:
                 new_config["layered_max_turns"] = layered_max_turns
 
             # 决策模型配置
@@ -728,7 +724,7 @@ class UnifiedConfigManager:
                         file_value=file_value,
                         override_value=cli_value,
                         override_source=ConfigSource.CLI,
-                    )
+                    ),
                 )
                 continue
 
@@ -741,7 +737,7 @@ class UnifiedConfigManager:
                         file_value=file_value,
                         override_value=env_value,
                         override_source=ConfigSource.ENV,
-                    )
+                    ),
                 )
 
         return conflicts

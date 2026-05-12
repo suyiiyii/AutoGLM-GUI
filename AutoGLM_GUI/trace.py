@@ -17,7 +17,8 @@ from typing import Any, Iterator, Literal
 
 _TRACE_ID: ContextVar[str | None] = ContextVar("autoglm_trace_id", default=None)
 _SPAN_STACK: ContextVar[tuple[str, ...]] = ContextVar(
-    "autoglm_trace_span_stack", default=()
+    "autoglm_trace_span_stack",
+    default=(),
 )
 _WRITE_LOCK = threading.Lock()
 _TRACE_STATE_LOCK = threading.Lock()
@@ -103,10 +104,9 @@ def _write_trace_record(record: dict[str, Any]) -> None:
         return
 
     path = _resolve_trace_path()
-    with _WRITE_LOCK:
-        with path.open("a", encoding="utf-8") as file:
-            file.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")))
-            file.write("\n")
+    with _WRITE_LOCK, path.open("a", encoding="utf-8") as file:
+        file.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")))
+        file.write("\n")
 
 
 def _extract_step(attrs: dict[str, Any]) -> int | None:
@@ -317,7 +317,9 @@ class _TraceCollector:
 
 
 def _get_trace_collector(
-    trace_id: str, *, create: bool = False
+    trace_id: str,
+    *,
+    create: bool = False,
 ) -> _TraceCollector | None:
     collector = _TRACE_COLLECTORS.get(trace_id)
     if collector is None and create:
@@ -327,7 +329,9 @@ def _get_trace_collector(
 
 
 def get_step_timing_summary(
-    step: int, *, trace_id: str | None = None
+    step: int,
+    *,
+    trace_id: str | None = None,
 ) -> dict[str, Any] | None:
     """Return the current timing summary for a step in the active trace."""
     active_trace_id = trace_id or current_trace_id()

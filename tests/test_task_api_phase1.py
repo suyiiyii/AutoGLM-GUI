@@ -198,7 +198,11 @@ class _FakeTaskStore:
         return None
 
     def list_task_events(
-        self, task_id: str, *, after_seq: int = 0, **_: object
+        self,
+        task_id: str,
+        *,
+        after_seq: int = 0,
+        **_: object,
     ) -> list[dict[str, object]]:
         return []
 
@@ -242,7 +246,8 @@ def test_list_tasks_accepts_device_serial_filter(_client: TestClient) -> None:
     ["QUEUED", "RUNNING", "SUCCEEDED", "FAILED", "CANCELLED", "INTERRUPTED"],
 )
 def test_list_tasks_accepts_all_valid_statuses(
-    _client: TestClient, valid_status: str
+    _client: TestClient,
+    valid_status: str,
 ) -> None:
     """All TaskStatus values should be accepted as filter."""
     response = _client.get(f"/api/tasks?status={valid_status}")

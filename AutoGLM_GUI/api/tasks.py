@@ -199,7 +199,8 @@ async def list_task_session_tasks(
     response_model=TaskRunResponse,
 )
 async def submit_task_session_task(
-    session_id: str, request: TaskSubmitRequest
+    session_id: str,
+    request: TaskSubmitRequest,
 ) -> TaskRunResponse:
     session = await task_manager.get_session(session_id)
     if session is None:
@@ -273,7 +274,7 @@ async def get_task_events(
         after_seq=after_seq,
     )
     return TaskEventListResponse(
-        events=[_task_event_response(event) for event in events]
+        events=[_task_event_response(event) for event in events],
     )
 
 

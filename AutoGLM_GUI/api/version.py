@@ -106,14 +106,14 @@ def fetch_latest_release() -> GitHubRelease | None:
         with urllib.request.urlopen(req, timeout=10) as response:
             data = json.loads(response.read().decode("utf-8"))
             logger.debug(
-                f"Successfully fetched latest release: {data.get('tag_name', 'unknown')}"
+                f"Successfully fetched latest release: {data.get('tag_name', 'unknown')}",
             )
             return data
 
     except urllib.error.HTTPError as e:
         if e.code == 403:
             logger.warning(
-                "GitHub API rate limit exceeded (HTTP 403), using cached data if available"
+                "GitHub API rate limit exceeded (HTTP 403), using cached data if available",
             )
         else:
             logger.warning(f"GitHub API HTTP error {e.code}: {e.reason}")
@@ -151,7 +151,7 @@ def check_version() -> VersionCheckResponse:
         and current_time - _version_cache["timestamp"] < _version_cache["ttl"]
     ):
         logger.debug(
-            f"Using cached version check result (age: {int(current_time - _version_cache['timestamp'])}s)"
+            f"Using cached version check result (age: {int(current_time - _version_cache['timestamp'])}s)",
         )
         return _version_cache["data"]
 
@@ -200,7 +200,7 @@ def check_version() -> VersionCheckResponse:
     _version_cache["timestamp"] = current_time
 
     logger.info(
-        f"Version check completed: current={APP_VERSION}, latest={latest_version}, has_update={has_update}"
+        f"Version check completed: current={APP_VERSION}, latest={latest_version}, has_update={has_update}",
     )
 
     return response

@@ -118,20 +118,25 @@ def _trace_summary_from_step_timings(
         steps=len(step_timings),
         total_duration_ms=round(sum(t.total_duration_ms for t in step_timings), 3),
         screenshot_duration_ms=round(
-            sum(t.screenshot_duration_ms for t in step_timings), 3
+            sum(t.screenshot_duration_ms for t in step_timings),
+            3,
         ),
         current_app_duration_ms=round(
-            sum(t.current_app_duration_ms for t in step_timings), 3
+            sum(t.current_app_duration_ms for t in step_timings),
+            3,
         ),
         llm_duration_ms=round(sum(t.llm_duration_ms for t in step_timings), 3),
         parse_action_duration_ms=round(
-            sum(t.parse_action_duration_ms for t in step_timings), 3
+            sum(t.parse_action_duration_ms for t in step_timings),
+            3,
         ),
         execute_action_duration_ms=round(
-            sum(t.execute_action_duration_ms for t in step_timings), 3
+            sum(t.execute_action_duration_ms for t in step_timings),
+            3,
         ),
         update_context_duration_ms=round(
-            sum(t.update_context_duration_ms for t in step_timings), 3
+            sum(t.update_context_duration_ms for t in step_timings),
+            3,
         ),
         adb_duration_ms=round(sum(t.adb_duration_ms for t in step_timings), 3),
         sleep_duration_ms=round(sum(t.sleep_duration_ms for t in step_timings), 3),
@@ -140,7 +145,9 @@ def _trace_summary_from_step_timings(
 
 
 def _build_history_record_from_task(
-    record: dict[str, Any], *, include_attachments: bool = True
+    record: dict[str, Any],
+    *,
+    include_attachments: bool = True,
 ) -> HistoryRecordResponse:
     events = task_store.list_task_events(record["id"])
     user_message_event = next(
@@ -163,7 +170,7 @@ def _build_history_record_from_task(
             content=str(user_message_payload.get("message", record["input_text"])),
             timestamp=record["created_at"],
             attachments=user_attachments,
-        )
+        ),
     ]
     # Sequence index for layered tool-call cycles so the UI can group a tool
     # call together with its result under a single "step".
@@ -182,7 +189,7 @@ def _build_history_record_from_task(
                     thinking=payload.get("thinking"),
                     action=payload.get("action"),
                     step=payload.get("step"),
-                )
+                ),
             )
             timings = payload.get("timings")
             if isinstance(timings, dict):
@@ -209,7 +216,7 @@ def _build_history_record_from_task(
                         "tool_args": payload.get("tool_args", {}),
                     },
                     step=layered_step,
-                )
+                ),
             )
         elif event_type == "tool_result":
             messages.append(
@@ -218,7 +225,7 @@ def _build_history_record_from_task(
                     content=_tool_result_text(payload),
                     timestamp=event["created_at"],
                     step=layered_step or None,
-                )
+                ),
             )
         elif event_type == "message":
             content = payload.get("content")
@@ -228,7 +235,7 @@ def _build_history_record_from_task(
                         role="assistant",
                         content=str(content),
                         timestamp=event["created_at"],
-                    )
+                    ),
                 )
 
     source_detail = record.get("session_id") or ""
@@ -289,10 +296,13 @@ def _is_terminal_task_record(record: dict[str, Any]) -> bool:
 
 
 def _list_merged_history(
-    serialno: str, mode: str | None = None
+    serialno: str,
+    mode: str | None = None,
 ) -> list[HistoryRecordResponse]:
     task_records, _ = task_store.list_tasks(
-        device_serial=serialno, limit=10000, offset=0
+        device_serial=serialno,
+        limit=10000,
+        offset=0,
     )
     history_total = history_manager.get_total_count(serialno)
     legacy_records = history_manager.list_records(serialno, history_total, 0)
@@ -323,7 +333,10 @@ def _list_merged_history(
 
 @router.get("/api/history/{serialno}", response_model=HistoryListResponse)
 def list_history(
-    serialno: str, limit: int = 50, offset: int = 0, mode: str | None = None
+    serialno: str,
+    limit: int = 50,
+    offset: int = 0,
+    mode: str | None = None,
 ) -> HistoryListResponse:
     if limit < 1 or limit > 100:
         raise HTTPException(status_code=400, detail="limit must be between 1 and 100")
@@ -331,7 +344,8 @@ def list_history(
         raise HTTPException(status_code=400, detail="offset must be non-negative")
     if mode is not None and mode not in _MODE_EXECUTOR_KEYS:
         raise HTTPException(
-            status_code=400, detail="mode must be 'classic' or 'layered'"
+            status_code=400,
+            detail="mode must be 'classic' or 'layered'",
         )
 
     merged_records = _list_merged_history(serialno, mode)

@@ -55,7 +55,7 @@ class MockAgentState:
                 "model": "MockPhone",
                 "platform": "android",
                 "connection_type": "mock",
-            }
+            },
         ]
 
     def record(self, action: str, device_id: str, **params):
@@ -65,7 +65,7 @@ class MockAgentState:
                 action=action,
                 device_id=device_id,
                 params=params,
-            )
+            ),
         )
 
     def reset(self):
@@ -230,7 +230,10 @@ def _register_routes(app: FastAPI):
         )
         if state.state_machine:
             state.state_machine.handle_swipe(
-                req.start_x, req.start_y, req.end_x, req.end_y
+                req.start_x,
+                req.start_y,
+                req.end_x,
+                req.end_y,
             )
         return {"status": "ok"}
 

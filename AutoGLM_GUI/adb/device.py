@@ -35,7 +35,10 @@ def get_current_app(device_id: str | None = None) -> str:
 
 
 def tap(
-    x: int, y: int, device_id: str | None = None, delay: float | None = None
+    x: int,
+    y: int,
+    device_id: str | None = None,
+    delay: float | None = None,
 ) -> None:
     if delay is None:
         delay = TIMING_CONFIG.device.default_tap_delay
@@ -47,7 +50,8 @@ def tap(
         attrs={"device_id": device_id, "x": x, "y": y, "delay_ms": delay * 1000},
     ):
         subprocess.run(
-            adb_prefix + ["shell", "input", "tap", str(x), str(y)], capture_output=True
+            adb_prefix + ["shell", "input", "tap", str(x), str(y)],
+            capture_output=True,
         )
     trace_sleep(
         delay,
@@ -57,7 +61,10 @@ def tap(
 
 
 def double_tap(
-    x: int, y: int, device_id: str | None = None, delay: float | None = None
+    x: int,
+    y: int,
+    device_id: str | None = None,
+    delay: float | None = None,
 ) -> None:
     if delay is None:
         delay = TIMING_CONFIG.device.default_double_tap_delay
@@ -69,7 +76,8 @@ def double_tap(
         attrs={"device_id": device_id, "x": x, "y": y, "delay_ms": delay * 1000},
     ):
         subprocess.run(
-            adb_prefix + ["shell", "input", "tap", str(x), str(y)], capture_output=True
+            adb_prefix + ["shell", "input", "tap", str(x), str(y)],
+            capture_output=True,
         )
         trace_sleep(
             TIMING_CONFIG.device.double_tap_interval,
@@ -77,7 +85,8 @@ def double_tap(
             attrs={"device_id": device_id},
         )
         subprocess.run(
-            adb_prefix + ["shell", "input", "tap", str(x), str(y)], capture_output=True
+            adb_prefix + ["shell", "input", "tap", str(x), str(y)],
+            capture_output=True,
         )
     trace_sleep(
         delay,
@@ -192,7 +201,8 @@ def back(device_id: str | None = None, delay: float | None = None) -> None:
         attrs={"device_id": device_id, "delay_ms": delay * 1000},
     ):
         subprocess.run(
-            adb_prefix + ["shell", "input", "keyevent", "4"], capture_output=True
+            adb_prefix + ["shell", "input", "keyevent", "4"],
+            capture_output=True,
         )
     trace_sleep(
         delay,
@@ -223,7 +233,9 @@ def home(device_id: str | None = None, delay: float | None = None) -> None:
 
 
 def launch_app(
-    app_name: str, device_id: str | None = None, delay: float | None = None
+    app_name: str,
+    device_id: str | None = None,
+    delay: float | None = None,
 ) -> bool:
     if delay is None:
         delay = TIMING_CONFIG.device.default_launch_delay

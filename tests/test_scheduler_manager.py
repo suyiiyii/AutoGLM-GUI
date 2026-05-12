@@ -16,7 +16,8 @@ from AutoGLM_GUI.task_store import TaskStatus, TaskStore
 
 
 def test_scheduler_execution_counts_offline_devices_in_latest_summary(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     class FakeWorkflowManager:
         @staticmethod
@@ -33,7 +34,7 @@ def test_scheduler_execution_counts_offline_devices_in_latest_summary(
                     serial="online-1",
                     primary_device_id="device-online-1",
                     state=SimpleNamespace(value="online"),
-                )
+                ),
             ]
 
     class FakeTaskManager:
@@ -83,11 +84,13 @@ def test_scheduler_execution_counts_offline_devices_in_latest_summary(
             device_serialnos=["online-1", "offline-1"],
             cron_expression="0 8 * * *",
             enabled=True,
-        )
+        ),
     }
 
     monkeypatch.setattr(
-        workflow_manager_module, "workflow_manager", FakeWorkflowManager()
+        workflow_manager_module,
+        "workflow_manager",
+        FakeWorkflowManager(),
     )
     monkeypatch.setattr(
         device_manager_module.DeviceManager,
@@ -102,7 +105,10 @@ def test_scheduler_execution_counts_offline_devices_in_latest_summary(
 
         summary = store.get_latest_schedule_summary("scheduled-1")
         tasks, total = store.list_tasks(
-            source="scheduled", limit=10, offset=0, device_serial=None
+            source="scheduled",
+            limit=10,
+            offset=0,
+            device_serial=None,
         )
     finally:
         store.close()
@@ -120,7 +126,8 @@ def test_scheduler_execution_counts_offline_devices_in_latest_summary(
 
 
 def test_scheduler_uses_layered_executor_when_task_mode_is_layered(
-    tmp_path: Path, monkeypatch
+    tmp_path: Path,
+    monkeypatch,
 ) -> None:
     class FakeWorkflowManager:
         @staticmethod
@@ -137,7 +144,7 @@ def test_scheduler_uses_layered_executor_when_task_mode_is_layered(
                     serial="online-1",
                     primary_device_id="device-online-1",
                     state=SimpleNamespace(value="online"),
-                )
+                ),
             ]
 
     class FakeTaskManager:
@@ -162,11 +169,13 @@ def test_scheduler_uses_layered_executor_when_task_mode_is_layered(
             cron_expression="0 8 * * *",
             enabled=True,
             execution_mode="layered",
-        )
+        ),
     }
 
     monkeypatch.setattr(
-        workflow_manager_module, "workflow_manager", FakeWorkflowManager()
+        workflow_manager_module,
+        "workflow_manager",
+        FakeWorkflowManager(),
     )
     monkeypatch.setattr(
         device_manager_module.DeviceManager,

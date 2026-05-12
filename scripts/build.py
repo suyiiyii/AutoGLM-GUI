@@ -104,7 +104,9 @@ def main() -> int:
     """Main build process."""
     parser = argparse.ArgumentParser(description="Build AutoGLM-GUI for distribution")
     parser.add_argument(
-        "--pack", action="store_true", help="Also build Python package after frontend"
+        "--pack",
+        action="store_true",
+        help="Also build Python package after frontend",
     )
     args = parser.parse_args()
 
@@ -118,9 +120,8 @@ def main() -> int:
     if not copy_static_files():
         return 1
 
-    if args.pack:
-        if not build_package():
-            return 1
+    if args.pack and not build_package():
+        return 1
 
     print()
     print("=" * 50)

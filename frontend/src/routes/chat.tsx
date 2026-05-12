@@ -1,6 +1,6 @@
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import * as React from 'react';
-import { useState, useEffect, useCallback } from 'react';
+import { createFileRoute, useNavigate } from '@tanstack/react-router'
+import * as React from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import {
   connectWifi,
   disconnectWifi,
@@ -10,14 +10,14 @@ import {
   getErrorMessage,
   type Device,
   type ConfigSaveRequest,
-} from '../api';
-import { DeviceSidebar } from '../components/DeviceSidebar';
-import { DevicePanel } from '../components/DevicePanel';
-import { ChatKitPanel } from '../components/ChatKitPanel';
-import { GroupManageDialog } from '../components/GroupManageDialog';
-import { Toast, type ToastType } from '../components/Toast';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+} from '../api'
+import { DeviceSidebar } from '../components/DeviceSidebar'
+import { DevicePanel } from '../components/DevicePanel'
+import { ChatKitPanel } from '../components/ChatKitPanel'
+import { GroupManageDialog } from '../components/GroupManageDialog'
+import { Toast, type ToastType } from '../components/Toast'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
 import {
   Dialog,
   DialogContent,
@@ -25,14 +25,10 @@ import {
   DialogTitle,
   DialogDescription,
   DialogFooter,
-} from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
+} from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
 import {
   Settings,
   CheckCircle2,
@@ -47,9 +43,9 @@ import {
   Cpu,
   Info,
   Smartphone,
-} from 'lucide-react';
-import { useTranslation } from '../lib/i18n-context';
-import { usePageVisibility } from '../hooks/usePageVisibility';
+} from 'lucide-react'
+import { useTranslation } from '../lib/i18n-context'
+import { usePageVisibility } from '../hooks/usePageVisibility'
 
 // 视觉模型预设配置
 const VISION_PRESETS = [
@@ -76,7 +72,7 @@ const VISION_PRESETS = [
       model_name: 'autoglm-phone-9b',
     },
   },
-] as const;
+] as const
 
 // Agent 类型预设配置
 const AGENT_PRESETS = [
@@ -119,7 +115,7 @@ const AGENT_PRESETS = [
       model_family: 'doubao-vision',
     },
   },
-] as const;
+] as const
 
 // 决策模型预设配置（与视觉模型保持一致）
 const DECISION_PRESETS = [
@@ -146,47 +142,42 @@ const DECISION_PRESETS = [
       decision_model_name: '',
     },
   },
-] as const;
+] as const
 
 function getSelectedVisionPreset(baseUrl: string) {
   return (
-    VISION_PRESETS.find(
-      preset => preset.name !== 'custom' && preset.config.base_url === baseUrl
-    )?.name ?? 'custom'
-  );
+    VISION_PRESETS.find((preset) => preset.name !== 'custom' && preset.config.base_url === baseUrl)
+      ?.name ?? 'custom'
+  )
 }
 
 function getSelectedDecisionPreset(baseUrl: string) {
   return (
     DECISION_PRESETS.find(
-      preset =>
-        preset.name !== 'custom' && preset.config.decision_base_url === baseUrl
+      (preset) => preset.name !== 'custom' && preset.config.decision_base_url === baseUrl,
     )?.name ?? 'custom'
-  );
+  )
 }
 
 // Search params type for URL persistence
 type ChatSearchParams = {
-  serial?: string;
-  mode?: 'classic' | 'chatkit';
-};
+  serial?: string
+  mode?: 'classic' | 'chatkit'
+}
 
 type ElectronRelaunchAPI = {
   app?: {
-    relaunch: () => Promise<{ success: boolean }>;
-  };
-};
+    relaunch: () => Promise<{ success: boolean }>
+  }
+}
 
-function areAgentStatesEqual(
-  left: Device['agent'] | null,
-  right: Device['agent'] | null
-): boolean {
+function areAgentStatesEqual(left: Device['agent'] | null, right: Device['agent'] | null): boolean {
   if (left === right) {
-    return true;
+    return true
   }
 
   if (!left || !right) {
-    return false;
+    return false
   }
 
   return (
@@ -195,16 +186,16 @@ function areAgentStatesEqual(
     left.last_used === right.last_used &&
     left.error_message === right.error_message &&
     left.model_name === right.model_name
-  );
+  )
 }
 
 function areDevicesEqual(previous: Device[], next: Device[]): boolean {
   if (previous.length !== next.length) {
-    return false;
+    return false
   }
 
   return previous.every((device, index) => {
-    const nextDevice = next[index];
+    const nextDevice = next[index]
 
     return (
       device.id === nextDevice.id &&
@@ -217,51 +208,49 @@ function areDevicesEqual(previous: Device[], next: Device[]): boolean {
       device.display_name === nextDevice.display_name &&
       device.group_id === nextDevice.group_id &&
       areAgentStatesEqual(device.agent, nextDevice.agent)
-    );
-  });
+    )
+  })
 }
 
 export const Route = createFileRoute('/chat')({
   component: ChatComponent,
   validateSearch: (search: Record<string, unknown>): ChatSearchParams => {
-    const mode = search.mode;
+    const mode = search.mode
     return {
       serial: typeof search.serial === 'string' ? search.serial : undefined,
       mode: mode === 'classic' || mode === 'chatkit' ? mode : undefined,
-    };
+    }
   },
-});
+})
 
 function ChatComponent() {
-  const t = useTranslation();
-  const searchParams = Route.useSearch();
-  const navigate = useNavigate();
-  const isPageVisible = usePageVisibility();
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [currentDeviceId, setCurrentDeviceId] = useState<string>('');
+  const t = useTranslation()
+  const searchParams = Route.useSearch()
+  const navigate = useNavigate()
+  const isPageVisible = usePageVisibility()
+  const [devices, setDevices] = useState<Device[]>([])
+  const [currentDeviceId, setCurrentDeviceId] = useState<string>('')
   // Chat mode: 'classic' for DevicePanel (single model), 'chatkit' for ChatKitPanel (layered agent)
   // Initialize from URL search params if available
-  const [chatMode, setChatMode] = useState<'classic' | 'chatkit'>(
-    searchParams.mode || 'classic'
-  );
+  const [chatMode, setChatMode] = useState<'classic' | 'chatkit'>(searchParams.mode || 'classic')
 
   // Track if we've done initial device selection from URL
-  const [initialDeviceSet, setInitialDeviceSet] = useState(false);
+  const [initialDeviceSet, setInitialDeviceSet] = useState(false)
   const [toast, setToast] = useState<{
-    message: string;
-    type: ToastType;
-    visible: boolean;
-  }>({ message: '', type: 'info', visible: false });
+    message: string
+    type: ToastType
+    visible: boolean
+  }>({ message: '', type: 'info', visible: false })
 
   const showToast = (message: string, type: ToastType = 'info') => {
-    setToast({ message, type, visible: true });
-  };
+    setToast({ message, type, visible: true })
+  }
 
-  const [config, setConfig] = useState<ConfigSaveRequest | null>(null);
-  const [showConfig, setShowConfig] = useState(false);
-  const [showGroupManager, setShowGroupManager] = useState(false);
-  const [showApiKey, setShowApiKey] = useState(false);
-  const isLoadingDevicesRef = React.useRef(false);
+  const [config, setConfig] = useState<ConfigSaveRequest | null>(null)
+  const [showConfig, setShowConfig] = useState(false)
+  const [showGroupManager, setShowGroupManager] = useState(false)
+  const [showApiKey, setShowApiKey] = useState(false)
+  const isLoadingDevicesRef = React.useRef(false)
   const [tempConfig, setTempConfig] = useState({
     base_url: VISION_PRESETS[0].config.base_url as string,
     model_name: VISION_PRESETS[0].config.model_name as string,
@@ -273,16 +262,14 @@ function ChatComponent() {
     decision_base_url: '',
     decision_model_name: '',
     decision_api_key: '',
-  });
-  const selectedVisionPreset = getSelectedVisionPreset(tempConfig.base_url);
-  const selectedDecisionPreset = getSelectedDecisionPreset(
-    tempConfig.decision_base_url
-  );
+  })
+  const selectedVisionPreset = getSelectedVisionPreset(tempConfig.base_url)
+  const selectedDecisionPreset = getSelectedDecisionPreset(tempConfig.decision_base_url)
 
   useEffect(() => {
     const loadConfiguration = async () => {
       try {
-        const data = await getConfig();
+        const data = await getConfig()
         setConfig({
           base_url: data.base_url,
           model_name: data.model_name,
@@ -294,16 +281,12 @@ function ChatComponent() {
           decision_base_url: data.decision_base_url || undefined,
           decision_model_name: data.decision_model_name || undefined,
           decision_api_key: data.decision_api_key || undefined,
-        });
+        })
         // 当后端返回空配置时，使用智谱预设作为默认值
-        const useDefault = !data.base_url;
+        const useDefault = !data.base_url
         setTempConfig({
-          base_url: useDefault
-            ? VISION_PRESETS[0].config.base_url
-            : data.base_url,
-          model_name: useDefault
-            ? VISION_PRESETS[0].config.model_name
-            : data.model_name,
+          base_url: useDefault ? VISION_PRESETS[0].config.base_url : data.base_url,
+          model_name: useDefault ? VISION_PRESETS[0].config.model_name : data.model_name,
           api_key: data.api_key || '',
           agent_type: data.agent_type || 'glm-async',
           agent_config_params: data.agent_config_params || {},
@@ -312,136 +295,124 @@ function ChatComponent() {
           decision_base_url: data.decision_base_url || '',
           decision_model_name: data.decision_model_name || 'glm-4.7',
           decision_api_key: data.decision_api_key || '',
-        });
+        })
 
         if (useDefault) {
-          setShowConfig(true);
+          setShowConfig(true)
         }
       } catch (err) {
-        console.error('Failed to load config:', err);
-        setShowConfig(true);
+        console.error('Failed to load config:', err)
+        setShowConfig(true)
       }
-    };
+    }
 
-    loadConfiguration();
-  }, []);
+    loadConfiguration()
+  }, [])
 
   const loadDevices = useCallback(async () => {
     if (isLoadingDevicesRef.current) {
-      return;
+      return
     }
 
-    isLoadingDevicesRef.current = true;
+    isLoadingDevicesRef.current = true
     try {
-      const response = await listDevices();
+      const response = await listDevices()
 
       // Filter out disconnected devices
-      const connectedDevices = response.devices.filter(
-        device => device.state !== 'disconnected'
-      );
+      const connectedDevices = response.devices.filter((device) => device.state !== 'disconnected')
 
-      const deviceMap = new Map<string, Device>();
-      const serialMap = new Map<string, Device[]>();
+      const deviceMap = new Map<string, Device>()
+      const serialMap = new Map<string, Device[]>()
 
       for (const device of connectedDevices) {
         if (device.serial) {
-          const group = serialMap.get(device.serial) || [];
-          group.push(device);
-          serialMap.set(device.serial, group);
+          const group = serialMap.get(device.serial) || []
+          group.push(device)
+          serialMap.set(device.serial, group)
         } else {
-          deviceMap.set(device.id, device);
+          deviceMap.set(device.id, device)
         }
       }
 
-      Array.from(serialMap.values()).forEach(devices => {
-        const wifiDevice = devices.find(
-          (d: Device) => d.connection_type === 'wifi'
-        );
-        const selectedDevice = wifiDevice || devices[0];
-        deviceMap.set(selectedDevice.id, selectedDevice);
-      });
+      Array.from(serialMap.values()).forEach((devices) => {
+        const wifiDevice = devices.find((d: Device) => d.connection_type === 'wifi')
+        const selectedDevice = wifiDevice || devices[0]
+        deviceMap.set(selectedDevice.id, selectedDevice)
+      })
 
-      const filteredDevices = Array.from(deviceMap.values());
-      setDevices(previousDevices =>
-        areDevicesEqual(previousDevices, filteredDevices)
-          ? previousDevices
-          : filteredDevices
-      );
+      const filteredDevices = Array.from(deviceMap.values())
+      setDevices((previousDevices) =>
+        areDevicesEqual(previousDevices, filteredDevices) ? previousDevices : filteredDevices,
+      )
 
       // On initial load, try to select device from URL serial param
       if (filteredDevices.length > 0 && !initialDeviceSet) {
-        const urlSerial = searchParams.serial;
+        const urlSerial = searchParams.serial
         if (urlSerial) {
-          const deviceFromUrl = filteredDevices.find(
-            d => d.serial === urlSerial
-          );
+          const deviceFromUrl = filteredDevices.find((d) => d.serial === urlSerial)
           if (deviceFromUrl) {
-            setCurrentDeviceId(deviceFromUrl.id);
+            setCurrentDeviceId(deviceFromUrl.id)
           } else {
             // URL serial not found, fallback to first device
-            setCurrentDeviceId(filteredDevices[0].id);
+            setCurrentDeviceId(filteredDevices[0].id)
           }
         } else if (!currentDeviceId) {
-          setCurrentDeviceId(filteredDevices[0].id);
+          setCurrentDeviceId(filteredDevices[0].id)
         }
-        setInitialDeviceSet(true);
+        setInitialDeviceSet(true)
       }
 
-      if (
-        currentDeviceId &&
-        !filteredDevices.find(d => d.id === currentDeviceId)
-      ) {
-        setCurrentDeviceId(filteredDevices[0]?.id || '');
+      if (currentDeviceId && !filteredDevices.find((d) => d.id === currentDeviceId)) {
+        setCurrentDeviceId(filteredDevices[0]?.id || '')
       }
     } catch (error) {
-      console.error('Failed to load devices:', error);
+      console.error('Failed to load devices:', error)
     } finally {
-      isLoadingDevicesRef.current = false;
+      isLoadingDevicesRef.current = false
     }
-  }, [currentDeviceId, initialDeviceSet, searchParams.serial]);
+  }, [currentDeviceId, initialDeviceSet, searchParams.serial])
 
   useEffect(() => {
     if (!isPageVisible) {
-      return;
+      return
     }
 
-    let isCancelled = false;
-    let timeoutId: number | null = null;
+    let isCancelled = false
+    let timeoutId: number | null = null
 
     const pollDevices = async () => {
-      await loadDevices();
+      await loadDevices()
 
       if (isCancelled) {
-        return;
+        return
       }
 
       timeoutId = window.setTimeout(() => {
-        void pollDevices();
-      }, 3000);
-    };
+        void pollDevices()
+      }, 3000)
+    }
 
-    void pollDevices();
+    void pollDevices()
 
     return () => {
-      isCancelled = true;
+      isCancelled = true
       if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
+        window.clearTimeout(timeoutId)
       }
-    };
-  }, [isPageVisible, loadDevices]);
+    }
+  }, [isPageVisible, loadDevices])
 
   // Sync state changes to URL search params
   useEffect(() => {
     // Get current device's serial
-    const currentDevice = devices.find(d => d.id === currentDeviceId);
-    const currentSerial = currentDevice?.serial;
+    const currentDevice = devices.find((d) => d.id === currentDeviceId)
+    const currentSerial = currentDevice?.serial
 
     // Only update URL after initial device selection is done
-    if (!initialDeviceSet) return;
+    if (!initialDeviceSet) return
 
     // Check if URL needs updating
-    const needsUpdate =
-      currentSerial !== searchParams.serial || chatMode !== searchParams.mode;
+    const needsUpdate = currentSerial !== searchParams.serial || chatMode !== searchParams.mode
 
     if (needsUpdate) {
       navigate({
@@ -451,7 +422,7 @@ function ChatComponent() {
           mode: chatMode,
         },
         replace: true, // Don't create new history entry
-      });
+      })
     }
   }, [
     currentDeviceId,
@@ -461,12 +432,12 @@ function ChatComponent() {
     navigate,
     searchParams.serial,
     searchParams.mode,
-  ]);
+  ])
 
   const handleSaveConfig = async () => {
     if (!tempConfig.base_url) {
-      showToast(t.chat.baseUrlRequired, 'error');
-      return;
+      showToast(t.chat.baseUrlRequired, 'error')
+      return
     }
 
     try {
@@ -481,14 +452,12 @@ function ChatComponent() {
             ? tempConfig.agent_config_params
             : undefined,
         default_max_steps:
-          tempConfig.default_max_steps === ''
-            ? null
-            : tempConfig.default_max_steps,
+          tempConfig.default_max_steps === '' ? null : tempConfig.default_max_steps,
         layered_max_turns: tempConfig.layered_max_turns,
         decision_base_url: tempConfig.decision_base_url || undefined,
         decision_model_name: tempConfig.decision_model_name || undefined,
         decision_api_key: tempConfig.decision_api_key || undefined,
-      });
+      })
 
       setConfig({
         base_url: tempConfig.base_url,
@@ -500,73 +469,64 @@ function ChatComponent() {
             ? tempConfig.agent_config_params
             : undefined,
         default_max_steps:
-          tempConfig.default_max_steps === ''
-            ? null
-            : tempConfig.default_max_steps,
+          tempConfig.default_max_steps === '' ? null : tempConfig.default_max_steps,
         layered_max_turns: tempConfig.layered_max_turns,
         decision_base_url: tempConfig.decision_base_url || undefined,
         decision_model_name: tempConfig.decision_model_name || undefined,
         decision_api_key: tempConfig.decision_api_key || undefined,
-      });
+      })
 
-      showToast(t.toasts.configSaved, 'success');
+      showToast(t.toasts.configSaved, 'success')
 
-      const electronApp = (
-        window as Window & { electronAPI?: ElectronRelaunchAPI }
-      ).electronAPI?.app;
+      const electronApp = (window as Window & { electronAPI?: ElectronRelaunchAPI }).electronAPI
+        ?.app
 
       if (saveResult.restart_required && electronApp?.relaunch) {
-        showToast('配置已保存，应用将立即重启以应用新配置', 'warning');
-        await new Promise(resolve => setTimeout(resolve, 600));
-        await electronApp.relaunch();
-        return;
+        showToast('配置已保存，应用将立即重启以应用新配置', 'warning')
+        await new Promise((resolve) => setTimeout(resolve, 600))
+        await electronApp.relaunch()
+        return
       }
 
       if (saveResult.restart_required) {
-        showToast('配置已保存，请手动重启应用以立即生效', 'warning');
+        showToast('配置已保存，请手动重启应用以立即生效', 'warning')
       }
 
-      setShowConfig(false);
+      setShowConfig(false)
     } catch (err) {
-      console.error('Failed to save config:', err);
-      showToast(`Failed to save: ${getErrorMessage(err)}`, 'error');
+      console.error('Failed to save config:', err)
+      showToast(`Failed to save: ${getErrorMessage(err)}`, 'error')
     }
-  };
+  }
 
   const handleConnectWifi = async (deviceId: string) => {
     try {
-      const res = await connectWifi({ device_id: deviceId });
+      const res = await connectWifi({ device_id: deviceId })
       if (res.success && res.device_id) {
-        setCurrentDeviceId(res.device_id);
-        showToast(t.toasts.wifiConnected, 'success');
+        setCurrentDeviceId(res.device_id)
+        showToast(t.toasts.wifiConnected, 'success')
       } else if (!res.success) {
-        showToast(
-          res.message || res.error || t.toasts.connectionFailed,
-          'error'
-        );
+        showToast(res.message || res.error || t.toasts.connectionFailed, 'error')
       }
     } catch (e) {
-      showToast(t.toasts.wifiConnectionError, 'error');
-      console.error('Connect WiFi error:', e);
+      showToast(t.toasts.wifiConnectionError, 'error')
+      console.error('Connect WiFi error:', e)
     }
-  };
+  }
 
   const handleDisconnectWifi = async (deviceId: string) => {
     try {
-      const res = await disconnectWifi(deviceId);
+      const res = await disconnectWifi(deviceId)
       if (res.success) {
-        showToast(t.toasts.wifiDisconnected, 'success');
+        showToast(t.toasts.wifiDisconnected, 'success')
       } else {
-        showToast(
-          res.message || res.error || t.toasts.disconnectFailed,
-          'error'
-        );
+        showToast(res.message || res.error || t.toasts.disconnectFailed, 'error')
       }
     } catch (e) {
-      showToast(t.toasts.wifiDisconnectError, 'error');
-      console.error('Disconnect WiFi error:', e);
+      showToast(t.toasts.wifiDisconnectError, 'error')
+      console.error('Disconnect WiFi error:', e)
     }
-  };
+  }
 
   return (
     <div className="h-full flex relative min-h-0">
@@ -574,12 +534,15 @@ function ChatComponent() {
         <Toast
           message={toast.message}
           type={toast.type}
-          onClose={() => setToast(prev => ({ ...prev, visible: false }))}
+          onClose={() => setToast((prev) => ({ ...prev, visible: false }))}
         />
       )}
 
       {/* Config Dialog */}
-      <Dialog open={showConfig} onOpenChange={setShowConfig}>
+      <Dialog
+        open={showConfig}
+        onOpenChange={setShowConfig}
+      >
         <DialogContent className="sm:max-w-md h-[75vh] flex flex-col">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center gap-2">
@@ -589,7 +552,10 @@ function ChatComponent() {
             <DialogDescription>{t.chat.configureApi}</DialogDescription>
           </DialogHeader>
 
-          <Tabs defaultValue="vision" className="flex-1 flex flex-col min-h-0">
+          <Tabs
+            defaultValue="vision"
+            className="flex-1 flex flex-col min-h-0"
+          >
             <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
               <TabsTrigger value="vision">
                 <Eye className="w-4 h-4 mr-2" />
@@ -608,20 +574,20 @@ function ChatComponent() {
             >
               {/* 视觉模型预设配置 */}
               <div className="space-y-2">
-                <Label className="text-sm font-medium">
-                  {t.chat.selectPreset}
-                </Label>
+                <Label className="text-sm font-medium">{t.chat.selectPreset}</Label>
                 <div className="grid grid-cols-1 gap-2">
-                  {VISION_PRESETS.map(preset => (
-                    <div key={preset.name} className="relative">
+                  {VISION_PRESETS.map((preset) => (
+                    <div
+                      key={preset.name}
+                      className="relative"
+                    >
                       <button
                         type="button"
                         onClick={() =>
-                          setTempConfig(prev => ({
+                          setTempConfig((prev) => ({
                             ...prev,
                             ...(preset.name === 'custom'
-                              ? getSelectedVisionPreset(prev.base_url) ===
-                                'custom'
+                              ? getSelectedVisionPreset(prev.base_url) === 'custom'
                                 ? {}
                                 : {
                                     base_url: preset.config.base_url,
@@ -648,19 +614,11 @@ function ChatComponent() {
                             }`}
                           />
                           <span className="font-medium text-sm text-slate-900 dark:text-slate-100">
-                            {
-                              t.presetConfigs[
-                                preset.name as keyof typeof t.presetConfigs
-                              ].name
-                            }
+                            {t.presetConfigs[preset.name as keyof typeof t.presetConfigs].name}
                           </span>
                         </div>
                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 ml-6">
-                          {
-                            t.presetConfigs[
-                              preset.name as keyof typeof t.presetConfigs
-                            ].description
-                          }
+                          {t.presetConfigs[preset.name as keyof typeof t.presetConfigs].description}
                         </p>
                       </button>
                       {'apiKeyUrl' in preset && (
@@ -668,7 +626,7 @@ function ChatComponent() {
                           href={preset.apiKeyUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          onClick={e => e.stopPropagation()}
+                          onClick={(e) => e.stopPropagation()}
                           className="absolute top-3 right-3 p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors group"
                           title={t.chat.getApiKey || '获取 API Key'}
                         >
@@ -685,9 +643,7 @@ function ChatComponent() {
                 <Input
                   id="base_url"
                   value={tempConfig.base_url}
-                  onChange={e =>
-                    setTempConfig({ ...tempConfig, base_url: e.target.value })
-                  }
+                  onChange={(e) => setTempConfig({ ...tempConfig, base_url: e.target.value })}
                   placeholder="http://localhost:8080/v1"
                 />
                 {!tempConfig.base_url && (
@@ -705,7 +661,7 @@ function ChatComponent() {
                     id="api_key"
                     type={showApiKey ? 'text' : 'password'}
                     value={tempConfig.api_key}
-                    onChange={e =>
+                    onChange={(e) =>
                       setTempConfig({
                         ...tempConfig,
                         api_key: e.target.value,
@@ -735,7 +691,7 @@ function ChatComponent() {
                 <Input
                   id="model_name"
                   value={tempConfig.model_name}
-                  onChange={e =>
+                  onChange={(e) =>
                     setTempConfig({
                       ...tempConfig,
                       model_name: e.target.value,
@@ -747,16 +703,14 @@ function ChatComponent() {
 
               {/* Agent 类型选择 */}
               <div className="space-y-2">
-                <Label className="text-sm font-medium">
-                  {t.chat.agentType || 'Agent 类型'}
-                </Label>
+                <Label className="text-sm font-medium">{t.chat.agentType || 'Agent 类型'}</Label>
                 <div className="grid grid-cols-2 gap-2">
-                  {AGENT_PRESETS.map(preset => (
+                  {AGENT_PRESETS.map((preset) => (
                     <button
                       key={preset.name}
                       type="button"
                       onClick={() =>
-                        setTempConfig(prev => ({
+                        setTempConfig((prev) => ({
                           ...prev,
                           agent_type: preset.name,
                           agent_config_params: preset.defaultConfig,
@@ -803,28 +757,22 @@ function ChatComponent() {
               {/* MAI Agent 特定配置 */}
               {tempConfig.agent_type === 'mai' && (
                 <div className="space-y-2">
-                  <Label htmlFor="history_n">
-                    {t.chat.history_n || '历史记录数量'}
-                  </Label>
+                  <Label htmlFor="history_n">{t.chat.history_n || '历史记录数量'}</Label>
                   <Input
                     id="history_n"
                     type="number"
                     min={1}
                     max={10}
-                    value={
-                      (tempConfig.agent_config_params?.history_n as
-                        | number
-                        | undefined) || 3
-                    }
-                    onChange={e => {
-                      const value = parseInt(e.target.value) || 3;
-                      setTempConfig(prev => ({
+                    value={(tempConfig.agent_config_params?.history_n as number | undefined) || 3}
+                    onChange={(e) => {
+                      const value = parseInt(e.target.value) || 3
+                      setTempConfig((prev) => ({
                         ...prev,
                         agent_config_params: {
                           ...prev.agent_config_params,
                           history_n: value,
                         },
-                      }));
+                      }))
                     }}
                     className="w-full"
                   />
@@ -843,47 +791,41 @@ function ChatComponent() {
                     type="text"
                     placeholder="e.g. doubao-vision, gemini, qwen3.5"
                     value={
-                      (tempConfig.agent_config_params?.model_family as
-                        | string
-                        | undefined) || 'doubao-vision'
+                      (tempConfig.agent_config_params?.model_family as string | undefined) ||
+                      'doubao-vision'
                     }
-                    onChange={e => {
-                      setTempConfig(prev => ({
+                    onChange={(e) => {
+                      setTempConfig((prev) => ({
                         ...prev,
                         agent_config_params: {
                           ...prev.agent_config_params,
                           model_family: e.target.value,
                         },
-                      }));
+                      }))
                     }}
                     className="w-full"
                   />
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    Midscene
-                    视觉模型家族标识，常用：doubao-vision、doubao-seed、gemini、qwen3.5
+                    Midscene 视觉模型家族标识，常用：doubao-vision、doubao-seed、gemini、qwen3.5
                   </p>
                 </div>
               )}
 
               {/* 最大执行步数配置 */}
               <div className="space-y-2">
-                <Label htmlFor="default_max_steps">
-                  {t.chat.maxSteps || '最大执行步数'}
-                </Label>
+                <Label htmlFor="default_max_steps">{t.chat.maxSteps || '最大执行步数'}</Label>
                 <Input
                   id="default_max_steps"
                   type="number"
                   min={1}
                   value={tempConfig.default_max_steps}
-                  onChange={e => {
-                    const rawValue = e.target.value.trim();
-                    setTempConfig(prev => ({
+                  onChange={(e) => {
+                    const rawValue = e.target.value.trim()
+                    setTempConfig((prev) => ({
                       ...prev,
                       default_max_steps:
-                        rawValue === ''
-                          ? ''
-                          : Math.max(1, parseInt(rawValue, 10) || 1),
-                    }));
+                        rawValue === '' ? '' : Math.max(1, parseInt(rawValue, 10) || 1),
+                    }))
                   }}
                   placeholder="留空表示不限制"
                   className="w-full"
@@ -906,12 +848,12 @@ function ChatComponent() {
                   type="number"
                   min={1}
                   value={tempConfig.layered_max_turns}
-                  onChange={e => {
-                    const value = parseInt(e.target.value) || 50;
-                    setTempConfig(prev => ({
+                  onChange={(e) => {
+                    const value = parseInt(e.target.value) || 50
+                    setTempConfig((prev) => ({
                       ...prev,
                       layered_max_turns: Math.max(1, value),
-                    }));
+                    }))
                   }}
                   className="w-full"
                 />
@@ -936,33 +878,28 @@ function ChatComponent() {
 
               {/* 决策模型预设配置 */}
               <div className="space-y-2">
-                <Label className="text-sm font-medium">
-                  {t.chat.selectDecisionPreset}
-                </Label>
+                <Label className="text-sm font-medium">{t.chat.selectDecisionPreset}</Label>
                 <div className="grid grid-cols-1 gap-2">
-                  {DECISION_PRESETS.map(preset => (
-                    <div key={preset.name} className="relative">
+                  {DECISION_PRESETS.map((preset) => (
+                    <div
+                      key={preset.name}
+                      className="relative"
+                    >
                       <button
                         type="button"
                         onClick={() =>
-                          setTempConfig(prev => ({
+                          setTempConfig((prev) => ({
                             ...prev,
                             ...(preset.name === 'custom'
-                              ? getSelectedDecisionPreset(
-                                  prev.decision_base_url
-                                ) === 'custom'
+                              ? getSelectedDecisionPreset(prev.decision_base_url) === 'custom'
                                 ? {}
                                 : {
-                                    decision_base_url:
-                                      preset.config.decision_base_url,
-                                    decision_model_name:
-                                      preset.config.decision_model_name,
+                                    decision_base_url: preset.config.decision_base_url,
+                                    decision_model_name: preset.config.decision_model_name,
                                   }
                               : {
-                                  decision_base_url:
-                                    preset.config.decision_base_url,
-                                  decision_model_name:
-                                    preset.config.decision_model_name,
+                                  decision_base_url: preset.config.decision_base_url,
+                                  decision_model_name: preset.config.decision_model_name,
                                 }),
                           }))
                         }
@@ -981,19 +918,11 @@ function ChatComponent() {
                             }`}
                           />
                           <span className="font-medium text-sm text-slate-900 dark:text-slate-100">
-                            {
-                              t.presetConfigs[
-                                preset.name as keyof typeof t.presetConfigs
-                              ].name
-                            }
+                            {t.presetConfigs[preset.name as keyof typeof t.presetConfigs].name}
                           </span>
                         </div>
                         <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 ml-6">
-                          {
-                            t.presetConfigs[
-                              preset.name as keyof typeof t.presetConfigs
-                            ].description
-                          }
+                          {t.presetConfigs[preset.name as keyof typeof t.presetConfigs].description}
                         </p>
                       </button>
                       {'apiKeyUrl' in preset && (
@@ -1001,7 +930,7 @@ function ChatComponent() {
                           href={preset.apiKeyUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          onClick={e => e.stopPropagation()}
+                          onClick={(e) => e.stopPropagation()}
                           className="absolute top-3 right-3 p-1.5 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors group"
                           title={t.chat.getApiKey || '获取 API Key'}
                         >
@@ -1015,13 +944,11 @@ function ChatComponent() {
 
               {/* Decision Base URL */}
               <div className="space-y-2">
-                <Label htmlFor="decision_base_url">
-                  {t.chat.decisionBaseUrl} *
-                </Label>
+                <Label htmlFor="decision_base_url">{t.chat.decisionBaseUrl} *</Label>
                 <Input
                   id="decision_base_url"
                   value={tempConfig.decision_base_url}
-                  onChange={e =>
+                  onChange={(e) =>
                     setTempConfig({
                       ...tempConfig,
                       decision_base_url: e.target.value,
@@ -1033,15 +960,13 @@ function ChatComponent() {
 
               {/* Decision API Key */}
               <div className="space-y-2">
-                <Label htmlFor="decision_api_key">
-                  {t.chat.decisionApiKey}
-                </Label>
+                <Label htmlFor="decision_api_key">{t.chat.decisionApiKey}</Label>
                 <div className="relative">
                   <Input
                     id="decision_api_key"
                     type={showApiKey ? 'text' : 'password'}
                     value={tempConfig.decision_api_key}
-                    onChange={e =>
+                    onChange={(e) =>
                       setTempConfig({
                         ...tempConfig,
                         decision_api_key: e.target.value,
@@ -1068,13 +993,11 @@ function ChatComponent() {
 
               {/* Decision Model Name */}
               <div className="space-y-2">
-                <Label htmlFor="decision_model_name">
-                  {t.chat.decisionModelName} *
-                </Label>
+                <Label htmlFor="decision_model_name">{t.chat.decisionModelName} *</Label>
                 <Input
                   id="decision_model_name"
                   value={tempConfig.decision_model_name}
-                  onChange={e =>
+                  onChange={(e) =>
                     setTempConfig({
                       ...tempConfig,
                       decision_model_name: e.target.value,
@@ -1090,7 +1013,7 @@ function ChatComponent() {
             <Button
               variant="outline"
               onClick={() => {
-                setShowConfig(false);
+                setShowConfig(false)
                 if (config) {
                   setTempConfig({
                     base_url: config.base_url,
@@ -1101,16 +1024,18 @@ function ChatComponent() {
                     default_max_steps: config.default_max_steps ?? '',
                     layered_max_turns: config.layered_max_turns || 50,
                     decision_base_url: config.decision_base_url || '',
-                    decision_model_name:
-                      config.decision_model_name || 'glm-4.7',
+                    decision_model_name: config.decision_model_name || 'glm-4.7',
                     decision_api_key: config.decision_api_key || '',
-                  });
+                  })
                 }
               }}
             >
               {t.chat.cancel}
             </Button>
-            <Button onClick={handleSaveConfig} variant="twitter">
+            <Button
+              onClick={handleSaveConfig}
+              variant="twitter"
+            >
               <CheckCircle2 className="w-4 h-4 mr-2" />
               {t.chat.saveConfig}
             </Button>
@@ -1150,11 +1075,13 @@ function ChatComponent() {
                   {t.chatkit?.classicMode || '经典模式'}
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={8} className="max-w-xs">
+              <TooltipContent
+                side="bottom"
+                sideOffset={8}
+                className="max-w-xs"
+              >
                 <div className="space-y-1">
-                  <p className="font-medium">
-                    {t.chatkit?.classicMode || '经典模式'}
-                  </p>
+                  <p className="font-medium">{t.chatkit?.classicMode || '经典模式'}</p>
                   <p className="text-xs opacity-80">
                     {t.chatkit?.classicModeDesc || '视觉模型直接执行任务'}
                   </p>
@@ -1165,7 +1092,7 @@ function ChatComponent() {
               <TooltipTrigger asChild>
                 <button
                   onClick={() => {
-                    setChatMode('chatkit');
+                    setChatMode('chatkit')
                   }}
                   className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all ${
                     chatMode === 'chatkit'
@@ -1177,14 +1104,15 @@ function ChatComponent() {
                   {t.chatkit?.layeredMode || '分层代理'}
                 </button>
               </TooltipTrigger>
-              <TooltipContent side="bottom" sideOffset={8} className="max-w-xs">
+              <TooltipContent
+                side="bottom"
+                sideOffset={8}
+                className="max-w-xs"
+              >
                 <div className="space-y-1">
-                  <p className="font-medium">
-                    {t.chatkit?.layeredMode || '分层代理'}
-                  </p>
+                  <p className="font-medium">{t.chatkit?.layeredMode || '分层代理'}</p>
                   <p className="text-xs opacity-80">
-                    {t.chatkit?.layeredModeDesc ||
-                      '规划层分解任务，执行层独立完成子任务'}
+                    {t.chatkit?.layeredModeDesc || '规划层分解任务，执行层独立完成子任务'}
                   </p>
                 </div>
               </TooltipContent>
@@ -1215,15 +1143,13 @@ function ChatComponent() {
                 <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
                   {t.chat.welcomeTitle}
                 </h3>
-                <p className="text-slate-500 dark:text-slate-400">
-                  {t.chat.connectDevice}
-                </p>
+                <p className="text-slate-500 dark:text-slate-400">{t.chat.connectDevice}</p>
               </div>
             </div>
           ) : (
             devices
-              .filter(device => device.id === currentDeviceId)
-              .map(device => (
+              .filter((device) => device.id === currentDeviceId)
+              .map((device) => (
                 <div
                   key={device.serial}
                   className="w-full max-w-7xl flex items-stretch justify-center min-h-0"
@@ -1236,9 +1162,7 @@ function ChatComponent() {
                         deviceName={device.model}
                         deviceConnectionType={device.connection_type}
                         isVisible={device.id === currentDeviceId}
-                        unlimitedStepsEnabled={
-                          config?.default_max_steps === null
-                        }
+                        unlimitedStepsEnabled={config?.default_max_steps === null}
                       />
                     </div>
                   ) : (
@@ -1250,9 +1174,7 @@ function ChatComponent() {
                         deviceConnectionType={device.connection_type}
                         isConfigured={!!config?.base_url}
                         isVisible={device.id === currentDeviceId} // ✅ 新增：传递可见性状态
-                        unlimitedStepsEnabled={
-                          config?.default_max_steps === null
-                        }
+                        unlimitedStepsEnabled={config?.default_max_steps === null}
                       />
                     </div>
                   )}
@@ -1270,5 +1192,5 @@ function ChatComponent() {
         showToast={showToast}
       />
     </div>
-  );
+  )
 }

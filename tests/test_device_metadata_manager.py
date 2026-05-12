@@ -233,7 +233,7 @@ class TestDeviceMetadataManager:
         DeviceMetadataManager._instance = None
         with tempfile.TemporaryDirectory() as temp_dir:
             fresh_manager = DeviceMetadataManager.get_instance(
-                storage_dir=Path(temp_dir)
+                storage_dir=Path(temp_dir),
             )
 
             all_metadata = fresh_manager.list_all_metadata()

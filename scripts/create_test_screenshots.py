@@ -19,7 +19,10 @@ except ImportError:
 
 
 def create_placeholder_image(
-    path: Path, index: int, total: int, size: tuple[int, int] = (1080, 2400)
+    path: Path,
+    index: int,
+    total: int,
+    size: tuple[int, int] = (1080, 2400),
 ):
     """Create a minimal placeholder image with step number.
 
@@ -39,10 +42,12 @@ def create_placeholder_image(
     try:
         # Try different font sizes for better visibility
         font_large = ImageFont.truetype(
-            "/System/Library/Fonts/Supplemental/Arial.ttf", 400
+            "/System/Library/Fonts/Supplemental/Arial.ttf",
+            400,
         )
         font_small = ImageFont.truetype(
-            "/System/Library/Fonts/Supplemental/Arial.ttf", 80
+            "/System/Library/Fonts/Supplemental/Arial.ttf",
+            80,
         )
     except Exception:
         # Fall back to default font
@@ -112,7 +117,9 @@ def main():
 
     for i, state_file in enumerate(wechat_states, start=1):
         create_placeholder_image(
-            wechat_dir / state_file, index=i, total=len(wechat_states)
+            wechat_dir / state_file,
+            index=i,
+            total=len(wechat_states),
         )
 
     print()

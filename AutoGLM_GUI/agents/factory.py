@@ -76,7 +76,7 @@ def create_agent(
     if agent_type not in AGENT_REGISTRY:
         available = ", ".join(AGENT_REGISTRY.keys())
         raise ValueError(
-            f"Unknown agent type: '{agent_type}'. Available types: {available}"
+            f"Unknown agent type: '{agent_type}'. Available types: {available}",
         )
 
     creator = AGENT_REGISTRY[agent_type]

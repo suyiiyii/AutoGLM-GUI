@@ -108,7 +108,7 @@ async def stream_response(content: str) -> AsyncGenerator[str, None]:
                     "index": 0,
                     "delta": {"content": word + " "},
                     "finish_reason": None,
-                }
+                },
             ],
         }
         yield f"data: {json.dumps(chunk)}\n\n"
@@ -148,7 +148,8 @@ def _register_routes(app: FastAPI) -> None:
         # Validate streaming requirement
         if not req.stream:
             raise HTTPException(
-                status_code=400, detail="Only streaming mode is supported"
+                status_code=400,
+                detail="Only streaming mode is supported",
             )
 
         # Validate messages array
@@ -162,7 +163,8 @@ def _register_routes(app: FastAPI) -> None:
         from fastapi.responses import StreamingResponse
 
         return StreamingResponse(
-            stream_response(response_text), media_type="text/event-stream"
+            stream_response(response_text),
+            media_type="text/event-stream",
         )
 
     # === Test Helper Endpoints ===

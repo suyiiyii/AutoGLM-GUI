@@ -1,5 +1,5 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { useState, useEffect, useCallback } from 'react';
+import { createFileRoute } from '@tanstack/react-router'
+import { useState, useEffect, useCallback } from 'react'
 import {
   listHistory,
   clearHistory,
@@ -8,17 +8,17 @@ import {
   type HistoryRecordResponse,
   type Device,
   type StepTimingSummary,
-} from '../api';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+} from '../api'
+import { Button } from '@/components/ui/button'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
   SelectValue,
-} from '@/components/ui/select';
+} from '@/components/ui/select'
 import {
   AlertDialog,
   AlertDialogAction,
@@ -28,13 +28,8 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+} from '@/components/ui/alert-dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import {
   Loader2,
   Trash2,
@@ -46,243 +41,239 @@ import {
   ChevronDown,
   ChevronRight,
   Eye,
-} from 'lucide-react';
-import { useTranslation } from '../lib/i18n-context';
+} from 'lucide-react'
+import { useTranslation } from '../lib/i18n-context'
 
 export const Route = createFileRoute('/history')({
   component: HistoryComponent,
-});
+})
 
 function HistoryComponent() {
-  const t = useTranslation();
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [selectedSerial, setSelectedSerial] = useState<string>('');
-  const [records, setRecords] = useState<HistoryRecordResponse[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
-  const [total, setTotal] = useState(0);
-  const [offset, setOffset] = useState(0);
-  const [clearDialogOpen, setClearDialogOpen] = useState(false);
-  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
-  const [recordToDelete, setRecordToDelete] = useState<string | null>(null);
-  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
-  const [selectedRecord, setSelectedRecord] =
-    useState<HistoryRecordResponse | null>(null);
-  const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
-  const limit = 20;
+  const t = useTranslation()
+  const [devices, setDevices] = useState<Device[]>([])
+  const [selectedSerial, setSelectedSerial] = useState<string>('')
+  const [records, setRecords] = useState<HistoryRecordResponse[]>([])
+  const [loading, setLoading] = useState(false)
+  const [loadingMore, setLoadingMore] = useState(false)
+  const [total, setTotal] = useState(0)
+  const [offset, setOffset] = useState(0)
+  const [clearDialogOpen, setClearDialogOpen] = useState(false)
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false)
+  const [recordToDelete, setRecordToDelete] = useState<string | null>(null)
+  const [detailDialogOpen, setDetailDialogOpen] = useState(false)
+  const [selectedRecord, setSelectedRecord] = useState<HistoryRecordResponse | null>(null)
+  const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set())
+  const limit = 20
 
   // Load devices
   useEffect(() => {
     const loadDevices = async () => {
       try {
-        const deviceList = await getDevices();
-        setDevices(deviceList);
+        const deviceList = await getDevices()
+        setDevices(deviceList)
         // Auto-select first device if available
         if (deviceList.length > 0 && !selectedSerial) {
-          setSelectedSerial(deviceList[0].serial);
+          setSelectedSerial(deviceList[0].serial)
         }
       } catch (error) {
-        console.error('Failed to load devices:', error);
+        console.error('Failed to load devices:', error)
       }
-    };
-    loadDevices();
-  }, [selectedSerial]);
+    }
+    loadDevices()
+  }, [selectedSerial])
 
   // Load history when device changes
   const loadHistory = useCallback(
     async (serial: string, reset = true) => {
-      if (!serial) return;
+      if (!serial) return
 
       try {
         if (reset) {
-          setLoading(true);
-          setOffset(0);
+          setLoading(true)
+          setOffset(0)
         } else {
-          setLoadingMore(true);
+          setLoadingMore(true)
         }
 
-        const newOffset = reset ? 0 : offset;
-        const data = await listHistory(serial, limit, newOffset);
+        const newOffset = reset ? 0 : offset
+        const data = await listHistory(serial, limit, newOffset)
 
         if (reset) {
-          setRecords(data.records);
+          setRecords(data.records)
         } else {
-          setRecords(prev => [...prev, ...data.records]);
+          setRecords((prev) => [...prev, ...data.records])
         }
-        setTotal(data.total);
-        setOffset(newOffset + data.records.length);
+        setTotal(data.total)
+        setOffset(newOffset + data.records.length)
       } catch (error) {
-        console.error('Failed to load history:', error);
+        console.error('Failed to load history:', error)
       } finally {
-        setLoading(false);
-        setLoadingMore(false);
+        setLoading(false)
+        setLoadingMore(false)
       }
     },
-    [offset]
-  );
+    [offset],
+  )
 
   useEffect(() => {
     if (selectedSerial) {
-      loadHistory(selectedSerial, true);
+      loadHistory(selectedSerial, true)
     }
-  }, [selectedSerial]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [selectedSerial]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleLoadMore = () => {
     if (selectedSerial && records.length < total) {
-      loadHistory(selectedSerial, false);
+      loadHistory(selectedSerial, false)
     }
-  };
+  }
 
   const handleClearAll = async () => {
-    if (!selectedSerial) return;
+    if (!selectedSerial) return
     try {
-      await clearHistory(selectedSerial);
-      setRecords([]);
-      setTotal(0);
-      setOffset(0);
+      await clearHistory(selectedSerial)
+      setRecords([])
+      setTotal(0)
+      setOffset(0)
     } catch (error) {
-      console.error('Failed to clear history:', error);
+      console.error('Failed to clear history:', error)
     }
-    setClearDialogOpen(false);
-  };
+    setClearDialogOpen(false)
+  }
 
   const handleDelete = async () => {
-    if (!selectedSerial || !recordToDelete) return;
+    if (!selectedSerial || !recordToDelete) return
     try {
-      await deleteHistoryRecord(selectedSerial, recordToDelete);
-      setRecords(prev => prev.filter(r => r.id !== recordToDelete));
-      setTotal(prev => prev - 1);
+      await deleteHistoryRecord(selectedSerial, recordToDelete)
+      setRecords((prev) => prev.filter((r) => r.id !== recordToDelete))
+      setTotal((prev) => prev - 1)
     } catch (error) {
-      console.error('Failed to delete record:', error);
+      console.error('Failed to delete record:', error)
     }
-    setDeleteDialogOpen(false);
-    setRecordToDelete(null);
-  };
+    setDeleteDialogOpen(false)
+    setRecordToDelete(null)
+  }
 
   const handleViewDetail = (record: HistoryRecordResponse) => {
-    setSelectedRecord(record);
+    setSelectedRecord(record)
     // 默认展开所有步骤
-    const allSteps = new Set<number>();
-    record.messages.forEach(msg => {
+    const allSteps = new Set<number>()
+    record.messages.forEach((msg) => {
       if (msg.step !== null && msg.step !== undefined) {
-        allSteps.add(msg.step);
+        allSteps.add(msg.step)
       }
-    });
-    setExpandedSteps(allSteps);
-    setDetailDialogOpen(true);
-  };
+    })
+    setExpandedSteps(allSteps)
+    setDetailDialogOpen(true)
+  }
 
   const toggleStepExpanded = (step: number) => {
-    setExpandedSteps(prev => {
-      const next = new Set(prev);
+    setExpandedSteps((prev) => {
+      const next = new Set(prev)
       if (next.has(step)) {
-        next.delete(step);
+        next.delete(step)
       } else {
-        next.add(step);
+        next.add(step)
       }
-      return next;
-    });
-  };
+      return next
+    })
+  }
 
   const formatDuration = (ms: number): string => {
-    if (ms < 1000) return `${ms}ms`;
-    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`;
-    return `${(ms / 60000).toFixed(1)}min`;
-  };
+    if (ms < 1000) return `${ms}ms`
+    if (ms < 60000) return `${(ms / 1000).toFixed(1)}s`
+    return `${(ms / 60000).toFixed(1)}min`
+  }
 
   const formatTime = (timeStr: string): string => {
-    const date = new Date(timeStr);
-    const now = new Date();
-    const isToday = date.toDateString() === now.toDateString();
-    const yesterday = new Date(now);
-    yesterday.setDate(yesterday.getDate() - 1);
-    const isYesterday = date.toDateString() === yesterday.toDateString();
+    const date = new Date(timeStr)
+    const now = new Date()
+    const isToday = date.toDateString() === now.toDateString()
+    const yesterday = new Date(now)
+    yesterday.setDate(yesterday.getDate() - 1)
+    const isYesterday = date.toDateString() === yesterday.toDateString()
 
     const timeFormat = date.toLocaleTimeString('zh-CN', {
       hour: '2-digit',
       minute: '2-digit',
-    });
+    })
 
     if (isToday) {
-      return `${t.history.today} ${timeFormat}`;
+      return `${t.history.today} ${timeFormat}`
     } else if (isYesterday) {
-      return `${t.history.yesterday} ${timeFormat}`;
+      return `${t.history.yesterday} ${timeFormat}`
     } else {
       return date.toLocaleDateString('zh-CN', {
         month: 'short',
         day: 'numeric',
         hour: '2-digit',
         minute: '2-digit',
-      });
+      })
     }
-  };
+  }
 
   const getSourceLabel = (source: string): string => {
     const sourceMap: Record<string, string> = {
       chat: t.historyPage.source.chat,
       layered: t.historyPage.source.layered,
       scheduled: t.historyPage.source.scheduled,
-    };
-    return sourceMap[source] || source;
-  };
+    }
+    return sourceMap[source] || source
+  }
 
   const getSourceColor = (source: string): string => {
     switch (source) {
       case 'chat':
-        return 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300';
+        return 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
       case 'layered':
-        return 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300';
+        return 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300'
       case 'scheduled':
-        return 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300';
+        return 'bg-orange-100 text-orange-700 dark:bg-orange-900 dark:text-orange-300'
       default:
-        return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300';
+        return 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
     }
-  };
+  }
 
   const getStepTiming = (
     record: HistoryRecordResponse,
-    step: number
-  ): StepTimingSummary | undefined =>
-    record.step_timings.find(item => item.step === step);
+    step: number,
+  ): StepTimingSummary | undefined => record.step_timings.find((item) => item.step === step)
 
-  const getTimingChips = (
-    timings: StepTimingSummary
-  ): Array<{ label: string; value: string }> => {
+  const getTimingChips = (timings: StepTimingSummary): Array<{ label: string; value: string }> => {
     const chips = [
       { label: 'Total', value: formatDuration(timings.total_duration_ms) },
       { label: 'LLM', value: formatDuration(timings.llm_duration_ms) },
-    ];
+    ]
 
     if (timings.screenshot_duration_ms > 0) {
       chips.push({
         label: 'Shot',
         value: formatDuration(timings.screenshot_duration_ms),
-      });
+      })
     }
 
     if (timings.current_app_duration_ms > 0) {
       chips.push({
         label: 'App',
         value: formatDuration(timings.current_app_duration_ms),
-      });
+      })
     }
 
     if (timings.execute_action_duration_ms > 0) {
       chips.push({
         label: 'Action',
         value: formatDuration(timings.execute_action_duration_ms),
-      });
+      })
     }
 
     if (timings.sleep_duration_ms > 0) {
       chips.push({
         label: 'Sleep',
         value: formatDuration(timings.sleep_duration_ms),
-      });
+      })
     }
 
-    return chips;
-  };
+    return chips
+  }
 
   return (
     <div className="container mx-auto p-6 max-w-4xl">
@@ -290,18 +281,27 @@ function HistoryComponent() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">{t.historyPage.title}</h1>
         <div className="flex items-center gap-4">
-          <Select value={selectedSerial} onValueChange={setSelectedSerial}>
+          <Select
+            value={selectedSerial}
+            onValueChange={setSelectedSerial}
+          >
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder={t.historyPage.selectDevice} />
             </SelectTrigger>
             <SelectContent>
               {devices.length === 0 ? (
-                <SelectItem value="_none" disabled>
+                <SelectItem
+                  value="_none"
+                  disabled
+                >
                   {t.historyPage.noDevices}
                 </SelectItem>
               ) : (
-                devices.map(device => (
-                  <SelectItem key={device.serial} value={device.serial}>
+                devices.map((device) => (
+                  <SelectItem
+                    key={device.serial}
+                    value={device.serial}
+                  >
                     {device.model || device.serial}
                   </SelectItem>
                 ))
@@ -328,16 +328,14 @@ function HistoryComponent() {
         </div>
       ) : records.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-slate-500 dark:text-slate-400">
-            {t.historyPage.noRecords}
-          </p>
+          <p className="text-slate-500 dark:text-slate-400">{t.historyPage.noRecords}</p>
           <p className="text-sm text-slate-400 dark:text-slate-500 mt-2">
             {t.historyPage.noRecordsDesc}
           </p>
         </div>
       ) : (
         <div className="space-y-4">
-          {records.map(record => (
+          {records.map((record) => (
             <Card
               key={record.id}
               className="hover:shadow-md transition-shadow cursor-pointer"
@@ -386,10 +384,7 @@ function HistoryComponent() {
                       {/* Steps */}
                       {record.steps > 0 && (
                         <span className="text-slate-500 dark:text-slate-400">
-                          {t.historyPage.steps.replace(
-                            '{count}',
-                            String(record.steps)
-                          )}
+                          {t.historyPage.steps.replace('{count}', String(record.steps))}
                         </span>
                       )}
 
@@ -412,9 +407,9 @@ function HistoryComponent() {
                       variant="ghost"
                       size="sm"
                       className="text-slate-400 hover:text-blue-500"
-                      onClick={e => {
-                        e.stopPropagation();
-                        handleViewDetail(record);
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        handleViewDetail(record)
                       }}
                     >
                       <Eye className="w-4 h-4" />
@@ -423,10 +418,10 @@ function HistoryComponent() {
                       variant="ghost"
                       size="sm"
                       className="text-slate-400 hover:text-red-500"
-                      onClick={e => {
-                        e.stopPropagation();
-                        setRecordToDelete(record.id);
-                        setDeleteDialogOpen(true);
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setRecordToDelete(record.id)
+                        setDeleteDialogOpen(true)
                       }}
                     >
                       <Trash2 className="w-4 h-4" />
@@ -460,43 +455,44 @@ function HistoryComponent() {
       )}
 
       {/* Clear All Dialog */}
-      <AlertDialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
+      <AlertDialog
+        open={clearDialogOpen}
+        onOpenChange={setClearDialogOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t.historyPage.clearAll}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t.historyPage.clearAllConfirm}
-            </AlertDialogDescription>
+            <AlertDialogDescription>{t.historyPage.clearAllConfirm}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
-            <AlertDialogAction onClick={handleClearAll}>
-              {t.common.confirm}
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleClearAll}>{t.common.confirm}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {/* Delete Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t.common.delete}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t.historyPage.deleteConfirm}
-            </AlertDialogDescription>
+            <AlertDialogDescription>{t.historyPage.deleteConfirm}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>
-              {t.common.confirm}
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete}>{t.common.confirm}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {/* Detail Dialog */}
-      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
+      <Dialog
+        open={detailDialogOpen}
+        onOpenChange={setDetailDialogOpen}
+      >
         <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center gap-2">
@@ -526,7 +522,10 @@ function HistoryComponent() {
                 <div className="space-y-3">
                   {selectedRecord.messages.length > 0 ? (
                     selectedRecord.messages.map((msg, idx) => (
-                      <div key={idx} className="space-y-2">
+                      <div
+                        key={idx}
+                        className="space-y-2"
+                      >
                         {msg.role === 'user' ? (
                           <div className="flex items-start gap-3">
                             <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center flex-shrink-0">
@@ -549,33 +548,26 @@ function HistoryComponent() {
                                 <div className="space-y-2">
                                   <button
                                     className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                                    onClick={() =>
-                                      toggleStepExpanded(msg.step as number)
-                                    }
+                                    onClick={() => toggleStepExpanded(msg.step as number)}
                                   >
                                     {expandedSteps.has(msg.step) ? (
                                       <ChevronDown className="w-3 h-3" />
                                     ) : (
                                       <ChevronRight className="w-3 h-3" />
                                     )}
-                                    {t.historyPage.stepLabel?.replace(
-                                      '{step}',
-                                      String(msg.step)
-                                    ) || `步骤 ${msg.step}`}
+                                    {t.historyPage.stepLabel?.replace('{step}', String(msg.step)) ||
+                                      `步骤 ${msg.step}`}
                                   </button>
 
                                   {expandedSteps.has(msg.step) &&
-                                    getStepTiming(
-                                      selectedRecord,
-                                      msg.step as number
-                                    ) && (
+                                    getStepTiming(selectedRecord, msg.step as number) && (
                                       <div className="flex flex-wrap gap-2">
                                         {getTimingChips(
                                           getStepTiming(
                                             selectedRecord,
-                                            msg.step as number
-                                          ) as StepTimingSummary
-                                        ).map(chip => (
+                                            msg.step as number,
+                                          ) as StepTimingSummary,
+                                        ).map((chip) => (
                                           <Badge
                                             key={`${msg.step}-${chip.label}`}
                                             variant="secondary"
@@ -667,10 +659,7 @@ function HistoryComponent() {
                 {/* Metadata */}
                 <div className="flex flex-wrap gap-3 text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-700">
                   <span>
-                    {t.historyPage.steps.replace(
-                      '{count}',
-                      String(selectedRecord.steps)
-                    )}
+                    {t.historyPage.steps.replace('{count}', String(selectedRecord.steps))}
                   </span>
                   <span className="flex items-center">
                     <Clock className="w-3 h-3 mr-1" />
@@ -686,5 +675,5 @@ function HistoryComponent() {
         </DialogContent>
       </Dialog>
     </div>
-  );
+  )
 }

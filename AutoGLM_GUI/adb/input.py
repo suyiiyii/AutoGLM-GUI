@@ -81,5 +81,7 @@ def restore_keyboard(ime: str, device_id: str | None = None) -> None:
         attrs={"device_id": device_id},
     ):
         subprocess.run(
-            adb_prefix + ["shell", "ime", "set", ime], capture_output=True, text=True
+            adb_prefix + ["shell", "ime", "set", ime],
+            capture_output=True,
+            text=True,
         )

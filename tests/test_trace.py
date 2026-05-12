@@ -24,7 +24,8 @@ def _read_trace_records(trace_file: Path) -> list[dict[str, object]]:
 
 
 def test_trace_span_writes_nested_records(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ):
     trace_file = tmp_path / "trace.jsonl"
     monkeypatch.setenv("AUTOGLM_TRACE_FILE", str(trace_file))
@@ -63,7 +64,8 @@ def test_trace_context_sets_trace_id(tmp_path: Path, monkeypatch: pytest.MonkeyP
 
 
 def test_trace_span_records_error_status(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ):
     trace_file = tmp_path / "trace.jsonl"
     monkeypatch.setenv("AUTOGLM_TRACE_FILE", str(trace_file))
@@ -80,29 +82,29 @@ def test_trace_span_records_error_status(
 
 
 def test_trace_collects_step_timing_summaries(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ):
     trace_file = tmp_path / "trace.jsonl"
     monkeypatch.setenv("AUTOGLM_TRACE_FILE", str(trace_file))
     monkeypatch.setenv("AUTOGLM_TRACE_ENABLED", "1")
 
-    with trace_context("trace-step"):
-        with trace_span("agent.step", attrs={"step": 1}):
-            with trace_span("step.capture_screenshot", attrs={"step": 1}):
+    with trace_context("trace-step"), trace_span("agent.step", attrs={"step": 1}):
+        with trace_span("step.capture_screenshot", attrs={"step": 1}):
+            pass
+        with trace_span("step.llm", attrs={"step": 1}):
+            trace_sleep(0.001, name="sleep.test")
+        with trace_span("step.execute_action", attrs={"step": 1}):
+            with trace_span("adb.tap"):
                 pass
-            with trace_span("step.llm", attrs={"step": 1}):
-                trace_sleep(0.001, name="sleep.test")
-            with trace_span("step.execute_action", attrs={"step": 1}):
-                with trace_span("adb.tap"):
-                    pass
 
-            step_summary = get_step_timing_summary(1)
-            assert step_summary is not None
-            assert step_summary["trace_id"] == "trace-step"
-            assert step_summary["step"] == 1
-            assert step_summary["total_duration_ms"] >= step_summary["llm_duration_ms"]
-            assert step_summary["sleep_duration_ms"] > 0
-            assert step_summary["adb_duration_ms"] >= 0
+        step_summary = get_step_timing_summary(1)
+        assert step_summary is not None
+        assert step_summary["trace_id"] == "trace-step"
+        assert step_summary["step"] == 1
+        assert step_summary["total_duration_ms"] >= step_summary["llm_duration_ms"]
+        assert step_summary["sleep_duration_ms"] > 0
+        assert step_summary["adb_duration_ms"] >= 0
 
     summaries = list_step_timing_summaries(trace_id="trace-step")
     assert len(summaries) == 1

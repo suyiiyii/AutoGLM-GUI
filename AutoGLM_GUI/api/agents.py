@@ -27,7 +27,9 @@ SSEPayload = dict[str, Any]
 
 
 def _create_sse_event(
-    event_type: str, data: SSEPayload, role: str = "assistant"
+    event_type: str,
+    data: SSEPayload,
+    role: str = "assistant",
 ) -> SSEPayload:
     """Create an SSE event with standardized fields including role."""
     event_data = {"type": event_type, "role": role, **data}
@@ -189,7 +191,7 @@ async def abort_chat(request: AbortRequest) -> dict[str, Any]:
     )
     if not success:
         success = await PhoneAgentManager.get_instance().abort_streaming_chat_async(
-            request.device_id
+            request.device_id,
         )
 
     return {

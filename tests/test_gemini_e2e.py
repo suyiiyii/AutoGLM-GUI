@@ -86,7 +86,9 @@ def create_mock_device() -> MagicMock:
     img_b64 = base64.b64encode(buf.getvalue()).decode()
 
     device.get_screenshot.return_value = Screenshot(
-        base64_data=img_b64, width=1080, height=2400
+        base64_data=img_b64,
+        width=1080,
+        height=2400,
     )
     device.get_current_app.return_value = "System Home"
     device.tap.return_value = None
@@ -173,7 +175,7 @@ async def run_e2e_test():
         elif event_type == "done":
             print(f"\n  🏁 Done: {event_data.get('message')}")
             print(
-                f"     Steps: {event_data.get('steps')}, Success: {event_data.get('success')}"
+                f"     Steps: {event_data.get('steps')}, Success: {event_data.get('success')}",
             )
 
         elif event_type == "error":
@@ -229,12 +231,12 @@ def test_gemini_e2e_launch_wechat():
 
     if not api_key or api_key == "test-key":
         pytest.skip(
-            "Skipping live Gemini E2E: OPENAI_API_KEY is not configured with a real key"
+            "Skipping live Gemini E2E: OPENAI_API_KEY is not configured with a real key",
         )
 
     if "api.openai.com" in base_url and not api_key.startswith("sk-"):
         pytest.skip(
-            "Skipping live Gemini E2E: OPENAI_BASE_URL points to OpenAI but key format looks invalid"
+            "Skipping live Gemini E2E: OPENAI_BASE_URL points to OpenAI but key format looks invalid",
         )
 
     tracker = asyncio.run(run_e2e_test())

@@ -39,7 +39,8 @@ def test_compare_versions() -> None:
 
 
 def test_version_endpoint_success(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(
         version_api,
@@ -62,7 +63,8 @@ def test_version_endpoint_success(
 
 
 def test_version_endpoint_failure_without_cache(
-    client: TestClient, monkeypatch: pytest.MonkeyPatch
+    client: TestClient,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setattr(version_api, "fetch_latest_release", lambda: None)
 

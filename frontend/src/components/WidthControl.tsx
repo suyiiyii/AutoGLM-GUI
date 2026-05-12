@@ -1,18 +1,14 @@
-import React from 'react';
-import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
-import { Minus, Plus, Maximize } from 'lucide-react';
-import { useTranslation } from '../lib/i18n-context';
+import React from 'react'
+import { Button } from '@/components/ui/button'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { Minus, Plus, Maximize } from 'lucide-react'
+import { useTranslation } from '../lib/i18n-context'
 
-export type WidthPreset = 'compact' | 'standard' | 'wide' | 'auto';
+export type WidthPreset = 'compact' | 'standard' | 'wide' | 'auto'
 
 interface WidthControlProps {
-  currentWidth: number | 'auto';
-  onWidthChange: (width: number | 'auto') => void;
+  currentWidth: number | 'auto'
+  onWidthChange: (width: number | 'auto') => void
 }
 
 const WIDTH_PRESETS: Record<WidthPreset, number | 'auto'> = {
@@ -20,29 +16,26 @@ const WIDTH_PRESETS: Record<WidthPreset, number | 'auto'> = {
   standard: 400,
   wide: 480,
   auto: 'auto',
-};
+}
 
-export function WidthControl({
-  currentWidth,
-  onWidthChange,
-}: WidthControlProps) {
-  const t = useTranslation();
+export function WidthControl({ currentWidth, onWidthChange }: WidthControlProps) {
+  const t = useTranslation()
 
   const handlePresetClick = (preset: WidthPreset) => {
-    onWidthChange(WIDTH_PRESETS[preset]);
-  };
+    onWidthChange(WIDTH_PRESETS[preset])
+  }
 
   const handleDecrease = () => {
-    if (typeof currentWidth !== 'number') return;
-    const newWidth = Math.max(240, currentWidth - 40);
-    onWidthChange(newWidth);
-  };
+    if (typeof currentWidth !== 'number') return
+    const newWidth = Math.max(240, currentWidth - 40)
+    onWidthChange(newWidth)
+  }
 
   const handleIncrease = () => {
-    if (typeof currentWidth !== 'number') return;
-    const newWidth = Math.min(640, currentWidth + 40);
-    onWidthChange(newWidth);
-  };
+    if (typeof currentWidth !== 'number') return
+    const newWidth = Math.min(640, currentWidth + 40)
+    onWidthChange(newWidth)
+  }
 
   return (
     <div className="flex items-center gap-1 bg-popover/90 backdrop-blur rounded-xl p-1 shadow-lg border border-border">
@@ -137,5 +130,5 @@ export function WidthControl({
         </Tooltip>
       )}
     </div>
-  );
+  )
 }

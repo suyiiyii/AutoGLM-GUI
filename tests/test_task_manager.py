@@ -73,7 +73,7 @@ def test_task_manager_runs_fifo_per_device_and_parallel_across_devices(
         )
 
         assert start_order.index(str(task_a["id"])) < start_order.index(
-            str(task_b["id"])
+            str(task_b["id"]),
         )
         assert max_active >= 2
         assert store.get_task(str(task_a["id"]))["status"] == TaskStatus.SUCCEEDED.value
@@ -223,7 +223,8 @@ def test_task_manager_marks_running_tasks_interrupted_on_start(tmp_path: Path) -
 
 
 def test_execute_layered_chat_counts_inner_steps_and_skips_legacy_history(
-    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    tmp_path: Path,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     import AutoGLM_GUI.device_manager as device_manager_module
     import AutoGLM_GUI.history_manager as history_manager_module

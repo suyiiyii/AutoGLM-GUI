@@ -115,7 +115,7 @@ class _TraceLatencyStore:
                     if component_duration_seconds <= 0:
                         continue
                     self._get_component_histogram((source, component)).observe(
-                        component_duration_seconds
+                        component_duration_seconds,
                     )
 
     def reset(self) -> None:
@@ -382,7 +382,7 @@ class AutoGLMMetricsCollector(Collector):
                 devices_gauge,
                 connections_gauge,
                 last_seen_gauge,
-            ]
+            ],
         )
 
         # Metric 7: autoglm_devices_online_count

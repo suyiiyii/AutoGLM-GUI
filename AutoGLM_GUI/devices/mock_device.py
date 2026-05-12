@@ -57,7 +57,7 @@ class MockDevice(DeviceProtocol):
         return self._state_machine
 
     # === Screenshot ===
-    def get_screenshot(self, timeout: int = 10) -> Screenshot:
+    def get_screenshot(self, timeout: int = 10) -> Screenshot:  # noqa: ARG002
         """Get screenshot from current state."""
         result = self._state_machine.get_current_screenshot()
         return Screenshot(
@@ -67,7 +67,7 @@ class MockDevice(DeviceProtocol):
         )
 
     # === Input Operations ===
-    def tap(self, x: int, y: int, delay: float | None = None) -> None:
+    def tap(self, x: int, y: int, delay: float | None = None) -> None:  # noqa: ARG002
         """Handle tap action through state machine.
 
         Passes pixel coordinates directly to state machine (no conversion).
@@ -76,13 +76,17 @@ class MockDevice(DeviceProtocol):
         # Pass pixel coordinates directly to state machine (no conversion)
         self._state_machine.handle_tap(x, y)
 
-    def double_tap(self, x: int, y: int, delay: float | None = None) -> None:
+    def double_tap(self, x: int, y: int, delay: float | None = None) -> None:  # noqa: ARG002
         """Handle double tap (treated as single tap)."""
         # Pass pixel coordinates directly to state machine (no conversion)
         self._state_machine.handle_tap(x, y)
 
     def long_press(
-        self, x: int, y: int, duration_ms: int = 3000, delay: float | None = None
+        self,
+        x: int,
+        y: int,
+        duration_ms: int = 3000,  # noqa: ARG002
+        delay: float | None = None,  # noqa: ARG002
     ) -> None:
         """Handle long press (treated as tap for testing)."""
         # Pass pixel coordinates directly to state machine (no conversion)
@@ -94,8 +98,8 @@ class MockDevice(DeviceProtocol):
         start_y: int,
         end_x: int,
         end_y: int,
-        duration_ms: int | None = None,
-        delay: float | None = None,
+        duration_ms: int | None = None,  # noqa: ARG002
+        delay: float | None = None,  # noqa: ARG002
     ) -> None:
         """Handle swipe action."""
         self._state_machine.handle_swipe(start_x, start_y, end_x, end_y)
@@ -109,15 +113,15 @@ class MockDevice(DeviceProtocol):
         pass
 
     # === Navigation ===
-    def back(self, delay: float | None = None) -> None:
+    def back(self, delay: float | None = None) -> None:  # noqa: ARG002
         """Handle back button (no-op in testing)."""
         pass
 
-    def home(self, delay: float | None = None) -> None:
+    def home(self, delay: float | None = None) -> None:  # noqa: ARG002
         """Handle home button (no-op in testing)."""
         pass
 
-    def launch_app(self, app_name: str, delay: float | None = None) -> bool:
+    def launch_app(self, app_name: str, delay: float | None = None) -> bool:  # noqa: ARG002
         """Handle app launch (always succeeds in testing)."""
         return True
 
@@ -172,7 +176,7 @@ class MockDeviceManager(DeviceManagerProtocol):
                 model="MockPhone",
                 platform="android",
                 connection_type="mock",
-            )
+            ),
         ]
 
     def get_device(self, device_id: str) -> MockDevice:
@@ -181,7 +185,7 @@ class MockDeviceManager(DeviceManagerProtocol):
             raise KeyError(f"Device '{device_id}' not found")
         return self._device
 
-    def connect(self, address: str, timeout: int = 10) -> tuple[bool, str]:
+    def connect(self, address: str, timeout: int = 10) -> tuple[bool, str]:  # noqa: ARG002
         """Mock connect (always succeeds)."""
         return True, f"Connected to {address}"
 

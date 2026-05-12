@@ -30,12 +30,12 @@ async def check_device_available(device_id: str | None = None) -> None:
         # Check for common error patterns
         if "not found" in error_output.lower() or "offline" in error_output.lower():
             raise DeviceNotAvailableError(
-                f"Device {device_id} is not available: {error_output}"
+                f"Device {device_id} is not available: {error_output}",
             )
 
         if state != "device":
             raise DeviceNotAvailableError(
-                f"Device {device_id} is not available (state: {state or 'offline'})"
+                f"Device {device_id} is not available (state: {state or 'offline'})",
             )
 
         logger.debug(f"Device {device_id} is available (state: {state})")

@@ -37,7 +37,7 @@ class ScheduledTask:
     name: str = ""  # 任务名称
     workflow_uuid: str = ""  # 关联的 Workflow UUID
     device_serialnos: list[str] = field(
-        default_factory=list
+        default_factory=list,
     )  # 绑定的设备 serialno 列表
     device_group_id: str | None = (
         None  # 绑定的设备分组 ID（与 device_serialnos 二选一）

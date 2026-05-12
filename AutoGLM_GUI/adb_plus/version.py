@@ -67,7 +67,7 @@ def supports_mdns_services(adb_path: str = "adb") -> bool:
         stderr_lower = result.stderr.lower()
         if "unknown" in stderr_lower or "not found" in stderr_lower:
             logger.info(
-                "ADB does not support 'mdns services' command (requires ADB 30.0.0+)"
+                "ADB does not support 'mdns services' command (requires ADB 30.0.0+)",
             )
             return False
 

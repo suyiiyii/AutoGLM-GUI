@@ -1,305 +1,295 @@
-import { createFileRoute } from '@tanstack/react-router';
-import { useState, useEffect } from 'react';
+import { createFileRoute } from '@tanstack/react-router'
+import { useState, useEffect } from 'react'
 import {
   listWorkflows,
   createWorkflow,
   updateWorkflow,
   deleteWorkflow,
   type Workflow,
-} from '../api';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { Label } from '@/components/ui/label';
+} from '../api'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Textarea } from '@/components/ui/textarea'
+import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card'
+import { Label } from '@/components/ui/label'
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogFooter,
-} from '@/components/ui/dialog';
-import { Plus, Edit, Trash2, Loader2, ArrowUp, ArrowDown } from 'lucide-react';
-import { useTranslation } from '../lib/i18n-context';
+} from '@/components/ui/dialog'
+import { Plus, Edit, Trash2, Loader2, ArrowUp, ArrowDown } from 'lucide-react'
+import { useTranslation } from '../lib/i18n-context'
 
 export const Route = createFileRoute('/workflows')({
   component: WorkflowsComponent,
-});
+})
 
 interface WorkflowStep {
-  id: string;
-  title: string;
-  description: string;
+  id: string
+  title: string
+  description: string
 }
 
 const STEP_PREFIX_REGEX =
-  /^(?:步骤\s*\d+\s*[:：.]?\s*|step\s*\d+\s*[:：.]?\s*|\d+\s*[.)、．]\s+|[-*]\s+)/i;
+  /^(?:步骤\s*\d+\s*[:：.]?\s*|step\s*\d+\s*[:：.]?\s*|\d+\s*[.)、．]\s+|[-*]\s+)/i
 const DESCRIPTION_PREFIX_REGEX =
-  /^(?:描述|说明|备注|验证(?:点|标准)?|校验(?:点)?|检查(?:点)?|断言|expected|assert(?:ion)?|verify|description|desc)\s*[:：-]?\s*/i;
+  /^(?:描述|说明|备注|验证(?:点|标准)?|校验(?:点)?|检查(?:点)?|断言|expected|assert(?:ion)?|verify|description|desc)\s*[:：-]?\s*/i
 
 const createStep = (title = '', description = ''): WorkflowStep => ({
   id: `step-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
   title,
   description,
-});
+})
 
 const parseWorkflowTextToSteps = (text: string): WorkflowStep[] => {
-  const rawLines = text.split(/\r?\n/);
-  if (rawLines.every(line => line.trim().length === 0)) {
-    return [createStep()];
+  const rawLines = text.split(/\r?\n/)
+  if (rawLines.every((line) => line.trim().length === 0)) {
+    return [createStep()]
   }
 
-  const parsed: Array<{ title: string; description: string }> = [];
-  let current: { title: string; descriptionLines: string[] } | null = null;
-  let inDescriptionBlock = false;
+  const parsed: Array<{ title: string; description: string }> = []
+  let current: { title: string; descriptionLines: string[] } | null = null
+  let inDescriptionBlock = false
 
   const pushCurrent = () => {
-    if (!current) return;
+    if (!current) return
 
-    const title = current.title.trim();
-    const descriptionLines = [...current.descriptionLines];
+    const title = current.title.trim()
+    const descriptionLines = [...current.descriptionLines]
     while (descriptionLines.length > 0 && descriptionLines[0].trim() === '') {
-      descriptionLines.shift();
+      descriptionLines.shift()
     }
     while (
       descriptionLines.length > 0 &&
       descriptionLines[descriptionLines.length - 1].trim() === ''
     ) {
-      descriptionLines.pop();
+      descriptionLines.pop()
     }
-    const description = descriptionLines.join('\n').trimEnd();
+    const description = descriptionLines.join('\n').trimEnd()
 
     if (title || description) {
-      parsed.push({ title, description });
+      parsed.push({ title, description })
     }
-  };
+  }
 
   for (const rawLine of rawLines) {
-    const line = rawLine.replace(/\s+$/, '');
-    const trimmedLine = line.trim();
+    const line = rawLine.replace(/\s+$/, '')
+    const trimmedLine = line.trim()
 
     if (trimmedLine.length === 0) {
       if (current && inDescriptionBlock) {
-        current.descriptionLines.push('');
+        current.descriptionLines.push('')
       }
-      continue;
+      continue
     }
 
-    const isTopLevel = /^\S/.test(line);
+    const isTopLevel = /^\S/.test(line)
     if (isTopLevel && STEP_PREFIX_REGEX.test(trimmedLine)) {
-      pushCurrent();
+      pushCurrent()
       current = {
         title: trimmedLine.replace(STEP_PREFIX_REGEX, '').trim(),
         descriptionLines: [],
-      };
-      inDescriptionBlock = false;
-      continue;
+      }
+      inDescriptionBlock = false
+      continue
     }
 
     if (!current) {
-      current = { title: trimmedLine, descriptionLines: [] };
-      inDescriptionBlock = false;
-      continue;
+      current = { title: trimmedLine, descriptionLines: [] }
+      inDescriptionBlock = false
+      continue
     }
 
     if (DESCRIPTION_PREFIX_REGEX.test(trimmedLine)) {
-      const descriptionLine = trimmedLine
-        .replace(DESCRIPTION_PREFIX_REGEX, '')
-        .trimEnd();
+      const descriptionLine = trimmedLine.replace(DESCRIPTION_PREFIX_REGEX, '').trimEnd()
       if (descriptionLine) {
-        current.descriptionLines.push(descriptionLine);
+        current.descriptionLines.push(descriptionLine)
       }
-      inDescriptionBlock = true;
-      continue;
+      inDescriptionBlock = true
+      continue
     }
 
     if (!current.title) {
-      current.title = trimmedLine;
-      continue;
+      current.title = trimmedLine
+      continue
     }
 
     // Preserve manual line breaks and list formatting in description blocks.
     // Strip only one visual indentation level from serialized content.
-    const normalizedLine = line.replace(/^\s{1,4}/, '');
-    current.descriptionLines.push(normalizedLine);
-    inDescriptionBlock = true;
+    const normalizedLine = line.replace(/^\s{1,4}/, '')
+    current.descriptionLines.push(normalizedLine)
+    inDescriptionBlock = true
   }
 
-  pushCurrent();
+  pushCurrent()
   if (parsed.length === 0) {
-    return [createStep()];
+    return [createStep()]
   }
 
-  return parsed.map(step => createStep(step.title, step.description));
-};
+  return parsed.map((step) => createStep(step.title, step.description))
+}
 
 const buildWorkflowTextFromSteps = (
   steps: WorkflowStep[],
-  labels: { stepLabel: string; descriptionLabel: string }
+  labels: { stepLabel: string; descriptionLabel: string },
 ): string => {
-  const { stepLabel, descriptionLabel } = labels;
+  const { stepLabel, descriptionLabel } = labels
   return steps
-    .map(step => ({
+    .map((step) => ({
       title: step.title.trim(),
       description: step.description,
     }))
-    .filter(step => step.title || step.description)
+    .filter((step) => step.title || step.description)
     .map((step, index) => {
-      const fallbackTitle = `${stepLabel} ${index + 1}`;
-      const lines = [`${index + 1}. ${step.title.trim() || fallbackTitle}`];
+      const fallbackTitle = `${stepLabel} ${index + 1}`
+      const lines = [`${index + 1}. ${step.title.trim() || fallbackTitle}`]
       if (step.description) {
         const descriptionLines = step.description
           .split(/\r?\n/)
-          .map(line => line.trimEnd())
+          .map((line) => line.trimEnd())
           .filter(
             (line, lineIndex, arr) =>
-              line.trim().length > 0 ||
-              (lineIndex > 0 && lineIndex < arr.length - 1)
-          );
+              line.trim().length > 0 || (lineIndex > 0 && lineIndex < arr.length - 1),
+          )
         if (descriptionLines.length > 0) {
-          lines.push(`   ${descriptionLabel}:`);
+          lines.push(`   ${descriptionLabel}:`)
         }
         for (const descriptionLine of descriptionLines) {
-          lines.push(descriptionLine ? `   ${descriptionLine}` : '');
+          lines.push(descriptionLine ? `   ${descriptionLine}` : '')
         }
       }
-      return lines.join('\n');
+      return lines.join('\n')
     })
-    .join('\n\n');
-};
+    .join('\n\n')
+}
 
 function WorkflowsComponent() {
-  const t = useTranslation();
-  const [workflows, setWorkflows] = useState<Workflow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [showDialog, setShowDialog] = useState(false);
-  const [editingWorkflow, setEditingWorkflow] = useState<Workflow | null>(null);
+  const t = useTranslation()
+  const [workflows, setWorkflows] = useState<Workflow[]>([])
+  const [loading, setLoading] = useState(true)
+  const [showDialog, setShowDialog] = useState(false)
+  const [editingWorkflow, setEditingWorkflow] = useState<Workflow | null>(null)
   const [formData, setFormData] = useState({
     name: '',
     steps: [createStep()],
-  });
-  const [saving, setSaving] = useState(false);
+  })
+  const [saving, setSaving] = useState(false)
 
   // Load workflows on mount
   useEffect(() => {
-    loadWorkflows();
-  }, []);
+    loadWorkflows()
+  }, [])
 
   const loadWorkflows = async () => {
     try {
-      setLoading(true);
-      const data = await listWorkflows();
-      setWorkflows(data.workflows);
+      setLoading(true)
+      const data = await listWorkflows()
+      setWorkflows(data.workflows)
     } catch (error) {
-      console.error('Failed to load workflows:', error);
+      console.error('Failed to load workflows:', error)
     } finally {
-      setLoading(false);
+      setLoading(false)
     }
-  };
+  }
 
   const handleCreate = () => {
-    setEditingWorkflow(null);
-    setFormData({ name: '', steps: [createStep()] });
-    setShowDialog(true);
-  };
+    setEditingWorkflow(null)
+    setFormData({ name: '', steps: [createStep()] })
+    setShowDialog(true)
+  }
 
   const handleEdit = (workflow: Workflow) => {
-    setEditingWorkflow(workflow);
+    setEditingWorkflow(workflow)
     setFormData({
       name: workflow.name,
       steps: parseWorkflowTextToSteps(workflow.text),
-    });
-    setShowDialog(true);
-  };
+    })
+    setShowDialog(true)
+  }
 
   const updateStepTitle = (stepId: string, title: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      steps: prev.steps.map(step =>
-        step.id === stepId ? { ...step, title } : step
-      ),
-    }));
-  };
+      steps: prev.steps.map((step) => (step.id === stepId ? { ...step, title } : step)),
+    }))
+  }
 
   const updateStepDescription = (stepId: string, description: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      steps: prev.steps.map(step =>
-        step.id === stepId ? { ...step, description } : step
-      ),
-    }));
-  };
+      steps: prev.steps.map((step) => (step.id === stepId ? { ...step, description } : step)),
+    }))
+  }
 
   const insertStepAfter = (index: number) => {
-    setFormData(prev => {
-      const nextSteps = [...prev.steps];
-      nextSteps.splice(index + 1, 0, createStep());
-      return { ...prev, steps: nextSteps };
-    });
-  };
+    setFormData((prev) => {
+      const nextSteps = [...prev.steps]
+      nextSteps.splice(index + 1, 0, createStep())
+      return { ...prev, steps: nextSteps }
+    })
+  }
 
   const removeStep = (stepId: string) => {
-    setFormData(prev => {
+    setFormData((prev) => {
       if (prev.steps.length === 1) {
-        return { ...prev, steps: [createStep()] };
+        return { ...prev, steps: [createStep()] }
       }
       return {
         ...prev,
-        steps: prev.steps.filter(step => step.id !== stepId),
-      };
-    });
-  };
+        steps: prev.steps.filter((step) => step.id !== stepId),
+      }
+    })
+  }
 
   const moveStep = (index: number, direction: -1 | 1) => {
-    setFormData(prev => {
-      const targetIndex = index + direction;
+    setFormData((prev) => {
+      const targetIndex = index + direction
       if (targetIndex < 0 || targetIndex >= prev.steps.length) {
-        return prev;
+        return prev
       }
-      const nextSteps = [...prev.steps];
-      [nextSteps[index], nextSteps[targetIndex]] = [
-        nextSteps[targetIndex],
-        nextSteps[index],
-      ];
-      return { ...prev, steps: nextSteps };
-    });
-  };
+      const nextSteps = [...prev.steps]
+      ;[nextSteps[index], nextSteps[targetIndex]] = [nextSteps[targetIndex], nextSteps[index]]
+      return { ...prev, steps: nextSteps }
+    })
+  }
 
   const handleSave = async () => {
     try {
-      setSaving(true);
+      setSaving(true)
       const payload = {
         name: formData.name.trim(),
         text: buildWorkflowTextFromSteps(formData.steps, {
           stepLabel: t.workflows.stepLabel,
           descriptionLabel: t.workflows.stepDescriptionLabel,
         }),
-      };
-      if (editingWorkflow) {
-        await updateWorkflow(editingWorkflow.uuid, payload);
-      } else {
-        await createWorkflow(payload);
       }
-      setShowDialog(false);
-      await loadWorkflows();
+      if (editingWorkflow) {
+        await updateWorkflow(editingWorkflow.uuid, payload)
+      } else {
+        await createWorkflow(payload)
+      }
+      setShowDialog(false)
+      await loadWorkflows()
     } catch (error) {
-      console.error('Failed to save workflow:', error);
+      console.error('Failed to save workflow:', error)
     } finally {
-      setSaving(false);
+      setSaving(false)
     }
-  };
+  }
 
   const handleDelete = async (uuid: string) => {
-    if (!window.confirm(t.workflows.deleteConfirm)) return;
+    if (!window.confirm(t.workflows.deleteConfirm)) return
     try {
-      await deleteWorkflow(uuid);
-      await loadWorkflows();
+      await deleteWorkflow(uuid)
+      await loadWorkflows()
     } catch (error) {
-      console.error('Failed to delete workflow:', error);
+      console.error('Failed to delete workflow:', error)
     }
-  };
+  }
 
-  const hasValidStep = formData.steps.some(step => step.title.trim());
+  const hasValidStep = formData.steps.some((step) => step.title.trim())
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
@@ -317,13 +307,11 @@ function WorkflowsComponent() {
         </div>
       ) : workflows.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-slate-500 dark:text-slate-400">
-            {t.workflows.empty}
-          </p>
+          <p className="text-slate-500 dark:text-slate-400">{t.workflows.empty}</p>
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {workflows.map(workflow => (
+          {workflows.map((workflow) => (
             <Card
               key={workflow.uuid}
               className="hover:shadow-md transition-shadow"
@@ -334,9 +322,9 @@ function WorkflowsComponent() {
               <CardContent>
                 {(() => {
                   const steps = parseWorkflowTextToSteps(workflow.text).filter(
-                    step => step.title.trim() || step.description.trim()
-                  );
-                  const previewSteps = steps.slice(0, 3);
+                    (step) => step.title.trim() || step.description.trim(),
+                  )
+                  const previewSteps = steps.slice(0, 3)
                   return (
                     <div className="mb-4 space-y-2">
                       <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -349,8 +337,7 @@ function WorkflowsComponent() {
                           </p>
                           {step.description.trim() && (
                             <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
-                              {t.workflows.stepDescriptionLabel}:{' '}
-                              {step.description}
+                              {t.workflows.stepDescriptionLabel}: {step.description}
                             </p>
                           )}
                         </div>
@@ -361,7 +348,7 @@ function WorkflowsComponent() {
                         </p>
                       )}
                     </div>
-                  );
+                  )
                 })()}
                 <div className="flex gap-2">
                   <Button
@@ -388,15 +375,16 @@ function WorkflowsComponent() {
       )}
 
       {/* Create/Edit Dialog: header/footer fixed, only step list scrolls */}
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+      <Dialog
+        open={showDialog}
+        onOpenChange={setShowDialog}
+      >
         <DialogContent
           className="sm:max-w-[680px] max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden"
-          onOpenAutoFocus={e => e.preventDefault()}
+          onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-3 pr-12 border-b border-slate-200 dark:border-slate-800">
-            <DialogTitle>
-              {editingWorkflow ? t.workflows.edit : t.workflows.create}
-            </DialogTitle>
+            <DialogTitle>{editingWorkflow ? t.workflows.edit : t.workflows.create}</DialogTitle>
           </DialogHeader>
           {/* Scrollable body: name + steps list only */}
           <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
@@ -406,9 +394,7 @@ function WorkflowsComponent() {
                 <Input
                   id="name"
                   value={formData.name}
-                  onChange={e =>
-                    setFormData(prev => ({ ...prev, name: e.target.value }))
-                  }
+                  onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                   placeholder={t.workflows.namePlaceholder}
                 />
               </div>
@@ -475,9 +461,7 @@ function WorkflowsComponent() {
                             </Label>
                             <Input
                               value={step.title}
-                              onChange={e =>
-                                updateStepTitle(step.id, e.target.value)
-                              }
+                              onChange={(e) => updateStepTitle(step.id, e.target.value)}
                               placeholder={t.workflows.stepNamePlaceholder}
                               className="h-10 bg-white dark:bg-slate-950"
                             />
@@ -488,12 +472,8 @@ function WorkflowsComponent() {
                             </Label>
                             <Textarea
                               value={step.description}
-                              onChange={e =>
-                                updateStepDescription(step.id, e.target.value)
-                              }
-                              placeholder={
-                                t.workflows.stepDescriptionPlaceholder
-                              }
+                              onChange={(e) => updateStepDescription(step.id, e.target.value)}
+                              placeholder={t.workflows.stepDescriptionPlaceholder}
                               rows={7}
                               className="resize-y min-h-[180px] !rounded-lg bg-white dark:bg-slate-950"
                             />
@@ -510,7 +490,10 @@ function WorkflowsComponent() {
             </div>
           </div>
           <DialogFooter className="flex-shrink-0 border-t border-slate-200 dark:border-slate-800 px-6 py-4">
-            <Button variant="outline" onClick={() => setShowDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowDialog(false)}
+            >
               {t.common.cancel}
             </Button>
             <Button
@@ -530,5 +513,5 @@ function WorkflowsComponent() {
         </DialogContent>
       </Dialog>
     </div>
-  );
+  )
 }

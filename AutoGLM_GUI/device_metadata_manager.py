@@ -105,7 +105,7 @@ class DeviceMetadataManager:
                 try:
                     self.metadata_file.rename(backup_path)
                     logger.warning(
-                        f"Corrupted metadata file moved to {backup_path.name}"
+                        f"Corrupted metadata file moved to {backup_path.name}",
                     )
                 except Exception as backup_error:
                     logger.error(f"Failed to create backup: {backup_error}")
@@ -145,7 +145,7 @@ class DeviceMetadataManager:
 
         if normalized_name and len(normalized_name) > DISPLAY_NAME_MAX_LENGTH:
             raise ValueError(
-                f"Display name too long: {len(normalized_name)} > {DISPLAY_NAME_MAX_LENGTH}"
+                f"Display name too long: {len(normalized_name)} > {DISPLAY_NAME_MAX_LENGTH}",
             )
 
         with self._data_lock:

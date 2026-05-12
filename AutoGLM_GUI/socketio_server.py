@@ -33,7 +33,8 @@ sio = socketio.AsyncServer(
 _socket_streamers: dict[str, ScrcpyStreamer] = {}
 _stream_tasks: dict[str, asyncio.Task[None]] = {}
 _device_locks: dict[
-    str, asyncio.Lock
+    str,
+    asyncio.Lock,
 ] = {}  # Lock per device to prevent concurrent connections
 
 
@@ -116,7 +117,9 @@ async def _stream_packets(sid: str, streamer: ScrcpyStreamer) -> None:
             await sio.emit("error", {"message": str(exc)}, to=sid)
         except Exception as emit_exc:
             logger.debug(
-                "Failed to emit Socket.IO stream error to %s: %s", sid, emit_exc
+                "Failed to emit Socket.IO stream error to %s: %s",
+                sid,
+                emit_exc,
             )
     finally:
         await _stop_stream_for_sid(sid)
@@ -135,7 +138,7 @@ def _packet_to_payload(packet: ScrcpyMediaStreamPacket) -> VideoPacketPayload:
 
 
 @sio.event
-async def connect(sid: str, environ: dict[str, Any]) -> None:
+async def connect(sid: str, _environ: dict[str, Any]) -> None:
     logger.info("Socket.IO client connected: %s", sid)
 
 

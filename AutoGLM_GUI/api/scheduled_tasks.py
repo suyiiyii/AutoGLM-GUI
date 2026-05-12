@@ -103,7 +103,8 @@ def get_scheduled_task(task_id: str) -> ScheduledTaskResponse:
 
 @router.put("/api/scheduled-tasks/{task_id}", response_model=ScheduledTaskResponse)
 def update_scheduled_task(
-    task_id: str, request: ScheduledTaskUpdate
+    task_id: str,
+    request: ScheduledTaskUpdate,
 ) -> ScheduledTaskResponse:
     update_data = request.model_dump(exclude_unset=True)
     task = scheduler_manager.update_task(task_id, **update_data)

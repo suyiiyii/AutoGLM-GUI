@@ -73,3 +73,22 @@ dev = [
     "pytest>=9.0.2",
     "ruff>=0.14.9",
 ]
+
+[tool.ruff]
+line-length = 88
+target-version = "py38"
+
+[tool.ruff.lint]
+select = [
+    "SIM",   # Code simplification patterns
+    "ARG",   # Detect unused function arguments
+    "B904",  # Proper exception chaining with raise from
+]
+# COM812 conflicts with the formatter, so we let the formatter handle trailing commas
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**" = ["ARG"]  # Unused arguments are common in test mocks
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

@@ -12,7 +12,7 @@ def _require_int(args: dict[str, Any], key: str) -> int:
         raise ValueError(f"Missing required argument: '{key}'")
     if not isinstance(val, (int, float)):
         raise ValueError(
-            f"Expected number for '{key}', got {type(val).__name__}: {val!r}"
+            f"Expected number for '{key}', got {type(val).__name__}: {val!r}",
         )
     return int(val)
 
@@ -24,7 +24,7 @@ def _require_str(args: dict[str, Any], key: str) -> str:
         raise ValueError(f"Missing required argument: '{key}'")
     if not isinstance(val, str):
         raise ValueError(
-            f"Expected string for '{key}', got {type(val).__name__}: {val!r}"
+            f"Expected string for '{key}', got {type(val).__name__}: {val!r}",
         )
     return val
 

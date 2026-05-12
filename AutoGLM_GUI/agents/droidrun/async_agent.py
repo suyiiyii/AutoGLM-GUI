@@ -50,7 +50,7 @@ class DroidRunAgent:
                 "chunk": (
                     "[DroidRun 模式] 注意：此模式需要在 Android 设备上安装 DroidRun Portal APK。\n"
                     "如未安装，请先运行：droidrun setup --device <serial>"
-                )
+                ),
             },
         }
 
@@ -78,7 +78,7 @@ class DroidRunAgent:
                 "data": {
                     "message": (
                         f"droidrun 未安装，请运行：uv pip install droidrun\n错误：{e}"
-                    )
+                    ),
                 },
             }
             return
@@ -86,7 +86,9 @@ class DroidRunAgent:
         # droidrun 0.4.x: CodeActResultEvent; 0.5.x: FastAgentResultEvent
         codeact_result_event_cls = getattr(droid_events, "CodeActResultEvent", None)
         fast_agent_result_event_cls = getattr(
-            droid_events, "FastAgentResultEvent", None
+            droid_events,
+            "FastAgentResultEvent",
+            None,
         )
         ExecutorResultEvent = droid_events.ExecutorResultEvent
         FinalizeEvent = droid_events.FinalizeEvent
@@ -111,10 +113,14 @@ class DroidRunAgent:
             )
             if is_codeact_result:
                 summary = getattr(event, "summary", None) or getattr(
-                    event, "reason", ""
+                    event,
+                    "reason",
+                    "",
                 )
                 action = getattr(event, "action", None) or getattr(
-                    event, "instruction", "code execution"
+                    event,
+                    "instruction",
+                    "code execution",
                 )
                 success = getattr(event, "success", getattr(event, "outcome", True))
                 self._step_count += 1

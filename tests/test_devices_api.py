@@ -104,7 +104,7 @@ class FakeDeviceManager:
                     "model": "RemotePhone",
                     "platform": "android",
                     "status": "online",
-                }
+                },
             ],
         )
         self.add_remote_result = (True, "Added", "remote-serial-1")
@@ -137,19 +137,27 @@ class FakeDeviceManager:
         return self.connect_wifi_manual_result
 
     def pair_wifi(
-        self, ip: str, pairing_port: int, pairing_code: str, connection_port: int
+        self,
+        ip: str,
+        pairing_port: int,
+        pairing_code: str,
+        connection_port: int,
     ) -> tuple[bool, str, str | None]:
         self.last_pair_wifi_args = (ip, pairing_port, pairing_code, connection_port)
         return self.pair_wifi_result
 
     def discover_remote_devices(
-        self, base_url: str, timeout: int
+        self,
+        base_url: str,
+        timeout: int,
     ) -> tuple[bool, str, list[dict]]:
         _ = (base_url, timeout)
         return self.discover_remote_result
 
     def add_remote_device(
-        self, base_url: str, device_id: str
+        self,
+        base_url: str,
+        device_id: str,
     ) -> tuple[bool, str, str | None]:
         _ = (base_url, device_id)
         return self.add_remote_result
@@ -176,7 +184,9 @@ def devices_env(monkeypatch: pytest.MonkeyPatch) -> dict:
         staticmethod(lambda: fake_agent_manager),
     )
     monkeypatch.setattr(
-        device_group_manager_module, "device_group_manager", fake_group_manager
+        device_group_manager_module,
+        "device_group_manager",
+        fake_group_manager,
     )
 
     app = FastAPI()
@@ -195,7 +205,7 @@ def test_list_devices_refreshes_when_polling_inactive(devices_env: dict) -> None
     devices_env["device_manager"].polling_active = False
     devices_env["group_manager"].group_map["SER-1"] = "qa"
     devices_env["agent_manager"].metadata_by_device_id["dev-1"] = FakeMetadata(
-        model_name="autoglm-phone-9b"
+        model_name="autoglm-phone-9b",
     )
 
     response = devices_env["client"].get("/api/devices")
@@ -223,7 +233,8 @@ def test_list_devices_surfaces_contextual_agent_metadata(devices_env: dict) -> N
 
 def test_connect_wifi_requires_device_id(devices_env: dict) -> None:
     response = devices_env["client"].post(
-        "/api/devices/connect_wifi", json={"port": 5555}
+        "/api/devices/connect_wifi",
+        json={"port": 5555},
     )
 
     assert response.status_code == 200
@@ -389,7 +400,8 @@ def test_remove_remote_device_failure_returns_remove_failed(devices_env: dict) -
 
 
 def test_discover_mdns_success(
-    monkeypatch: pytest.MonkeyPatch, devices_env: dict
+    monkeypatch: pytest.MonkeyPatch,
+    devices_env: dict,
 ) -> None:
     class FakeADBConnection:
         adb_path = "/tmp/fake-adb"
@@ -404,12 +416,14 @@ def test_discover_mdns_success(
                 has_pairing=True,
                 service_type="_adb._tcp",
                 pairing_port=37123,
-            )
+            ),
         ]
 
     monkeypatch.setattr(adb_module, "ADBConnection", FakeADBConnection)
     monkeypatch.setattr(
-        adb_plus_module, "discover_mdns_devices", fake_discover_mdns_devices
+        adb_plus_module,
+        "discover_mdns_devices",
+        fake_discover_mdns_devices,
     )
 
     response = devices_env["client"].get("/api/devices/discover_mdns")
@@ -423,7 +437,8 @@ def test_discover_mdns_success(
 
 
 def test_discover_mdns_exception_returns_error(
-    monkeypatch: pytest.MonkeyPatch, devices_env: dict
+    monkeypatch: pytest.MonkeyPatch,
+    devices_env: dict,
 ) -> None:
     class FakeADBConnection:
         adb_path = "/tmp/fake-adb"
@@ -434,7 +449,9 @@ def test_discover_mdns_exception_returns_error(
 
     monkeypatch.setattr(adb_module, "ADBConnection", FakeADBConnection)
     monkeypatch.setattr(
-        adb_plus_module, "discover_mdns_devices", broken_discover_mdns_devices
+        adb_plus_module,
+        "discover_mdns_devices",
+        broken_discover_mdns_devices,
     )
 
     response = devices_env["client"].get("/api/devices/discover_mdns")
