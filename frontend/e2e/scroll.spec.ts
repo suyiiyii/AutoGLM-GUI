@@ -35,29 +35,21 @@ const VIEWPORT_SELECTOR =
 function readServiceUrls(): { backend_url: string; agent_url: string } {
   const urlsPath = path.resolve(__dirname, '.service_urls.json');
   if (!fs.existsSync(urlsPath)) {
-    throw new Error(
-      `.service_urls.json not found — ensure start_e2e_services.py is running`
-    );
+    throw new Error(`.service_urls.json not found — ensure start_e2e_services.py is running`);
   }
   return JSON.parse(fs.readFileSync(urlsPath, 'utf-8'));
 }
 
 test.describe('DevicePanel auto-scroll', () => {
-  test('stays at bottom during streaming agent response', async ({
-    page,
-    request,
-  }) => {
+  test('stays at bottom during streaming agent response', async ({ page, request }) => {
     const { backend_url, agent_url } = readServiceUrls();
 
     // ── 1. Configure backend (device + LLM config) ──────────────────────
 
     // Register mock device
-    const deviceRes = await request.post(
-      `${backend_url}/api/devices/add_remote`,
-      {
-        data: { base_url: agent_url, device_id: 'mock_device_001' },
-      }
-    );
+    const deviceRes = await request.post(`${backend_url}/api/devices/add_remote`, {
+      data: { base_url: agent_url, device_id: 'mock_device_001' },
+    });
     expect(deviceRes.status()).toBe(200);
     const deviceData = await deviceRes.json();
     expect(deviceData.success).toBe(true);
@@ -94,9 +86,7 @@ test.describe('DevicePanel auto-scroll', () => {
     // If content fits without scrolling, the auto-scroll test is meaningless.
     await page.setViewportSize({ width: 1280, height: 500 });
 
-    await page.goto(
-      `/chat?serial=${encodeURIComponent(deviceSerial)}&mode=classic`
-    );
+    await page.goto(`/chat?serial=${encodeURIComponent(deviceSerial)}&mode=classic`);
 
     // The settings dialog may appear — close it first
     const dialog = page.locator('[role="dialog"]');
@@ -116,27 +106,21 @@ test.describe('DevicePanel auto-scroll', () => {
 
     // Inject a scroll observer that records the distance from bottom over time.
     // We read it back after streaming completes.
-    await page.evaluate(viewportSelector => {
+    await page.evaluate((viewportSelector) => {
       window.__scrollReport = {
         maxDistance: 0,
         samples: [] as number[],
       };
 
-      const viewport = document.querySelector(
-        viewportSelector
-      ) as HTMLDivElement | null;
+      const viewport = document.querySelector(viewportSelector) as HTMLDivElement | null;
       if (!viewport) {
         window.__scrollReport.error = 'No scroll viewport found';
         return;
       }
 
       const record = () => {
-        const d =
-          viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
-        window.__scrollReport.maxDistance = Math.max(
-          window.__scrollReport.maxDistance,
-          d
-        );
+        const d = viewport.scrollHeight - viewport.scrollTop - viewport.clientHeight;
+        window.__scrollReport.maxDistance = Math.max(window.__scrollReport.maxDistance, d);
         window.__scrollReport.samples.push(Math.round(d));
       };
 
@@ -195,10 +179,8 @@ test.describe('DevicePanel auto-scroll', () => {
     // Verify the viewport is the real scroll container (content > viewport).
     // If this fails, the layout is broken (the bug also reported as "missing
     // scrollbar") or the test viewport is too tall — reduce height further.
-    const overflow = await page.evaluate(viewportSelector => {
-      const v = document.querySelector(
-        viewportSelector
-      ) as HTMLDivElement | null;
+    const overflow = await page.evaluate((viewportSelector) => {
+      const v = document.querySelector(viewportSelector) as HTMLDivElement | null;
       return v
         ? {
             scrollHeight: v.scrollHeight,

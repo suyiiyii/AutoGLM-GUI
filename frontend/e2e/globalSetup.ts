@@ -65,15 +65,11 @@ async function globalSetup() {
   // Start services with retry on port-in-use
   let proc: ReturnType<typeof spawn> | null = null;
   for (let attempt = 0; attempt < 3; attempt++) {
-    proc = spawn(
-      'uv',
-      ['run', 'python', 'scripts/start_e2e_services.py', '--output', urlsPath],
-      {
-        cwd: projectRoot,
-        stdio: 'inherit',
-        detached: true,
-      }
-    );
+    proc = spawn('uv', ['run', 'python', 'scripts/start_e2e_services.py', '--output', urlsPath], {
+      cwd: projectRoot,
+      stdio: 'inherit',
+      detached: true,
+    });
 
     // Wait for both backend health and the launcher-written URL file.
     const deadline = Date.now() + 30000;
@@ -93,9 +89,7 @@ async function globalSetup() {
         // Not ready — but check if the process exited with error
         if (proc && proc.exitCode !== null) {
           // Process died — port likely in use, retry
-          console.log(
-            `[globalSetup] Attempt ${attempt + 1}: process exited, retrying...`
-          );
+          console.log(`[globalSetup] Attempt ${attempt + 1}: process exited, retrying...`);
           break;
         }
       }

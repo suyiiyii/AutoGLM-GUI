@@ -3,8 +3,7 @@ import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
 
-export const sleep = (ms: number) =>
-  new Promise(resolve => setTimeout(resolve, ms));
+export const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
 export async function terminateProcessTree(pid: number) {
   if (!Number.isFinite(pid)) {

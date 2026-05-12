@@ -6,12 +6,7 @@
  * The frontend asserts visible debug output; the backend asserts persisted
  * task events and trace artifacts.
  */
-import {
-  test,
-  expect,
-  type APIRequestContext,
-  type APIResponse,
-} from '@playwright/test';
+import { test, expect, type APIRequestContext, type APIResponse } from '@playwright/test';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -57,28 +52,19 @@ type CommandAction = {
   [key: string]: unknown;
 };
 
-const TERMINAL_STATUSES = new Set([
-  'SUCCEEDED',
-  'FAILED',
-  'CANCELLED',
-  'INTERRUPTED',
-]);
+const TERMINAL_STATUSES = new Set(['SUCCEEDED', 'FAILED', 'CANCELLED', 'INTERRUPTED']);
 
 function readServiceUrls(): ServiceUrls {
   const urlsPath = path.resolve(__dirname, '.service_urls.json');
   if (!fs.existsSync(urlsPath)) {
-    throw new Error(
-      `.service_urls.json not found - ensure start_e2e_services.py is running`
-    );
+    throw new Error(`.service_urls.json not found - ensure start_e2e_services.py is running`);
   }
   return JSON.parse(fs.readFileSync(urlsPath, 'utf-8')) as ServiceUrls;
 }
 
 async function assertOk(response: APIResponse, label: string): Promise<void> {
   if (!response.ok()) {
-    throw new Error(
-      `${label} failed with ${response.status()}: ${await response.text()}`
-    );
+    throw new Error(`${label} failed with ${response.status()}: ${await response.text()}`);
   }
 }
 
@@ -104,13 +90,11 @@ async function waitForTask(
     if (TERMINAL_STATUSES.has(latest.status)) {
       return latest;
     }
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
   throw new Error(
-    `Task ${taskId} did not reach a terminal status. Latest: ${JSON.stringify(
-      latest
-    )}`
+    `Task ${taskId} did not reach a terminal status. Latest: ${JSON.stringify(latest)}`
   );
 }
 
@@ -124,24 +108,20 @@ async function waitForTaskEvents(
   let latestEvents: TaskEventRecord[] = [];
 
   while (Date.now() < deadline) {
-    const response = await request.get(
-      `${backendUrl}/api/tasks/${taskId}/events`
-    );
+    const response = await request.get(`${backendUrl}/api/tasks/${taskId}/events`);
     await assertOk(response, 'get task events');
     latestEvents = ((await response.json()) as TaskEventListResponse).events;
-    const eventTypes = latestEvents.map(event => event.event_type);
-    if (requiredEventTypes.every(type => eventTypes.includes(type))) {
+    const eventTypes = latestEvents.map((event) => event.event_type);
+    if (requiredEventTypes.every((type) => eventTypes.includes(type))) {
       return latestEvents;
     }
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 500));
   }
 
   throw new Error(
     `Task ${taskId} did not emit required events ${requiredEventTypes.join(
       ', '
-    )}. Latest events: ${latestEvents
-      .map(event => event.event_type)
-      .join(', ')}`
+    )}. Latest events: ${latestEvents.map((event) => event.event_type).join(', ')}`
   );
 }
 
@@ -162,31 +142,19 @@ test.describe('Trace debug surface', () => {
       }),
       'set mock LLM responses'
     );
-    await assertOk(
-      await request.post(`${llm_url}/test/reset`),
-      'reset mock LLM'
-    );
+    await assertOk(await request.post(`${llm_url}/test/reset`), 'reset mock LLM');
 
-    const deviceResponse = await request.post(
-      `${backend_url}/api/devices/add_remote`,
-      {
-        data: { base_url: agent_url, device_id: testDeviceId },
-      }
-    );
+    const deviceResponse = await request.post(`${backend_url}/api/devices/add_remote`, {
+      data: { base_url: agent_url, device_id: testDeviceId },
+    });
     await assertOk(deviceResponse, 'add remote device');
     const deviceData = (await deviceResponse.json()) as RemoteDeviceAddResponse;
     expect(deviceData.success).toBe(true);
     expect(deviceData.serial).toBeTruthy();
 
-    await assertOk(
-      await request.post(`${agent_url}/test/reset`),
-      'reset mock device commands'
-    );
+    await assertOk(await request.post(`${agent_url}/test/reset`), 'reset mock device commands');
 
-    await assertOk(
-      await request.delete(`${backend_url}/api/config`),
-      'clear config'
-    );
+    await assertOk(await request.delete(`${backend_url}/api/config`), 'clear config');
     await assertOk(
       await request.post(`${backend_url}/api/config`, {
         data: {
@@ -199,9 +167,7 @@ test.describe('Trace debug surface', () => {
       'save config'
     );
 
-    await page.goto(
-      `/chat?serial=${encodeURIComponent(deviceData.serial)}&mode=classic`
-    );
+    await page.goto(`/chat?serial=${encodeURIComponent(deviceData.serial)}&mode=classic`);
 
     const dialog = page.locator('[role="dialog"]');
     if (await dialog.isVisible({ timeout: 3000 }).catch(() => false)) {
@@ -211,7 +177,7 @@ test.describe('Trace debug surface', () => {
     const textbox = page.locator('textarea');
     await expect(textbox).toBeVisible({ timeout: 15000 });
 
-    const taskResponsePromise = page.waitForResponse(response => {
+    const taskResponsePromise = page.waitForResponse((response) => {
       return (
         response.request().method() === 'POST' &&
         response.url().includes('/api/task-sessions/') &&
@@ -226,9 +192,7 @@ test.describe('Trace debug surface', () => {
     await assertOk(taskResponse, 'submit task');
     const submittedTask = (await taskResponse.json()) as TaskRunResponse;
 
-    await expect(
-      page.getByText('点击屏幕下方的消息按钮').first()
-    ).toBeVisible();
+    await expect(page.getByText('点击屏幕下方的消息按钮').first()).toBeVisible();
     await expect(page.getByText('Step 1').first()).toBeVisible({
       timeout: 30000,
     });
@@ -240,29 +204,30 @@ test.describe('Trace debug surface', () => {
     });
     await page.getByText('View action').first().click();
     await expect(page.getByText('"action": "Tap"').first()).toBeVisible();
-    await expect(
-      page.locator('p').filter({ hasText: '已成功点击消息按钮' }).first()
-    ).toBeVisible({ timeout: 30000 });
+    await expect(page.locator('p').filter({ hasText: '已成功点击消息按钮' }).first()).toBeVisible({
+      timeout: 30000,
+    });
 
     const finalTask = await waitForTask(request, backend_url, submittedTask.id);
     expect(finalTask.status).toBe('SUCCEEDED');
     expect(finalTask.trace_id).toBeTruthy();
     expect(finalTask.step_count).toBeGreaterThanOrEqual(1);
 
-    const events = await waitForTaskEvents(
-      request,
-      backend_url,
-      submittedTask.id,
-      ['status', 'thinking', 'step', 'done', 'trace_summary']
-    );
-    const eventTypes = events.map(event => event.event_type);
+    const events = await waitForTaskEvents(request, backend_url, submittedTask.id, [
+      'status',
+      'thinking',
+      'step',
+      'done',
+      'trace_summary',
+    ]);
+    const eventTypes = events.map((event) => event.event_type);
     expect(eventTypes).toContain('status');
     expect(eventTypes).toContain('thinking');
     expect(eventTypes).toContain('step');
     expect(eventTypes).toContain('done');
     expect(eventTypes).toContain('trace_summary');
 
-    const stepEvent = events.find(event => event.event_type === 'step');
+    const stepEvent = events.find((event) => event.event_type === 'step');
     if (!stepEvent) {
       throw new Error('step event not found');
     }
@@ -273,32 +238,25 @@ test.describe('Trace debug surface', () => {
     expect(typeof timings.llm_duration_ms).toBe('number');
     expect(typeof timings.execute_action_duration_ms).toBe('number');
 
-    const traceSummaryEvent = events.find(
-      event => event.event_type === 'trace_summary'
-    );
+    const traceSummaryEvent = events.find((event) => event.event_type === 'trace_summary');
     if (!traceSummaryEvent) {
       throw new Error('trace_summary event not found');
     }
-    const summary = asRecord(
-      traceSummaryEvent.payload.summary,
-      'trace summary'
-    );
+    const summary = asRecord(traceSummaryEvent.payload.summary, 'trace summary');
     expect(summary.trace_id).toBe(finalTask.trace_id);
     expect(summary.steps).toBeGreaterThanOrEqual(1);
     const stepSummaries = traceSummaryEvent.payload.step_summaries;
     expect(Array.isArray(stepSummaries)).toBe(true);
     expect((stepSummaries as unknown[]).length).toBeGreaterThanOrEqual(1);
 
-    const commandResponse = await request.get(
-      `${agent_url}/test/commands/actions`
-    );
+    const commandResponse = await request.get(`${agent_url}/test/commands/actions`);
     await assertOk(commandResponse, 'get mock device commands');
     const commands = (await commandResponse.json()) as CommandAction[];
-    const commandActions = commands.map(command => command.action);
+    const commandActions = commands.map((command) => command.action);
     expect(commandActions).toContain('screenshot');
     expect(commandActions).toContain('tap');
 
-    const tapCommand = commands.find(command => command.action === 'tap');
+    const tapCommand = commands.find((command) => command.action === 'tap');
     if (!tapCommand) {
       throw new Error(`tap command not found: ${JSON.stringify(commands)}`);
     }

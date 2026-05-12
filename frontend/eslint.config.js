@@ -78,10 +78,7 @@ export default [
       ...prettierConfig.rules,
 
       // TypeScript rules
-      '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_' },
-      ],
+      '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
       '@typescript-eslint/no-explicit-any': 'error',
@@ -98,7 +95,7 @@ export default [
       'react-hooks/purity': 'off', // Allow Date.now() in event handlers
 
       // General rules
-      'no-console': 'warn', // Allow console logs for debugging in this component
+      'no-console': ['warn', { allow: ['error', 'warn', 'debug'] }], // Allow console.error/warn/debug for logging
       'no-debugger': 'error',
       'prefer-const': 'error',
       'no-var': 'error',
@@ -129,6 +126,7 @@ export default [
       'coverage/**',
       'test-results/**',
       'playwright-report/**',
+      'e2e/**',
       '*.config.js',
       '*.config.ts',
       'vite.config.*',
