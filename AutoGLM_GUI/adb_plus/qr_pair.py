@@ -42,7 +42,9 @@ class PairingSession:
     status: str  # Current status: "listening" | "pairing" | "paired" | "connecting" | "connected" | "timeout" | "error"
     device_id: str | None = None  # Device ID after connection (ip:port)
     error_message: str | None = None  # Error details if status is "error"
-    created_at: float = field(default_factory=lambda: datetime.now().timestamp())
+    created_at: float = field(
+        default_factory=lambda: datetime.now(datetime.UTC).timestamp()
+    )
     expires_at: float = 0.0  # Unix timestamp when session expires
     zeroconf: Zeroconf | None = None  # Zeroconf instance
     listener: QRPairingListener | None = None  # Service listener
@@ -78,7 +80,8 @@ def _adb_pair(host: str, port: int, password: str, adb_path: str = "adb") -> boo
     """Execute ADB pair command."""
     logger.info(f"[QR Pair] Executing: adb pair {host}:{port}")
     result = run_cmd_silently_sync(
-        [adb_path, "pair", f"{host}:{port}", password], timeout=25
+        [adb_path, "pair", f"{host}:{port}", password],
+        timeout=25,
     )
     output = result.stdout.strip()
     logger.debug(f"[QR Pair] Pair output: {output}")
@@ -164,13 +167,13 @@ class QRPairingListener(ServiceListener):
             # Prefer same host as paired if we have it
             if self.last_paired_host and host != self.last_paired_host:
                 logger.debug(
-                    f"[QR Pair] Skipping connect service on different host: {host} (expected {self.last_paired_host})"
+                    f"[QR Pair] Skipping connect service on different host: {host} (expected {self.last_paired_host})",
                 )
                 return
 
             if key in self.attempted_connect:
                 logger.debug(
-                    f"[QR Pair] Already attempted connection for {host}:{port}"
+                    f"[QR Pair] Already attempted connection for {host}:{port}",
                 )
                 return
             self.attempted_connect.add(key)
@@ -201,7 +204,9 @@ class QRPairingManager:
         self._sessions: dict[str, PairingSession] = {}
 
     def create_session(
-        self, timeout: int = 90, adb_path: str = "adb"
+        self,
+        timeout: int = 90,
+        adb_path: str = "adb",
     ) -> PairingSession:
         """Create a new pairing session with QR code.
 
@@ -217,7 +222,7 @@ class QRPairingManager:
         password = secrets.token_hex(8)  # 16 hex chars (64-bit entropy)
         qr_payload = QR_PAYLOAD_TEMPLATE.format(name=name, password=password)
 
-        now = datetime.now().timestamp()
+        now = datetime.now(datetime.UTC).timestamp()
         session = PairingSession(
             session_id=session_id,
             name=name,
@@ -253,12 +258,12 @@ class QRPairingManager:
                 ServiceBrowser(zc, CONNECT_SERVICE_TYPE, listener)
 
                 logger.info(
-                    f"[QR Pair] Listening for mDNS services ({PAIR_SERVICE_TYPE}, {CONNECT_SERVICE_TYPE})"
+                    f"[QR Pair] Listening for mDNS services ({PAIR_SERVICE_TYPE}, {CONNECT_SERVICE_TYPE})",
                 )
 
                 # Wait until timeout or connected
                 deadline = session.expires_at
-                while datetime.now().timestamp() < deadline:
+                while datetime.now(datetime.UTC).timestamp() < deadline:
                     if listener.connected:
                         logger.info("[QR Pair] Listener detected connection, stopping")
                         break
@@ -282,7 +287,7 @@ class QRPairingManager:
                     try:
                         session.zeroconf.close()
                         logger.debug(
-                            f"[QR Pair] Zeroconf closed for session {session.session_id}"
+                            f"[QR Pair] Zeroconf closed for session {session.session_id}",
                         )
                     except Exception as e:
                         logger.error(f"[QR Pair] Error closing zeroconf: {e}")
@@ -296,7 +301,7 @@ class QRPairingManager:
         session.thread = thread
         thread.start()
         logger.debug(
-            f"[QR Pair] Started listener thread for session {session.session_id}"
+            f"[QR Pair] Started listener thread for session {session.session_id}",
         )
 
     def get_session(self, session_id: str) -> PairingSession | None:
@@ -328,11 +333,11 @@ class QRPairingManager:
                 try:
                     session.zeroconf.close()
                     logger.debug(
-                        f"[QR Pair] Zeroconf closed for cancelled session {session_id}"
+                        f"[QR Pair] Zeroconf closed for cancelled session {session_id}",
                     )
                 except Exception as e:
                     logger.error(
-                        f"[QR Pair] Error closing zeroconf during cancellation: {e}"
+                        f"[QR Pair] Error closing zeroconf during cancellation: {e}",
                     )
 
             # Wait for thread to finish (with timeout)
@@ -341,7 +346,7 @@ class QRPairingManager:
                 session.thread.join(timeout=2.0)  # 最多等待2秒
                 if session.thread.is_alive():
                     logger.warning(
-                        "[QR Pair] Listener thread did not finish in time (will be abandoned as daemon)"
+                        "[QR Pair] Listener thread did not finish in time (will be abandoned as daemon)",
                     )
 
             return True
@@ -357,7 +362,7 @@ class QRPairingManager:
         logger.info("[QR Pair] Starting cleanup task")
         while True:
             await asyncio.sleep(60)  # Check every minute
-            now = datetime.now().timestamp()
+            now = datetime.now(datetime.UTC).timestamp()
             expired = [
                 sid for sid, sess in self._sessions.items() if now > sess.expires_at
             ]

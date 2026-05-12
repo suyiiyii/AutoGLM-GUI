@@ -1,7 +1,7 @@
 from __future__ import annotations
 
-from typing import Any, Protocol
 from collections.abc import AsyncIterator
+from typing import Any, Protocol
 
 from AutoGLM_GUI.config import AgentConfig, ModelConfig, StepResult
 

@@ -5,10 +5,12 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import AsyncGenerator
+from typing import Annotated
 
 from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
+from AutoGLM_GUI.layered_agent_service import reset_session as reset_layered_session
 from AutoGLM_GUI.schemas import (
     TaskCancelResponse,
     TaskEventListResponse,
@@ -20,7 +22,6 @@ from AutoGLM_GUI.schemas import (
     TaskSessionResponse,
     TaskSubmitRequest,
 )
-from AutoGLM_GUI.layered_agent_service import reset_session as reset_layered_session
 from AutoGLM_GUI.task_manager import task_manager
 from AutoGLM_GUI.task_store import (
     TERMINAL_TASK_STATUSES,
@@ -173,8 +174,8 @@ async def reset_task_session(session_id: str) -> TaskSessionResetResponse:
 )
 async def list_task_session_tasks(
     session_id: str,
-    limit: int = Query(default=50, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> TaskRunListResponse:
     session = await task_manager.get_session(session_id)
     if session is None:
@@ -199,7 +200,8 @@ async def list_task_session_tasks(
     response_model=TaskRunResponse,
 )
 async def submit_task_session_task(
-    session_id: str, request: TaskSubmitRequest
+    session_id: str,
+    request: TaskSubmitRequest,
 ) -> TaskRunResponse:
     session = await task_manager.get_session(session_id)
     if session is None:
@@ -222,8 +224,8 @@ async def list_tasks(
     device_id: str | None = None,
     device_serial: str | None = None,
     session_id: str | None = None,
-    limit: int = Query(default=50, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
+    limit: Annotated[int, Query(ge=1, le=100)] = 50,
+    offset: Annotated[int, Query(ge=0)] = 0,
 ) -> TaskRunListResponse:
     if status is not None:
         valid = {s.value for s in TaskStatus}
@@ -261,7 +263,7 @@ async def get_task(task_id: str) -> TaskRunResponse:
 @router.get("/api/tasks/{task_id}/events", response_model=TaskEventListResponse)
 async def get_task_events(
     task_id: str,
-    after_seq: int = Query(default=0, ge=0),
+    after_seq: Annotated[int, Query(ge=0)] = 0,
 ) -> TaskEventListResponse:
     task = await asyncio.to_thread(task_store.get_task, task_id)
     if task is None:
@@ -273,14 +275,14 @@ async def get_task_events(
         after_seq=after_seq,
     )
     return TaskEventListResponse(
-        events=[_task_event_response(event) for event in events]
+        events=[_task_event_response(event) for event in events],
     )
 
 
 @router.get("/api/tasks/{task_id}/stream")
 async def stream_task_events(
     task_id: str,
-    after_seq: int = Query(default=0, ge=0),
+    after_seq: Annotated[int, Query(ge=0)] = 0,
 ) -> StreamingResponse:
     task = await asyncio.to_thread(task_store.get_task, task_id)
     if task is None:

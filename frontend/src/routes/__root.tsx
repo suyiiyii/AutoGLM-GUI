@@ -43,7 +43,10 @@ function Footer() {
     <footer className="mt-auto border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950">
       <div className="max-w-7xl mx-auto px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-2 text-sm">
         <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
-          <span className="flex items-center gap-1.5" title={versionTitle}>
+          <span
+            className="flex items-center gap-1.5"
+            title={versionTitle}
+          >
             v{displayedVersion}
             {__GIT_HASH__ !== 'unknown' && (
               <span className="font-mono text-xs text-slate-400 dark:text-slate-500">
@@ -55,10 +58,7 @@ function Footer() {
                 variant="warning"
                 className="cursor-pointer hover:opacity-80 transition-opacity"
                 onClick={handleUpdateClick}
-                title={t.footer.updateAvailable.replace(
-                  '{version}',
-                  updateInfo.latest_version
-                )}
+                title={t.footer.updateAvailable.replace('{version}', updateInfo.latest_version)}
               >
                 {t.footer.newVersion}
               </Badge>
@@ -106,7 +106,11 @@ function Footer() {
             className="text-slate-500 dark:text-slate-400 hover:text-[#1d9bf0] transition-colors"
           >
             Star{' '}
-            <span className="font-semibold" role="img" aria-label="star">
+            <span
+              className="font-semibold"
+              role="img"
+              aria-label="star"
+            >
               ⭐
             </span>{' '}
             on GitHub
@@ -129,9 +133,7 @@ function RootComponent() {
           <Footer />
         </div>
       </div>
-      {__DEVTOOLS_ENABLED__ && (
-        <TanStackRouterDevtools position="bottom-right" />
-      )}
+      {__DEVTOOLS_ENABLED__ && <TanStackRouterDevtools position="bottom-right" />}
     </div>
   );
 }

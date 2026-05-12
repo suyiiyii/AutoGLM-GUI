@@ -4,11 +4,11 @@ import asyncio
 import mimetypes
 import os
 import sys
+from collections.abc import AsyncGenerator
 from contextlib import asynccontextmanager
 from importlib.resources import files
 from os import PathLike
 from pathlib import Path
-from collections.abc import AsyncGenerator
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -34,8 +34,8 @@ from . import (
     media,
     metrics,
     scheduled_tasks,
-    terminal,
     tasks,
+    terminal,
     version,
     workflows,
 )
@@ -182,7 +182,9 @@ def create_app() -> FastAPI:
 
     # Create FastAPI app with combined lifespan
     app = FastAPI(
-        title="AutoGLM-GUI API", version=APP_VERSION, lifespan=combined_lifespan
+        title="AutoGLM-GUI API",
+        version=APP_VERSION,
+        lifespan=combined_lifespan,
     )
 
     app.add_middleware(
@@ -216,7 +218,9 @@ def create_app() -> FastAPI:
         if assets_dir.exists():
             # Vite builds assets with content hashes, so we can cache them long-term
             app.mount(
-                "/assets", _FrontendStaticFiles(directory=assets_dir), name="assets"
+                "/assets",
+                _FrontendStaticFiles(directory=assets_dir),
+                name="assets",
             )
 
         # Define SPA serving function

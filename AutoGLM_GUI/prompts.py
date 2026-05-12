@@ -6,9 +6,9 @@ These prompts are optimized for MCP tool calls where:
 3. Clear error reporting is required for the caller to handle
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
-today = datetime.today()
+today = datetime.now(UTC)
 weekday_names = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
 weekday = weekday_names[today.weekday()]
 # NOTE: Do NOT use strftime with Chinese characters in format string!
@@ -27,7 +27,7 @@ MCP_SYSTEM_PROMPT_ZH = f"""
 
 # CRITICAL CONSTRAINTS (核心约束)
 
-1. **Fail Fast (快速报错)**: 
+1. **Fail Fast (快速报错)**:
    上层指令通常包含一个明确的目标（如"点击设置按钮"）。
    **在执行任何点击操作前，必须在屏幕上确认识别到了该元素。**
    如果当前屏幕**根本没有**上层要求的元素，且你判断简单的滑动也无法找到它，**禁止猜测坐标**，必须立即调用 `finish` 报错。

@@ -1,6 +1,6 @@
-from datetime import datetime
+from datetime import UTC, datetime
 
-today = datetime.today()
+today = datetime.now(UTC)
 formatted_date = today.strftime("%Y-%m-%d, %A")
 
 SYSTEM_PROMPT = (

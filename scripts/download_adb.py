@@ -18,7 +18,6 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
-
 # Google 官方 Android Platform Tools 下载地址
 ADB_URLS = {
     "windows": "https://dl.google.com/android/repository/platform-tools-latest-windows.zip",
@@ -128,7 +127,10 @@ def main():
         help="要下载的平台 (windows/darwin/linux)",
     )
     parser.add_argument(
-        "--force", "-f", action="store_true", help="强制重新下载，即使已存在"
+        "--force",
+        "-f",
+        action="store_true",
+        help="强制重新下载，即使已存在",
     )
     args = parser.parse_args()
 

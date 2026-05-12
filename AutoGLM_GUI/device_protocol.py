@@ -102,7 +102,11 @@ class DeviceProtocol(Protocol):
         ...
 
     def long_press(
-        self, x: int, y: int, duration_ms: int = 3000, delay: float | None = None
+        self,
+        x: int,
+        y: int,
+        duration_ms: int = 3000,
+        delay: float | None = None,
     ) -> None:
         """
         Long press at specified coordinates.

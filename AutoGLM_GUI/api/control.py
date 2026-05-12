@@ -21,7 +21,7 @@ from AutoGLM_GUI.schemas import (
 router = APIRouter()
 
 
-@router.post("/api/control/tap", response_model=TapResponse)
+@router.post("/api/control/tap")
 async def control_tap(request: TapRequest) -> TapResponse:
     """Execute tap at specified device coordinates."""
     try:
@@ -41,7 +41,7 @@ async def control_tap(request: TapRequest) -> TapResponse:
         return TapResponse(success=False, error=str(e))
 
 
-@router.post("/api/control/swipe", response_model=SwipeResponse)
+@router.post("/api/control/swipe")
 async def control_swipe(request: SwipeRequest) -> SwipeResponse:
     """Execute swipe from start to end coordinates."""
     try:
@@ -64,7 +64,7 @@ async def control_swipe(request: SwipeRequest) -> SwipeResponse:
         return SwipeResponse(success=False, error=str(e))
 
 
-@router.post("/api/control/touch/down", response_model=TouchDownResponse)
+@router.post("/api/control/touch/down")
 async def control_touch_down(request: TouchDownRequest) -> TouchDownResponse:
     """Send touch DOWN event at specified device coordinates."""
     try:
@@ -82,7 +82,7 @@ async def control_touch_down(request: TouchDownRequest) -> TouchDownResponse:
         return TouchDownResponse(success=False, error=str(e))
 
 
-@router.post("/api/control/touch/move", response_model=TouchMoveResponse)
+@router.post("/api/control/touch/move")
 async def control_touch_move(request: TouchMoveRequest) -> TouchMoveResponse:
     """Send touch MOVE event at specified device coordinates."""
     try:
@@ -100,7 +100,7 @@ async def control_touch_move(request: TouchMoveRequest) -> TouchMoveResponse:
         return TouchMoveResponse(success=False, error=str(e))
 
 
-@router.post("/api/control/touch/up", response_model=TouchUpResponse)
+@router.post("/api/control/touch/up")
 async def control_touch_up(request: TouchUpRequest) -> TouchUpResponse:
     """Send touch UP event at specified device coordinates."""
     try:

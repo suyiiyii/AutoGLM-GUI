@@ -66,7 +66,10 @@ export function ImagePreview({
       </div>
 
       {/* 全屏预览 */}
-      <Dialog open={isOpen} onOpenChange={setIsOpen}>
+      <Dialog
+        open={isOpen}
+        onOpenChange={setIsOpen}
+      >
         <DialogPortal>
           <DialogOverlay className="bg-black/80" />
           <DialogContent

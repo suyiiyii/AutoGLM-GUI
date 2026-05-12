@@ -55,7 +55,8 @@ def fake_manager() -> FakeWorkflowManager:
 
 @pytest.fixture
 def client(
-    monkeypatch: pytest.MonkeyPatch, fake_manager: FakeWorkflowManager
+    monkeypatch: pytest.MonkeyPatch,
+    fake_manager: FakeWorkflowManager,
 ) -> TestClient:
     monkeypatch.setattr(workflow_manager_module, "workflow_manager", fake_manager)
 

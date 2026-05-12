@@ -11,7 +11,7 @@ from AutoGLM_GUI.types import DeviceConnectionType
 
 
 class _FakeMetadataManager:
-    def get_display_name(self, serial: str) -> str | None:  # noqa: ARG002
+    def get_display_name(self, serial: str) -> str | None:
         return None
 
 
@@ -37,7 +37,8 @@ class _FakeInstaller:
 
 
 def _build_local_managed(
-    serial: str, device_id: str
+    serial: str,
+    device_id: str,
 ) -> device_manager_module.ManagedDevice:
     return device_manager_module.ManagedDevice(
         serial=serial,
@@ -46,13 +47,14 @@ def _build_local_managed(
                 device_id=device_id,
                 connection_type=DeviceConnectionType.USB,
                 status="device",
-            )
+            ),
         ],
     )
 
 
 def _build_remote_managed(
-    serial: str, device_id: str
+    serial: str,
+    device_id: str,
 ) -> device_manager_module.ManagedDevice:
     return device_manager_module.ManagedDevice(
         serial=serial,
@@ -61,7 +63,7 @@ def _build_remote_managed(
                 device_id=device_id,
                 connection_type=DeviceConnectionType.REMOTE,
                 status="device",
-            )
+            ),
         ],
     )
 

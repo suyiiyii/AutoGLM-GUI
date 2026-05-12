@@ -73,3 +73,36 @@ dev = [
     "pytest>=9.0.2",
     "ruff>=0.14.9",
 ]
+
+[tool.ruff]
+exclude = [".claude", ".codex", ".opencode"]
+
+[tool.ruff.lint]
+select = [
+    "E", "F", "I", "N", "W",     # Built-in + import sorting + naming
+    "UP",                          # pyupgrade
+    "B", "B904",                   # flake8-bugbear
+    "SIM",                         # flake8-simplify
+    "ARG",                         # unused arguments
+    "RUF100",                      # unused noqa
+    "FAST",                        # FastAPI specific (requires preview)
+    "PLW1510",                     # subprocess.run without check=True
+    "DTZ",                         # flake8-datetimez (naive datetime)
+]
+ignore = ["E501", "N999"]  # line-too-long is too noisy for now; N999: module name uppercase is intentional
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
+
+[tool.ruff.lint.per-file-ignores]
+"__init__.py" = ["F401"]  # unused import OK in __init__
+"tests/*" = ["S101", "ARG", "DTZ"]  # assert and unused args OK in tests
+"AutoGLM_GUI/actions/handler.py" = ["ARG002"]
+"AutoGLM_GUI/devices/mock_device.py" = ["ARG002"]
+"AutoGLM_GUI/phone_agent_manager.py" = ["ARG002"]
+"scripts/lint.py" = ["ARG002"]
+"scripts/start_e2e_services.py" = ["ARG001"]
+"AutoGLM_GUI/agents/glm/async_agent.py" = ["ARG002"]
+"AutoGLM_GUI/agents/mai/async_agent.py" = ["ARG002"]

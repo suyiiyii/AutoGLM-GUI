@@ -1,10 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import {
-  ChevronDown,
-  ChevronRight,
-  FolderOpen,
-  GripVertical,
-} from 'lucide-react';
+import { ChevronDown, ChevronRight, FolderOpen, GripVertical } from 'lucide-react';
 import { DeviceCard } from './DeviceCard';
 import { Button } from '@/components/ui/button';
 import {
@@ -57,9 +52,7 @@ export function GroupedDeviceList({
   showToast,
 }: GroupedDeviceListProps) {
   const t = useTranslation();
-  const [collapsedState, setCollapsedState] = useState<CollapsedState>(
-    getInitialCollapsedState
-  );
+  const [collapsedState, setCollapsedState] = useState<CollapsedState>(getInitialCollapsedState);
   const [movingDevice, setMovingDevice] = useState<string | null>(null);
 
   // Save collapsed state to localStorage
@@ -88,7 +81,7 @@ export function GroupedDeviceList({
   }, [devices, groups]);
 
   const toggleGroup = (groupId: string) => {
-    setCollapsedState(prev => ({
+    setCollapsedState((prev) => ({
       ...prev,
       [groupId]: !prev[groupId],
     }));
@@ -106,10 +99,7 @@ export function GroupedDeviceList({
         }
       } else {
         if (showToast) {
-          showToast(
-            result.message || t.deviceGroups?.moveFailed || '移动失败',
-            'error'
-          );
+          showToast(result.message || t.deviceGroups?.moveFailed || '移动失败', 'error');
         }
       }
     } catch (error) {
@@ -129,13 +119,16 @@ export function GroupedDeviceList({
 
   return (
     <div className="space-y-2">
-      {sortedGroups.map(group => {
+      {sortedGroups.map((group) => {
         const groupDevices = devicesByGroup.get(group.id) || [];
         const isCollapsed = collapsedState[group.id] || false;
         const deviceCount = groupDevices.length;
 
         return (
-          <div key={group.id} className="space-y-1">
+          <div
+            key={group.id}
+            className="space-y-1"
+          >
             {/* Group Header */}
             <button
               onClick={() => toggleGroup(group.id)}
@@ -150,9 +143,7 @@ export function GroupedDeviceList({
               <span className="flex-1 text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
                 {group.name}
               </span>
-              <span className="text-xs text-slate-400 dark:text-slate-500">
-                ({deviceCount})
-              </span>
+              <span className="text-xs text-slate-400 dark:text-slate-500">({deviceCount})</span>
             </button>
 
             {/* Device List */}
@@ -163,7 +154,7 @@ export function GroupedDeviceList({
                     {t.deviceGroups?.noDevicesInGroup || '该分组暂无设备'}
                   </div>
                 ) : (
-                  groupDevices.map(device => (
+                  groupDevices.map((device) => (
                     <div
                       key={device.id}
                       className="group/card relative flex items-center gap-1"
@@ -180,22 +171,19 @@ export function GroupedDeviceList({
                             <GripVertical className="w-3.5 h-3.5" />
                           </Button>
                         </DropdownMenuTrigger>
-                        <DropdownMenuContent align="start" className="w-48">
+                        <DropdownMenuContent
+                          align="start"
+                          className="w-48"
+                        >
                           <div className="px-2 py-1.5 text-xs font-medium text-slate-500">
                             {t.deviceGroups?.moveTo || '移动到分组'}
                           </div>
-                          {sortedGroups.map(targetGroup => (
+                          {sortedGroups.map((targetGroup) => (
                             <DropdownMenuItem
                               key={targetGroup.id}
                               disabled={targetGroup.id === device.group_id}
-                              onClick={() =>
-                                handleMoveDevice(device.serial, targetGroup.id)
-                              }
-                              className={
-                                targetGroup.id === device.group_id
-                                  ? 'opacity-50'
-                                  : ''
-                              }
+                              onClick={() => handleMoveDevice(device.serial, targetGroup.id)}
+                              className={targetGroup.id === device.group_id ? 'opacity-50' : ''}
                             >
                               <FolderOpen className="w-4 h-4 mr-2" />
                               {targetGroup.name}

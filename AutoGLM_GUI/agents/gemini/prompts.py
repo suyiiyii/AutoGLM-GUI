@@ -3,7 +3,7 @@
 Date is injected dynamically to avoid stale values in long-running processes.
 """
 
-from datetime import datetime
+from datetime import UTC, datetime
 
 _SYSTEM_PROMPT_TEMPLATE = """\
 The current date: {date}
@@ -79,7 +79,7 @@ _SYSTEM_PROMPT_TEMPLATE_ZH = """\
 
 def get_system_prompt(lang: str = "en") -> str:
     """Get system prompt with current date dynamically injected."""
-    formatted_date = datetime.today().strftime("%Y-%m-%d, %A")
+    formatted_date = datetime.now(UTC).strftime("%Y-%m-%d, %A")
     template = _SYSTEM_PROMPT_TEMPLATE_ZH if lang == "cn" else _SYSTEM_PROMPT_TEMPLATE
     return template.format(date=formatted_date)
 

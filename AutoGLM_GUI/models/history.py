@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any, Literal
 from uuid import uuid4
 
@@ -14,7 +14,7 @@ class MessageRecord:
 
     role: Literal["user", "assistant"]
     content: str
-    timestamp: datetime = field(default_factory=datetime.now)
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     # assistant 消息特有字段
     thinking: str | None = None
@@ -40,7 +40,7 @@ class MessageRecord:
             content=data.get("content", ""),
             timestamp=datetime.fromisoformat(data["timestamp"])
             if data.get("timestamp")
-            else datetime.now(),
+            else datetime.now(UTC),
             thinking=data.get("thinking"),
             action=data.get("action"),
             step=data.get("step"),
@@ -93,10 +93,10 @@ class StepTimingRecord:
             llm_duration_ms=float(data.get("llm_duration_ms", 0.0)),
             parse_action_duration_ms=float(data.get("parse_action_duration_ms", 0.0)),
             execute_action_duration_ms=float(
-                data.get("execute_action_duration_ms", 0.0)
+                data.get("execute_action_duration_ms", 0.0),
             ),
             update_context_duration_ms=float(
-                data.get("update_context_duration_ms", 0.0)
+                data.get("update_context_duration_ms", 0.0),
             ),
             adb_duration_ms=float(data.get("adb_duration_ms", 0.0)),
             sleep_duration_ms=float(data.get("sleep_duration_ms", 0.0)),
@@ -150,10 +150,10 @@ class TraceSummaryRecord:
             llm_duration_ms=float(data.get("llm_duration_ms", 0.0)),
             parse_action_duration_ms=float(data.get("parse_action_duration_ms", 0.0)),
             execute_action_duration_ms=float(
-                data.get("execute_action_duration_ms", 0.0)
+                data.get("execute_action_duration_ms", 0.0),
             ),
             update_context_duration_ms=float(
-                data.get("update_context_duration_ms", 0.0)
+                data.get("update_context_duration_ms", 0.0),
             ),
             adb_duration_ms=float(data.get("adb_duration_ms", 0.0)),
             sleep_duration_ms=float(data.get("sleep_duration_ms", 0.0)),
@@ -174,7 +174,7 @@ class ConversationRecord:
     # 执行信息
     success: bool = False
     steps: int = 0
-    start_time: datetime = field(default_factory=datetime.now)
+    start_time: datetime = field(default_factory=lambda: datetime.now(UTC))
     end_time: datetime | None = None
     duration_ms: int = 0  # 执行时长（毫秒）
 
@@ -226,7 +226,7 @@ class ConversationRecord:
             steps=data.get("steps", 0),
             start_time=datetime.fromisoformat(data["start_time"])
             if data.get("start_time")
-            else datetime.now(),
+            else datetime.now(UTC),
             end_time=datetime.fromisoformat(data["end_time"])
             if data.get("end_time")
             else None,
@@ -252,7 +252,7 @@ class DeviceHistory:
 
     serialno: str
     records: list[ConversationRecord] = field(default_factory=list)
-    last_updated: datetime = field(default_factory=datetime.now)
+    last_updated: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict[str, Any]:
         """转换为可序列化的字典."""
@@ -270,5 +270,5 @@ class DeviceHistory:
             records=[ConversationRecord.from_dict(r) for r in data.get("records", [])],
             last_updated=datetime.fromisoformat(data["last_updated"])
             if data.get("last_updated")
-            else datetime.now(),
+            else datetime.now(UTC),
         )

@@ -5,9 +5,9 @@ AutoGLM-GUI 统一 Lint 脚本
 """
 
 import argparse
+import platform
 import subprocess
 import sys
-import platform
 from pathlib import Path
 
 
@@ -53,6 +53,7 @@ class AutoGLMLinter:
         try:
             result = subprocess.run(
                 cmd,
+                check=False,
                 cwd=work_dir,
                 capture_output=capture_output,
                 text=True,
@@ -249,7 +250,9 @@ class AutoGLMLinter:
         return result
 
     def lint_frontend(
-        self, fix: bool = False, check_only: bool = False
+        self,
+        fix: bool = False,
+        check_only: bool = False,
     ) -> list[LintResult]:
         """运行前端所有检查"""
         print("\n📱 前端代码检查")
@@ -272,7 +275,9 @@ class AutoGLMLinter:
         return results
 
     def lint_backend(
-        self, fix: bool = False, check_only: bool = False
+        self,
+        fix: bool = False,
+        check_only: bool = False,
     ) -> list[LintResult]:
         """运行后端所有检查"""
         print("\n🐍 后端代码检查")

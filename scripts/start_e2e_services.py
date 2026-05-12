@@ -56,6 +56,7 @@ def _run_llm_server(port):
 
 def _run_agent_server(port, scenario_path=None):
     import uvicorn
+
     from tests.integration.device_agent.mock_agent_server import create_app
 
     app = create_app(scenario_path=scenario_path)
@@ -77,7 +78,9 @@ def _run_autoglm_server(port, llm_url):
 def main():
     parser = argparse.ArgumentParser(description="Start E2E test services")
     parser.add_argument(
-        "--output", default=None, help="JSON output file for service URLs"
+        "--output",
+        default=None,
+        help="JSON output file for service URLs",
     )
     parser.add_argument("--scenario", default=None, help="Scenario YAML for mock agent")
     args = parser.parse_args()
@@ -115,7 +118,8 @@ def main():
     # Start mock agent
     scenario = args.scenario
     agent_proc = multiprocessing.Process(
-        target=_run_agent_server, args=(agent_port, scenario)
+        target=_run_agent_server,
+        args=(agent_port, scenario),
     )
     agent_proc.start()
     wait_for_server(agent_url, timeout=10, endpoint="/test/commands")
@@ -123,7 +127,8 @@ def main():
 
     # Start AutoGLM-GUI backend
     backend_proc = multiprocessing.Process(
-        target=_run_autoglm_server, args=(backend_port, llm_url)
+        target=_run_autoglm_server,
+        args=(backend_port, llm_url),
     )
     backend_proc.start()
     wait_for_server(backend_url, timeout=30, endpoint="/api/health")
@@ -137,7 +142,10 @@ def main():
         "frontend_url": "http://localhost:3000",
     }
     output_path = args.output or os.path.join(
-        PROJECT_ROOT, "frontend", "e2e", ".service_urls.json"
+        PROJECT_ROOT,
+        "frontend",
+        "e2e",
+        ".service_urls.json",
     )
     with open(output_path, "w") as f:
         json.dump(urls, f)

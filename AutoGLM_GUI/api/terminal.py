@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import ipaddress
 import os
-from typing import Any
+from typing import Annotated, Any
 
 from fastapi import (
     APIRouter,
@@ -134,17 +134,18 @@ async def create_terminal_session(
         {
             **session.to_response(),
             "session_token": session_token,
-        }
+        },
     )
 
 
 @router.get(
-    "/api/terminal/sessions/{session_id}", response_model=TerminalSessionResponse
+    "/api/terminal/sessions/{session_id}",
+    response_model=TerminalSessionResponse,
 )
 async def get_terminal_session(
     request: Request,
     session_id: str,
-    token: str | None = Query(default=None),
+    token: Annotated[str | None, Query()] = None,
 ) -> TerminalSessionResponse:
     """Return terminal session metadata."""
     _require_terminal_enabled()
@@ -160,7 +161,7 @@ async def get_terminal_session(
 async def close_terminal_session(
     request: Request,
     session_id: str,
-    token: str | None = Query(default=None),
+    token: Annotated[str | None, Query()] = None,
 ) -> TerminalSessionCloseResponse:
     """Close a terminal session."""
     _require_terminal_enabled()
@@ -199,7 +200,8 @@ async def terminal_session_stream(websocket: WebSocket, session_id: str) -> None
         return
 
     session = terminal_session_manager.authenticate_session(
-        session_id, websocket.query_params.get("token")
+        session_id,
+        websocket.query_params.get("token"),
     )
     if session is None:
         await websocket.close(code=4403, reason="Invalid terminal session token")
@@ -232,7 +234,8 @@ async def terminal_session_stream(websocket: WebSocket, session_id: str) -> None
 
 
 async def _send_terminal_events(
-    websocket: WebSocket, queue: asyncio.Queue[dict[str, Any]]
+    websocket: WebSocket,
+    queue: asyncio.Queue[dict[str, Any]],
 ) -> None:
     try:
         while True:
@@ -265,7 +268,7 @@ async def _receive_terminal_input(websocket: WebSocket, session: Any) -> None:
                     {
                         "type": "error",
                         "message": f"Unsupported terminal message type: {message_type}",
-                    }
+                    },
                 )
     except asyncio.CancelledError:
         return

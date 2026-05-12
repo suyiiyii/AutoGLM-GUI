@@ -16,15 +16,17 @@ Mock LLM Server 启动脚本
 
 import argparse
 import json
-import time
 import threading
+import time
 
 import httpx
 import uvicorn
 
 
 def _load_responses_after_startup(
-    base_url: str, responses_path: str, delay: float = 1.0
+    base_url: str,
+    responses_path: str,
+    delay: float = 1.0,
 ):
     """等待服务器启动后加载自定义响应。"""
     time.sleep(delay)
@@ -141,7 +143,7 @@ def main():
     print(f"  curl -X POST {server_url}/v1/chat/completions \\")
     print('    -H "Content-Type: application/json" \\')
     print(
-        '    -d \'{"model": "mock-glm", "messages": [{"role": "user", "content": "test"}], "stream": true}\''
+        '    -d \'{"model": "mock-glm", "messages": [{"role": "user", "content": "test"}], "stream": true}\'',
     )
     print("=" * 60)
     print()

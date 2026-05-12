@@ -41,7 +41,7 @@ class FakeHistoryManager:
                     llm_duration_ms=800.0,
                     execute_action_duration_ms=200.0,
                     sleep_duration_ms=50.0,
-                )
+                ),
             ],
             trace_summary=TraceSummaryRecord(
                 trace_id="trace-1",
@@ -88,7 +88,10 @@ class FakeHistoryManager:
         }
 
     def list_records(
-        self, serialno: str, limit: int = 50, offset: int = 0
+        self,
+        serialno: str,
+        limit: int = 50,
+        offset: int = 0,
     ) -> list[ConversationRecord]:
         return self.records.get(serialno, [])[offset : offset + limit]
 
@@ -203,7 +206,8 @@ def test_list_history_returns_paginated_data(client: TestClient) -> None:
 
 
 def test_history_includes_task_backed_records(
-    client: TestClient, fake_task_store: FakeTaskStore
+    client: TestClient,
+    fake_task_store: FakeTaskStore,
 ) -> None:
     fake_task_store.tasks["task-1"] = {
         "id": "task-1",
@@ -236,7 +240,7 @@ def test_history_includes_task_backed_records(
                 "action": {"action": "Tap", "element": [20, 30]},
             },
             "created_at": "2026-01-03T09:00:02",
-        }
+        },
     ]
 
     response = client.get("/api/history/device-1")
@@ -250,7 +254,8 @@ def test_history_includes_task_backed_records(
 
 
 def test_history_excludes_active_task_records(
-    client: TestClient, fake_task_store: FakeTaskStore
+    client: TestClient,
+    fake_task_store: FakeTaskStore,
 ) -> None:
     fake_task_store.tasks["task-active"] = {
         "id": "task-active",
@@ -280,7 +285,8 @@ def test_history_excludes_active_task_records(
 
 
 def test_list_history_filters_by_classic_mode(
-    client: TestClient, fake_task_store: FakeTaskStore
+    client: TestClient,
+    fake_task_store: FakeTaskStore,
 ) -> None:
     fake_task_store.tasks["classic-task"] = {
         "id": "classic-task",
@@ -389,7 +395,7 @@ def test_list_history_filters_by_layered_mode(
             source="layered",
             source_detail="sess-old",
             messages=[],
-        )
+        ),
     )
 
     response = client.get("/api/history/device-1", params={"mode": "layered"})
@@ -411,7 +417,8 @@ def test_list_history_rejects_invalid_mode(client: TestClient) -> None:
 
 
 def test_history_converts_layered_tool_events_to_messages(
-    client: TestClient, fake_task_store: FakeTaskStore
+    client: TestClient,
+    fake_task_store: FakeTaskStore,
 ) -> None:
     fake_task_store.tasks["layered-task"] = {
         "id": "layered-task",
@@ -558,7 +565,8 @@ def test_delete_history_record_success_and_not_found(client: TestClient) -> None
 
 
 def test_delete_history_record_rejects_active_task(
-    client: TestClient, fake_task_store: FakeTaskStore
+    client: TestClient,
+    fake_task_store: FakeTaskStore,
 ) -> None:
     fake_task_store.tasks["task-active"] = {
         "id": "task-active",

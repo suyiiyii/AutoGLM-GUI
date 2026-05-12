@@ -42,10 +42,7 @@ export function ResizableHandle({
 
     const handleMouseMove = (e: MouseEvent) => {
       const deltaX = e.clientX - startX.current;
-      const newWidth = Math.min(
-        maxWidth,
-        Math.max(minWidth, startWidth.current + deltaX)
-      );
+      const newWidth = Math.min(maxWidth, Math.max(minWidth, startWidth.current + deltaX));
 
       onResize(newWidth - startWidth.current);
     };

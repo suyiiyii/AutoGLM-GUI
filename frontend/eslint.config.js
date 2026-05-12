@@ -84,8 +84,8 @@ export default [
       ],
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/explicit-module-boundary-types': 'off',
-      '@typescript-eslint/no-explicit-any': 'warn',
-      '@typescript-eslint/no-non-null-assertion': 'warn',
+      '@typescript-eslint/no-explicit-any': 'error',
+      '@typescript-eslint/no-non-null-assertion': 'error',
       '@typescript-eslint/no-require-imports': 'off',
 
       // React rules
@@ -98,11 +98,13 @@ export default [
       'react-hooks/purity': 'off', // Allow Date.now() in event handlers
 
       // General rules
-      'no-console': 'off', // Allow console logs for debugging in this component
+      'no-console': 'warn', // Allow console logs for debugging in this component
       'no-debugger': 'error',
       'prefer-const': 'error',
       'no-var': 'error',
       'no-unused-vars': 'off', // Let TypeScript handle this
+      'prefer-template': 'error',
+      'object-shorthand': ['error', 'always'],
 
       // Prettier
       'prettier/prettier': 'error',

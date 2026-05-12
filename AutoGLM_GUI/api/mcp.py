@@ -3,9 +3,8 @@
 import asyncio
 from typing import Any, cast
 
-from typing_extensions import TypedDict
-
 from fastmcp import FastMCP
+from typing_extensions import TypedDict
 
 from AutoGLM_GUI.adb_plus import capture_screenshot_async
 from AutoGLM_GUI.exceptions import DeviceNotAvailableError
@@ -95,7 +94,7 @@ async def chat(device_id: str, message: str) -> ChatResult:
             agent.agent_config.system_prompt = original_system_prompt
 
     except DeviceBusyError:
-        raise RuntimeError(f"Device {device_id} is busy. Please wait.")
+        raise RuntimeError(f"Device {device_id} is busy. Please wait.") from None
     except Exception as e:
         logger.error(f"[MCP] chat tool error: {e}")
         return {"result": str(e), "steps": 0, "success": False}
@@ -328,7 +327,7 @@ async def list_tasks(
         valid = {s.value for s in TaskStatus}
         if status not in valid:
             raise ValueError(
-                f"Invalid status '{status}'. Must be one of: {', '.join(sorted(valid))}"
+                f"Invalid status '{status}'. Must be one of: {', '.join(sorted(valid))}",
             )
 
     limit = max(1, min(limit, 100))
@@ -395,7 +394,9 @@ async def get_task_events(
     from AutoGLM_GUI.api.tasks import _task_event_response
 
     events = await asyncio.to_thread(
-        task_store.list_task_events, task_id, after_seq=after_seq
+        task_store.list_task_events,
+        task_id,
+        after_seq=after_seq,
     )
 
     return {

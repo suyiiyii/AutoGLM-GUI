@@ -52,10 +52,7 @@ interface UseTaskSessionConversationResult {
   aborting: boolean;
   error: string | null;
   sessionReady: boolean;
-  sendMessage: (
-    input: string,
-    attachments?: TaskImageAttachment[]
-  ) => Promise<boolean>;
+  sendMessage: (input: string, attachments?: TaskImageAttachment[]) => Promise<boolean>;
   resetConversation: () => Promise<void>;
   abortConversation: () => Promise<void>;
 }
@@ -80,8 +77,7 @@ function applyTaskEventToTask(
     }
   } else if (event.event_type === 'done') {
     nextTask.status = 'SUCCEEDED';
-    nextTask.final_message =
-      typeof payload.message === 'string' ? payload.message : null;
+    nextTask.final_message = typeof payload.message === 'string' ? payload.message : null;
     nextTask.error_message = null;
     nextTask.finished_at = event.created_at;
     if (typeof payload.steps === 'number') {
@@ -89,17 +85,13 @@ function applyTaskEventToTask(
     }
   } else if (event.event_type === 'error') {
     nextTask.status = 'FAILED';
-    nextTask.final_message =
-      typeof payload.message === 'string' ? payload.message : null;
-    nextTask.error_message =
-      typeof payload.message === 'string' ? payload.message : null;
+    nextTask.final_message = typeof payload.message === 'string' ? payload.message : null;
+    nextTask.error_message = typeof payload.message === 'string' ? payload.message : null;
     nextTask.finished_at = event.created_at;
   } else if (event.event_type === 'cancelled') {
     nextTask.status = 'CANCELLED';
-    nextTask.final_message =
-      typeof payload.message === 'string' ? payload.message : null;
-    nextTask.error_message =
-      typeof payload.message === 'string' ? payload.message : null;
+    nextTask.final_message = typeof payload.message === 'string' ? payload.message : null;
+    nextTask.error_message = typeof payload.message === 'string' ? payload.message : null;
     nextTask.finished_at = event.created_at;
   } else if (event.event_type === 'step' && typeof payload.step === 'number') {
     nextTask.step_count = Math.max(nextTask.step_count, payload.step);
@@ -112,10 +104,9 @@ function reconcileTaskRun(
   task: TaskRunResponse,
   events: TaskEventRecordResponse[]
 ): TaskRunResponse {
-  return events.reduce(
-    (currentTask, event) => applyTaskEventToTask(currentTask, event),
-    { ...task }
-  );
+  return events.reduce((currentTask, event) => applyTaskEventToTask(currentTask, event), {
+    ...task,
+  });
 }
 
 function buildAssistantMessage(
@@ -132,13 +123,11 @@ function buildAssistantMessage(
   let success: boolean | undefined =
     task.status === 'SUCCEEDED'
       ? true
-      : task.status === 'FAILED' ||
-          task.status === 'CANCELLED' ||
-          task.status === 'INTERRUPTED'
+      : task.status === 'FAILED' || task.status === 'CANCELLED' || task.status === 'INTERRUPTED'
         ? false
         : undefined;
 
-  events.forEach(event => {
+  events.forEach((event) => {
     const payload = event.payload;
     switch (event.event_type) {
       case 'thinking': {
@@ -155,14 +144,8 @@ function buildAssistantMessage(
             : currentThinking;
         thinking.push(stepThinking);
         actions.push((payload.action as Record<string, unknown>) || {});
-        screenshots.push(
-          typeof payload.screenshot === 'string'
-            ? payload.screenshot
-            : undefined
-        );
-        stepTimings.push(
-          (payload.timings as StepTimingSummary | undefined) || undefined
-        );
+        screenshots.push(typeof payload.screenshot === 'string' ? payload.screenshot : undefined);
+        stepTimings.push((payload.timings as StepTimingSummary | undefined) || undefined);
         currentThinking = '';
         if (typeof payload.step === 'number') {
           steps = payload.step;
@@ -197,12 +180,7 @@ function buildAssistantMessage(
         break;
       }
       case 'status': {
-        if (
-          payload.status === 'QUEUED' &&
-          !currentThinking &&
-          !content &&
-          thinking.length === 0
-        ) {
+        if (payload.status === 'QUEUED' && !currentThinking && !content && thinking.length === 0) {
           currentThinking = 'Waiting for device...';
         }
         break;
@@ -234,19 +212,18 @@ function buildMessagePair(
   task: TaskRunResponse,
   events: TaskEventRecordResponse[]
 ): TaskConversationMessage[] {
-  const userEvent = events.find(event => event.event_type === 'user_message');
+  const userEvent = events.find((event) => event.event_type === 'user_message');
   const userPayload = userEvent?.payload || {};
   const eventAttachments = Array.isArray(userPayload.attachments)
     ? (userPayload.attachments.filter(
-        attachment =>
+        (attachment) =>
           attachment &&
           typeof attachment === 'object' &&
           typeof (attachment as TaskImageAttachment).mime_type === 'string' &&
           typeof (attachment as TaskImageAttachment).data === 'string'
       ) as TaskImageAttachment[])
     : [];
-  const eventMessage =
-    typeof userPayload.message === 'string' ? userPayload.message : null;
+  const eventMessage = typeof userPayload.message === 'string' ? userPayload.message : null;
 
   return [
     {
@@ -282,19 +259,15 @@ export function useTaskSessionConversation({
     }
 
     const pair = buildMessagePair(task, taskEventsRef.current[taskId] || []);
-    setMessages(previousMessages => {
-      const userIndex = previousMessages.findIndex(
-        msg => msg.id === pair[0].id
-      );
-      const assistantIndex = previousMessages.findIndex(
-        msg => msg.id === pair[1].id
-      );
+    setMessages((previousMessages) => {
+      const userIndex = previousMessages.findIndex((msg) => msg.id === pair[0].id);
+      const assistantIndex = previousMessages.findIndex((msg) => msg.id === pair[1].id);
 
       if (userIndex === -1 || assistantIndex === -1) {
         return [...previousMessages, ...pair];
       }
 
-      return previousMessages.map(message => {
+      return previousMessages.map((message) => {
         if (message.id === pair[0].id) {
           return pair[0];
         }
@@ -313,19 +286,13 @@ export function useTaskSessionConversation({
         return;
       }
 
-      taskEventsRef.current[taskId] = [
-        ...(taskEventsRef.current[taskId] || []),
-        event,
-      ];
+      taskEventsRef.current[taskId] = [...(taskEventsRef.current[taskId] || []), event];
 
       const nextTask = applyTaskEventToTask(currentTask, event);
       taskRunsRef.current[taskId] = nextTask;
       replaceTaskMessages(taskId);
 
-      if (
-        !isTaskActive(nextTask.status) &&
-        currentTaskIdRef.current === taskId
-      ) {
+      if (!isTaskActive(nextTask.status) && currentTaskIdRef.current === taskId) {
         setLoading(false);
         setAborting(false);
         currentTaskIdRef.current = null;
@@ -342,10 +309,10 @@ export function useTaskSessionConversation({
 
       chatStreamRef.current = streamTaskEvents(
         taskId,
-        event => {
+        (event) => {
           applyTaskEvent(taskId, event);
         },
-        message => {
+        (message) => {
           setError(message);
           setLoading(false);
           setAborting(false);
@@ -363,37 +330,29 @@ export function useTaskSessionConversation({
       const tasks = [...taskList.tasks].reverse();
 
       const eventPairs = await Promise.all(
-        tasks.map(
-          async task =>
-            [task.id, (await listTaskEvents(task.id)).events] as const
-        )
+        tasks.map(async (task) => [task.id, (await listTaskEvents(task.id)).events] as const)
       );
 
       taskEventsRef.current = Object.fromEntries(eventPairs);
-      const reconciledTasks = tasks.map(task =>
+      const reconciledTasks = tasks.map((task) =>
         reconcileTaskRun(task, taskEventsRef.current[task.id] || [])
       );
 
-      taskRunsRef.current = Object.fromEntries(
-        reconciledTasks.map(task => [task.id, task])
-      );
+      taskRunsRef.current = Object.fromEntries(reconciledTasks.map((task) => [task.id, task]));
       setMessages(
-        reconciledTasks.flatMap(task =>
+        reconciledTasks.flatMap((task) =>
           buildMessagePair(task, taskEventsRef.current[task.id] || [])
         )
       );
 
-      const activeTask = [...reconciledTasks]
-        .reverse()
-        .find(task => isTaskActive(task.status));
+      const activeTask = [...reconciledTasks].reverse().find((task) => isTaskActive(task.status));
 
       if (activeTask) {
         currentTaskIdRef.current = activeTask.id;
         setLoading(true);
         const lastSeq =
-          taskEventsRef.current[activeTask.id]?.[
-            taskEventsRef.current[activeTask.id].length - 1
-          ]?.seq || 0;
+          taskEventsRef.current[activeTask.id]?.[taskEventsRef.current[activeTask.id].length - 1]
+            ?.seq || 0;
         attachTaskStream(activeTask.id, lastSeq);
       } else {
         currentTaskIdRef.current = null;
@@ -468,19 +427,13 @@ export function useTaskSessionConversation({
       try {
         setError(null);
         setLoading(true);
-        const task = await submitTaskSessionTask(
-          sessionId,
-          inputValue,
-          attachments
-        );
+        const task = await submitTaskSessionTask(sessionId, inputValue, attachments);
         const initialEvents = (await listTaskEvents(task.id)).events;
         const reconciledTask = reconcileTaskRun(task, initialEvents);
 
         taskRunsRef.current[task.id] = reconciledTask;
         taskEventsRef.current[task.id] = initialEvents;
-        currentTaskIdRef.current = isTaskActive(reconciledTask.status)
-          ? task.id
-          : null;
+        currentTaskIdRef.current = isTaskActive(reconciledTask.status) ? task.id : null;
         replaceTaskMessages(task.id);
 
         if (isTaskActive(reconciledTask.status)) {
@@ -495,11 +448,7 @@ export function useTaskSessionConversation({
       } catch (sendError) {
         console.error('Failed to submit task:', sendError);
         setLoading(false);
-        setError(
-          sendError instanceof Error
-            ? sendError.message
-            : 'Failed to submit task'
-        );
+        setError(sendError instanceof Error ? sendError.message : 'Failed to submit task');
         return false;
       }
     },
@@ -525,11 +474,7 @@ export function useTaskSessionConversation({
       setAborting(false);
     } catch (resetError) {
       console.error('Failed to reset chat session:', resetError);
-      setError(
-        resetError instanceof Error
-          ? resetError.message
-          : 'Failed to reset chat'
-      );
+      setError(resetError instanceof Error ? resetError.message : 'Failed to reset chat');
     }
   }, [deviceId, deviceSerial, sessionStorageKey]);
 
@@ -549,11 +494,7 @@ export function useTaskSessionConversation({
     } catch (abortError) {
       console.error('Failed to abort chat:', abortError);
       setAborting(false);
-      setError(
-        abortError instanceof Error
-          ? abortError.message
-          : 'Failed to cancel task'
-      );
+      setError(abortError instanceof Error ? abortError.message : 'Failed to cancel task');
     }
   }, [replaceTaskMessages]);
 

@@ -57,8 +57,8 @@ class FakeDeviceManager:
                     width=800,
                     height=1600,
                     is_sensitive=True,
-                )
-            )
+                ),
+            ),
         }
 
     def get_serial_by_device_id(self, device_id: str) -> str | None:

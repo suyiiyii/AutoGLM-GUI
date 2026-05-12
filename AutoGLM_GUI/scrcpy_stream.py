@@ -1,15 +1,16 @@
 """Scrcpy video streaming implementation (ya-webadb protocol aligned)."""
 
 import asyncio
+import contextlib
 import os
 import socket
 import subprocess
 import sys
 import time
-from dataclasses import dataclass
-from pathlib import Path
 from asyncio.subprocess import Process as AsyncProcess
 from collections.abc import AsyncGenerator
+from dataclasses import dataclass
+from pathlib import Path
 
 from AutoGLM_GUI.adb_plus import check_device_available
 from AutoGLM_GUI.logger import logger
@@ -78,7 +79,7 @@ async def wait_for_port_release(
         if await is_port_available(port, host):
             elapsed = time.time() - start_time
             logger.info(
-                f"Port {port} became available after {elapsed:.2f}s ({attempt} checks)"
+                f"Port {port} became available after {elapsed:.2f}s ({attempt} checks)",
             )
             return True
 
@@ -190,7 +191,7 @@ class ScrcpyStreamer:
                 return path
 
         raise FileNotFoundError(
-            "scrcpy-server not found. Please put scrcpy-server-v3.3.3 in AutoGLM_GUI/resources or set SCRCPY_SERVER_PATH."
+            "scrcpy-server not found. Please put scrcpy-server-v3.3.3 in AutoGLM_GUI/resources or set SCRCPY_SERVER_PATH.",
         )
 
     async def start(self) -> None:
@@ -267,7 +268,7 @@ class ScrcpyStreamer:
         if not port_released:
             logger.warning(
                 f"Port {self.port} still occupied after cleanup. "
-                "Will attempt to start anyway (may fail)."
+                "Will attempt to start anyway (may fail).",
             )
         else:
             logger.info(f"Port {self.port} successfully released and ready")
@@ -368,11 +369,11 @@ class ScrcpyStreamer:
                 if "Address already in use" in error_msg:
                     logger.error(
                         f"Port {self.port} conflict detected (attempt {attempt + 1}/{max_retries}). "
-                        f"Error: {error_msg[:200]}"
+                        f"Error: {error_msg[:200]}",
                     )
                     if attempt < max_retries - 1:
                         logger.warning(
-                            f"Retrying with aggressive cleanup in {retry_delay}s..."
+                            f"Retrying with aggressive cleanup in {retry_delay}s...",
                         )
                         await self._cleanup_existing_server()
                         await asyncio.sleep(retry_delay)
@@ -380,7 +381,7 @@ class ScrcpyStreamer:
                     # Specific error for port conflicts
                     raise RuntimeError(
                         f"Port {self.port} persistently occupied after {max_retries} attempts. "
-                        "Please check if another scrcpy instance is running."
+                        "Please check if another scrcpy instance is running.",
                     )
                 else:
                     # Non-port errors fail immediately (no retry)
@@ -416,15 +417,13 @@ class ScrcpyStreamer:
                 return
             except (ConnectionRefusedError, OSError) as e:
                 # Close the failed socket
-                try:
+                with contextlib.suppress(Exception):
                     sock.close()
-                except Exception:
-                    pass
 
                 if attempt < max_attempts - 1:
                     logger.debug(
                         f"Connection attempt {attempt + 1}/{max_attempts} failed: {e}. "
-                        f"Retrying in {retry_delay}s..."
+                        f"Retrying in {retry_delay}s...",
                     )
                     await asyncio.sleep(retry_delay)
                     # Gradually increase delay for later attempts
@@ -433,7 +432,7 @@ class ScrcpyStreamer:
                 else:
                     logger.error(
                         f"Failed to connect after {max_attempts} attempts. "
-                        f"Last error: {e}"
+                        f"Last error: {e}",
                     )
 
         raise ConnectionError("Failed to connect to scrcpy server")
@@ -444,7 +443,8 @@ class ScrcpyStreamer:
 
         while len(self._read_buffer) < size:
             chunk = await asyncio.to_thread(
-                self.tcp_socket.recv, max(4096, size - len(self._read_buffer))
+                self.tcp_socket.recv,
+                max(4096, size - len(self._read_buffer)),
             )
             if not chunk:
                 raise ConnectionError("Socket closed by remote")
@@ -476,13 +476,15 @@ class ScrcpyStreamer:
         width = None
         height = None
         codec = SCRCPY_CODEC_NAME_TO_ID.get(
-            self.stream_options.video_codec, SCRCPY_CODEC_NAME_TO_ID["h264"]
+            self.stream_options.video_codec,
+            SCRCPY_CODEC_NAME_TO_ID["h264"],
         )
 
         if self.stream_options.send_device_meta:
             raw_name = await self._read_exactly(64)
             device_name = raw_name.split(b"\x00", 1)[0].decode(
-                "utf-8", errors="replace"
+                "utf-8",
+                errors="replace",
             )
 
         if self.stream_options.send_codec_meta:
@@ -512,7 +514,7 @@ class ScrcpyStreamer:
         """Read one Scrcpy media packet (configuration/data)."""
         if not self.stream_options.send_frame_meta:
             raise RuntimeError(
-                "send_frame_meta is disabled; packet parsing unavailable"
+                "send_frame_meta is disabled; packet parsing unavailable",
             )
 
         if self._metadata is None:
@@ -575,6 +577,7 @@ class ScrcpyStreamer:
                 cmd.extend(["forward", "--remove", f"tcp:{self.port}"])
                 subprocess.run(
                     cmd,
+                    check=False,
                     stdout=subprocess.DEVNULL,
                     stderr=subprocess.DEVNULL,
                     timeout=2,

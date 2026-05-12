@@ -1,13 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import {
-  FolderOpen,
-  Plus,
-  Edit,
-  Trash2,
-  GripVertical,
-  Loader2,
-  AlertCircle,
-} from 'lucide-react';
+import { FolderOpen, Plus, Edit, Trash2, GripVertical, Loader2, AlertCircle } from 'lucide-react';
 import {
   Dialog,
   DialogContent,
@@ -147,10 +139,7 @@ export function GroupManageDialog({
         }
       } else {
         if (showToast) {
-          showToast(
-            result.message || t.deviceGroups?.deleteError || '删除分组失败',
-            'error'
-          );
+          showToast(result.message || t.deviceGroups?.deleteError || '删除分组失败', 'error');
         }
       }
     } catch (err) {
@@ -173,8 +162,8 @@ export function GroupManageDialog({
 
     // Reorder locally for visual feedback
     const newGroups = [...groups];
-    const draggedIndex = newGroups.findIndex(g => g.id === draggedGroupId);
-    const targetIndex = newGroups.findIndex(g => g.id === targetGroupId);
+    const draggedIndex = newGroups.findIndex((g) => g.id === draggedGroupId);
+    const targetIndex = newGroups.findIndex((g) => g.id === targetGroupId);
 
     if (draggedIndex === -1 || targetIndex === -1) return;
 
@@ -188,7 +177,7 @@ export function GroupManageDialog({
     if (!draggedGroupId) return;
 
     // Save the new order
-    const groupIds = groups.map(g => g.id);
+    const groupIds = groups.map((g) => g.id);
     try {
       await reorderDeviceGroups(groupIds);
       if (onGroupsChanged) onGroupsChanged();
@@ -206,12 +195,13 @@ export function GroupManageDialog({
 
   return (
     <>
-      <Dialog open={isOpen} onOpenChange={open => !open && onClose()}>
+      <Dialog
+        open={isOpen}
+        onOpenChange={(open) => !open && onClose()}
+      >
         <DialogContent className="sm:max-w-md max-h-[80vh] overflow-hidden flex flex-col">
           <DialogHeader>
-            <DialogTitle>
-              {t.deviceGroups?.manageTitle || '管理设备分组'}
-            </DialogTitle>
+            <DialogTitle>{t.deviceGroups?.manageTitle || '管理设备分组'}</DialogTitle>
             <DialogDescription>
               {t.deviceGroups?.manageDescription ||
                 '创建、编辑、删除和排序设备分组。拖拽分组可调整顺序。'}
@@ -226,9 +216,7 @@ export function GroupManageDialog({
             ) : error ? (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <AlertCircle className="h-8 w-8 text-red-500 mb-2" />
-                <p className="text-sm text-red-600 dark:text-red-400">
-                  {error}
-                </p>
+                <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
                 <Button
                   variant="outline"
                   size="sm"
@@ -240,12 +228,12 @@ export function GroupManageDialog({
               </div>
             ) : (
               <div className="space-y-2">
-                {groups.map(group => (
+                {groups.map((group) => (
                   <div
                     key={group.id}
                     draggable={!group.is_default}
                     onDragStart={() => handleDragStart(group.id)}
-                    onDragOver={e => handleDragOver(e, group.id)}
+                    onDragOver={(e) => handleDragOver(e, group.id)}
                     onDragEnd={handleDragEnd}
                     className={`
                       flex items-center gap-2 p-3 rounded-lg border
@@ -271,8 +259,7 @@ export function GroupManageDialog({
                         {group.name}
                       </span>
                       <span className="text-xs text-slate-400 dark:text-slate-500">
-                        {group.device_count}{' '}
-                        {t.deviceGroups?.deviceCount || '台设备'}
+                        {group.device_count} {t.deviceGroups?.deviceCount || '台设备'}
                         {group.is_default && (
                           <span className="ml-2 text-slate-400">
                             ({t.deviceGroups?.defaultGroup || '默认'})
@@ -322,7 +309,10 @@ export function GroupManageDialog({
           </div>
 
           <DialogFooter>
-            <Button variant="outline" onClick={onClose}>
+            <Button
+              variant="outline"
+              onClick={onClose}
+            >
               {t.common?.close || '关闭'}
             </Button>
           </DialogFooter>
@@ -330,30 +320,27 @@ export function GroupManageDialog({
       </Dialog>
 
       {/* Create Group Dialog */}
-      <Dialog open={showCreateDialog} onOpenChange={setShowCreateDialog}>
+      <Dialog
+        open={showCreateDialog}
+        onOpenChange={setShowCreateDialog}
+      >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>
-              {t.deviceGroups?.createTitle || '新建分组'}
-            </DialogTitle>
+            <DialogTitle>{t.deviceGroups?.createTitle || '新建分组'}</DialogTitle>
             <DialogDescription>
               {t.deviceGroups?.createDescription || '为设备创建一个新的分组。'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="new-group-name">
-                {t.deviceGroups?.groupNameLabel || '分组名称'}
-              </Label>
+              <Label htmlFor="new-group-name">{t.deviceGroups?.groupNameLabel || '分组名称'}</Label>
               <Input
                 id="new-group-name"
                 value={newGroupName}
-                onChange={e => setNewGroupName(e.target.value)}
-                placeholder={
-                  t.deviceGroups?.groupNamePlaceholder || '请输入分组名称'
-                }
+                onChange={(e) => setNewGroupName(e.target.value)}
+                placeholder={t.deviceGroups?.groupNamePlaceholder || '请输入分组名称'}
                 maxLength={50}
-                onKeyDown={e => {
+                onKeyDown={(e) => {
                   if (e.key === 'Enter' && !creating) {
                     handleCreateGroup();
                   }
@@ -389,7 +376,7 @@ export function GroupManageDialog({
       {/* Edit Group Dialog */}
       <Dialog
         open={!!editingGroup}
-        onOpenChange={open => !open && setEditingGroup(null)}
+        onOpenChange={(open) => !open && setEditingGroup(null)}
       >
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
@@ -406,12 +393,10 @@ export function GroupManageDialog({
               <Input
                 id="edit-group-name"
                 value={editingName}
-                onChange={e => setEditingName(e.target.value)}
-                placeholder={
-                  t.deviceGroups?.groupNamePlaceholder || '请输入分组名称'
-                }
+                onChange={(e) => setEditingName(e.target.value)}
+                placeholder={t.deviceGroups?.groupNamePlaceholder || '请输入分组名称'}
                 maxLength={50}
-                onKeyDown={e => {
+                onKeyDown={(e) => {
                   if (e.key === 'Enter' && !saving) {
                     handleUpdateGroup();
                   }
@@ -449,19 +434,12 @@ export function GroupManageDialog({
         isOpen={!!deletingGroup}
         title={t.deviceGroups?.deleteTitle || '删除分组'}
         content={
-          t.deviceGroups?.deleteContent?.replace(
-            '{name}',
-            deletingGroup?.name || ''
-          ) ||
+          t.deviceGroups?.deleteContent?.replace('{name}', deletingGroup?.name || '') ||
           `确定要删除分组 "${deletingGroup?.name}" 吗？该分组内的设备将被移回默认分组。`
         }
         onConfirm={handleDeleteGroup}
         onCancel={() => setDeletingGroup(null)}
-        confirmText={
-          deleting
-            ? t.common?.loading || '加载中...'
-            : t.common?.delete || '删除'
-        }
+        confirmText={deleting ? t.common?.loading || '加载中...' : t.common?.delete || '删除'}
         confirmVariant="destructive"
         disabled={deleting}
       />

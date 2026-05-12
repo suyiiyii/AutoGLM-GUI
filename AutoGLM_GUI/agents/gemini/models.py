@@ -33,14 +33,24 @@ BENCHMARKS: list[ModelBenchmark] = [
     ModelBenchmark("gpt-5-mini", "openai", 6969, "tap", True, "比 4.1 慢"),
     ModelBenchmark("gpt-5", "openai", 36153, "NO_TOOL", False, "不支持 tool_choice"),
     ModelBenchmark(
-        "gpt-5-nano", "openai", 7443, "NO_TOOL", False, "不支持 tool_choice"
+        "gpt-5-nano",
+        "openai",
+        7443,
+        "NO_TOOL",
+        False,
+        "不支持 tool_choice",
     ),
     # --- 智谱 GLM ---
     ModelBenchmark("glm-4.7", "zhipu", 1488, "launch_app", True, "最快，推荐"),
     ModelBenchmark("glm-5", "zhipu", 3419, "launch_app", True, "最新一代"),
     ModelBenchmark("GLM-4.6V", "zhipu", 9780, "launch_app", True, "视觉专用，较慢"),
     ModelBenchmark(
-        "glm-4v-plus", "zhipu", 2303, "NO_TOOL", False, "不支持 function calling"
+        "glm-4v-plus",
+        "zhipu",
+        2303,
+        "NO_TOOL",
+        False,
+        "不支持 function calling",
     ),
     ModelBenchmark(
         "GLM-4.1V-Thinking-Flash",

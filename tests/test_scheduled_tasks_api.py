@@ -18,7 +18,7 @@ pytestmark = [pytest.mark.contract, pytest.mark.release_gate]
 class FakeWorkflowManager:
     def __init__(self) -> None:
         self.workflows: dict[str, dict[str, str]] = {
-            "wf-1": {"uuid": "wf-1", "name": "Main", "text": "Do something"}
+            "wf-1": {"uuid": "wf-1", "name": "Main", "text": "Do something"},
         }
 
     def get_workflow(self, workflow_uuid: str) -> dict[str, str] | None:
@@ -101,7 +101,7 @@ class FakeSchedulerManager:
 
 
 class FakeTaskStore:
-    def get_latest_schedule_summary(self, scheduled_task_id: str):  # noqa: ANN201
+    def get_latest_schedule_summary(self, scheduled_task_id: str):
         return None
 
 
@@ -128,10 +128,14 @@ def client(
     fake_task_store: FakeTaskStore,
 ) -> TestClient:
     monkeypatch.setattr(
-        workflow_manager_module, "workflow_manager", fake_workflow_manager
+        workflow_manager_module,
+        "workflow_manager",
+        fake_workflow_manager,
     )
     monkeypatch.setattr(
-        scheduled_tasks_api, "scheduler_manager", fake_scheduler_manager
+        scheduled_tasks_api,
+        "scheduler_manager",
+        fake_scheduler_manager,
     )
     monkeypatch.setattr(scheduled_tasks_api, "task_store", fake_task_store)
 

@@ -45,7 +45,7 @@ def build_frontend() -> bool:
 
     # Install dependencies
     print("Installing frontend dependencies...")
-    result = subprocess.run([pnpm_exe, "install"], cwd=FRONTEND_DIR)
+    result = subprocess.run([pnpm_exe, "install"], check=False, cwd=FRONTEND_DIR)
     if result.returncode != 0:
         print("Error: Failed to install frontend dependencies.")
         return False
@@ -55,7 +55,7 @@ def build_frontend() -> bool:
     env = os.environ.copy()
     env["VITE_BACKEND_VERSION"] = get_backend_version()
     print(f"Frontend build version: {env['VITE_BACKEND_VERSION']}")
-    result = subprocess.run([pnpm_exe, "build"], cwd=FRONTEND_DIR, env=env)
+    result = subprocess.run([pnpm_exe, "build"], check=False, cwd=FRONTEND_DIR, env=env)
     if result.returncode != 0:
         print("Error: Failed to build frontend.")
         return False
@@ -92,7 +92,7 @@ def build_package() -> bool:
     if dist_dir.exists():
         shutil.rmtree(dist_dir)
 
-    result = subprocess.run(["uv", "build"], cwd=ROOT_DIR)
+    result = subprocess.run(["uv", "build"], check=False, cwd=ROOT_DIR)
     if result.returncode != 0:
         print("Error: Failed to build package.")
         return False
@@ -104,7 +104,9 @@ def main() -> int:
     """Main build process."""
     parser = argparse.ArgumentParser(description="Build AutoGLM-GUI for distribution")
     parser.add_argument(
-        "--pack", action="store_true", help="Also build Python package after frontend"
+        "--pack",
+        action="store_true",
+        help="Also build Python package after frontend",
     )
     args = parser.parse_args()
 
@@ -118,9 +120,8 @@ def main() -> int:
     if not copy_static_files():
         return 1
 
-    if args.pack:
-        if not build_package():
-            return 1
+    if args.pack and not build_package():
+        return 1
 
     print()
     print("=" * 50)

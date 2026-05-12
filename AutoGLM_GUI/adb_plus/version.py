@@ -1,6 +1,7 @@
 """ADB version detection and feature support checking."""
 
 import re
+
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.platform_utils import run_cmd_silently_sync
 
@@ -67,7 +68,7 @@ def supports_mdns_services(adb_path: str = "adb") -> bool:
         stderr_lower = result.stderr.lower()
         if "unknown" in stderr_lower or "not found" in stderr_lower:
             logger.info(
-                "ADB does not support 'mdns services' command (requires ADB 30.0.0+)"
+                "ADB does not support 'mdns services' command (requires ADB 30.0.0+)",
             )
             return False
 

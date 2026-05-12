@@ -6,12 +6,7 @@ import React, {
   useMemo,
   type ReactNode,
 } from 'react';
-import {
-  translations,
-  localeNames,
-  type Locale,
-  type Translations,
-} from './i18n';
+import { translations, localeNames, type Locale, type Translations } from './i18n';
 
 interface I18nContextType {
   locale: Locale;

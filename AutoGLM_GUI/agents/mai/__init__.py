@@ -14,7 +14,7 @@ Design notes:
 """
 
 from .async_agent import AsyncMAIAgent
-from .parser import MAIParser, MAIParseError
+from .parser import MAIParseError, MAIParser
 from .prompts import MAI_MOBILE_SYSTEM_PROMPT
 from .traj_memory import TrajMemory, TrajStep
 

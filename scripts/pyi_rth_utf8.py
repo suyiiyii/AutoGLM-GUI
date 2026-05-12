@@ -15,8 +15,8 @@ Reference:
 - https://github.com/pyinstaller/pyinstaller/discussions/9065
 """
 
-import sys
 import os
+import sys
 
 # Only apply on Windows
 if sys.platform == "win32":

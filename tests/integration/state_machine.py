@@ -61,7 +61,7 @@ class TestState:
             buffered = BytesIO()
             img.save(buffered, format="PNG")
             self._screenshot_base64 = base64.b64encode(buffered.getvalue()).decode(
-                "utf-8"
+                "utf-8",
             )
 
         assert (
@@ -149,7 +149,7 @@ class StateMachine:
                 "x": x,
                 "y": y,
                 "state": self.current_state_id,
-            }
+            },
         )
 
         # Check if we're in a terminal state
@@ -166,7 +166,7 @@ class StateMachine:
                 self.state_history.append(self.current_state_id)
                 print(
                     f"[StateMachine] Transition: {old_state} -> {self.current_state_id} "
-                    f"(tap at {x}, {y})"
+                    f"(tap at {x}, {y})",
                 )
                 return True
 
@@ -174,7 +174,7 @@ class StateMachine:
         self.retry_count += 1
         print(
             f"[StateMachine] Tap missed ({x}, {y}) in state {self.current_state_id}, "
-            f"retry {self.retry_count}/{self.max_retries}"
+            f"retry {self.retry_count}/{self.max_retries}",
         )
 
         if self.retry_count >= self.max_retries:
@@ -197,7 +197,7 @@ class StateMachine:
                 "end_x": end_x,
                 "end_y": end_y,
                 "state": self.current_state_id,
-            }
+            },
         )
         # Swipe doesn't trigger transitions in basic implementation
         return False
@@ -209,7 +209,7 @@ class StateMachine:
                 "action": "finish",
                 "message": message,
                 "state": self.current_state_id,
-            }
+            },
         )
 
         # Check if we're in a terminal state that expects finish
@@ -245,7 +245,8 @@ class TestFailedError(Exception):
 
 
 def load_test_case(
-    yaml_path: str | Path, base_dir: str | Path | None = None
+    yaml_path: str | Path,
+    base_dir: str | Path | None = None,
 ) -> tuple[StateMachine, str, int]:
     """
     Load a test case from YAML file.
@@ -261,6 +262,7 @@ def load_test_case(
         ValueError: If YAML validation fails
     """
     import yaml
+
     from tests.integration.schema import TestScenarioSchema
 
     yaml_path = Path(yaml_path)
@@ -293,7 +295,7 @@ def load_test_case(
                     click_region=tuple(trans_data["click_region"]),
                     next_state=trans_data["next_state"],
                     description=trans_data.get("description", ""),
-                )
+                ),
             )
 
         state = TestState(

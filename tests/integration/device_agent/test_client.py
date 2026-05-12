@@ -34,7 +34,8 @@ class MockAgentTestClient:
     def load_scenario(self, scenario_path: str) -> dict:
         """Load a test scenario."""
         resp = self._client.post(
-            "/test/load_scenario", json={"scenario_path": scenario_path}
+            "/test/load_scenario",
+            json={"scenario_path": scenario_path},
         )
         resp.raise_for_status()
         return resp.json()
@@ -81,7 +82,12 @@ class MockAgentTestClient:
         assert result["match"], result["message"]
 
     def assert_tap_in_region(
-        self, x1: int, y1: int, x2: int, y2: int, index: int = 0
+        self,
+        x1: int,
+        y1: int,
+        x2: int,
+        y2: int,
+        index: int = 0,
     ) -> None:
         """
         Assert that a tap command was in the specified region.

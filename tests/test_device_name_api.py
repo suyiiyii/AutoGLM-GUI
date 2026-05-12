@@ -42,7 +42,8 @@ def test_set_and_get_device_name(client):
     display_name = "My Test Device"
 
     response = client.put(
-        f"/api/devices/{serial}/name", json={"display_name": display_name}
+        f"/api/devices/{serial}/name",
+        json={"display_name": display_name},
     )
     assert response.status_code == 200
     data = response.json()
@@ -88,7 +89,8 @@ def test_set_device_name_too_long_rejected(client):
     too_long_name = "a" * (DISPLAY_NAME_MAX_LENGTH + 1)
 
     response = client.put(
-        f"/api/devices/{serial}/name", json={"display_name": too_long_name}
+        f"/api/devices/{serial}/name",
+        json={"display_name": too_long_name},
     )
     assert response.status_code == 422
 
@@ -99,7 +101,8 @@ def test_set_device_name_max_length_accepted(client):
     max_length_name = "a" * DISPLAY_NAME_MAX_LENGTH
 
     response = client.put(
-        f"/api/devices/{serial}/name", json={"display_name": max_length_name}
+        f"/api/devices/{serial}/name",
+        json={"display_name": max_length_name},
     )
     assert response.status_code == 200
     assert response.json()["display_name"] == max_length_name
@@ -129,12 +132,14 @@ def test_set_device_name_idempotent(client):
     display_name = "Same Name"
 
     response1 = client.put(
-        f"/api/devices/{serial}/name", json={"display_name": display_name}
+        f"/api/devices/{serial}/name",
+        json={"display_name": display_name},
     )
     assert response1.status_code == 200
 
     response2 = client.put(
-        f"/api/devices/{serial}/name", json={"display_name": display_name}
+        f"/api/devices/{serial}/name",
+        json={"display_name": display_name},
     )
     assert response2.status_code == 200
     assert response2.json()["display_name"] == display_name
@@ -145,13 +150,15 @@ def test_set_device_name_update_existing(client):
     serial = "test_device_008"
 
     response = client.put(
-        f"/api/devices/{serial}/name", json={"display_name": "Old Name"}
+        f"/api/devices/{serial}/name",
+        json={"display_name": "Old Name"},
     )
     assert response.status_code == 200
     assert response.json()["display_name"] == "Old Name"
 
     response = client.put(
-        f"/api/devices/{serial}/name", json={"display_name": "New Name"}
+        f"/api/devices/{serial}/name",
+        json={"display_name": "New Name"},
     )
     assert response.status_code == 200
     assert response.json()["display_name"] == "New Name"
@@ -166,7 +173,8 @@ def test_all_responses_include_success_field(client):
     serial = "test_device_009"
 
     response = client.put(
-        f"/api/devices/{serial}/name", json={"display_name": "Test Name"}
+        f"/api/devices/{serial}/name",
+        json={"display_name": "Test Name"},
     )
     assert response.status_code == 200
     data = response.json()

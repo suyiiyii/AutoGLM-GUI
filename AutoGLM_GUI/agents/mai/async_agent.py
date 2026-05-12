@@ -192,7 +192,7 @@ class AsyncMAIAgent(AsyncAgentBase):
 
             except MAIParseError as e:
                 logger.warning(
-                    f"Parse failed (attempt {attempt + 1}/{max_retries}): {e}"
+                    f"Parse failed (attempt {attempt + 1}/{max_retries}): {e}",
                 )
                 if attempt == max_retries - 1:
                     yield {"type": "error", "data": {"message": f"Parse error: {e}"}}
@@ -211,7 +211,7 @@ class AsyncMAIAgent(AsyncAgentBase):
 
             except Exception as e:
                 logger.warning(
-                    f"Model call failed (attempt {attempt + 1}/{max_retries}): {e}"
+                    f"Model call failed (attempt {attempt + 1}/{max_retries}): {e}",
                 )
                 if attempt == max_retries - 1:
                     if self.agent_config.verbose:
@@ -318,7 +318,8 @@ class AsyncMAIAgent(AsyncAgentBase):
         }
 
     async def _stream_openai(
-        self, messages: list[dict[str, Any]]
+        self,
+        messages: list[dict[str, Any]],
     ) -> AsyncGenerator[dict[str, str], None]:
         """流式调用 OpenAI，yield thinking chunks 和 raw content。"""
         stream = await self.openai_client.chat.completions.create(
@@ -384,7 +385,10 @@ class AsyncMAIAgent(AsyncAgentBase):
             await stream.close()
 
     def _build_messages(
-        self, instruction: str, screen_info: str, current_screenshot_base64: str
+        self,
+        instruction: str,
+        screen_info: str,
+        current_screenshot_base64: str,
     ) -> list[dict[str, Any]]:
         """构建包含多图历史上下文的完整消息列表。"""
         system_prompt = self.agent_config.system_prompt or MAI_MOBILE_SYSTEM_PROMPT
@@ -399,13 +403,17 @@ class AsyncMAIAgent(AsyncAgentBase):
         history_actions = self.traj_memory.get_history_actions(self._history_n - 1)
 
         for img_bytes, thought, action in zip(
-            history_images, history_thoughts, history_actions
+            history_images,
+            history_thoughts,
+            history_actions,
+            strict=False,
         ):
             img_base64 = base64.b64encode(img_bytes).decode("utf-8")
             messages.append(
                 MessageBuilder.create_user_message(
-                    text=screen_info, image_base64=img_base64
-                )
+                    text=screen_info,
+                    image_base64=img_base64,
+                ),
             )
 
             tool_call_dict = {"name": "mobile_use", "arguments": action}
@@ -418,8 +426,9 @@ class AsyncMAIAgent(AsyncAgentBase):
 
         messages.append(
             MessageBuilder.create_user_message(
-                text=screen_info, image_base64=current_screenshot_base64
-            )
+                text=screen_info,
+                image_base64=current_screenshot_base64,
+            ),
         )
 
         return messages

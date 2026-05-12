@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Self
 
@@ -52,7 +52,7 @@ class HistoryManager:
             # 使用 SHA1 哈希作为安全的文件名
             hashed = hashlib.sha1(serialno.encode("utf-8")).hexdigest()
             logger.warning(
-                f"Unsafe serialno detected, using hash: {serialno!r} -> {hashed}"
+                f"Unsafe serialno detected, using hash: {serialno!r} -> {hashed}",
             )
             return hashed
 
@@ -113,7 +113,7 @@ class HistoryManager:
             },
         ):
             try:
-                history.last_updated = datetime.now()
+                history.last_updated = datetime.now(UTC)
                 with open(temp_path, "w", encoding="utf-8") as f:
                     json.dump(history.to_dict(), f, indent=2, ensure_ascii=False)
                 temp_path.replace(path)
@@ -121,7 +121,7 @@ class HistoryManager:
                 self._file_cache[history.serialno] = history
                 self._file_mtime[history.serialno] = path.stat().st_mtime
                 logger.debug(
-                    f"Saved {len(history.records)} records for {history.serialno}"
+                    f"Saved {len(history.records)} records for {history.serialno}",
                 )
                 return True
             except Exception as e:
@@ -147,7 +147,10 @@ class HistoryManager:
             logger.info(f"Added history record for {serialno}: {record.id}")
 
     def list_records(
-        self, serialno: str, limit: int = 50, offset: int = 0
+        self,
+        serialno: str,
+        limit: int = 50,
+        offset: int = 0,
     ) -> list[ConversationRecord]:
         history = self._load_history(serialno)
         return history.records[offset : offset + limit]

@@ -12,7 +12,6 @@ if TYPE_CHECKING:
 
 from AutoGLM_GUI.adb_plus.qr_pair import qr_pairing_manager
 from AutoGLM_GUI.logger import logger
-
 from AutoGLM_GUI.schemas import (
     DeviceGroupAssignRequest,
     DeviceGroupCreateRequest,
@@ -49,7 +48,8 @@ from AutoGLM_GUI.schemas import (
 
 
 def _build_device_response_with_agent(
-    device: ManagedDevice, agent_manager: PhoneAgentManager
+    device: ManagedDevice,
+    agent_manager: PhoneAgentManager,
 ) -> DeviceResponse:
     """聚合设备信息和 Agent 状态（API 层职责）.
 
@@ -177,7 +177,8 @@ def disconnect_wifi(request: WiFiDisconnectRequest) -> WiFiDisconnectResponse:
 
 
 @router.post(
-    "/api/devices/connect_wifi_manual", response_model=WiFiManualConnectResponse
+    "/api/devices/connect_wifi_manual",
+    response_model=WiFiManualConnectResponse,
 )
 def connect_wifi_manual(
     request: WiFiManualConnectRequest,
@@ -309,7 +310,8 @@ def generate_qr_pairing(timeout: int = 90) -> QRPairGenerateResponse:
 
         conn = ADBConnection()
         session = qr_pairing_manager.create_session(
-            timeout=timeout, adb_path=conn.adb_path
+            timeout=timeout,
+            adb_path=conn.adb_path,
         )
 
         return QRPairGenerateResponse(
@@ -342,7 +344,8 @@ def _get_status_message(status: str) -> str:
 
 
 @router.get(
-    "/api/devices/qr_pair/status/{session_id}", response_model=QRPairStatusResponse
+    "/api/devices/qr_pair/status/{session_id}",
+    response_model=QRPairStatusResponse,
 )
 def get_qr_pairing_status(session_id: str) -> QRPairStatusResponse:
     """Get current status of a QR pairing session.
@@ -397,7 +400,8 @@ def cancel_qr_pairing(session_id: str) -> QRPairCancelResponse:
 
 
 @router.post(
-    "/api/devices/discover_remote", response_model=RemoteDeviceDiscoverResponse
+    "/api/devices/discover_remote",
+    response_model=RemoteDeviceDiscoverResponse,
 )
 def discover_remote_devices(
     request: RemoteDeviceDiscoverRequest,
@@ -471,7 +475,8 @@ def remove_remote_device(
 
 @router.put("/api/devices/{serial}/name", response_model=DeviceNameResponse)
 def update_device_name(
-    serial: str, request: DeviceNameUpdateRequest
+    serial: str,
+    request: DeviceNameUpdateRequest,
 ) -> DeviceNameResponse:
     """Update or clear device display name.
 
@@ -583,7 +588,7 @@ def list_device_groups() -> DeviceGroupListResponse:
                 updated_at=group.updated_at.isoformat(),
                 is_default=group.is_default,
                 device_count=device_count,
-            )
+            ),
         )
 
     return DeviceGroupListResponse(groups=group_responses)
@@ -609,7 +614,8 @@ def create_device_group(request: DeviceGroupCreateRequest) -> DeviceGroupRespons
 
 @router.put("/api/device-groups/{group_id}", response_model=DeviceGroupResponse)
 def update_device_group(
-    group_id: str, request: DeviceGroupUpdateRequest
+    group_id: str,
+    request: DeviceGroupUpdateRequest,
 ) -> DeviceGroupResponse:
     """更新设备分组名称."""
     from fastapi import HTTPException
@@ -632,7 +638,8 @@ def update_device_group(
 
 
 @router.delete(
-    "/api/device-groups/{group_id}", response_model=DeviceGroupOperationResponse
+    "/api/device-groups/{group_id}",
+    response_model=DeviceGroupOperationResponse,
 )
 def delete_device_group(group_id: str) -> DeviceGroupOperationResponse:
     """删除设备分组（设备移回默认分组）."""
@@ -685,7 +692,8 @@ def reorder_device_groups(
 
 @router.put("/api/devices/{serial}/group", response_model=DeviceGroupOperationResponse)
 def assign_device_to_group(
-    serial: str, request: DeviceGroupAssignRequest
+    serial: str,
+    request: DeviceGroupAssignRequest,
 ) -> DeviceGroupOperationResponse:
     """分配设备到指定分组."""
     from AutoGLM_GUI.device_group_manager import device_group_manager

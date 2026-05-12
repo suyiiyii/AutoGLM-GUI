@@ -3,6 +3,7 @@
 
 import sys
 from pathlib import Path
+
 from PIL import Image
 
 ROOT_DIR = Path(__file__).parent.parent

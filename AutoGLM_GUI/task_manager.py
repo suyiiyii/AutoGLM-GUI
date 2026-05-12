@@ -8,6 +8,7 @@ import time
 from collections.abc import Awaitable, Callable
 from typing import Any, cast
 
+import AutoGLM_GUI.trace as trace_module
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.metrics import record_trace_latency_metrics
 from AutoGLM_GUI.task_store import (
@@ -18,7 +19,6 @@ from AutoGLM_GUI.task_store import (
     TaskStore,
     task_store,
 )
-import AutoGLM_GUI.trace as trace_module
 
 TaskExecutor = Callable[[TaskRecord], Awaitable[None]]
 TaskImageAttachment = dict[str, Any]
@@ -31,7 +31,8 @@ class TaskManager:
         self.store = store
         self._workers: dict[str, asyncio.Task[None]] = {}
         self._abort_handlers: dict[
-            str, Callable[[], Any] | Callable[[], Awaitable[Any]]
+            str,
+            Callable[[], Any] | Callable[[], Awaitable[Any]],
         ] = {}
         self._completion_events: dict[str, asyncio.Event] = {}
         self._cancel_requested: set[str] = set()
@@ -42,7 +43,8 @@ class TaskManager:
         self.register_executor("layered_chat", self._execute_layered_chat)
         self.register_executor("scheduled_workflow", self._execute_scheduled_workflow)
         self.register_executor(
-            "scheduled_layered_workflow", self._execute_scheduled_layered_workflow
+            "scheduled_layered_workflow",
+            self._execute_scheduled_layered_workflow,
         )
 
     def register_executor(self, executor_key: str, executor: TaskExecutor) -> None:
@@ -70,7 +72,11 @@ class TaskManager:
         self._started = False
 
     async def create_chat_session(
-        self, *, device_id: str, device_serial: str, mode: str = "classic"
+        self,
+        *,
+        device_id: str,
+        device_serial: str,
+        mode: str = "classic",
     ) -> TaskSessionRecord:
         return await asyncio.to_thread(
             self.store.create_session,
@@ -84,7 +90,11 @@ class TaskManager:
         return await asyncio.to_thread(self.store.get_session, session_id)
 
     async def get_or_create_legacy_chat_session(
-        self, *, device_id: str, device_serial: str, mode: str = "classic"
+        self,
+        *,
+        device_id: str,
+        device_serial: str,
+        mode: str = "classic",
     ) -> TaskSessionRecord:
         session = await asyncio.to_thread(
             self.store.get_latest_open_chat_session,
@@ -117,7 +127,7 @@ class TaskManager:
                 manager.destroy_agent(device_id, context=context)
             except Exception as exc:
                 logger.debug(
-                    f"Contextual agent cleanup skipped for {device_id}/{context}: {exc}"
+                    f"Contextual agent cleanup skipped for {device_id}/{context}: {exc}",
                 )
         return archived
 
@@ -166,7 +176,8 @@ class TaskManager:
         return task
 
     def _get_task_user_image_attachments(
-        self, task_id: str
+        self,
+        task_id: str,
     ) -> list[TaskImageAttachment]:
         events = self.store.list_task_events(task_id)
         for event in events:
@@ -212,7 +223,9 @@ class TaskManager:
         return task
 
     async def wait_for_task(
-        self, task_id: str, timeout: float | None = None
+        self,
+        task_id: str,
+        timeout: float | None = None,
     ) -> TaskRecord | None:
         task = await asyncio.to_thread(self.store.get_task, task_id)
         if task is None:
@@ -254,10 +267,14 @@ class TaskManager:
         return task
 
     async def cancel_latest_chat_task(
-        self, device_id: str, mode: str | None = None
+        self,
+        device_id: str,
+        mode: str | None = None,
     ) -> TaskRecord | None:
         task = await asyncio.to_thread(
-            self.store.get_latest_active_chat_task, device_id, mode
+            self.store.get_latest_active_chat_task,
+            device_id,
+            mode,
         )
         if task is None:
             return None
@@ -376,7 +393,8 @@ class TaskManager:
         try:
             while not self._shutdown:
                 task = await asyncio.to_thread(
-                    self.store.claim_next_queued_task, device_id
+                    self.store.claim_next_queued_task,
+                    device_id,
                 )
                 if task is None:
                     break
@@ -513,7 +531,7 @@ class TaskManager:
                                 "completed"
                                 if event_data.get("success", False)
                                 else "error",
-                            )
+                            ),
                         )
                         step_count = int(event_data.get("steps", step_count))
                     elif event_type == "error":
@@ -522,7 +540,7 @@ class TaskManager:
                         stop_reason = str(event_data.get("stop_reason", "error"))
                     elif event_type == "cancelled":
                         final_message = str(
-                            event_data.get("message", "Task cancelled by user")
+                            event_data.get("message", "Task cancelled by user"),
                         )
                         final_status = TaskStatus.CANCELLED.value
                         stop_reason = str(event_data.get("stop_reason", "user_stopped"))
@@ -616,6 +634,8 @@ class TaskManager:
     ) -> None:
         from AutoGLM_GUI.layered_agent_service import (
             reset_session as reset_layered_session,
+        )
+        from AutoGLM_GUI.layered_agent_service import (
             start_run,
         )
 
@@ -666,7 +686,7 @@ class TaskManager:
                                 "completed"
                                 if event_payload.get("success", False)
                                 else "error",
-                            )
+                            ),
                         )
                     elif event_type == "error":
                         final_message = str(event_payload.get("message", "Task failed"))
@@ -674,11 +694,11 @@ class TaskManager:
                         stop_reason = str(event_payload.get("stop_reason", "error"))
                     elif event_type == "cancelled":
                         final_message = str(
-                            event_payload.get("message", "Task cancelled by user")
+                            event_payload.get("message", "Task cancelled by user"),
                         )
                         final_status = TaskStatus.CANCELLED.value
                         stop_reason = str(
-                            event_payload.get("stop_reason", "user_stopped")
+                            event_payload.get("stop_reason", "user_stopped"),
                         )
 
             if not final_message:
@@ -803,7 +823,7 @@ class TaskManager:
                             )
                         elif event_type == "done":
                             final_message = str(
-                                event_data.get("message", "Task completed")
+                                event_data.get("message", "Task completed"),
                             )
                             final_status = (
                                 TaskStatus.SUCCEEDED.value
@@ -816,12 +836,12 @@ class TaskManager:
                                     "completed"
                                     if event_data.get("success", False)
                                     else "error",
-                                )
+                                ),
                             )
                             step_count = int(event_data.get("steps", step_count))
                         elif event_type == "error":
                             final_message = str(
-                                event_data.get("message", "Task failed")
+                                event_data.get("message", "Task failed"),
                             )
                             final_status = TaskStatus.FAILED.value
                             stop_reason = str(event_data.get("stop_reason", "error"))
@@ -837,11 +857,11 @@ class TaskManager:
                             )
                         elif event_type == "cancelled":
                             final_message = str(
-                                event_data.get("message", "Task cancelled by user")
+                                event_data.get("message", "Task cancelled by user"),
                             )
                             final_status = TaskStatus.CANCELLED.value
                             stop_reason = str(
-                                event_data.get("stop_reason", "user_stopped")
+                                event_data.get("stop_reason", "user_stopped"),
                             )
 
                 if not final_message:

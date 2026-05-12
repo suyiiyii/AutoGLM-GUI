@@ -11,24 +11,18 @@ interface FooterVersionInfo {
 const VERSION_CHECK_CACHE_KEY = 'version_check';
 const VERSION_CHECK_TTL_MS = 3600000;
 
-export function useFooterVersionInfo(
-  buildBackendVersion: string
-): FooterVersionInfo {
-  const [backendVersion, setBackendVersion] = React.useState<string | null>(
-    null
-  );
+export function useFooterVersionInfo(buildBackendVersion: string): FooterVersionInfo {
+  const [backendVersion, setBackendVersion] = React.useState<string | null>(null);
   const [versionMismatch, setVersionMismatch] = React.useState(false);
-  const [updateInfo, setUpdateInfo] =
-    React.useState<VersionCheckResponse | null>(null);
+  const [updateInfo, setUpdateInfo] = React.useState<VersionCheckResponse | null>(null);
   const [showUpdateBadge, setShowUpdateBadge] = React.useState(false);
 
   React.useEffect(() => {
     getStatus()
-      .then(status => {
+      .then((status) => {
         setBackendVersion(status.version);
         setVersionMismatch(
-          buildBackendVersion !== 'unknown' &&
-            status.version !== buildBackendVersion
+          buildBackendVersion !== 'unknown' && status.version !== buildBackendVersion
         );
       })
       .catch(() => setBackendVersion(null));

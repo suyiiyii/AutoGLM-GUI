@@ -8,13 +8,7 @@ import {
   WebCodecsVideoDecoder,
   WebGLVideoFrameRenderer,
 } from '@yume-chan/scrcpy-decoder-webcodecs';
-import {
-  getScreenshot,
-  sendSwipe,
-  sendTouchDown,
-  sendTouchMove,
-  sendTouchUp,
-} from '../api';
+import { getScreenshot, sendSwipe, sendTouchDown, sendTouchMove, sendTouchUp } from '../api';
 import { detectWebCodecsUnavailabilityReason } from '../lib/webcodecs-utils';
 
 const MOTION_THROTTLE_MS = 50;
@@ -75,9 +69,9 @@ export function ScrcpyPlayer({
   const onStreamReadyRef = useRef(onStreamReady);
   const isVisibleRef = useRef(isVisible); // ✅ 新增：用 ref 追踪 isVisible
 
-  const [status, setStatus] = useState<
-    'connecting' | 'connected' | 'error' | 'disconnected'
-  >('connecting');
+  const [status, setStatus] = useState<'connecting' | 'connected' | 'error' | 'disconnected'>(
+    'connecting'
+  );
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [screenInfo, setScreenInfo] = useState<{
     width: number;
@@ -115,10 +109,7 @@ export function ScrcpyPlayer({
           });
         }
       } catch (error) {
-        console.error(
-          '[ScrcpyPlayer] Failed to fetch device resolution:',
-          error
-        );
+        console.error('[ScrcpyPlayer] Failed to fetch device resolution:', error);
       }
     };
 
@@ -178,8 +169,7 @@ export function ScrcpyPlayer({
   const createDecoder = useCallback(
     async (codecId: ScrcpyVideoCodecId) => {
       if (!WebCodecsVideoDecoder.isSupported) {
-        const reason =
-          detectWebCodecsUnavailabilityReason() || 'decoder_unsupported';
+        const reason = detectWebCodecsUnavailabilityReason() || 'decoder_unsupported';
         onFallbackRef.current?.(reason);
         throw new Error(
           'Current browser does not support WebCodecs API. Please use the latest Chrome/Edge.'
@@ -223,7 +213,7 @@ export function ScrcpyPlayer({
             configurationPacketSent = true;
 
             if (pendingDataPackets.length > 0) {
-              pendingDataPackets.forEach(p => controller.enqueue(p));
+              pendingDataPackets.forEach((p) => controller.enqueue(p));
               pendingDataPackets = [];
             }
             return;
@@ -248,10 +238,7 @@ export function ScrcpyPlayer({
               markDataReceived();
               const payload = {
                 ...data,
-                data:
-                  data.data instanceof Uint8Array
-                    ? data.data
-                    : new Uint8Array(data.data),
+                data: data.data instanceof Uint8Array ? data.data : new Uint8Array(data.data),
               };
               controller.enqueue(payload);
             } catch (error) {
@@ -363,9 +350,7 @@ export function ScrcpyPlayer({
     socketRef.current = socket;
 
     socket.on('connect', () => {
-      console.log(
-        `[ScrcpyPlayer] [${deviceId}] Socket connected, emitting connect-device`
-      ); // ✅ 方案 3
+      console.log(`[ScrcpyPlayer] [${deviceId}] Socket connected, emitting connect-device`); // ✅ 方案 3
       socket.emit('connect-device', {
         device_id: deviceId,
         maxSize: 1280,
@@ -434,9 +419,7 @@ export function ScrcpyPlayer({
 
       // ✅ 方案 1：检查 isVisible，隐藏时不重连
       if (!isVisibleRef.current) {
-        console.log(
-          `[ScrcpyPlayer] [${deviceId}] Skipping reconnect on error (not visible)`
-        );
+        console.log(`[ScrcpyPlayer] [${deviceId}] Skipping reconnect on error (not visible)`);
         onStreamReadyRef.current?.(null);
         return;
       }
@@ -444,9 +427,7 @@ export function ScrcpyPlayer({
       onStreamReadyRef.current?.(null);
 
       if (!reconnectTimerRef.current) {
-        console.log(
-          `[ScrcpyPlayer] [${deviceId}] Scheduling reconnect after error in 3s`
-        ); // ✅ 方案 3
+        console.log(`[ScrcpyPlayer] [${deviceId}] Scheduling reconnect after error in 3s`); // ✅ 方案 3
         reconnectTimerRef.current = setTimeout(() => {
           reconnectTimerRef.current = null;
           connectDeviceRef.current?.();
@@ -468,9 +449,7 @@ export function ScrcpyPlayer({
 
       // ✅ 方案 1：检查 isVisible，隐藏时不重连
       if (!isVisibleRef.current) {
-        console.log(
-          `[ScrcpyPlayer] [${deviceId}] Skipping reconnect (not visible)`
-        );
+        console.log(`[ScrcpyPlayer] [${deviceId}] Skipping reconnect (not visible)`);
         setStatus('disconnected');
         onStreamReadyRef.current?.(null);
         return;
@@ -518,21 +497,13 @@ export function ScrcpyPlayer({
   // ✅ 方案 1：响应 isVisible 变化
   useEffect(() => {
     if (!isVisible && socketRef.current?.connected) {
-      console.log(
-        `[ScrcpyPlayer] [${deviceId}] Component hidden, disconnecting stream`
-      );
+      console.log(`[ScrcpyPlayer] [${deviceId}] Component hidden, disconnecting stream`);
       // Use queueMicrotask to avoid synchronous setState within effect
       queueMicrotask(() => {
         disconnectDevice(true); // 抑制重连
       });
-    } else if (
-      isVisible &&
-      status === 'disconnected' &&
-      !socketRef.current?.connected
-    ) {
-      console.log(
-        `[ScrcpyPlayer] [${deviceId}] Component visible again, reconnecting`
-      );
+    } else if (isVisible && status === 'disconnected' && !socketRef.current?.connected) {
+      console.log(`[ScrcpyPlayer] [${deviceId}] Component visible again, reconnecting`);
       // 小延迟避免快速重连
       const timer = setTimeout(() => {
         connectDevice();
@@ -568,19 +539,11 @@ export function ScrcpyPlayer({
     const relativeX = clientX - rect.left;
     const relativeY = clientY - rect.top;
 
-    const streamX = Math.round(
-      (relativeX / rect.width) * streamDimensions.width
-    );
-    const streamY = Math.round(
-      (relativeY / rect.height) * streamDimensions.height
-    );
+    const streamX = Math.round((relativeX / rect.width) * streamDimensions.width);
+    const streamY = Math.round((relativeY / rect.height) * streamDimensions.height);
 
-    const scaleX = deviceResolution
-      ? deviceResolution.width / streamDimensions.width
-      : 1;
-    const scaleY = deviceResolution
-      ? deviceResolution.height / streamDimensions.height
-      : 1;
+    const scaleX = deviceResolution ? deviceResolution.width / streamDimensions.width : 1;
+    const scaleY = deviceResolution ? deviceResolution.height / streamDimensions.height : 1;
 
     return {
       x: Math.round(streamX * scaleX),
@@ -626,13 +589,11 @@ export function ScrcpyPlayer({
         moveThrottleTimerRef.current = setTimeout(() => {
           moveThrottleTimerRef.current = null;
           if (pendingMoveRef.current) {
-            sendTouchMove(
-              pendingMoveRef.current.x,
-              pendingMoveRef.current.y,
-              deviceId
-            ).catch(error => {
-              console.error('[ScrcpyPlayer] Touch move failed:', error);
-            });
+            sendTouchMove(pendingMoveRef.current.x, pendingMoveRef.current.y, deviceId).catch(
+              (error) => {
+                console.error('[ScrcpyPlayer] Touch move failed:', error);
+              }
+            );
             pendingMoveRef.current = null;
             lastMoveTimeRef.current = Date.now();
           }
@@ -642,7 +603,7 @@ export function ScrcpyPlayer({
     }
 
     lastMoveTimeRef.current = now;
-    sendTouchMove(coords.x, coords.y, deviceId).catch(error => {
+    sendTouchMove(coords.x, coords.y, deviceId).catch((error) => {
       console.error('[ScrcpyPlayer] Touch move failed:', error);
     });
   };
@@ -746,9 +707,7 @@ export function ScrcpyPlayer({
   };
 
   return (
-    <div
-      className={`relative w-full h-full flex items-center justify-center ${className || ''}`}
-    >
+    <div className={`relative w-full h-full flex items-center justify-center ${className || ''}`}>
       <div
         ref={videoContainerRef}
         className="relative w-full h-full flex items-center justify-center bg-slate-50 dark:bg-slate-900"

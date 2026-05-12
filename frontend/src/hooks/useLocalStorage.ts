@@ -28,8 +28,7 @@ export function useLocalStorage<T>(
   // Update localStorage when value changes
   const setValue = (value: T | ((val: T) => T)) => {
     try {
-      const valueToStore =
-        value instanceof Function ? value(storedValue) : value;
+      const valueToStore = value instanceof Function ? value(storedValue) : value;
       setStoredValue(valueToStore);
 
       if (typeof window !== 'undefined') {

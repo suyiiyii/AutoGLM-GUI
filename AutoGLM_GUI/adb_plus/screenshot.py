@@ -19,7 +19,6 @@ from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.platform_utils import is_windows
 from AutoGLM_GUI.trace import trace_span
 
-
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
 
 
@@ -77,12 +76,14 @@ def capture_screenshot(
                         "attempt": attempt + 1,
                         "width": width,
                         "height": height,
-                    }
+                    },
                 )
                 return Screenshot(base64_data=base64_data, width=width, height=height)
             except Exception as exc:
                 logger.debug(
-                    "Failed to decode screenshot PNG for %s: %s", device_id, exc
+                    "Failed to decode screenshot PNG for %s: %s",
+                    device_id,
+                    exc,
                 )
                 continue
 
@@ -108,6 +109,7 @@ def _try_capture(device_id: str | None, adb_path: str, timeout: int) -> bytes | 
         ):
             result = subprocess.run(
                 cmd,
+                check=False,
                 capture_output=True,
                 timeout=timeout,
             )
@@ -119,7 +121,7 @@ def _try_capture(device_id: str | None, adb_path: str, timeout: int) -> bytes | 
             stderr_lower = stderr.lower()
             if "device not found" in stderr_lower or "offline" in stderr_lower:
                 raise DeviceNotAvailableError(
-                    f"Device {device_id} not found or offline"
+                    f"Device {device_id} not found or offline",
                 )
             return None
         # stdout should hold the PNG data
@@ -162,7 +164,7 @@ async def capture_screenshot_async(
                         "attempt": attempt + 1,
                         "width": width,
                         "height": height,
-                    }
+                    },
                 )
                 return Screenshot(base64_data=base64_data, width=width, height=height)
             except Exception as exc:
@@ -178,7 +180,9 @@ async def capture_screenshot_async(
 
 
 async def _try_capture_async(
-    device_id: str | None, adb_path: str, timeout: int
+    device_id: str | None,
+    adb_path: str,
+    timeout: int,
 ) -> bytes | None:
     """Async exec-out screencap helper."""
     cmd: list[str] = [adb_path]
@@ -209,10 +213,10 @@ async def _try_capture_async(
                         process.communicate(),
                         timeout=timeout,
                     )
-                except asyncio.TimeoutError:
+                except TimeoutError:
                     process.kill()
                     await process.communicate()
-                    raise subprocess.TimeoutExpired(cmd, timeout)
+                    raise subprocess.TimeoutExpired(cmd, timeout) from None
                 result = subprocess.CompletedProcess(
                     cmd,
                     process.returncode if process.returncode is not None else -1,
@@ -226,7 +230,7 @@ async def _try_capture_async(
             stderr_lower = stderr.lower()
             if "device not found" in stderr_lower or "offline" in stderr_lower:
                 raise DeviceNotAvailableError(
-                    f"Device {device_id} not found or offline"
+                    f"Device {device_id} not found or offline",
                 )
             return None
         return result.stdout
@@ -253,5 +257,8 @@ def _fallback_screenshot() -> Screenshot:
     img.save(buffered, format="PNG")
     base64_data = base64.b64encode(buffered.getvalue()).decode("utf-8")
     return Screenshot(
-        base64_data=base64_data, width=width, height=height, is_sensitive=False
+        base64_data=base64_data,
+        width=width,
+        height=height,
+        is_sensitive=False,
     )

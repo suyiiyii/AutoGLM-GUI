@@ -152,14 +152,7 @@ export function DeviceSidebar({
   interface QRPairingSession {
     sessionId: string;
     payload: string;
-    status:
-      | 'listening'
-      | 'pairing'
-      | 'paired'
-      | 'connecting'
-      | 'connected'
-      | 'timeout'
-      | 'error';
+    status: 'listening' | 'pairing' | 'paired' | 'connecting' | 'connected' | 'timeout' | 'error';
     expiresAt: number;
   }
   const [qrSession, setQrSession] = useState<QRPairingSession | null>(null);
@@ -169,12 +162,8 @@ export function DeviceSidebar({
   const [remoteBaseUrl, setRemoteBaseUrl] = useState('');
   const [remoteUrlError, setRemoteUrlError] = useState('');
   const [isDiscoveringRemote, setIsDiscoveringRemote] = useState(false);
-  const [discoveredRemoteDevices, setDiscoveredRemoteDevices] = useState<
-    RemoteDeviceInfo[]
-  >([]);
-  const [selectedRemoteDevice, setSelectedRemoteDevice] = useState<
-    string | null
-  >(null);
+  const [discoveredRemoteDevices, setDiscoveredRemoteDevices] = useState<RemoteDeviceInfo[]>([]);
+  const [selectedRemoteDevice, setSelectedRemoteDevice] = useState<string | null>(null);
   const [isConnectingRemote, setIsConnectingRemote] = useState(false);
 
   useEffect(() => {
@@ -242,7 +231,7 @@ export function DeviceSidebar({
     const ipPattern = /^(?:[0-9]{1,3}\.){3}[0-9]{1,3}$/;
     if (!ipPattern.test(ip)) return false;
     const parts = ip.split('.');
-    return parts.every(part => {
+    return parts.every((part) => {
       const num = parseInt(part, 10);
       return num >= 0 && num <= 255;
     });
@@ -378,7 +367,7 @@ export function DeviceSidebar({
         try {
           const status = await getQRPairingStatus(sessionId);
 
-          setQrSession(prev =>
+          setQrSession((prev) =>
             prev
               ? {
                   ...prev,
@@ -446,19 +435,11 @@ export function DeviceSidebar({
     setRemoteUrlError('');
 
     if (!remoteBaseUrl.trim()) {
-      setRemoteUrlError(
-        t.deviceSidebar.remoteUrlRequired || '请输入远程服务器地址'
-      );
+      setRemoteUrlError(t.deviceSidebar.remoteUrlRequired || '请输入远程服务器地址');
       return;
     }
-    if (
-      !remoteBaseUrl.startsWith('http://') &&
-      !remoteBaseUrl.startsWith('https://')
-    ) {
-      setRemoteUrlError(
-        t.deviceSidebar.remoteUrlInvalid ||
-          '地址必须以 http:// 或 https:// 开头'
-      );
+    if (!remoteBaseUrl.startsWith('http://') && !remoteBaseUrl.startsWith('https://')) {
+      setRemoteUrlError(t.deviceSidebar.remoteUrlInvalid || '地址必须以 http:// 或 https:// 开头');
       return;
     }
 
@@ -517,13 +498,7 @@ export function DeviceSidebar({
       }
       stopQRStatusPolling();
     }
-  }, [
-    showManualConnect,
-    activeTab,
-    qrSession,
-    stopQRStatusPolling,
-    handleCancelQRPairing,
-  ]);
+  }, [showManualConnect, activeTab, qrSession, stopQRStatusPolling, handleCancelQRPairing]);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -534,21 +509,10 @@ export function DeviceSidebar({
 
   // Auto-generate QR code when switching to pair tab
   useEffect(() => {
-    if (
-      showManualConnect &&
-      activeTab === 'pair' &&
-      !qrSession &&
-      !isGeneratingQR
-    ) {
+    if (showManualConnect && activeTab === 'pair' && !qrSession && !isGeneratingQR) {
       handleGenerateQRCode();
     }
-  }, [
-    showManualConnect,
-    activeTab,
-    qrSession,
-    isGeneratingQR,
-    handleGenerateQRCode,
-  ]);
+  }, [showManualConnect, activeTab, qrSession, isGeneratingQR, handleGenerateQRCode]);
 
   // mDNS device discovery handler
   const handleDiscover = useCallback(async () => {
@@ -561,10 +525,7 @@ export function DeviceSidebar({
       if (result.success) {
         setDiscoveredDevices(result.devices);
       } else {
-        setScanError(
-          result.error ||
-            t.deviceSidebar.scanError.replace('{error}', 'Unknown error')
-        );
+        setScanError(result.error || t.deviceSidebar.scanError.replace('{error}', 'Unknown error'));
         setDiscoveredDevices([]);
       }
     } catch (error) {
@@ -576,10 +537,7 @@ export function DeviceSidebar({
   }, [t.deviceSidebar.scanError, setIsScanning]);
 
   // Handle clicking on a discovered device
-  const handleDeviceClick = async (
-    device: MdnsDevice,
-    inPairingTab: boolean
-  ) => {
+  const handleDeviceClick = async (device: MdnsDevice, inPairingTab: boolean) => {
     if (!inPairingTab && !device.has_pairing) {
       // In direct connect tab, connect directly
       setIsConnecting(true);
@@ -675,14 +633,10 @@ export function DeviceSidebar({
         <div className="flex items-center justify-between p-4">
           <div className="flex items-center gap-2">
             <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">
-                AutoGLM
-              </h2>
+              <h2 className="text-base font-bold text-slate-900 dark:text-slate-100">AutoGLM</h2>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 {devices.length}{' '}
-                {devices.length === 1
-                  ? t.deviceSidebar.devices
-                  : t.deviceSidebar.devices}
+                {devices.length === 1 ? t.deviceSidebar.devices : t.deviceSidebar.devices}
               </p>
             </div>
           </div>
@@ -762,13 +716,14 @@ export function DeviceSidebar({
         </div>
 
         {/* Manual WiFi Connect Dialog */}
-        <Dialog open={showManualConnect} onOpenChange={setShowManualConnect}>
+        <Dialog
+          open={showManualConnect}
+          onOpenChange={setShowManualConnect}
+        >
           <DialogContent className="sm:max-w-md max-h-[80vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>{t.deviceSidebar.manualConnectTitle}</DialogTitle>
-              <DialogDescription>
-                {t.deviceSidebar.manualConnectDescription}
-              </DialogDescription>
+              <DialogDescription>{t.deviceSidebar.manualConnectDescription}</DialogDescription>
             </DialogHeader>
 
             <Tabs
@@ -777,19 +732,16 @@ export function DeviceSidebar({
               className="w-full"
             >
               <TabsList className="grid w-full grid-cols-3">
-                <TabsTrigger value="direct">
-                  {t.deviceSidebar.directConnectTab}
-                </TabsTrigger>
-                <TabsTrigger value="pair">
-                  {t.deviceSidebar.pairTab}
-                </TabsTrigger>
-                <TabsTrigger value="remote">
-                  {t.deviceSidebar.remoteTab || '远程设备'}
-                </TabsTrigger>
+                <TabsTrigger value="direct">{t.deviceSidebar.directConnectTab}</TabsTrigger>
+                <TabsTrigger value="pair">{t.deviceSidebar.pairTab}</TabsTrigger>
+                <TabsTrigger value="remote">{t.deviceSidebar.remoteTab || '远程设备'}</TabsTrigger>
               </TabsList>
 
               {/* Direct Connect Tab */}
-              <TabsContent value="direct" className="space-y-4 mt-4">
+              <TabsContent
+                value="direct"
+                className="space-y-4 mt-4"
+              >
                 {/* Scan Control */}
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100">
@@ -816,17 +768,13 @@ export function DeviceSidebar({
                 {/* Scan Error */}
                 {scanError && (
                   <div className="rounded-lg bg-red-50 dark:bg-red-950/20 p-3">
-                    <p className="text-sm text-red-700 dark:text-red-300">
-                      {scanError}
-                    </p>
+                    <p className="text-sm text-red-700 dark:text-red-300">{scanError}</p>
                   </div>
                 )}
 
                 {/* Discovered Devices List - Filter has_pairing=false */}
                 {(() => {
-                  const directDevices = discoveredDevices.filter(
-                    d => !d.has_pairing
-                  );
+                  const directDevices = discoveredDevices.filter((d) => !d.has_pairing);
                   if (!isScanning && directDevices.length === 0) {
                     return (
                       <div className="rounded-lg bg-slate-50 dark:bg-slate-900 p-4 text-center">
@@ -840,7 +788,7 @@ export function DeviceSidebar({
                   if (directDevices.length > 0) {
                     return (
                       <div className="space-y-2">
-                        {directDevices.map(device => (
+                        {directDevices.map((device) => (
                           <button
                             key={`${device.ip}:${device.port}`}
                             onClick={() => handleDeviceClick(device, false)}
@@ -871,9 +819,7 @@ export function DeviceSidebar({
                 {/* Connection Error */}
                 {ipError && activeTab === 'direct' && (
                   <div className="rounded-lg bg-red-50 dark:bg-red-950/20 p-3">
-                    <p className="text-sm text-red-700 dark:text-red-300">
-                      {ipError}
-                    </p>
+                    <p className="text-sm text-red-700 dark:text-red-300">{ipError}</p>
                   </div>
                 )}
 
@@ -891,7 +837,7 @@ export function DeviceSidebar({
                   <div className="space-y-2">
                     <Label>{t.deviceSidebar.emulatorPreset}</Label>
                     <div className="grid grid-cols-3 gap-2">
-                      {EMULATOR_PRESETS.map(preset => (
+                      {EMULATOR_PRESETS.map((preset) => (
                         <button
                           key={preset.id}
                           onClick={() => {
@@ -909,9 +855,8 @@ export function DeviceSidebar({
                               : 'border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800'
                           }`}
                         >
-                          {t.deviceSidebar[
-                            preset.nameKey as keyof typeof t.deviceSidebar
-                          ] || preset.nameKey}
+                          {t.deviceSidebar[preset.nameKey as keyof typeof t.deviceSidebar] ||
+                            preset.nameKey}
                         </button>
                       ))}
                     </div>
@@ -930,16 +875,14 @@ export function DeviceSidebar({
                       id="ip"
                       placeholder="192.168.1.100"
                       value={manualConnectIp}
-                      onChange={e => {
+                      onChange={(e) => {
                         setManualConnectIp(e.target.value);
                         // Switch to custom if user manually edits
                         if (selectedEmulator !== 'custom') {
                           setSelectedEmulator('custom');
                         }
                       }}
-                      onKeyDown={e =>
-                        e.key === 'Enter' && handleManualConnect()
-                      }
+                      onKeyDown={(e) => e.key === 'Enter' && handleManualConnect()}
                       className={ipError ? 'border-red-500' : ''}
                     />
                   </div>
@@ -949,21 +892,17 @@ export function DeviceSidebar({
                       id="port"
                       type="number"
                       value={manualConnectPort}
-                      onChange={e => {
+                      onChange={(e) => {
                         setManualConnectPort(e.target.value);
                         // Switch to custom if user manually edits
                         if (selectedEmulator !== 'custom') {
                           setSelectedEmulator('custom');
                         }
                       }}
-                      onKeyDown={e =>
-                        e.key === 'Enter' && handleManualConnect()
-                      }
+                      onKeyDown={(e) => e.key === 'Enter' && handleManualConnect()}
                       className={portError ? 'border-red-500' : ''}
                     />
-                    {portError && (
-                      <p className="text-sm text-red-500">{portError}</p>
-                    )}
+                    {portError && <p className="text-sm text-red-500">{portError}</p>}
                   </div>
                   <Button
                     onClick={handleManualConnect}
@@ -976,7 +915,10 @@ export function DeviceSidebar({
               </TabsContent>
 
               {/* Pairing Tab */}
-              <TabsContent value="pair" className="space-y-4 mt-4">
+              <TabsContent
+                value="pair"
+                className="space-y-4 mt-4"
+              >
                 {/* Scan Control (shared state) */}
                 <div className="flex items-center justify-between">
                   <h3 className="text-sm font-medium text-slate-900 dark:text-slate-100">
@@ -1003,17 +945,13 @@ export function DeviceSidebar({
                 {/* Scan Error */}
                 {scanError && (
                   <div className="rounded-lg bg-red-50 dark:bg-red-950/20 p-3">
-                    <p className="text-sm text-red-700 dark:text-red-300">
-                      {scanError}
-                    </p>
+                    <p className="text-sm text-red-700 dark:text-red-300">{scanError}</p>
                   </div>
                 )}
 
                 {/* Discovered Devices List - Filter has_pairing=true */}
                 {(() => {
-                  const pairingDevices = discoveredDevices.filter(
-                    d => d.has_pairing
-                  );
+                  const pairingDevices = discoveredDevices.filter((d) => d.has_pairing);
                   if (!isScanning && pairingDevices.length === 0) {
                     return (
                       <div className="rounded-lg bg-slate-50 dark:bg-slate-900 p-4 text-center">
@@ -1027,7 +965,7 @@ export function DeviceSidebar({
                   if (pairingDevices.length > 0) {
                     return (
                       <div className="space-y-2">
-                        {pairingDevices.map(device => (
+                        {pairingDevices.map((device) => (
                           <button
                             key={`${device.ip}:${device.port}`}
                             onClick={() => handleDeviceClick(device, true)}
@@ -1140,8 +1078,7 @@ export function DeviceSidebar({
 
                         {/* Action Buttons */}
                         <div className="flex gap-2 w-full">
-                          {(qrSession.status === 'timeout' ||
-                            qrSession.status === 'error') && (
+                          {(qrSession.status === 'timeout' || qrSession.status === 'error') && (
                             <Button
                               variant="outline"
                               onClick={handleGenerateQRCode}
@@ -1213,7 +1150,7 @@ export function DeviceSidebar({
                       id="pair-ip"
                       placeholder="192.168.1.100"
                       value={manualConnectIp}
-                      onChange={e => setManualConnectIp(e.target.value)}
+                      onChange={(e) => setManualConnectIp(e.target.value)}
                       className={ipError ? 'border-red-500' : ''}
                     />
                     {ipError && activeTab === 'pair' && (
@@ -1222,53 +1159,41 @@ export function DeviceSidebar({
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="pairing-port">
-                      {t.deviceSidebar.pairingPort}
-                    </Label>
+                    <Label htmlFor="pairing-port">{t.deviceSidebar.pairingPort}</Label>
                     <Input
                       id="pairing-port"
                       type="number"
                       placeholder="37831"
                       value={pairingPort}
-                      onChange={e => setPairingPort(e.target.value)}
+                      onChange={(e) => setPairingPort(e.target.value)}
                       className={portError ? 'border-red-500' : ''}
                     />
-                    {portError && (
-                      <p className="text-sm text-red-500">{portError}</p>
-                    )}
+                    {portError && <p className="text-sm text-red-500">{portError}</p>}
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="pairing-code">
-                      {t.deviceSidebar.pairingCode}
-                    </Label>
+                    <Label htmlFor="pairing-code">{t.deviceSidebar.pairingCode}</Label>
                     <Input
                       id="pairing-code"
                       type="text"
                       placeholder="123456"
                       maxLength={6}
                       value={pairingCode}
-                      onChange={e =>
-                        setPairingCode(e.target.value.replace(/\D/g, ''))
-                      }
-                      onKeyDown={e => e.key === 'Enter' && handlePair()}
+                      onChange={(e) => setPairingCode(e.target.value.replace(/\D/g, ''))}
+                      onKeyDown={(e) => e.key === 'Enter' && handlePair()}
                       className={pairingCodeError ? 'border-red-500' : ''}
                     />
-                    {pairingCodeError && (
-                      <p className="text-sm text-red-500">{pairingCodeError}</p>
-                    )}
+                    {pairingCodeError && <p className="text-sm text-red-500">{pairingCodeError}</p>}
                   </div>
 
                   <div className="space-y-2">
-                    <Label htmlFor="connection-port">
-                      {t.deviceSidebar.connectionPort}
-                    </Label>
+                    <Label htmlFor="connection-port">{t.deviceSidebar.connectionPort}</Label>
                     <Input
                       id="connection-port"
                       type="number"
                       value={connectionPort}
-                      onChange={e => setConnectionPort(e.target.value)}
-                      onKeyDown={e => e.key === 'Enter' && handlePair()}
+                      onChange={(e) => setConnectionPort(e.target.value)}
+                      onKeyDown={(e) => e.key === 'Enter' && handlePair()}
                     />
                   </div>
 
@@ -1277,15 +1202,16 @@ export function DeviceSidebar({
                     disabled={isConnecting}
                     className="w-full"
                   >
-                    {isConnecting
-                      ? t.common.loading
-                      : t.deviceSidebar.pairAndConnect}
+                    {isConnecting ? t.common.loading : t.deviceSidebar.pairAndConnect}
                   </Button>
                 </div>
               </TabsContent>
 
               {/* Remote Device Tab */}
-              <TabsContent value="remote" className="space-y-4 mt-4">
+              <TabsContent
+                value="remote"
+                className="space-y-4 mt-4"
+              >
                 <div className="space-y-2">
                   <Label htmlFor="remote-url">
                     {t.deviceSidebar.remoteUrl || '远程服务器地址'}
@@ -1294,20 +1220,17 @@ export function DeviceSidebar({
                     id="remote-url"
                     placeholder="http://192.168.1.100:8001"
                     value={remoteBaseUrl}
-                    onChange={e => {
+                    onChange={(e) => {
                       setRemoteBaseUrl(e.target.value);
                       setRemoteUrlError('');
                     }}
                     disabled={isDiscoveringRemote}
-                    onKeyDown={e => e.key === 'Enter' && handleDiscoverRemote()}
+                    onKeyDown={(e) => e.key === 'Enter' && handleDiscoverRemote()}
                     className={remoteUrlError ? 'border-red-500' : ''}
                   />
-                  {remoteUrlError && (
-                    <p className="text-sm text-red-500">{remoteUrlError}</p>
-                  )}
+                  {remoteUrlError && <p className="text-sm text-red-500">{remoteUrlError}</p>}
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    {t.deviceSidebar.remoteUrlHint ||
-                      '运行 Device Agent Server 的地址'}
+                    {t.deviceSidebar.remoteUrlHint || '运行 Device Agent Server 的地址'}
                   </p>
                   <Button
                     onClick={handleDiscoverRemote}
@@ -1322,12 +1245,10 @@ export function DeviceSidebar({
                   <div className="space-y-2">
                     <Label>可用设备</Label>
                     <div className="space-y-2">
-                      {discoveredRemoteDevices.map(device => (
+                      {discoveredRemoteDevices.map((device) => (
                         <button
                           key={device.device_id}
-                          onClick={() =>
-                            setSelectedRemoteDevice(device.device_id)
-                          }
+                          onClick={() => setSelectedRemoteDevice(device.device_id)}
                           className={`
                             w-full rounded-lg border p-3 text-left transition-colors
                             ${
@@ -1340,9 +1261,7 @@ export function DeviceSidebar({
                           <div className="flex items-center gap-2">
                             <Smartphone className="h-4 w-4 text-[#1d9bf0]" />
                             <div className="flex-1">
-                              <p className="font-medium text-sm">
-                                {device.device_id}
-                              </p>
+                              <p className="font-medium text-sm">{device.device_id}</p>
                               <p className="text-xs text-slate-500">
                                 {device.model} · {device.platform}
                               </p>

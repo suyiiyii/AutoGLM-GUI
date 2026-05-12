@@ -29,7 +29,11 @@ class FakeTaskStore:
         }
 
     def get_latest_open_chat_session(
-        self, *, device_id: str, device_serial: str, mode: str = "classic"
+        self,
+        *,
+        device_id: str,
+        device_serial: str,
+        mode: str = "classic",
     ) -> dict[str, object] | None:
         _ = device_serial
         if device_id == "device-1" and mode == "layered":
@@ -40,7 +44,11 @@ class FakeTaskStore:
         return self.tasks.get(task_id)
 
     def list_task_events(
-        self, task_id: str, *, after_seq: int = 0, **_: object
+        self,
+        task_id: str,
+        *,
+        after_seq: int = 0,
+        **_: object,
     ) -> list[dict[str, object]]:
         return [
             event
@@ -49,7 +57,8 @@ class FakeTaskStore:
         ]
 
     def get_latest_active_session_task(
-        self, session_id: str
+        self,
+        session_id: str,
     ) -> dict[str, object] | None:
         for task in self.tasks.values():
             if task["session_id"] == session_id and task["status"] in {
@@ -135,7 +144,9 @@ class FakeTaskManager:
         return task
 
     async def wait_for_task(
-        self, task_id: str, timeout: float | None = None
+        self,
+        task_id: str,
+        timeout: float | None = None,
     ) -> dict[str, object] | None:
         _ = timeout
         self.waited_task_ids.append(task_id)
@@ -158,7 +169,9 @@ def layered_env(monkeypatch: pytest.MonkeyPatch) -> dict[str, Any]:
     monkeypatch.setattr(layered_agent_api, "task_store", store)
     monkeypatch.setattr(layered_agent_api, "task_manager", manager)
     monkeypatch.setattr(
-        layered_agent_api, "_resolve_device_serial", lambda _: "serial-1"
+        layered_agent_api,
+        "_resolve_device_serial",
+        lambda _: "serial-1",
     )
     monkeypatch.setattr(
         layered_agent_api,

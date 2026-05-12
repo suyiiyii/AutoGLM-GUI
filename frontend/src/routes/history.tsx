@@ -29,12 +29,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   Loader2,
   Trash2,
@@ -66,8 +61,7 @@ function HistoryComponent() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [recordToDelete, setRecordToDelete] = useState<string | null>(null);
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
-  const [selectedRecord, setSelectedRecord] =
-    useState<HistoryRecordResponse | null>(null);
+  const [selectedRecord, setSelectedRecord] = useState<HistoryRecordResponse | null>(null);
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
   const limit = 20;
 
@@ -107,7 +101,7 @@ function HistoryComponent() {
         if (reset) {
           setRecords(data.records);
         } else {
-          setRecords(prev => [...prev, ...data.records]);
+          setRecords((prev) => [...prev, ...data.records]);
         }
         setTotal(data.total);
         setOffset(newOffset + data.records.length);
@@ -150,8 +144,8 @@ function HistoryComponent() {
     if (!selectedSerial || !recordToDelete) return;
     try {
       await deleteHistoryRecord(selectedSerial, recordToDelete);
-      setRecords(prev => prev.filter(r => r.id !== recordToDelete));
-      setTotal(prev => prev - 1);
+      setRecords((prev) => prev.filter((r) => r.id !== recordToDelete));
+      setTotal((prev) => prev - 1);
     } catch (error) {
       console.error('Failed to delete record:', error);
     }
@@ -163,7 +157,7 @@ function HistoryComponent() {
     setSelectedRecord(record);
     // 默认展开所有步骤
     const allSteps = new Set<number>();
-    record.messages.forEach(msg => {
+    record.messages.forEach((msg) => {
       if (msg.step !== null && msg.step !== undefined) {
         allSteps.add(msg.step);
       }
@@ -173,7 +167,7 @@ function HistoryComponent() {
   };
 
   const toggleStepExpanded = (step: number) => {
-    setExpandedSteps(prev => {
+    setExpandedSteps((prev) => {
       const next = new Set(prev);
       if (next.has(step)) {
         next.delete(step);
@@ -242,12 +236,9 @@ function HistoryComponent() {
   const getStepTiming = (
     record: HistoryRecordResponse,
     step: number
-  ): StepTimingSummary | undefined =>
-    record.step_timings.find(item => item.step === step);
+  ): StepTimingSummary | undefined => record.step_timings.find((item) => item.step === step);
 
-  const getTimingChips = (
-    timings: StepTimingSummary
-  ): Array<{ label: string; value: string }> => {
+  const getTimingChips = (timings: StepTimingSummary): Array<{ label: string; value: string }> => {
     const chips = [
       { label: 'Total', value: formatDuration(timings.total_duration_ms) },
       { label: 'LLM', value: formatDuration(timings.llm_duration_ms) },
@@ -290,18 +281,27 @@ function HistoryComponent() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">{t.historyPage.title}</h1>
         <div className="flex items-center gap-4">
-          <Select value={selectedSerial} onValueChange={setSelectedSerial}>
+          <Select
+            value={selectedSerial}
+            onValueChange={setSelectedSerial}
+          >
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder={t.historyPage.selectDevice} />
             </SelectTrigger>
             <SelectContent>
               {devices.length === 0 ? (
-                <SelectItem value="_none" disabled>
+                <SelectItem
+                  value="_none"
+                  disabled
+                >
                   {t.historyPage.noDevices}
                 </SelectItem>
               ) : (
-                devices.map(device => (
-                  <SelectItem key={device.serial} value={device.serial}>
+                devices.map((device) => (
+                  <SelectItem
+                    key={device.serial}
+                    value={device.serial}
+                  >
                     {device.model || device.serial}
                   </SelectItem>
                 ))
@@ -328,16 +328,14 @@ function HistoryComponent() {
         </div>
       ) : records.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-slate-500 dark:text-slate-400">
-            {t.historyPage.noRecords}
-          </p>
+          <p className="text-slate-500 dark:text-slate-400">{t.historyPage.noRecords}</p>
           <p className="text-sm text-slate-400 dark:text-slate-500 mt-2">
             {t.historyPage.noRecordsDesc}
           </p>
         </div>
       ) : (
         <div className="space-y-4">
-          {records.map(record => (
+          {records.map((record) => (
             <Card
               key={record.id}
               className="hover:shadow-md transition-shadow cursor-pointer"
@@ -386,10 +384,7 @@ function HistoryComponent() {
                       {/* Steps */}
                       {record.steps > 0 && (
                         <span className="text-slate-500 dark:text-slate-400">
-                          {t.historyPage.steps.replace(
-                            '{count}',
-                            String(record.steps)
-                          )}
+                          {t.historyPage.steps.replace('{count}', String(record.steps))}
                         </span>
                       )}
 
@@ -412,7 +407,7 @@ function HistoryComponent() {
                       variant="ghost"
                       size="sm"
                       className="text-slate-400 hover:text-blue-500"
-                      onClick={e => {
+                      onClick={(e) => {
                         e.stopPropagation();
                         handleViewDetail(record);
                       }}
@@ -423,7 +418,7 @@ function HistoryComponent() {
                       variant="ghost"
                       size="sm"
                       className="text-slate-400 hover:text-red-500"
-                      onClick={e => {
+                      onClick={(e) => {
                         e.stopPropagation();
                         setRecordToDelete(record.id);
                         setDeleteDialogOpen(true);
@@ -460,43 +455,44 @@ function HistoryComponent() {
       )}
 
       {/* Clear All Dialog */}
-      <AlertDialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
+      <AlertDialog
+        open={clearDialogOpen}
+        onOpenChange={setClearDialogOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t.historyPage.clearAll}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t.historyPage.clearAllConfirm}
-            </AlertDialogDescription>
+            <AlertDialogDescription>{t.historyPage.clearAllConfirm}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
-            <AlertDialogAction onClick={handleClearAll}>
-              {t.common.confirm}
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleClearAll}>{t.common.confirm}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {/* Delete Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t.common.delete}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t.historyPage.deleteConfirm}
-            </AlertDialogDescription>
+            <AlertDialogDescription>{t.historyPage.deleteConfirm}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>
-              {t.common.confirm}
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete}>{t.common.confirm}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
 
       {/* Detail Dialog */}
-      <Dialog open={detailDialogOpen} onOpenChange={setDetailDialogOpen}>
+      <Dialog
+        open={detailDialogOpen}
+        onOpenChange={setDetailDialogOpen}
+      >
         <DialogContent className="max-w-2xl max-h-[80vh] flex flex-col overflow-hidden">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center gap-2">
@@ -526,7 +522,10 @@ function HistoryComponent() {
                 <div className="space-y-3">
                   {selectedRecord.messages.length > 0 ? (
                     selectedRecord.messages.map((msg, idx) => (
-                      <div key={idx} className="space-y-2">
+                      <div
+                        key={idx}
+                        className="space-y-2"
+                      >
                         {msg.role === 'user' ? (
                           <div className="flex items-start gap-3">
                             <div className="w-8 h-8 rounded-full bg-blue-100 dark:bg-blue-900 flex items-center justify-center flex-shrink-0">
@@ -549,33 +548,26 @@ function HistoryComponent() {
                                 <div className="space-y-2">
                                   <button
                                     className="flex items-center gap-1 text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200"
-                                    onClick={() =>
-                                      toggleStepExpanded(msg.step as number)
-                                    }
+                                    onClick={() => toggleStepExpanded(msg.step as number)}
                                   >
                                     {expandedSteps.has(msg.step) ? (
                                       <ChevronDown className="w-3 h-3" />
                                     ) : (
                                       <ChevronRight className="w-3 h-3" />
                                     )}
-                                    {t.historyPage.stepLabel?.replace(
-                                      '{step}',
-                                      String(msg.step)
-                                    ) || `步骤 ${msg.step}`}
+                                    {t.historyPage.stepLabel?.replace('{step}', String(msg.step)) ||
+                                      `步骤 ${msg.step}`}
                                   </button>
 
                                   {expandedSteps.has(msg.step) &&
-                                    getStepTiming(
-                                      selectedRecord,
-                                      msg.step as number
-                                    ) && (
+                                    getStepTiming(selectedRecord, msg.step as number) && (
                                       <div className="flex flex-wrap gap-2">
                                         {getTimingChips(
                                           getStepTiming(
                                             selectedRecord,
                                             msg.step as number
                                           ) as StepTimingSummary
-                                        ).map(chip => (
+                                        ).map((chip) => (
                                           <Badge
                                             key={`${msg.step}-${chip.label}`}
                                             variant="secondary"
@@ -667,10 +659,7 @@ function HistoryComponent() {
                 {/* Metadata */}
                 <div className="flex flex-wrap gap-3 text-xs text-slate-500 dark:text-slate-400 pt-2 border-t border-slate-200 dark:border-slate-700">
                   <span>
-                    {t.historyPage.steps.replace(
-                      '{count}',
-                      String(selectedRecord.steps)
-                    )}
+                    {t.historyPage.steps.replace('{count}', String(selectedRecord.steps))}
                   </span>
                   <span className="flex items-center">
                     <Clock className="w-3 h-3 mr-1" />

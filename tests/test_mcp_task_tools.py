@@ -12,7 +12,6 @@ import pytest
 import AutoGLM_GUI.api.mcp as mcp_api
 from AutoGLM_GUI.task_store import TaskStore
 
-
 pytestmark = [pytest.mark.contract]
 
 
@@ -29,7 +28,11 @@ class _FakeTaskManager:
         self._session_counter = 0
 
     async def get_or_create_legacy_chat_session(
-        self, *, device_id: str, device_serial: str, mode: str = "classic"
+        self,
+        *,
+        device_id: str,
+        device_serial: str,
+        mode: str = "classic",
     ) -> dict[str, Any]:
         self._session_counter += 1
         session_id = f"session-{self._session_counter}"
@@ -88,7 +91,7 @@ def test_create_task_queues_task(tmp_path: Path) -> None:
                 device_id="dev-1",
                 device_serial="serial-1",
                 message="打开微信",
-            )
+            ),
         )
 
         assert result["status"] == "QUEUED"
@@ -123,7 +126,7 @@ def test_create_task_with_layered_mode(tmp_path: Path) -> None:
                 device_serial="serial-1",
                 message="test layered",
                 mode="layered",
-            )
+            ),
         )
 
         assert result["status"] == "QUEUED"

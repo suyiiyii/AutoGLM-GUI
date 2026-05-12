@@ -1,20 +1,8 @@
 import React, { useState } from 'react';
-import {
-  Edit,
-  Loader2,
-  Server,
-  Smartphone,
-  Trash2,
-  Wifi,
-  WifiOff,
-} from 'lucide-react';
+import { Edit, Loader2, Server, Smartphone, Trash2, Wifi, WifiOff } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   Dialog,
   DialogContent,
@@ -189,7 +177,7 @@ export function DeviceCard({
         onClick={onClick}
         role="button"
         tabIndex={0}
-        onKeyDown={e => {
+        onKeyDown={(e) => {
           if (e.key === 'Enter' || e.key === ' ') {
             onClick();
           }
@@ -205,9 +193,7 @@ export function DeviceCard({
         `}
       >
         {/* Active indicator bar */}
-        {isActive && (
-          <div className="absolute left-0 top-2 bottom-2 w-1 bg-[#1d9bf0] rounded-r" />
-        )}
+        {isActive && <div className="absolute left-0 top-2 bottom-2 w-1 bg-[#1d9bf0] rounded-r" />}
 
         <div className="flex items-center gap-3 pl-2">
           {/* Agent status indicator with tooltip */}
@@ -219,7 +205,11 @@ export function DeviceCard({
                 }`}
               />
             </TooltipTrigger>
-            <TooltipContent side="right" sideOffset={8} className="max-w-xs">
+            <TooltipContent
+              side="right"
+              sideOffset={8}
+              className="max-w-xs"
+            >
               <div className="space-y-1.5">
                 <p className="font-medium">
                   {t.deviceCard.statusTooltip.title}
@@ -240,9 +230,7 @@ export function DeviceCard({
             <div className="flex items-center gap-2">
               <Smartphone
                 className={`w-4 h-4 flex-shrink-0 ${
-                  isActive
-                    ? 'text-[#1d9bf0]'
-                    : 'text-slate-400 dark:text-slate-500'
+                  isActive ? 'text-[#1d9bf0]' : 'text-slate-400 dark:text-slate-500'
                 }`}
               />
               <span
@@ -369,7 +357,7 @@ export function DeviceCard({
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={async e => {
+                onClick={async (e) => {
                   e.stopPropagation();
                   setLoading(true);
                   try {
@@ -415,26 +403,25 @@ export function DeviceCard({
       />
 
       {/* Device Name Edit Dialog */}
-      <Dialog open={showEditDialog} onOpenChange={setShowEditDialog}>
+      <Dialog
+        open={showEditDialog}
+        onOpenChange={setShowEditDialog}
+      >
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>{t.deviceCard.editNameDialogTitle}</DialogTitle>
-            <DialogDescription>
-              {t.deviceCard.editNameDialogDescription}
-            </DialogDescription>
+            <DialogDescription>{t.deviceCard.editNameDialogDescription}</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="device-name">
-                {t.deviceCard.deviceNameLabel}
-              </Label>
+              <Label htmlFor="device-name">{t.deviceCard.deviceNameLabel}</Label>
               <Input
                 id="device-name"
                 value={editingName}
-                onChange={e => setEditingName(e.target.value)}
+                onChange={(e) => setEditingName(e.target.value)}
                 placeholder={t.deviceCard.deviceNamePlaceholder}
                 maxLength={100}
-                onKeyDown={e => {
+                onKeyDown={(e) => {
                   if (e.key === 'Enter' && !saving) {
                     handleSaveName();
                   }
@@ -453,7 +440,10 @@ export function DeviceCard({
             >
               {t.common.cancel}
             </Button>
-            <Button onClick={handleSaveName} disabled={saving}>
+            <Button
+              onClick={handleSaveName}
+              disabled={saving}
+            >
               {saving ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />

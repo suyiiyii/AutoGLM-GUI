@@ -20,7 +20,6 @@ if TYPE_CHECKING:
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.version import APP_VERSION
 
-
 _TASK_DURATION_BUCKETS = (0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0, 60.0, 120.0)
 _STEP_DURATION_BUCKETS = (0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 5.0, 10.0, 30.0)
 _COMPONENT_DURATION_BUCKETS = (
@@ -71,7 +70,11 @@ class _HistogramAggregate:
     def to_prometheus_buckets(self) -> list[tuple[str, float]]:
         cumulative = 0.0
         buckets: list[tuple[str, float]] = []
-        for upper_bound, bucket_count in zip(self.bucket_bounds, self.bucket_counts):
+        for upper_bound, bucket_count in zip(
+            self.bucket_bounds,
+            self.bucket_counts,
+            strict=False,
+        ):
             cumulative += bucket_count
             buckets.append((str(upper_bound), cumulative))
 
@@ -115,7 +118,7 @@ class _TraceLatencyStore:
                     if component_duration_seconds <= 0:
                         continue
                     self._get_component_histogram((source, component)).observe(
-                        component_duration_seconds
+                        component_duration_seconds,
                     )
 
     def reset(self) -> None:
@@ -382,7 +385,7 @@ class AutoGLMMetricsCollector(Collector):
                 devices_gauge,
                 connections_gauge,
                 last_seen_gauge,
-            ]
+            ],
         )
 
         # Metric 7: autoglm_devices_online_count

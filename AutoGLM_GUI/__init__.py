@@ -33,9 +33,10 @@ def _patched_run(*args: Any, **kwargs: Any) -> subprocess.CompletedProcess[str]:
     """Patched subprocess.run that defaults to UTF-8 encoding on Windows."""
     if sys.platform == "win32":
         # Add encoding='utf-8' if text=True is set but encoding is not specified
-        if kwargs.get("text") or kwargs.get("universal_newlines"):
-            if "encoding" not in kwargs:
-                kwargs["encoding"] = "utf-8"
+        if (
+            kwargs.get("text") or kwargs.get("universal_newlines")
+        ) and "encoding" not in kwargs:
+            kwargs["encoding"] = "utf-8"
     return _original_run(*args, **kwargs)
 
 
@@ -45,9 +46,10 @@ class _PatchedPopen(_original_popen):
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         if sys.platform == "win32":
             # Add encoding='utf-8' if text=True is set but encoding is not specified
-            if kwargs.get("text") or kwargs.get("universal_newlines"):
-                if "encoding" not in kwargs:
-                    kwargs["encoding"] = "utf-8"
+            if (
+                kwargs.get("text") or kwargs.get("universal_newlines")
+            ) and "encoding" not in kwargs:
+                kwargs["encoding"] = "utf-8"
         super().__init__(*args, **kwargs)
 
 

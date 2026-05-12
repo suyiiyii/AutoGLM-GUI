@@ -1,5 +1,6 @@
 """ADB binary detection and auto-download."""
 
+import contextlib
 import io
 import platform
 import shutil
@@ -7,6 +8,8 @@ import stat
 import urllib.request
 import zipfile
 from pathlib import Path
+
+from loguru import logger
 
 _CACHE_DIR = Path.home() / ".cache" / "autoglm"
 _PLATFORM_TOOLS_DIR = _CACHE_DIR / "platform-tools"
@@ -25,7 +28,7 @@ def _platform_name() -> str:
     name = _PLATFORM_MAP.get(system)
     if name is None:
         raise RuntimeError(
-            f"Unsupported platform: {system}. Please install ADB manually."
+            f"Unsupported platform: {system}. Please install ADB manually.",
         )
     return name
 
@@ -49,28 +52,28 @@ def ensure_adb() -> str:
     if system_adb:
         return system_adb
 
-    print("[AutoGLM] ADB not found in system PATH.")
+    logger.info("[AutoGLM] ADB not found in system PATH.")
 
     # 2. Cached download
     cached_adb = _PLATFORM_TOOLS_DIR / _ADB_BINARY
     if cached_adb.exists():
-        print(f"[AutoGLM] ADB ready: {cached_adb}")
+        logger.info("[AutoGLM] ADB ready: {}", cached_adb)
         return str(cached_adb)
 
     # 3. Download
     platform_name = _platform_name()
     url = f"https://dl.google.com/android/repository/platform-tools-latest-{platform_name}.zip"
-    print("[AutoGLM] Downloading Android Platform Tools from Google (~12MB)...")
+    logger.info("[AutoGLM] Downloading Android Platform Tools from Google (~12MB)...")
 
     try:
         data = _download_with_progress(url)
     except Exception as e:
         raise RuntimeError(
             f"Failed to download Android Platform Tools: {e}\n"
-            "Please install ADB manually: https://developer.android.com/tools/adb"
+            "Please install ADB manually: https://developer.android.com/tools/adb",
         ) from e
 
-    print("[AutoGLM] Extracting...")
+    logger.info("[AutoGLM] Extracting...")
     try:
         _PLATFORM_TOOLS_DIR.mkdir(parents=True, exist_ok=True)
         with zipfile.ZipFile(io.BytesIO(data)) as zf:
@@ -93,16 +96,16 @@ def ensure_adb() -> str:
     if not cached_adb.exists():
         raise RuntimeError(
             f"ADB binary not found after extraction (expected: {cached_adb}).\n"
-            "Please install ADB manually: https://developer.android.com/tools/adb"
+            "Please install ADB manually: https://developer.android.com/tools/adb",
         )
 
     # Make executable on Unix
     if platform.system().lower() != "windows":
         cached_adb.chmod(
-            cached_adb.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH
+            cached_adb.stat().st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH,
         )
 
-    print(f"[AutoGLM] ADB ready: {cached_adb}")
+    logger.info("[AutoGLM] ADB ready: {}", cached_adb)
     return str(cached_adb)
 
 
@@ -124,8 +127,8 @@ def _download_with_progress(url: str) -> bytes:
                 flush=True,
             )
 
-    import tempfile
     import os
+    import tempfile
 
     with tempfile.NamedTemporaryFile(delete=False, suffix=".zip") as tmp:
         tmp_path = tmp.name
@@ -136,7 +139,5 @@ def _download_with_progress(url: str) -> bytes:
         with open(tmp_path, "rb") as f:
             return f.read()
     finally:
-        try:
+        with contextlib.suppress(OSError):
             os.unlink(tmp_path)
-        except OSError:
-            pass

@@ -11,7 +11,10 @@ class TestAgentIntegration:
     """Test Agent integration using state machine."""
 
     def test_sample_case(
-        self, sample_test_case: Path, mock_llm_server: str, mock_llm_client
+        self,
+        sample_test_case: Path,
+        mock_llm_server: str,
+        mock_llm_client,
     ):
         """Test the sample test case (美团外卖消息按钮)."""
         from AutoGLM_GUI.config import ModelConfig
@@ -46,7 +49,7 @@ do(action="Tap", element=[499,966])""",
 
 任务已经完成，我成功点击了屏幕下方的消息按钮，现在进入了消息页面。
 finish(message="已成功点击消息按钮！现在进入了消息页面，可以看到各类消息通知，包括订单动态、服务提醒（有2条未读）、美团会员、美团客服以及2周前的历史消息。")""",
-            ]
+            ],
         )
 
         # Use mock LLM config

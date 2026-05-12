@@ -5,6 +5,8 @@ import time
 from dataclasses import dataclass
 from enum import Enum
 
+from loguru import logger
+
 from AutoGLM_GUI.adb.timing import TIMING_CONFIG
 from AutoGLM_GUI.adb_plus.ip import get_wifi_ip
 
@@ -92,6 +94,7 @@ class ADBConnection:
         try:
             result = subprocess.run(
                 [self.adb_path, "connect", address],
+                check=False,
                 capture_output=True,
                 text=True,
                 timeout=timeout,
@@ -127,7 +130,12 @@ class ADBConnection:
                 cmd.append(address)
 
             result = subprocess.run(
-                cmd, capture_output=True, text=True, encoding="utf-8", timeout=5
+                cmd,
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=5,
             )
 
             output = result.stdout + result.stderr
@@ -146,6 +154,7 @@ class ADBConnection:
         try:
             result = subprocess.run(
                 [self.adb_path, "devices", "-l"],
+                check=False,
                 capture_output=True,
                 text=True,
                 timeout=5,
@@ -177,13 +186,13 @@ class ADBConnection:
                             status=status,
                             connection_type=conn_type,
                             model=model,
-                        )
+                        ),
                     )
 
             return devices
 
         except Exception as e:
-            print(f"Error listing devices: {e}")
+            logger.error("Error listing devices: {}", e)
             return []
 
     def get_device_info(self, device_id: str | None = None) -> DeviceInfo | None:
@@ -231,7 +240,9 @@ class ADBConnection:
         return any(d.device_id == device_id and d.status == "device" for d in devices)
 
     def enable_tcpip(
-        self, port: int = 5555, device_id: str | None = None
+        self,
+        port: int = 5555,
+        device_id: str | None = None,
     ) -> tuple[bool, str]:
         """
         Enable TCP/IP debugging on a USB-connected device.
@@ -256,7 +267,12 @@ class ADBConnection:
             cmd.extend(["tcpip", str(port)])
 
             result = subprocess.run(
-                cmd, capture_output=True, text=True, encoding="utf-8", timeout=10
+                cmd,
+                check=False,
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                timeout=10,
             )
 
             output = result.stdout + result.stderr
@@ -294,14 +310,20 @@ class ADBConnection:
         try:
             # Kill server
             subprocess.run(
-                [self.adb_path, "kill-server"], capture_output=True, timeout=5
+                [self.adb_path, "kill-server"],
+                check=False,
+                capture_output=True,
+                timeout=5,
             )
 
             time.sleep(TIMING_CONFIG.connection.server_restart_delay)
 
             # Start server
             subprocess.run(
-                [self.adb_path, "start-server"], capture_output=True, timeout=5
+                [self.adb_path, "start-server"],
+                check=False,
+                capture_output=True,
+                timeout=5,
             )
 
             return True, "ADB server restarted"

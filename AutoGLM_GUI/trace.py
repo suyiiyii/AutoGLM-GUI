@@ -7,21 +7,22 @@ import os
 import threading
 import time
 import uuid
+from collections.abc import Iterator
 from contextlib import contextmanager
 from contextvars import ContextVar, Token
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
-from typing import Any, Iterator, Literal
-
+from typing import Any, Literal
 
 _TRACE_ID: ContextVar[str | None] = ContextVar("autoglm_trace_id", default=None)
 _SPAN_STACK: ContextVar[tuple[str, ...]] = ContextVar(
-    "autoglm_trace_span_stack", default=()
+    "autoglm_trace_span_stack",
+    default=(),
 )
 _WRITE_LOCK = threading.Lock()
 _TRACE_STATE_LOCK = threading.Lock()
-_TRACE_COLLECTORS: dict[str, "_TraceCollector"] = {}
+_TRACE_COLLECTORS: dict[str, _TraceCollector] = {}
 
 _FALSE_VALUES = {"0", "false", "no", "off"}
 _STEP_TIMING_FIELDS = (
@@ -71,7 +72,7 @@ def summarize_text(text: str | None, limit: int = 160) -> str | None:
 
 
 def _resolve_trace_path(now: datetime | None = None) -> Path:
-    current_time = now or datetime.now()
+    current_time = now or datetime.now(UTC)
     template = os.getenv("AUTOGLM_TRACE_FILE", "logs/trace_{date}.jsonl")
     path = Path(template.format(date=current_time.strftime("%Y-%m-%d")))
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -103,10 +104,9 @@ def _write_trace_record(record: dict[str, Any]) -> None:
         return
 
     path = _resolve_trace_path()
-    with _WRITE_LOCK:
-        with path.open("a", encoding="utf-8") as file:
-            file.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")))
-            file.write("\n")
+    with _WRITE_LOCK, path.open("a", encoding="utf-8") as file:
+        file.write(json.dumps(record, ensure_ascii=False, separators=(",", ":")))
+        file.write("\n")
 
 
 def _extract_step(attrs: dict[str, Any]) -> int | None:
@@ -317,7 +317,9 @@ class _TraceCollector:
 
 
 def _get_trace_collector(
-    trace_id: str, *, create: bool = False
+    trace_id: str,
+    *,
+    create: bool = False,
 ) -> _TraceCollector | None:
     collector = _TRACE_COLLECTORS.get(trace_id)
     if collector is None and create:
@@ -327,7 +329,9 @@ def _get_trace_collector(
 
 
 def get_step_timing_summary(
-    step: int, *, trace_id: str | None = None
+    step: int,
+    *,
+    trace_id: str | None = None,
 ) -> dict[str, Any] | None:
     """Return the current timing summary for a step in the active trace."""
     active_trace_id = trace_id or current_trace_id()
@@ -436,7 +440,7 @@ class TraceSpan:
         self.parent_span_id = stack[-1] if stack else None
         self._stack_token = _SPAN_STACK.set((*stack, self.span_id))
 
-        self._start_wall_time = datetime.now(timezone.utc)
+        self._start_wall_time = datetime.now(UTC)
         self._start_perf_ns = time.perf_counter_ns()
         with _TRACE_STATE_LOCK:
             collector = _get_trace_collector(self.trace_id, create=True)
@@ -466,7 +470,7 @@ class TraceSpan:
     ) -> Literal[False]:
         try:
             if self._enabled and self.trace_id and self.span_id:
-                end_time = datetime.now(timezone.utc)
+                end_time = datetime.now(UTC)
                 duration_ms = 0.0
                 if self._start_perf_ns is not None:
                     duration_ms = (time.perf_counter_ns() - self._start_perf_ns) / 1e6

@@ -16,7 +16,6 @@ from AutoGLM_GUI.phone_agent_manager import (
 from AutoGLM_GUI.task_manager import TaskManager
 from AutoGLM_GUI.task_store import TaskStatus, TaskStore
 
-
 # ---------------------------------------------------------------------------
 # Test: abort_streaming_chat_async finds handlers under contextual keys
 # ---------------------------------------------------------------------------

@@ -38,7 +38,7 @@ def control_env(monkeypatch: pytest.MonkeyPatch) -> dict:
                     "x": x,
                     "y": y,
                     "delay": delay,
-                }
+                },
             )
 
         def swipe(
@@ -62,34 +62,43 @@ def control_env(monkeypatch: pytest.MonkeyPatch) -> dict:
                     "end_y": end_y,
                     "duration_ms": duration_ms,
                     "delay": delay,
-                }
+                },
             )
 
     async def fake_touch_down(
-        x: int, y: int, device_id: str | None = None, delay: float = 0.0
+        x: int,
+        y: int,
+        device_id: str | None = None,
+        delay: float = 0.0,
     ) -> None:
         if should_fail["down"]:
             raise RuntimeError("touch_down failed")
         touch_calls["down"].append(
-            {"x": x, "y": y, "device_id": device_id, "delay": delay}
+            {"x": x, "y": y, "device_id": device_id, "delay": delay},
         )
 
     async def fake_touch_move(
-        x: int, y: int, device_id: str | None = None, delay: float = 0.0
+        x: int,
+        y: int,
+        device_id: str | None = None,
+        delay: float = 0.0,
     ) -> None:
         if should_fail["move"]:
             raise RuntimeError("touch_move failed")
         touch_calls["move"].append(
-            {"x": x, "y": y, "device_id": device_id, "delay": delay}
+            {"x": x, "y": y, "device_id": device_id, "delay": delay},
         )
 
     async def fake_touch_up(
-        x: int, y: int, device_id: str | None = None, delay: float = 0.0
+        x: int,
+        y: int,
+        device_id: str | None = None,
+        delay: float = 0.0,
     ) -> None:
         if should_fail["up"]:
             raise RuntimeError("touch_up failed")
         touch_calls["up"].append(
-            {"x": x, "y": y, "device_id": device_id, "delay": delay}
+            {"x": x, "y": y, "device_id": device_id, "delay": delay},
         )
 
     monkeypatch.setattr(control_api, "ADBDevice", FakeADBDevice)
@@ -133,7 +142,7 @@ def test_control_tap_success(control_env: dict) -> None:
             "x": 100,
             "y": 200,
             "delay": 0.2,
-        }
+        },
     ]
 
 
@@ -201,13 +210,13 @@ def test_touch_down_move_up_success(control_env: dict) -> None:
     assert up_resp.json()["success"] is True
 
     assert control_env["touch_calls"]["down"] == [
-        {"x": 10, "y": 11, "device_id": "device-3", "delay": 0.1}
+        {"x": 10, "y": 11, "device_id": "device-3", "delay": 0.1},
     ]
     assert control_env["touch_calls"]["move"] == [
-        {"x": 12, "y": 13, "device_id": "device-3", "delay": 0.0}
+        {"x": 12, "y": 13, "device_id": "device-3", "delay": 0.0},
     ]
     assert control_env["touch_calls"]["up"] == [
-        {"x": 14, "y": 15, "device_id": "device-3", "delay": 0.0}
+        {"x": 14, "y": 15, "device_id": "device-3", "delay": 0.0},
     ]
 
 

@@ -21,16 +21,19 @@ class ActionTimingConfig:
     def __post_init__(self):
         """Load values from environment variables if present."""
         self.keyboard_switch_delay = float(
-            os.getenv("PHONE_AGENT_KEYBOARD_SWITCH_DELAY", self.keyboard_switch_delay)
+            os.getenv("PHONE_AGENT_KEYBOARD_SWITCH_DELAY", self.keyboard_switch_delay),
         )
         self.text_clear_delay = float(
-            os.getenv("PHONE_AGENT_TEXT_CLEAR_DELAY", self.text_clear_delay)
+            os.getenv("PHONE_AGENT_TEXT_CLEAR_DELAY", self.text_clear_delay),
         )
         self.text_input_delay = float(
-            os.getenv("PHONE_AGENT_TEXT_INPUT_DELAY", self.text_input_delay)
+            os.getenv("PHONE_AGENT_TEXT_INPUT_DELAY", self.text_input_delay),
         )
         self.keyboard_restore_delay = float(
-            os.getenv("PHONE_AGENT_KEYBOARD_RESTORE_DELAY", self.keyboard_restore_delay)
+            os.getenv(
+                "PHONE_AGENT_KEYBOARD_RESTORE_DELAY",
+                self.keyboard_restore_delay,
+            ),
         )
 
 
@@ -51,28 +54,28 @@ class DeviceTimingConfig:
     def __post_init__(self):
         """Load values from environment variables if present."""
         self.default_tap_delay = float(
-            os.getenv("PHONE_AGENT_TAP_DELAY", self.default_tap_delay)
+            os.getenv("PHONE_AGENT_TAP_DELAY", self.default_tap_delay),
         )
         self.default_double_tap_delay = float(
-            os.getenv("PHONE_AGENT_DOUBLE_TAP_DELAY", self.default_double_tap_delay)
+            os.getenv("PHONE_AGENT_DOUBLE_TAP_DELAY", self.default_double_tap_delay),
         )
         self.double_tap_interval = float(
-            os.getenv("PHONE_AGENT_DOUBLE_TAP_INTERVAL", self.double_tap_interval)
+            os.getenv("PHONE_AGENT_DOUBLE_TAP_INTERVAL", self.double_tap_interval),
         )
         self.default_long_press_delay = float(
-            os.getenv("PHONE_AGENT_LONG_PRESS_DELAY", self.default_long_press_delay)
+            os.getenv("PHONE_AGENT_LONG_PRESS_DELAY", self.default_long_press_delay),
         )
         self.default_swipe_delay = float(
-            os.getenv("PHONE_AGENT_SWIPE_DELAY", self.default_swipe_delay)
+            os.getenv("PHONE_AGENT_SWIPE_DELAY", self.default_swipe_delay),
         )
         self.default_back_delay = float(
-            os.getenv("PHONE_AGENT_BACK_DELAY", self.default_back_delay)
+            os.getenv("PHONE_AGENT_BACK_DELAY", self.default_back_delay),
         )
         self.default_home_delay = float(
-            os.getenv("PHONE_AGENT_HOME_DELAY", self.default_home_delay)
+            os.getenv("PHONE_AGENT_HOME_DELAY", self.default_home_delay),
         )
         self.default_launch_delay = float(
-            os.getenv("PHONE_AGENT_LAUNCH_DELAY", self.default_launch_delay)
+            os.getenv("PHONE_AGENT_LAUNCH_DELAY", self.default_launch_delay),
         )
 
 
@@ -89,10 +92,10 @@ class ConnectionTimingConfig:
     def __post_init__(self):
         """Load values from environment variables if present."""
         self.adb_restart_delay = float(
-            os.getenv("PHONE_AGENT_ADB_RESTART_DELAY", self.adb_restart_delay)
+            os.getenv("PHONE_AGENT_ADB_RESTART_DELAY", self.adb_restart_delay),
         )
         self.server_restart_delay = float(
-            os.getenv("PHONE_AGENT_SERVER_RESTART_DELAY", self.server_restart_delay)
+            os.getenv("PHONE_AGENT_SERVER_RESTART_DELAY", self.server_restart_delay),
         )
 
 

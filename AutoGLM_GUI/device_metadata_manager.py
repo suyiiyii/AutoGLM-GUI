@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -20,7 +20,7 @@ class DeviceMetadata:
 
     serial: str
     display_name: str | None = None
-    last_updated: datetime = field(default_factory=datetime.now)
+    last_updated: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict[str, Any]:
         """Convert to serializable dict."""
@@ -37,7 +37,7 @@ class DeviceMetadata:
         last_updated = (
             datetime.fromisoformat(last_updated_str)
             if last_updated_str
-            else datetime.now()
+            else datetime.now(UTC)
         )
         return cls(
             serial=data.get("serial", ""),
@@ -105,7 +105,7 @@ class DeviceMetadataManager:
                 try:
                     self.metadata_file.rename(backup_path)
                     logger.warning(
-                        f"Corrupted metadata file moved to {backup_path.name}"
+                        f"Corrupted metadata file moved to {backup_path.name}",
                     )
                 except Exception as backup_error:
                     logger.error(f"Failed to create backup: {backup_error}")
@@ -145,7 +145,7 @@ class DeviceMetadataManager:
 
         if normalized_name and len(normalized_name) > DISPLAY_NAME_MAX_LENGTH:
             raise ValueError(
-                f"Display name too long: {len(normalized_name)} > {DISPLAY_NAME_MAX_LENGTH}"
+                f"Display name too long: {len(normalized_name)} > {DISPLAY_NAME_MAX_LENGTH}",
             )
 
         with self._data_lock:
@@ -157,7 +157,7 @@ class DeviceMetadataManager:
                 return
 
             self._metadata[serial].display_name = normalized_name
-            self._metadata[serial].last_updated = datetime.now()
+            self._metadata[serial].last_updated = datetime.now(UTC)
 
             self._save_metadata()
 

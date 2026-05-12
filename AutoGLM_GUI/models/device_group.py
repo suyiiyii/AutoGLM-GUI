@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -23,8 +23,8 @@ class DeviceGroup:
     order: int = 0  # 排序顺序（数字越小越靠前）
 
     # 元数据
-    created_at: datetime = field(default_factory=datetime.now)
-    updated_at: datetime = field(default_factory=datetime.now)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     def to_dict(self) -> dict[str, Any]:
         """转换为可序列化的字典."""
@@ -45,10 +45,10 @@ class DeviceGroup:
             order=data.get("order", 0),
             created_at=datetime.fromisoformat(data["created_at"])
             if data.get("created_at")
-            else datetime.now(),
+            else datetime.now(UTC),
             updated_at=datetime.fromisoformat(data["updated_at"])
             if data.get("updated_at")
-            else datetime.now(),
+            else datetime.now(UTC),
         )
 
     @classmethod

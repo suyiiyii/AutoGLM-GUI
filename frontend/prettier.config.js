@@ -19,7 +19,7 @@ export default {
   bracketSameLine: false,
 
   // Include parentheses around a sole arrow function parameter
-  arrowParens: 'avoid',
+  arrowParens: 'always',
 
   // Format only files that have a pragma comment
   requirePragma: false,
@@ -37,7 +37,7 @@ export default {
   vueIndentScriptAndStyle: false,
 
   // Line length that Prettier will try to maintain
-  printWidth: 80,
+  printWidth: 100,
 
   // End of line character
   endOfLine: 'lf',
@@ -46,5 +46,5 @@ export default {
   embeddedLanguageFormatting: 'auto',
 
   // Enforce single attribute per line in HTML, Vue and JSX
-  singleAttributePerLine: false,
+  singleAttributePerLine: true,
 };

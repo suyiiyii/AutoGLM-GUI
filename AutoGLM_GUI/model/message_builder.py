@@ -10,7 +10,8 @@ class MessageBuilder:
 
     @staticmethod
     def create_user_message(
-        text: str, image_base64: str | None = None
+        text: str,
+        image_base64: str | None = None,
     ) -> dict[str, Any]:
         if image_base64 is None:
             return {"role": "user", "content": text}
@@ -22,7 +23,8 @@ class MessageBuilder:
 
     @staticmethod
     def create_user_message_with_images(
-        text: str, images: list[dict[str, str]]
+        text: str,
+        images: list[dict[str, str]],
     ) -> dict[str, Any]:
         if not images:
             return {"role": "user", "content": text}
@@ -33,9 +35,9 @@ class MessageBuilder:
                 {
                     "type": "image_url",
                     "image_url": {
-                        "url": f"data:{image['mime_type']};base64,{image['data']}"
+                        "url": f"data:{image['mime_type']};base64,{image['data']}",
                     },
-                }
+                },
             )
 
         # Images first, then text — matches the official Open-AutoGLM input layout.
@@ -47,7 +49,8 @@ class MessageBuilder:
 
     @staticmethod
     def create_multi_image_user_message(
-        text: str, image_base64_list: list[str]
+        text: str,
+        image_base64_list: list[str],
     ) -> dict[str, Any]:
         if not image_base64_list:
             return {"role": "user", "content": text}

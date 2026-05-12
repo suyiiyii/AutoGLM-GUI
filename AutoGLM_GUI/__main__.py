@@ -1,11 +1,12 @@
 """CLI entry point for AutoGLM-GUI."""
 
 import argparse
-import sys
 import socket
 import threading
 import time
 import webbrowser
+
+from loguru import logger
 
 from AutoGLM_GUI import __version__
 from AutoGLM_GUI.adb_terminal_repl import main as adb_terminal_repl_main
@@ -15,7 +16,9 @@ DEFAULT_MODEL_NAME = "autoglm-phone-9b"
 
 
 def find_available_port(
-    start_port: int = 8000, max_attempts: int = 100, host: str = "127.0.0.1"
+    start_port: int = 8000,
+    max_attempts: int = 100,
+    host: str = "127.0.0.1",
 ) -> int:
     """Find an available port starting from start_port.
 
@@ -41,12 +44,15 @@ def find_available_port(
             continue
 
     raise RuntimeError(
-        f"Could not find available port in range {start_port}-{start_port + max_attempts - 1}"
+        f"Could not find available port in range {start_port}-{start_port + max_attempts - 1}",
     )
 
 
 def open_browser(
-    host: str, port: int, use_ssl: bool = False, delay: float = 1.5
+    host: str,
+    port: int,
+    use_ssl: bool = False,
+    delay: float = 1.5,
 ) -> None:
     """Open browser after a delay to ensure server is ready.
 
@@ -69,7 +75,7 @@ def open_browser(
             webbrowser.open(url)
         except Exception as e:
             # Non-critical failure, just log it
-            print(f"Could not open browser automatically: {e}", file=sys.stderr)
+            logger.warning("Could not open browser automatically: {}", e)
 
     thread = threading.Thread(target=_open, daemon=True)
     thread.start()
@@ -90,7 +96,8 @@ def main() -> None:
         default="INFO",
     )
     early_parser.add_argument(
-        "--log-file", default="logs/autoglm_{time:YYYY-MM-DD}.log"
+        "--log-file",
+        default="logs/autoglm_{time:YYYY-MM-DD}.log",
     )
     early_parser.add_argument("--no-log-file", action="store_true")
     early_parser.add_argument("--adb-terminal-repl", action="store_true")
@@ -115,7 +122,7 @@ def main() -> None:
     )
 
     parser = argparse.ArgumentParser(
-        description="AutoGLM-GUI - Web GUI for AutoGLM Phone Agent"
+        description="AutoGLM-GUI - Web GUI for AutoGLM Phone Agent",
     )
     parser.add_argument(
         "--base-url",
@@ -200,9 +207,9 @@ def main() -> None:
     if args.port is None:
         try:
             args.port = find_available_port(start_port=8000, host=args.host)
-            print(f"\nAuto-detected available port: {args.port}\n")
+            logger.info("Auto-detected available port: {}", args.port)
         except RuntimeError as e:
-            print(f"\nError: {e}", file=sys.stderr)
+            logger.error("Error: {}", e)
             sys.exit(1)
 
     import uvicorn
@@ -274,7 +281,7 @@ def main() -> None:
     try:
         adb_path = ensure_adb()
     except RuntimeError as e:
-        print(f"\n[AutoGLM] WARNING: {e}", file=sys.stderr)
+        logger.warning("[AutoGLM] WARNING: {}", e)
         adb_path = "adb"  # 降级，让后续错误正常暴露
 
     # 写入环境变量（供 --reload 模式的子进程使用）

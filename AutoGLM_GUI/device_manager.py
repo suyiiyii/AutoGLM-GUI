@@ -63,9 +63,10 @@ def map_adb_connection_type_to_device_connection_type(
     """
     if adb_connection_type == ConnectionType.USB:
         return DeviceConnectionType.USB
-    elif adb_connection_type == ConnectionType.WIFI:
-        return DeviceConnectionType.WIFI
-    elif adb_connection_type == ConnectionType.REMOTE:
+    elif (
+        adb_connection_type == ConnectionType.WIFI
+        or adb_connection_type == ConnectionType.REMOTE
+    ):
         return DeviceConnectionType.WIFI
     else:
         return DeviceConnectionType.USB
@@ -115,7 +116,8 @@ class DeviceConnection:
         }
 
         return type_priority.get(self.connection_type, 0) + status_priority.get(
-            self.status, 0
+            self.status,
+            0,
         )
 
 
@@ -210,14 +212,15 @@ def _is_mdns_connection(device_id: str) -> bool:
 
 
 def _create_managed_device(
-    serial: DeviceSerial, device_infos: list[DeviceInfo]
+    serial: DeviceSerial,
+    device_infos: list[DeviceInfo],
 ) -> ManagedDevice:
     """Create ManagedDevice from DeviceInfo list."""
     connections = [
         DeviceConnection(
             device_id=d.device_id,
             connection_type=map_adb_connection_type_to_device_connection_type(
-                d.connection_type
+                d.connection_type,
             ),
             status=d.status,
             last_seen=time.time(),
@@ -321,11 +324,13 @@ class DeviceManager:
 
             self._stop_event.clear()
             self._poll_thread = threading.Thread(
-                target=self._polling_loop, name="DeviceManager-Poll", daemon=True
+                target=self._polling_loop,
+                name="DeviceManager-Poll",
+                daemon=True,
             )
             self._poll_thread.start()
             logger.info(
-                f"DeviceManager polling started (interval: {self._poll_interval:.1f}s)"
+                f"DeviceManager polling started (interval: {self._poll_interval:.1f}s)",
             )
 
     def stop_polling(self) -> None:
@@ -376,7 +381,8 @@ class DeviceManager:
             return bool(self._poll_thread and self._poll_thread.is_alive())
 
     def get_device_by_device_id(
-        self, device_id: ConnectionDeviceID
+        self,
+        device_id: ConnectionDeviceID,
     ) -> ManagedDevice | None:
         """Get device by any known connection endpoint (backward compatibility).
 
@@ -408,7 +414,7 @@ class DeviceManager:
         except Exception as e:
             logger.warning(
                 f"Device poll failed during force refresh: {e}. "
-                f"This is expected in remote-only deployments without local ADB."
+                f"This is expected in remote-only deployments without local ADB.",
             )
 
     # Internal methods
@@ -465,9 +471,9 @@ class DeviceManager:
                     pool.map(
                         lambda d: get_device_serial(d.device_id, self._adb_path),
                         adb_devices,
-                    )
+                    ),
                 )
-            device_with_serials = list(zip(adb_devices, serials))
+            device_with_serials = list(zip(adb_devices, serials, strict=False))
         else:
             device_with_serials = []
 
@@ -493,7 +499,7 @@ class DeviceManager:
                 if has_non_mdns and _is_mdns_connection(device_info.device_id):
                     logger.debug(
                         f"Filtering mDNS connection {device_info.device_id} "
-                        f"(device has clearer connection)"
+                        f"(device has clearer connection)",
                     )
                     continue
                 filtered.append(device_info)
@@ -532,7 +538,7 @@ class DeviceManager:
 
                 logger.info(
                     f"Device added: {serial} ({managed.model or 'Unknown'}) "
-                    f"via {managed.connection_type.value} ({managed.primary_device_id})"
+                    f"via {managed.connection_type.value} ({managed.primary_device_id})",
                 )
 
             # Update existing devices
@@ -546,7 +552,7 @@ class DeviceManager:
                     DeviceConnection(
                         device_id=d.device_id,
                         connection_type=map_adb_connection_type_to_device_connection_type(
-                            d.connection_type
+                            d.connection_type,
                         ),
                         status=d.status,
                         last_seen=time.time(),
@@ -591,7 +597,7 @@ class DeviceManager:
                 managed.state = DeviceState.DISCONNECTED
                 managed.last_seen = time.time()
                 logger.warning(
-                    f"Device disconnected: {serial} ({managed.model or 'Unknown'})"
+                    f"Device disconnected: {serial} ({managed.model or 'Unknown'})",
                 )
 
                 # Remove reverse mappings
@@ -618,14 +624,14 @@ class DeviceManager:
 
                         if not serial:
                             logger.debug(
-                                f"Could not extract serial from mDNS device: {mdns_dev.name}"
+                                f"Could not extract serial from mDNS device: {mdns_dev.name}",
                             )
                             continue
 
                         # Skip if already connected
                         if serial in connected_serials:
                             logger.debug(
-                                f"mDNS device {mdns_dev.name} already connected as {serial}"
+                                f"mDNS device {mdns_dev.name} already connected as {serial}",
                             )
                             continue
 
@@ -640,14 +646,14 @@ class DeviceManager:
                                         connection_type=DeviceConnectionType.WIFI,
                                         status="available",
                                         last_seen=time.time(),
-                                    )
+                                    ),
                                 ],
                                 state=DeviceState.AVAILABLE_MDNS,
                                 model=None,  # Unknown until connected
                             )
                             self._mdns_devices[serial] = available_device
                             logger.info(
-                                f"Discovered mDNS device: {mdns_dev.name} at {mdns_dev.ip}:{mdns_dev.port}"
+                                f"Discovered mDNS device: {mdns_dev.name} at {mdns_dev.ip}:{mdns_dev.port}",
                             )
                         else:
                             # Update last_seen
@@ -679,13 +685,15 @@ class DeviceManager:
 
         logger.warning(
             f"Device polling failed (attempt {self._consecutive_failures}): {error}. "
-            f"Retrying in {self._current_interval:.1f}s"
+            f"Retrying in {self._current_interval:.1f}s",
         )
 
     # WiFi Connection Methods
 
     def connect_wifi(
-        self, device_id: str, port: int = 5555
+        self,
+        device_id: str,
+        port: int = 5555,
     ) -> tuple[bool, str, str | None]:
         """Connect to device over WiFi (from USB connection).
 
@@ -697,7 +705,6 @@ class DeviceManager:
             Tuple of (success, message, wifi_device_id)
         """
         from AutoGLM_GUI.adb import ADBConnection, ConnectionType
-
         from AutoGLM_GUI.adb_plus import get_wifi_ip
 
         conn = ADBConnection(adb_path=self._adb_path)
@@ -719,7 +726,7 @@ class DeviceManager:
 
         # 2) Get device IP
         ip = get_wifi_ip(conn.adb_path, device_info.device_id) or conn.get_device_ip(
-            device_info.device_id
+            device_info.device_id,
         )
         if not ip:
             return (False, "Failed to get device IP", None)
@@ -790,7 +797,11 @@ class DeviceManager:
         return (True, f"Successfully connected to {address}", address)
 
     def pair_wifi(
-        self, ip: str, pairing_port: int, pairing_code: str, connection_port: int
+        self,
+        ip: str,
+        pairing_port: int,
+        pairing_code: str,
+        connection_port: int,
     ) -> tuple[bool, str, str | None]:
         """Pair and connect to WiFi device using wireless debugging (Android 11+).
 
@@ -806,7 +817,6 @@ class DeviceManager:
         import re
 
         from AutoGLM_GUI.adb import ADBConnection
-
         from AutoGLM_GUI.adb_plus import pair_device
 
         # IP format validation
@@ -846,7 +856,7 @@ class DeviceManager:
 
         if not ok:
             logger.warning(
-                f"Paired successfully but connection failed to {connection_address}: {connect_msg}"
+                f"Paired successfully but connection failed to {connection_address}: {connect_msg}",
             )
             return (
                 False,
@@ -855,7 +865,7 @@ class DeviceManager:
             )
 
         logger.info(
-            f"Successfully paired and connected to WiFi device: {connection_address}"
+            f"Successfully paired and connected to WiFi device: {connection_address}",
         )
         return (
             True,
@@ -864,7 +874,9 @@ class DeviceManager:
         )
 
     def discover_remote_devices(
-        self, base_url: str, timeout: int = 5
+        self,
+        base_url: str,
+        timeout: int = 5,
     ) -> tuple[bool, str, list[RemoteDiscoveryDevice]]:
         """Discover devices from a remote Device Agent Server.
 
@@ -934,7 +946,7 @@ class DeviceManager:
                             connection_type=DeviceConnectionType.REMOTE,
                             status="device",
                             last_seen=time.time(),
-                        )
+                        ),
                     ],
                     model=device_id,
                     state=DeviceState.ONLINE,
@@ -1001,7 +1013,8 @@ class DeviceManager:
         return self._remote_devices.get(serial)
 
     def get_serial_by_device_id(
-        self, device_id: ConnectionDeviceID
+        self,
+        device_id: ConnectionDeviceID,
     ) -> DeviceSerial | None:
         """Resolve canonical serial from a connection endpoint.
 
@@ -1014,7 +1027,9 @@ class DeviceManager:
         return self._device_id_to_serial.get(device_id)
 
     def _ensure_adb_keyboard_once(
-        self, device_id: ConnectionDeviceID, managed: ManagedDevice
+        self,
+        device_id: ConnectionDeviceID,
+        managed: ManagedDevice,
     ) -> None:
         """Best-effort ADB Keyboard setup for local ADB devices (once per serial)."""
         if managed.connection_type == DeviceConnectionType.REMOTE:
@@ -1082,7 +1097,7 @@ class DeviceManager:
                 remote_device = self.get_remote_device_instance(managed.serial)
                 if not remote_device:
                     raise ValueError(
-                        f"Remote device instance not found for serial {managed.serial}"
+                        f"Remote device instance not found for serial {managed.serial}",
                     )
                 return remote_device  # type: ignore[return-value]
 

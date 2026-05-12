@@ -1,10 +1,6 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { Minus, Plus, Maximize } from 'lucide-react';
 import { useTranslation } from '../lib/i18n-context';
 
@@ -22,10 +18,7 @@ const WIDTH_PRESETS: Record<WidthPreset, number | 'auto'> = {
   auto: 'auto',
 };
 
-export function WidthControl({
-  currentWidth,
-  onWidthChange,
-}: WidthControlProps) {
+export function WidthControl({ currentWidth, onWidthChange }: WidthControlProps) {
   const t = useTranslation();
 
   const handlePresetClick = (preset: WidthPreset) => {

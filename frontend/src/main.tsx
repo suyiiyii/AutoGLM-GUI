@@ -6,7 +6,7 @@ import { I18nProvider } from './lib/i18n-context';
 import { ThemeProvider } from './lib/theme-provider';
 import './styles.css';
 
-window.addEventListener('error', event => {
+window.addEventListener('error', (event) => {
   const errorObj = event.error;
   console.error('[GlobalError]', {
     message: event.message,
@@ -17,7 +17,7 @@ window.addEventListener('error', event => {
   });
 });
 
-window.addEventListener('unhandledrejection', event => {
+window.addEventListener('unhandledrejection', (event) => {
   const reason = event.reason;
   if (reason instanceof Error) {
     console.error('[UnhandledRejection]', {

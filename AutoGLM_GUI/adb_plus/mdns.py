@@ -183,7 +183,7 @@ def discover_mdns_devices(adb_path: str = "adb") -> list[MdnsDevice]:
                         has_pairing=dev_data["has_pairing"],
                         service_type=dev_data["service_type"],
                         pairing_port=dev_data["pairing_port"],
-                    )
+                    ),
                 )
 
         return devices

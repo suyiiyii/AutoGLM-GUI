@@ -94,8 +94,7 @@ export const en = {
     pairingStep1: '1. Open Settings → Developer Options on your device',
     pairingStep2: '2. Enable "Wireless Debugging"',
     pairingStep3: '3. Tap "Pair device with pairing code"',
-    pairingStep4:
-      '4. Enter the IP address, pairing port, and 6-digit code shown',
+    pairingStep4: '4. Enter the IP address, pairing port, and 6-digit code shown',
     pairingNote:
       'Note: Pairing port and connection port are different. After pairing, the system will automatically connect using the connection port (default 5555).',
     discoveredDevices: 'Discovered Devices',
@@ -199,8 +198,7 @@ export const en = {
     codecNotSupported: 'Device codec not supported',
     unknownError: 'Unknown error',
     downloadElectron: 'Download Desktop App',
-    videoStreamWarning:
-      'Video streaming may be unavailable, attempting connection...',
+    videoStreamWarning: 'Video streaming may be unavailable, attempting connection...',
   },
   deviceCard: {
     unknownDevice: 'Unknown Device',
@@ -359,8 +357,7 @@ export const en = {
     stepNamePlaceholder: 'e.g., Open parent review page',
     stepDescription: 'Description',
     stepDescriptionLabel: 'Description',
-    stepDescriptionPlaceholder:
-      'Describe detailed actions and validation points for this step',
+    stepDescriptionPlaceholder: 'Describe detailed actions and validation points for this step',
     requireStep: 'At least one step is required',
     stepCount: 'Steps',
     moreSteps: 'more steps',
@@ -380,10 +377,8 @@ export const en = {
     classicMode: 'Classic',
     layeredMode: 'Layered Agent',
     classicModeDesc: 'Vision model executes tasks directly',
-    layeredModeDesc:
-      'Planner decomposes tasks, executor handles subtasks independently',
-    maiUIModeDesc:
-      'Alibaba Cloud MAI-UI model, open-source high-performance GUI Agent',
+    layeredModeDesc: 'Planner decomposes tasks, executor handles subtasks independently',
+    maiUIModeDesc: 'Alibaba Cloud MAI-UI model, open-source high-performance GUI Agent',
   },
   historyPage: {
     title: 'Conversation History',
@@ -455,8 +450,7 @@ export const en = {
   },
   deviceGroups: {
     manageTitle: 'Manage Device Groups',
-    manageDescription:
-      'Create, edit, delete, and reorder device groups. Drag groups to reorder.',
+    manageDescription: 'Create, edit, delete, and reorder device groups. Drag groups to reorder.',
     createNew: 'New Group',
     createTitle: 'Create Group',
     createDescription: 'Create a new group for devices.',

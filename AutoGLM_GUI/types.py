@@ -7,7 +7,15 @@ from typing_extensions import TypedDict
 
 ActionMetadata = Literal["do", "finish", "takeover"]
 PhoneActionType = Literal[
-    "Tap", "Swipe", "Type", "Launch", "Wait", "Back", "Home", "Long Press", "Double Tap"
+    "Tap",
+    "Swipe",
+    "Type",
+    "Launch",
+    "Wait",
+    "Back",
+    "Home",
+    "Long Press",
+    "Double Tap",
 ]
 MAIActionType = Literal[
     "click",

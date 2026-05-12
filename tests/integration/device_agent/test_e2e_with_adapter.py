@@ -80,7 +80,10 @@ class TestE2EWithoutLLM:
     """
 
     def test_remote_device_works(
-        self, mock_agent_server: str, test_client, sample_test_case
+        self,
+        mock_agent_server: str,
+        test_client,
+        sample_test_case,
     ):
         """Test that RemoteDevice can communicate with mock server."""
         test_client.load_scenario(str(sample_test_case))
@@ -231,7 +234,7 @@ class TestMultiDeviceConcurrent:
                 'do(action="Tap", element=[700, 800])',
                 'finish(message="Task completed")',
                 'finish(message="Task completed")',
-            ]
+            ],
         )
 
         # Send concurrent chat requests
@@ -330,7 +333,7 @@ class TestMultiDeviceConcurrent:
             [
                 'finish(message="Task completed")',  # First task
                 'finish(message="Second task completed")',  # Second task
-            ]
+            ],
         )
 
         # Send concurrent requests to same device

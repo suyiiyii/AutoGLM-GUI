@@ -10,7 +10,6 @@ import json
 import re
 from typing import Any
 
-
 SCALE_FACTOR = 999
 
 
@@ -58,7 +57,7 @@ class MAIParser:
 
         if "coordinate" in mai_action:
             mai_action["coordinate"] = self._normalize_coordinate_to_0_1(
-                mai_action["coordinate"]
+                mai_action["coordinate"],
             )
 
         return {
@@ -68,7 +67,8 @@ class MAIParser:
         }
 
     def _normalize_coordinate_to_0_1(
-        self, coordinate: list[int | float]
+        self,
+        coordinate: list[int | float],
     ) -> list[float]:
         if len(coordinate) == 2:
             x, y = coordinate
@@ -78,7 +78,7 @@ class MAIParser:
             y = (y1 + y2) / 2
         else:
             raise MAIParseError(
-                f"Invalid coordinate format: expected 2 or 4 values, got {len(coordinate)}"
+                f"Invalid coordinate format: expected 2 or 4 values, got {len(coordinate)}",
             )
 
         return [x / SCALE_FACTOR, y / SCALE_FACTOR]
@@ -162,22 +162,16 @@ class MAIParser:
             x = self._convert_coordinate(coordinate[0])
             y = self._convert_coordinate(coordinate[1])
 
-            if action_type == "click":
+            _coord_action_map = {
+                "click": "Tap",
+                "long_press": "Long Press",
+                "double_click": "Double Tap",
+            }
+            action_name = _coord_action_map.get(action_type)
+            if action_name is not None:
                 return {
                     "_metadata": "do",
-                    "action": "Tap",
-                    "element": [x, y],
-                }
-            elif action_type == "long_press":
-                return {
-                    "_metadata": "do",
-                    "action": "Long Press",
-                    "element": [x, y],
-                }
-            elif action_type == "double_click":
-                return {
-                    "_metadata": "do",
-                    "action": "Double Tap",
+                    "action": action_name,
                     "element": [x, y],
                 }
 
@@ -239,7 +233,10 @@ class MAIParser:
         return int((value / SCALE_FACTOR) * 1000)
 
     def _calculate_swipe_coordinates(
-        self, direction: str, x: int, y: int
+        self,
+        direction: str,
+        x: int,
+        y: int,
     ) -> tuple[list[int], list[int]]:
         """Calculate start and end coordinates for swipe based on direction."""
         swipe_distance = 300

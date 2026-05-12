@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self
 from uuid import uuid4
@@ -97,7 +97,7 @@ class SchedulerManager:
             if value is not None and hasattr(task, key):
                 setattr(task, key, value)
 
-        task.updated_at = datetime.now()
+        task.updated_at = datetime.now(UTC)
         self._save_tasks()
 
         if old_enabled and not task.enabled:
@@ -136,7 +136,7 @@ class SchedulerManager:
             return True
 
         task.enabled = enabled
-        task.updated_at = datetime.now()
+        task.updated_at = datetime.now(UTC)
         self._save_tasks()
 
         if enabled:
@@ -227,13 +227,13 @@ class SchedulerManager:
                 device_model=device.model or serialno,
             )
 
-        start_time = datetime.now()
+        start_time = datetime.now(UTC)
         messages: list[MessageRecord] = [
             MessageRecord(
                 role="user",
                 content=workflow["text"],
                 timestamp=start_time,
-            )
+            ),
         ]
 
         result_message = ""
@@ -250,11 +250,11 @@ class SchedulerManager:
                         MessageRecord(
                             role="assistant",
                             content="",
-                            timestamp=datetime.now(),
+                            timestamp=datetime.now(UTC),
                             thinking=step_data.get("thinking", ""),
                             action=step_data.get("action", {}),
                             step=step_data.get("step", 0),
-                        )
+                        ),
                     )
                 elif event["type"] == "done":
                     result_message = step_data.get("message", "Task completed")
@@ -266,7 +266,7 @@ class SchedulerManager:
                     break
 
             steps = agent.step_count
-            end_time = datetime.now()
+            end_time = datetime.now(UTC)
             device_model = device.model or serialno
 
             record = ConversationRecord(
@@ -292,7 +292,7 @@ class SchedulerManager:
             )
 
         except Exception as e:
-            end_time = datetime.now()
+            end_time = datetime.now(UTC)
             error_msg = str(e)
             device_model = device.model or serialno
 
@@ -362,7 +362,7 @@ class SchedulerManager:
         device_serialnos = self._resolve_device_serialnos(task)
 
         logger.info(
-            f"Executing scheduled task: {task.name} on {len(device_serialnos)} device(s)"
+            f"Executing scheduled task: {task.name} on {len(device_serialnos)} device(s)",
         )
 
         from AutoGLM_GUI.device_manager import DeviceManager
@@ -437,7 +437,7 @@ class SchedulerManager:
                     step_count=0,
                 )
                 logger.warning(
-                    f"Scheduled task {task.name} skipped offline device {serialno}"
+                    f"Scheduled task {task.name} skipped offline device {serialno}",
                 )
                 continue
 
@@ -463,7 +463,7 @@ class SchedulerManager:
             return
 
         logger.info(
-            f"Scheduled task {task.name} enqueued {created_count}/{total_count} task run(s)"
+            f"Scheduled task {task.name} enqueued {created_count}/{total_count} task run(s)",
         )
 
     def _record_run(
@@ -474,7 +474,7 @@ class SchedulerManager:
         success_count: int,
         total_count: int,
     ) -> None:
-        task.last_run_time = datetime.now()
+        task.last_run_time = datetime.now(UTC)
         task.last_run_status = status
         task.last_run_success = status == "success"
         task.last_run_success_count = success_count

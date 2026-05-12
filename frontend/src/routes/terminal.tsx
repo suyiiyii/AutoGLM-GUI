@@ -2,13 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { FitAddon } from '@xterm/addon-fit';
 import { Terminal as XTerm } from '@xterm/xterm';
-import {
-  Loader2,
-  MonitorSmartphone,
-  RefreshCw,
-  Terminal,
-  Trash2,
-} from 'lucide-react';
+import { Loader2, MonitorSmartphone, RefreshCw, Terminal, Trash2 } from 'lucide-react';
 
 import '@xterm/xterm/css/xterm.css';
 
@@ -26,10 +20,7 @@ export const Route = createFileRoute('/terminal')({
   component: TerminalRouteComponent,
 });
 
-function buildTerminalWebSocketUrl(
-  sessionId: string,
-  sessionToken: string
-): string {
+function buildTerminalWebSocketUrl(sessionId: string, sessionToken: string): string {
   const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
   const query = new URLSearchParams({ token: sessionToken }).toString();
   return `${protocol}//${window.location.host}/api/terminal/sessions/${sessionId}/stream?${query}`;
@@ -130,9 +121,7 @@ function TerminalRouteComponent() {
 
   const connectSessionStream = useCallback(
     (sessionId: string, sessionToken: string) => {
-      const socket = new WebSocket(
-        buildTerminalWebSocketUrl(sessionId, sessionToken)
-      );
+      const socket = new WebSocket(buildTerminalWebSocketUrl(sessionId, sessionToken));
       webSocketRef.current = socket;
 
       socket.onopen = () => {
@@ -141,7 +130,7 @@ function TerminalRouteComponent() {
         terminalRef.current?.focus();
       };
 
-      socket.onmessage = event => {
+      socket.onmessage = (event) => {
         const payload = JSON.parse(event.data) as {
           type: string;
           data?: string;
@@ -157,7 +146,7 @@ function TerminalRouteComponent() {
 
         if (payload.type === 'status' && payload.status) {
           const nextStatus = payload.status;
-          setSession(prev =>
+          setSession((prev) =>
             prev
               ? {
                   ...prev,
@@ -174,9 +163,7 @@ function TerminalRouteComponent() {
         }
 
         if (payload.type === 'exit') {
-          appendSystemMessage(
-            `${t.terminal.sessionClosed} (code ${payload.exit_code ?? 0})`
-          );
+          appendSystemMessage(`${t.terminal.sessionClosed} (code ${payload.exit_code ?? 0})`);
           return;
         }
 
@@ -196,12 +183,7 @@ function TerminalRouteComponent() {
         setSocketConnected(false);
       };
     },
-    [
-      appendSystemMessage,
-      sendResize,
-      t.terminal.sessionClosed,
-      t.terminal.websocketFailed,
-    ]
+    [appendSystemMessage, sendResize, t.terminal.sessionClosed, t.terminal.websocketFailed]
   );
 
   const createSession = useCallback(async () => {
@@ -221,10 +203,7 @@ function TerminalRouteComponent() {
       connectSessionStream(nextSession.session_id, nextSession.session_token);
       appendSystemMessage(t.terminal.initialMessage);
     } catch (createError) {
-      const message =
-        createError instanceof Error
-          ? createError.message
-          : t.terminal.createFailed;
+      const message = createError instanceof Error ? createError.message : t.terminal.createFailed;
       setError(message);
       appendSystemMessage(message);
       sessionTokenRef.current = null;
@@ -263,8 +242,7 @@ function TerminalRouteComponent() {
     const terminal = new XTerm({
       cursorBlink: true,
       convertEol: true,
-      fontFamily:
-        '"SFMono-Regular", "JetBrains Mono", "Menlo", "Monaco", "Consolas", monospace',
+      fontFamily: '"SFMono-Regular", "JetBrains Mono", "Menlo", "Monaco", "Consolas", monospace',
       fontSize: 13,
       theme: {
         background: '#020617',
@@ -293,7 +271,7 @@ function TerminalRouteComponent() {
     fitAddon.fit();
     terminal.focus();
 
-    const onDataDisposable = terminal.onData(data => {
+    const onDataDisposable = terminal.onData((data) => {
       const socket = webSocketRef.current;
       if (!socket || socket.readyState !== WebSocket.OPEN) {
         return;
@@ -359,9 +337,7 @@ function TerminalRouteComponent() {
               <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
                 {t.terminal.title}
               </h2>
-              <p className="text-sm text-slate-500 dark:text-slate-400">
-                {t.terminal.subtitle}
-              </p>
+              <p className="text-sm text-slate-500 dark:text-slate-400">{t.terminal.subtitle}</p>
             </div>
           </div>
         </div>
@@ -371,46 +347,37 @@ function TerminalRouteComponent() {
             <span className="text-xs uppercase tracking-[0.18em] text-slate-500">
               {t.terminal.statusLabel}
             </span>
-            <span
-              className={`rounded-full px-3 py-1 text-xs font-medium ${statusTone}`}
-            >
+            <span className={`rounded-full px-3 py-1 text-xs font-medium ${statusTone}`}>
               {session?.status || 'created'}
             </span>
           </div>
 
           <div className="space-y-1 text-sm text-slate-600 dark:text-slate-300">
             <div>
-              <span className="text-slate-400">
-                {t.terminal.sessionLabel}:{' '}
-              </span>
-              <span className="font-mono break-all">
-                {session?.session_id || '-'}
-              </span>
+              <span className="text-slate-400">{t.terminal.sessionLabel}: </span>
+              <span className="font-mono break-all">{session?.session_id || '-'}</span>
             </div>
             <div>
               <span className="text-slate-400">{t.terminal.cwdLabel}: </span>
               <span className="font-mono break-all">{session?.cwd || '-'}</span>
             </div>
             <div>
-              <span className="text-slate-400">
-                {t.terminal.commandLabel}:{' '}
-              </span>
-              <span className="font-mono break-all">
-                {session?.command.join(' ') || '-'}
-              </span>
+              <span className="text-slate-400">{t.terminal.commandLabel}: </span>
+              <span className="font-mono break-all">{session?.command.join(' ') || '-'}</span>
             </div>
             <div>
               <span className="text-slate-400">Socket: </span>
               <span>
-                {socketConnected
-                  ? t.terminal.socketConnected
-                  : t.terminal.socketDisconnected}
+                {socketConnected ? t.terminal.socketConnected : t.terminal.socketDisconnected}
               </span>
             </div>
           </div>
 
           <div className="grid grid-cols-2 gap-2">
-            <Button onClick={() => void createSession()} disabled={isLoading}>
+            <Button
+              onClick={() => void createSession()}
+              disabled={isLoading}
+            >
               {isLoading ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
@@ -454,9 +421,7 @@ function TerminalRouteComponent() {
               disabled={isRefreshingDevices}
               title={t.terminal.refreshDevices}
             >
-              <RefreshCw
-                className={`h-4 w-4 ${isRefreshingDevices ? 'animate-spin' : ''}`}
-              />
+              <RefreshCw className={`h-4 w-4 ${isRefreshingDevices ? 'animate-spin' : ''}`} />
             </Button>
           </div>
 
@@ -475,7 +440,7 @@ function TerminalRouteComponent() {
                 {t.terminal.noDevices}
               </div>
             ) : (
-              devices.map(device => (
+              devices.map((device) => (
                 <button
                   key={device.id}
                   type="button"

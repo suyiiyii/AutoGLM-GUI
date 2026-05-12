@@ -21,10 +21,7 @@ import {
   Loader2,
   X,
 } from 'lucide-react';
-import {
-  shouldShowWebCodecsWarning,
-  dismissWebCodecsWarning,
-} from '../lib/webcodecs-utils';
+import { shouldShowWebCodecsWarning, dismissWebCodecsWarning } from '../lib/webcodecs-utils';
 
 interface DeviceMonitorProps {
   deviceId: string;
@@ -50,19 +47,16 @@ export function DeviceMonitor({
   const isRemoteDevice = connectionType === 'remote';
   const [useVideoStream, setUseVideoStream] = useState(!isRemoteDevice);
   const [videoStreamFailed, setVideoStreamFailed] = useState(false);
-  const [displayMode, setDisplayMode] = useState<
-    'auto' | 'video' | 'screenshot'
-  >(isRemoteDevice ? 'screenshot' : 'auto');
+  const [displayMode, setDisplayMode] = useState<'auto' | 'video' | 'screenshot'>(
+    isRemoteDevice ? 'screenshot' : 'auto'
+  );
   const [feedbackMessage, setFeedbackMessage] = useState<string | null>(null);
-  const [feedbackType, setFeedbackType] = useState<
-    'tap' | 'swipe' | 'error' | 'success'
-  >('success');
+  const [feedbackType, setFeedbackType] = useState<'tap' | 'swipe' | 'error' | 'success'>(
+    'success'
+  );
   const [showControlArea, setShowControlArea] = useState(false);
   const [showControls, setShowControls] = useState(false);
-  const [panelWidth, setPanelWidth] = useLocalStorage<number | 'auto'>(
-    'device-monitor-width',
-    320
-  );
+  const [panelWidth, setPanelWidth] = useLocalStorage<number | 'auto'>('device-monitor-width', 320);
   const [fallbackReason, setFallbackReason] = useState<string | null>(null);
   const [showWebCodecsWarning, setShowWebCodecsWarning] = useState(false);
 
@@ -70,9 +64,7 @@ export function DeviceMonitor({
   const feedbackTimeoutRef = useRef<number | null>(null);
   const controlsTimeoutRef = useRef<number | null>(null);
   const shouldPollScreenshots =
-    isVisible &&
-    (displayMode === 'screenshot' ||
-      (displayMode === 'auto' && videoStreamFailed));
+    isVisible && (displayMode === 'screenshot' || (displayMode === 'auto' && videoStreamFailed));
   const { screenshot } = useScreenshotPolling({
     deviceId,
     enabled: shouldPollScreenshots,
@@ -108,7 +100,7 @@ export function DeviceMonitor({
   };
 
   const toggleControls = () => {
-    setShowControls(prev => !prev);
+    setShowControls((prev) => !prev);
   };
 
   const handleWidthChange = (width: number | 'auto') => {
@@ -121,12 +113,9 @@ export function DeviceMonitor({
     setPanelWidth(newWidth);
   };
 
-  const handleVideoStreamReady = useCallback(
-    (stream: { close: () => void } | null) => {
-      videoStreamRef.current = stream;
-    },
-    []
-  );
+  const handleVideoStreamReady = useCallback((stream: { close: () => void } | null) => {
+    videoStreamRef.current = stream;
+  }, []);
 
   const handleFallback = useCallback(
     (reason?: string) => {
@@ -168,16 +157,13 @@ export function DeviceMonitor({
       browser_unsupported:
         t.deviceMonitor?.browserNotSupported ||
         '当前浏览器不支持 WebCodecs API。请使用最新版 Chrome 或 Edge 浏览器。',
-      decoder_error:
-        t.deviceMonitor?.decoderInitFailed || '视频解码器初始化失败。',
-      decoder_unsupported:
-        t.deviceMonitor?.codecNotSupported || '设备编解码器不支持。',
+      decoder_error: t.deviceMonitor?.decoderInitFailed || '视频解码器初始化失败。',
+      decoder_unsupported: t.deviceMonitor?.codecNotSupported || '设备编解码器不支持。',
     };
     return messages[reason] || t.deviceMonitor?.unknownError || '未知错误';
   };
 
-  const widthStyle =
-    typeof panelWidth === 'number' ? `${panelWidth}px` : 'auto';
+  const widthStyle = typeof panelWidth === 'number' ? `${panelWidth}px` : 'auto';
 
   return (
     <Card
@@ -329,8 +315,7 @@ export function DeviceMonitor({
                 <div className="flex-1 space-y-2">
                   <div className="flex items-start justify-between gap-2">
                     <p className="text-sm font-medium text-amber-900 dark:text-amber-100">
-                      {t.deviceMonitor?.videoUnavailableWarning ||
-                        '视频流不可用'}
+                      {t.deviceMonitor?.videoUnavailableWarning || '视频流不可用'}
                     </p>
                     <Button
                       variant="ghost"
@@ -353,10 +338,7 @@ export function DeviceMonitor({
                       size="sm"
                       className="h-7 text-xs"
                       onClick={() =>
-                        window.open(
-                          'https://github.com/suyiiyii/AutoGLM-GUI/releases',
-                          '_blank'
-                        )
+                        window.open('https://github.com/suyiiyii/AutoGLM-GUI/releases', '_blank')
                       }
                     >
                       {t.deviceMonitor?.downloadElectron || '下载桌面应用'}
@@ -371,28 +353,18 @@ export function DeviceMonitor({
             className="w-full h-full"
             enableControl={true}
             onFallback={handleFallback}
-            onTapSuccess={() =>
-              showFeedback(t.devicePanel?.tapped || 'Tapped', 2000, 'tap')
-            }
-            onTapError={error =>
+            onTapSuccess={() => showFeedback(t.devicePanel?.tapped || 'Tapped', 2000, 'tap')}
+            onTapError={(error) =>
               showFeedback(
-                (t.devicePanel?.tapError || 'Tap error: {error}').replace(
-                  '{error}',
-                  error
-                ),
+                (t.devicePanel?.tapError || 'Tap error: {error}').replace('{error}', error),
                 3000,
                 'error'
               )
             }
-            onSwipeSuccess={() =>
-              showFeedback(t.devicePanel?.swiped || 'Swiped', 2000, 'swipe')
-            }
-            onSwipeError={error =>
+            onSwipeSuccess={() => showFeedback(t.devicePanel?.swiped || 'Swiped', 2000, 'swipe')}
+            onSwipeError={(error) =>
               showFeedback(
-                (t.devicePanel?.swipeError || 'Swipe error: {error}').replace(
-                  '{error}',
-                  error
-                ),
+                (t.devicePanel?.swipeError || 'Swipe error: {error}').replace('{error}', error),
                 3000,
                 'error'
               )
@@ -412,8 +384,7 @@ export function DeviceMonitor({
                 className="max-w-full max-h-full object-contain"
                 style={{
                   width: screenshot.width > screenshot.height ? '100%' : 'auto',
-                  height:
-                    screenshot.width > screenshot.height ? 'auto' : '100%',
+                  height: screenshot.width > screenshot.height ? 'auto' : '100%',
                 }}
               />
               {screenshot.is_sensitive && (
@@ -433,9 +404,7 @@ export function DeviceMonitor({
           ) : (
             <div className="text-center text-muted-foreground">
               <Loader2 className="w-8 h-8 mx-auto mb-2 animate-spin" />
-              <p className="text-sm">
-                {t.devicePanel?.loading || 'Loading...'}
-              </p>
+              <p className="text-sm">{t.devicePanel?.loading || 'Loading...'}</p>
             </div>
           )}
         </div>

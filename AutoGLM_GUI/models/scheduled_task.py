@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from typing import Any
 from uuid import uuid4
 
@@ -37,7 +37,7 @@ class ScheduledTask:
     name: str = ""  # 任务名称
     workflow_uuid: str = ""  # 关联的 Workflow UUID
     device_serialnos: list[str] = field(
-        default_factory=list
+        default_factory=list,
     )  # 绑定的设备 serialno 列表
     device_group_id: str | None = (
         None  # 绑定的设备分组 ID（与 device_serialnos 二选一）
@@ -49,8 +49,8 @@ class ScheduledTask:
     execution_mode: str = "classic"  # classic | layered
 
     # 元数据
-    created_at: datetime = field(default_factory=datetime.now)
-    updated_at: datetime = field(default_factory=datetime.now)
+    created_at: datetime = field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = field(default_factory=lambda: datetime.now(UTC))
 
     # 最近执行信息（只记录最后一次）
     last_run_time: datetime | None = None
@@ -105,10 +105,10 @@ class ScheduledTask:
             execution_mode=data.get("execution_mode", "classic"),
             created_at=datetime.fromisoformat(data["created_at"])
             if data.get("created_at")
-            else datetime.now(),
+            else datetime.now(UTC),
             updated_at=datetime.fromisoformat(data["updated_at"])
             if data.get("updated_at")
-            else datetime.now(),
+            else datetime.now(UTC),
             last_run_time=datetime.fromisoformat(data["last_run_time"])
             if data.get("last_run_time")
             else None,

@@ -304,7 +304,9 @@ class TerminalSession:
 
             try:
                 chunk = await asyncio.to_thread(
-                    os.read, self._master_fd, _DEFAULT_READ_CHUNK_SIZE
+                    os.read,
+                    self._master_fd,
+                    _DEFAULT_READ_CHUNK_SIZE,
                 )
             except OSError:
                 return
@@ -356,7 +358,7 @@ class TerminalSession:
             process.terminate()
             try:
                 await asyncio.wait_for(process.wait(), timeout=2.0)
-            except asyncio.TimeoutError:
+            except TimeoutError:
                 process.kill()
                 await process.wait()
             return
@@ -370,7 +372,7 @@ class TerminalSession:
 
         try:
             await asyncio.wait_for(asyncio.to_thread(process.wait), timeout=2.0)
-        except asyncio.TimeoutError:
+        except TimeoutError:
             with contextlib.suppress(ProcessLookupError):
                 os.killpg(process.pid, signal.SIGKILL)
             await asyncio.to_thread(process.wait)
@@ -425,7 +427,7 @@ class TerminalSession:
                     {
                         "type": "error",
                         "message": "Terminal output limit exceeded. Session will be closed.",
-                    }
+                    },
                 )
                 asyncio.create_task(self.close())
             return False
@@ -436,7 +438,7 @@ class TerminalSession:
                 "type": "output",
                 "stream": stream,
                 "data": chunk.decode("utf-8", errors="replace"),
-            }
+            },
         )
         return True
 
@@ -551,7 +553,9 @@ class TerminalSessionManager:
         return self._sessions.get(session_id)
 
     def authenticate_session(
-        self, session_id: str, session_token: str | None
+        self,
+        session_id: str,
+        session_token: str | None,
     ) -> TerminalSession | None:
         if not session_token:
             return None

@@ -10,7 +10,6 @@ import pytest
 
 from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
-
 pytestmark = [pytest.mark.contract, pytest.mark.release_gate]
 
 
@@ -39,7 +38,7 @@ def test_acquire_device_async_releases_lock_after_cancellation(
                 "device-1",
                 auto_initialize=True,
                 context="chat",
-            )
+            ),
         )
 
         await asyncio.sleep(0.01)

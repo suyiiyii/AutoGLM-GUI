@@ -45,7 +45,7 @@ const createStep = (title = '', description = ''): WorkflowStep => ({
 
 const parseWorkflowTextToSteps = (text: string): WorkflowStep[] => {
   const rawLines = text.split(/\r?\n/);
-  if (rawLines.every(line => line.trim().length === 0)) {
+  if (rawLines.every((line) => line.trim().length === 0)) {
     return [createStep()];
   }
 
@@ -103,9 +103,7 @@ const parseWorkflowTextToSteps = (text: string): WorkflowStep[] => {
     }
 
     if (DESCRIPTION_PREFIX_REGEX.test(trimmedLine)) {
-      const descriptionLine = trimmedLine
-        .replace(DESCRIPTION_PREFIX_REGEX, '')
-        .trimEnd();
+      const descriptionLine = trimmedLine.replace(DESCRIPTION_PREFIX_REGEX, '').trimEnd();
       if (descriptionLine) {
         current.descriptionLines.push(descriptionLine);
       }
@@ -130,7 +128,7 @@ const parseWorkflowTextToSteps = (text: string): WorkflowStep[] => {
     return [createStep()];
   }
 
-  return parsed.map(step => createStep(step.title, step.description));
+  return parsed.map((step) => createStep(step.title, step.description));
 };
 
 const buildWorkflowTextFromSteps = (
@@ -139,22 +137,21 @@ const buildWorkflowTextFromSteps = (
 ): string => {
   const { stepLabel, descriptionLabel } = labels;
   return steps
-    .map(step => ({
+    .map((step) => ({
       title: step.title.trim(),
       description: step.description,
     }))
-    .filter(step => step.title || step.description)
+    .filter((step) => step.title || step.description)
     .map((step, index) => {
       const fallbackTitle = `${stepLabel} ${index + 1}`;
       const lines = [`${index + 1}. ${step.title.trim() || fallbackTitle}`];
       if (step.description) {
         const descriptionLines = step.description
           .split(/\r?\n/)
-          .map(line => line.trimEnd())
+          .map((line) => line.trimEnd())
           .filter(
             (line, lineIndex, arr) =>
-              line.trim().length > 0 ||
-              (lineIndex > 0 && lineIndex < arr.length - 1)
+              line.trim().length > 0 || (lineIndex > 0 && lineIndex < arr.length - 1)
           );
         if (descriptionLines.length > 0) {
           lines.push(`   ${descriptionLabel}:`);
@@ -213,25 +210,21 @@ function WorkflowsComponent() {
   };
 
   const updateStepTitle = (stepId: string, title: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      steps: prev.steps.map(step =>
-        step.id === stepId ? { ...step, title } : step
-      ),
+      steps: prev.steps.map((step) => (step.id === stepId ? { ...step, title } : step)),
     }));
   };
 
   const updateStepDescription = (stepId: string, description: string) => {
-    setFormData(prev => ({
+    setFormData((prev) => ({
       ...prev,
-      steps: prev.steps.map(step =>
-        step.id === stepId ? { ...step, description } : step
-      ),
+      steps: prev.steps.map((step) => (step.id === stepId ? { ...step, description } : step)),
     }));
   };
 
   const insertStepAfter = (index: number) => {
-    setFormData(prev => {
+    setFormData((prev) => {
       const nextSteps = [...prev.steps];
       nextSteps.splice(index + 1, 0, createStep());
       return { ...prev, steps: nextSteps };
@@ -239,28 +232,25 @@ function WorkflowsComponent() {
   };
 
   const removeStep = (stepId: string) => {
-    setFormData(prev => {
+    setFormData((prev) => {
       if (prev.steps.length === 1) {
         return { ...prev, steps: [createStep()] };
       }
       return {
         ...prev,
-        steps: prev.steps.filter(step => step.id !== stepId),
+        steps: prev.steps.filter((step) => step.id !== stepId),
       };
     });
   };
 
   const moveStep = (index: number, direction: -1 | 1) => {
-    setFormData(prev => {
+    setFormData((prev) => {
       const targetIndex = index + direction;
       if (targetIndex < 0 || targetIndex >= prev.steps.length) {
         return prev;
       }
       const nextSteps = [...prev.steps];
-      [nextSteps[index], nextSteps[targetIndex]] = [
-        nextSteps[targetIndex],
-        nextSteps[index],
-      ];
+      [nextSteps[index], nextSteps[targetIndex]] = [nextSteps[targetIndex], nextSteps[index]];
       return { ...prev, steps: nextSteps };
     });
   };
@@ -299,7 +289,7 @@ function WorkflowsComponent() {
     }
   };
 
-  const hasValidStep = formData.steps.some(step => step.title.trim());
+  const hasValidStep = formData.steps.some((step) => step.title.trim());
 
   return (
     <div className="container mx-auto p-6 max-w-7xl">
@@ -317,13 +307,11 @@ function WorkflowsComponent() {
         </div>
       ) : workflows.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-slate-500 dark:text-slate-400">
-            {t.workflows.empty}
-          </p>
+          <p className="text-slate-500 dark:text-slate-400">{t.workflows.empty}</p>
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {workflows.map(workflow => (
+          {workflows.map((workflow) => (
             <Card
               key={workflow.uuid}
               className="hover:shadow-md transition-shadow"
@@ -334,7 +322,7 @@ function WorkflowsComponent() {
               <CardContent>
                 {(() => {
                   const steps = parseWorkflowTextToSteps(workflow.text).filter(
-                    step => step.title.trim() || step.description.trim()
+                    (step) => step.title.trim() || step.description.trim()
                   );
                   const previewSteps = steps.slice(0, 3);
                   return (
@@ -349,8 +337,7 @@ function WorkflowsComponent() {
                           </p>
                           {step.description.trim() && (
                             <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
-                              {t.workflows.stepDescriptionLabel}:{' '}
-                              {step.description}
+                              {t.workflows.stepDescriptionLabel}: {step.description}
                             </p>
                           )}
                         </div>
@@ -388,15 +375,16 @@ function WorkflowsComponent() {
       )}
 
       {/* Create/Edit Dialog: header/footer fixed, only step list scrolls */}
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+      <Dialog
+        open={showDialog}
+        onOpenChange={setShowDialog}
+      >
         <DialogContent
           className="sm:max-w-[680px] max-h-[85vh] flex flex-col p-0 gap-0 overflow-hidden"
-          onOpenAutoFocus={e => e.preventDefault()}
+          onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <DialogHeader className="flex-shrink-0 px-6 pt-6 pb-3 pr-12 border-b border-slate-200 dark:border-slate-800">
-            <DialogTitle>
-              {editingWorkflow ? t.workflows.edit : t.workflows.create}
-            </DialogTitle>
+            <DialogTitle>{editingWorkflow ? t.workflows.edit : t.workflows.create}</DialogTitle>
           </DialogHeader>
           {/* Scrollable body: name + steps list only */}
           <div className="flex-1 min-h-0 overflow-y-auto px-6 py-4">
@@ -406,9 +394,7 @@ function WorkflowsComponent() {
                 <Input
                   id="name"
                   value={formData.name}
-                  onChange={e =>
-                    setFormData(prev => ({ ...prev, name: e.target.value }))
-                  }
+                  onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                   placeholder={t.workflows.namePlaceholder}
                 />
               </div>
@@ -475,9 +461,7 @@ function WorkflowsComponent() {
                             </Label>
                             <Input
                               value={step.title}
-                              onChange={e =>
-                                updateStepTitle(step.id, e.target.value)
-                              }
+                              onChange={(e) => updateStepTitle(step.id, e.target.value)}
                               placeholder={t.workflows.stepNamePlaceholder}
                               className="h-10 bg-white dark:bg-slate-950"
                             />
@@ -488,12 +472,8 @@ function WorkflowsComponent() {
                             </Label>
                             <Textarea
                               value={step.description}
-                              onChange={e =>
-                                updateStepDescription(step.id, e.target.value)
-                              }
-                              placeholder={
-                                t.workflows.stepDescriptionPlaceholder
-                              }
+                              onChange={(e) => updateStepDescription(step.id, e.target.value)}
+                              placeholder={t.workflows.stepDescriptionPlaceholder}
                               rows={7}
                               className="resize-y min-h-[180px] !rounded-lg bg-white dark:bg-slate-950"
                             />
@@ -510,7 +490,10 @@ function WorkflowsComponent() {
             </div>
           </div>
           <DialogFooter className="flex-shrink-0 border-t border-slate-200 dark:border-slate-800 px-6 py-4">
-            <Button variant="outline" onClick={() => setShowDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowDialog(false)}
+            >
               {t.common.cancel}
             </Button>
             <Button

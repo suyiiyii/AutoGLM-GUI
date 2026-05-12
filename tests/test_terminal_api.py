@@ -90,7 +90,9 @@ class FakeTerminalManager:
         return None
 
     def authenticate_session(
-        self, session_id: str, session_token: str | None
+        self,
+        session_id: str,
+        session_token: str | None,
     ) -> FakeTerminalSession | None:
         if (
             session_id == self.session.session_id
@@ -185,7 +187,7 @@ def test_terminal_websocket_streams_backlog_and_input(terminal_env: dict) -> Non
                 "type": "output",
                 "stream": "stdout",
                 "data": "List of devices attached\n",
-            }
+            },
         )
 
         assert websocket.receive_json() == {
@@ -200,7 +202,8 @@ def test_terminal_websocket_streams_backlog_and_input(terminal_env: dict) -> Non
 
 
 def test_terminal_disabled_for_non_local_host_by_default(
-    terminal_env: dict, monkeypatch: pytest.MonkeyPatch
+    terminal_env: dict,
+    monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     monkeypatch.setenv("AUTOGLM_SERVER_HOST", "0.0.0.0")
     monkeypatch.delenv("AUTOGLM_ENABLE_WEB_TERMINAL", raising=False)

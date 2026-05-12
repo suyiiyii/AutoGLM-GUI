@@ -44,11 +44,7 @@ function formatDuration(ms: number): string {
   return `${minutes}m ${seconds}s`;
 }
 
-export function HistoryItemCard({
-  item,
-  onSelect,
-  onDelete,
-}: HistoryItemCardProps) {
+export function HistoryItemCard({ item, onSelect, onDelete }: HistoryItemCardProps) {
   const t = useTranslation();
 
   const handleDelete = (e: React.MouseEvent) => {

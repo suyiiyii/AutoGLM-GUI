@@ -124,7 +124,7 @@ def test_each_request_carries_exactly_one_image(monkeypatch):
         [
             "I will tap the icon.\ndo(action=Tap(element=[500, 500]))",
             "All done.\nfinish(message=ok)",
-        ]
+        ],
     )
 
     async def fake_stream(messages):
@@ -135,12 +135,14 @@ def test_each_request_carries_exactly_one_image(monkeypatch):
         [
             ActionResult(success=True, should_finish=False, message=None),
             ActionResult(success=True, should_finish=True, message="ok"),
-        ]
+        ],
     )
 
     monkeypatch.setattr(agent, "_stream_openai", fake_stream)
     monkeypatch.setattr(
-        agent.action_handler, "execute", lambda *a, **k: next(action_results)
+        agent.action_handler,
+        "execute",
+        lambda *a, **k: next(action_results),
     )
 
     async def run() -> None:
@@ -195,7 +197,7 @@ def test_user_reference_images_are_sent_on_first_request_only(monkeypatch):
         [
             "I will tap.\ndo(action=Tap(element=[500, 500]))",
             "Done.\nfinish(message=ok)",
-        ]
+        ],
     )
 
     async def fake_stream(messages):
@@ -206,12 +208,14 @@ def test_user_reference_images_are_sent_on_first_request_only(monkeypatch):
         [
             ActionResult(success=True, should_finish=False, message=None),
             ActionResult(success=True, should_finish=True, message="ok"),
-        ]
+        ],
     )
 
     monkeypatch.setattr(agent, "_stream_openai", fake_stream)
     monkeypatch.setattr(
-        agent.action_handler, "execute", lambda *a, **k: next(action_results)
+        agent.action_handler,
+        "execute",
+        lambda *a, **k: next(action_results),
     )
 
     async def run() -> None:

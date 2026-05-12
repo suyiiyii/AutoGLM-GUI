@@ -41,16 +41,8 @@ import {
   type TaskRunResponse,
   type TaskStatus,
 } from '../api';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { HistoryItemCard } from './HistoryItemCard';
 
 interface ChatKitPanelProps {
@@ -115,17 +107,13 @@ function applyTaskEventToTask(
     nextTask.finished_at = event.created_at;
   } else if (event.event_type === 'error') {
     nextTask.status = 'FAILED';
-    nextTask.final_message =
-      typeof payload.message === 'string' ? payload.message : null;
-    nextTask.error_message =
-      typeof payload.message === 'string' ? payload.message : null;
+    nextTask.final_message = typeof payload.message === 'string' ? payload.message : null;
+    nextTask.error_message = typeof payload.message === 'string' ? payload.message : null;
     nextTask.finished_at = event.created_at;
   } else if (event.event_type === 'cancelled') {
     nextTask.status = 'CANCELLED';
-    nextTask.final_message =
-      typeof payload.message === 'string' ? payload.message : null;
-    nextTask.error_message =
-      typeof payload.message === 'string' ? payload.message : null;
+    nextTask.final_message = typeof payload.message === 'string' ? payload.message : null;
+    nextTask.error_message = typeof payload.message === 'string' ? payload.message : null;
     nextTask.finished_at = event.created_at;
   }
 
@@ -136,23 +124,19 @@ function reconcileTaskRun(
   task: TaskRunResponse,
   events: TaskEventRecordResponse[]
 ): TaskRunResponse {
-  return events.reduce(
-    (currentTask, event) => applyTaskEventToTask(currentTask, event),
-    { ...task }
-  );
+  return events.reduce((currentTask, event) => applyTaskEventToTask(currentTask, event), {
+    ...task,
+  });
 }
 
-function buildExecutionSteps(
-  events: TaskEventRecordResponse[]
-): ExecutionStep[] {
+function buildExecutionSteps(events: TaskEventRecordResponse[]): ExecutionStep[] {
   const steps: ExecutionStep[] = [];
 
-  events.forEach(event => {
+  events.forEach((event) => {
     const payload = event.payload;
 
     if (event.event_type === 'tool_call') {
-      const toolName =
-        typeof payload.tool_name === 'string' ? payload.tool_name : 'unknown';
+      const toolName = typeof payload.tool_name === 'string' ? payload.tool_name : 'unknown';
       steps.push({
         id: `step-${event.task_id}-${event.seq}`,
         type: 'tool_call',
@@ -163,19 +147,16 @@ function buildExecutionSteps(
               ? '获取设备列表'
               : `调用工具: ${toolName}`,
         toolName,
-        toolArgs:
-          (payload.tool_args as Record<string, unknown> | undefined) || {},
+        toolArgs: (payload.tool_args as Record<string, unknown> | undefined) || {},
         timestamp: new Date(event.created_at),
         isExpanded: true,
       });
     } else if (event.event_type === 'tool_result') {
-      const toolName =
-        typeof payload.tool_name === 'string' ? payload.tool_name : 'unknown';
+      const toolName = typeof payload.tool_name === 'string' ? payload.tool_name : 'unknown';
       steps.push({
         id: `step-${event.task_id}-${event.seq}`,
         type: 'tool_result',
-        content:
-          toolName === 'chat' ? 'Phone Agent 执行结果' : `${toolName} 结果`,
+        content: toolName === 'chat' ? 'Phone Agent 执行结果' : `${toolName} 结果`,
         toolName,
         toolResult:
           typeof payload.result === 'string'
@@ -190,10 +171,7 @@ function buildExecutionSteps(
   return steps;
 }
 
-function buildAssistantMessage(
-  task: TaskRunResponse,
-  events: TaskEventRecordResponse[]
-): Message {
+function buildAssistantMessage(task: TaskRunResponse, events: TaskEventRecordResponse[]): Message {
   const steps = buildExecutionSteps(events);
   let content = task.final_message || task.error_message || '';
 
@@ -225,18 +203,13 @@ function buildAssistantMessage(
     success:
       task.status === 'SUCCEEDED'
         ? true
-        : task.status === 'FAILED' ||
-            task.status === 'CANCELLED' ||
-            task.status === 'INTERRUPTED'
+        : task.status === 'FAILED' || task.status === 'CANCELLED' || task.status === 'INTERRUPTED'
           ? false
           : undefined,
   };
 }
 
-function buildMessagePair(
-  task: TaskRunResponse,
-  events: TaskEventRecordResponse[]
-): Message[] {
+function buildMessagePair(task: TaskRunResponse, events: TaskEventRecordResponse[]): Message[] {
   return [
     {
       id: `${task.id}-user`,
@@ -272,39 +245,29 @@ export function ChatKitPanel({
   const taskStreamRef = React.useRef<{ close: () => void } | null>(null);
   const currentTaskIdRef = React.useRef<string | null>(null);
   const taskRunsRef = React.useRef<Record<string, TaskRunResponse>>({});
-  const taskEventsRef = React.useRef<Record<string, TaskEventRecordResponse[]>>(
-    {}
-  );
-  const sessionStorageKey = React.useMemo(
-    () => `layered-task-session:${deviceId}`,
-    [deviceId]
-  );
+  const taskEventsRef = React.useRef<Record<string, TaskEventRecordResponse[]>>({});
+  const sessionStorageKey = React.useMemo(() => `layered-task-session:${deviceId}`, [deviceId]);
 
   // Workflow state
   const [workflows, setWorkflows] = React.useState<Workflow[]>([]);
   const [showWorkflowPopover, setShowWorkflowPopover] = React.useState(false);
 
   // History state
-  const [historyItems, setHistoryItems] = React.useState<
-    HistoryRecordResponse[]
-  >([]);
+  const [historyItems, setHistoryItems] = React.useState<HistoryRecordResponse[]>([]);
   const [showHistoryPopover, setShowHistoryPopover] = React.useState(false);
 
   // Handle scroll position tracking
-  const handleScroll = React.useCallback(
-    (event: React.UIEvent<HTMLDivElement>) => {
-      const target = event.currentTarget;
-      const scrollHeight = target.scrollHeight;
-      const scrollTop = target.scrollTop;
-      const clientHeight = target.clientHeight;
-      const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
+  const handleScroll = React.useCallback((event: React.UIEvent<HTMLDivElement>) => {
+    const target = event.currentTarget;
+    const scrollHeight = target.scrollHeight;
+    const scrollTop = target.scrollTop;
+    const clientHeight = target.clientHeight;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
 
-      const nearBottom = distanceFromBottom < 200;
-      isNearBottomRef.current = nearBottom;
-      setShowScrollToBottom(!nearBottom);
-    },
-    []
-  );
+    const nearBottom = distanceFromBottom < 200;
+    isNearBottomRef.current = nearBottom;
+    setShowScrollToBottom(!nearBottom);
+  }, []);
 
   // Auto-scroll to bottom only if user was near bottom before the update.
   // Uses a ref (not state) to avoid the race condition where smooth-scroll
@@ -376,9 +339,7 @@ export function ChatKitPanel({
       id: `${record.id}-agent`,
       role: 'assistant',
       content: record.final_message,
-      timestamp: record.end_time
-        ? new Date(record.end_time)
-        : new Date(record.start_time),
+      timestamp: record.end_time ? new Date(record.end_time) : new Date(record.start_time),
       steps: [],
       success: record.success,
       isStreaming: false,
@@ -392,10 +353,7 @@ export function ChatKitPanel({
     // conversation (with the tool-call steps) exactly like the live view.
     // Older legacy records aren't task-backed, so fall back to a flat render.
     try {
-      const [task, { events }] = await Promise.all([
-        getTask(record.id),
-        listTaskEvents(record.id),
-      ]);
+      const [task, { events }] = await Promise.all([getTask(record.id), listTaskEvents(record.id)]);
       setMessages(buildMessagePair(reconcileTaskRun(task, events), events));
     } catch {
       setMessages([userMessage, fallbackAgentMessage]);
@@ -416,7 +374,7 @@ export function ChatKitPanel({
   const handleDeleteHistoryItem = async (itemId: string) => {
     try {
       await deleteHistoryRecord(deviceSerial, itemId);
-      setHistoryItems(prev => prev.filter(item => item.id !== itemId));
+      setHistoryItems((prev) => prev.filter((item) => item.id !== itemId));
     } catch (error) {
       console.error('Failed to delete history item:', error);
     }
@@ -424,15 +382,13 @@ export function ChatKitPanel({
 
   // Toggle step expansion
   const toggleStepExpansion = (messageId: string, stepId: string) => {
-    setMessages(prev =>
-      prev.map(msg =>
+    setMessages((prev) =>
+      prev.map((msg) =>
         msg.id === messageId
           ? {
               ...msg,
-              steps: msg.steps?.map(step =>
-                step.id === stepId
-                  ? { ...step, isExpanded: !step.isExpanded }
-                  : step
+              steps: msg.steps?.map((step) =>
+                step.id === stepId ? { ...step, isExpanded: !step.isExpanded } : step
               ),
             }
           : msg
@@ -442,14 +398,10 @@ export function ChatKitPanel({
 
   const replaceTaskMessages = React.useCallback(() => {
     const orderedTasks = Object.values(taskRunsRef.current).sort(
-      (left, right) =>
-        new Date(left.created_at).getTime() -
-        new Date(right.created_at).getTime()
+      (left, right) => new Date(left.created_at).getTime() - new Date(right.created_at).getTime()
     );
     setMessages(
-      orderedTasks.flatMap(task =>
-        buildMessagePair(task, taskEventsRef.current[task.id] || [])
-      )
+      orderedTasks.flatMap((task) => buildMessagePair(task, taskEventsRef.current[task.id] || []))
     );
   }, []);
 
@@ -461,7 +413,7 @@ export function ChatKitPanel({
 
       taskStreamRef.current = streamTaskEvents(
         taskId,
-        event => {
+        (event) => {
           const existingEvents = taskEventsRef.current[taskId] || [];
           taskEventsRef.current[taskId] = [...existingEvents, event];
           const task = taskRunsRef.current[taskId];
@@ -477,7 +429,7 @@ export function ChatKitPanel({
             setAborting(false);
           }
         },
-        message => {
+        (message) => {
           setError(message);
           setLoading(false);
           setAborting(false);
@@ -497,34 +449,27 @@ export function ChatKitPanel({
 
       const { tasks } = await listTaskSessionTasks(nextSessionId);
       const orderedTasks = [...tasks].sort(
-        (left, right) =>
-          new Date(left.created_at).getTime() -
-          new Date(right.created_at).getTime()
+        (left, right) => new Date(left.created_at).getTime() - new Date(right.created_at).getTime()
       );
 
       const reconciledTasks = await Promise.all(
-        orderedTasks.map(async task => {
+        orderedTasks.map(async (task) => {
           const events = (await listTaskEvents(task.id)).events;
           taskEventsRef.current[task.id] = events;
           return reconcileTaskRun(task, events);
         })
       );
 
-      taskRunsRef.current = Object.fromEntries(
-        reconciledTasks.map(task => [task.id, task])
-      );
+      taskRunsRef.current = Object.fromEntries(reconciledTasks.map((task) => [task.id, task]));
       replaceTaskMessages();
 
-      const activeTask = [...reconciledTasks]
-        .reverse()
-        .find(task => isTaskActive(task.status));
+      const activeTask = [...reconciledTasks].reverse().find((task) => isTaskActive(task.status));
       if (activeTask) {
         currentTaskIdRef.current = activeTask.id;
         setLoading(true);
         const lastSeq =
-          taskEventsRef.current[activeTask.id]?.[
-            taskEventsRef.current[activeTask.id].length - 1
-          ]?.seq || 0;
+          taskEventsRef.current[activeTask.id]?.[taskEventsRef.current[activeTask.id].length - 1]
+            ?.seq || 0;
         attachTaskStream(activeTask.id, lastSeq);
       } else {
         currentTaskIdRef.current = null;
@@ -560,11 +505,7 @@ export function ChatKitPanel({
         }
 
         if (!nextSessionId) {
-          const session = await createTaskSession(
-            deviceId,
-            deviceSerial,
-            'layered'
-          );
+          const session = await createTaskSession(deviceId, deviceSerial, 'layered');
           nextSessionId = session.id;
           sessionStorage.setItem(sessionStorageKey, nextSessionId);
         }
@@ -577,10 +518,7 @@ export function ChatKitPanel({
         await restoreSessionConversation(nextSessionId);
       } catch (sessionError) {
         if (!disposed) {
-          console.error(
-            'Failed to initialize layered task session:',
-            sessionError
-          );
+          console.error('Failed to initialize layered task session:', sessionError);
           setError('Failed to restore layered chat session');
           setLoading(false);
         }
@@ -612,9 +550,7 @@ export function ChatKitPanel({
       const reconciledTask = reconcileTaskRun(task, initialEvents);
       taskRunsRef.current[task.id] = reconciledTask;
       taskEventsRef.current[task.id] = initialEvents;
-      currentTaskIdRef.current = isTaskActive(reconciledTask.status)
-        ? task.id
-        : null;
+      currentTaskIdRef.current = isTaskActive(reconciledTask.status) ? task.id : null;
       replaceTaskMessages();
 
       if (isTaskActive(reconciledTask.status)) {
@@ -668,11 +604,7 @@ export function ChatKitPanel({
         await resetTaskSession(sessionId);
       }
 
-      const nextSession = await createTaskSession(
-        deviceId,
-        deviceSerial,
-        'layered'
-      );
+      const nextSession = await createTaskSession(deviceId, deviceSerial, 'layered');
       sessionStorage.setItem(sessionStorageKey, nextSession.id);
       setSessionId(nextSession.id);
       taskRunsRef.current = {};
@@ -690,9 +622,7 @@ export function ChatKitPanel({
     }
   }, [deviceId, deviceSerial, sessionId, sessionStorageKey]);
 
-  const handleInputKeyDown = (
-    event: React.KeyboardEvent<HTMLTextAreaElement>
-  ) => {
+  const handleInputKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
       event.preventDefault();
       handleSend();
@@ -749,7 +679,11 @@ export function ChatKitPanel({
                 </Button>
               </PopoverTrigger>
 
-              <PopoverContent className="w-96 p-0" align="end" sideOffset={8}>
+              <PopoverContent
+                className="w-96 p-0"
+                align="end"
+                sideOffset={8}
+              >
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800">
                   <h3 className="font-semibold text-sm text-slate-900 dark:text-slate-100">
@@ -771,7 +705,7 @@ export function ChatKitPanel({
                 <ScrollArea className="h-[400px]">
                   <div className="p-4 space-y-2">
                     {historyItems.length > 0 ? (
-                      historyItems.map(item => (
+                      historyItems.map((item) => (
                         <HistoryItemCard
                           key={item.id}
                           item={item}
@@ -837,15 +771,16 @@ export function ChatKitPanel({
                   </p>
                 </div>
               ) : (
-                messages.map(message => (
-                  <div key={message.id} className="space-y-2">
+                messages.map((message) => (
+                  <div
+                    key={message.id}
+                    className="space-y-2"
+                  >
                     {message.role === 'user' ? (
                       <div className="flex justify-end">
                         <div className="max-w-[80%]">
                           <div className="bg-purple-600 text-white px-4 py-2 rounded-2xl rounded-br-sm">
-                            <p className="whitespace-pre-wrap">
-                              {message.content}
-                            </p>
+                            <p className="whitespace-pre-wrap">{message.content}</p>
                           </div>
                           <p className="text-xs text-slate-400 mt-1 text-right">
                             {message.timestamp.toLocaleTimeString()}
@@ -864,9 +799,7 @@ export function ChatKitPanel({
                               >
                                 {/* Step Header */}
                                 <button
-                                  onClick={() =>
-                                    toggleStepExpansion(message.id, step.id)
-                                  }
+                                  onClick={() => toggleStepExpansion(message.id, step.id)}
                                   className="w-full flex items-center justify-between p-3 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                                 >
                                   <div className="flex items-center gap-2">
@@ -897,55 +830,40 @@ export function ChatKitPanel({
                                 {/* Step Content */}
                                 {step.isExpanded && (
                                   <div className="px-3 pb-3 space-y-2">
-                                    {step.type === 'tool_call' &&
-                                      step.toolArgs && (
-                                        <div className="bg-white dark:bg-slate-900 rounded-lg p-3 text-sm">
-                                          <p className="text-xs text-slate-500 mb-1 font-medium">
-                                            {step.toolName === 'chat'
-                                              ? '发送给 Phone Agent 的指令:'
-                                              : '工具参数:'}
+                                    {step.type === 'tool_call' && step.toolArgs && (
+                                      <div className="bg-white dark:bg-slate-900 rounded-lg p-3 text-sm">
+                                        <p className="text-xs text-slate-500 mb-1 font-medium">
+                                          {step.toolName === 'chat'
+                                            ? '发送给 Phone Agent 的指令:'
+                                            : '工具参数:'}
+                                        </p>
+                                        {step.toolName === 'chat' ? (
+                                          <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                                            {(
+                                              step.toolArgs as {
+                                                message?: string;
+                                              }
+                                            ).message || JSON.stringify(step.toolArgs, null, 2)}
                                           </p>
-                                          {step.toolName === 'chat' ? (
-                                            <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
-                                              {(
-                                                step.toolArgs as {
-                                                  message?: string;
-                                                }
-                                              ).message ||
-                                                JSON.stringify(
-                                                  step.toolArgs,
-                                                  null,
-                                                  2
-                                                )}
-                                            </p>
-                                          ) : (
-                                            <pre className="text-xs text-slate-600 dark:text-slate-400 overflow-x-auto">
-                                              {JSON.stringify(
-                                                step.toolArgs,
-                                                null,
-                                                2
-                                              )}
-                                            </pre>
-                                          )}
-                                        </div>
-                                      )}
-                                    {step.type === 'tool_result' &&
-                                      step.toolResult && (
-                                        <div className="bg-white dark:bg-slate-900 rounded-lg p-3 text-sm">
-                                          <p className="text-xs text-slate-500 mb-1 font-medium">
-                                            执行结果:
-                                          </p>
-                                          <pre className="text-xs text-slate-600 dark:text-slate-400 overflow-x-auto whitespace-pre-wrap">
-                                            {typeof step.toolResult === 'string'
-                                              ? step.toolResult
-                                              : JSON.stringify(
-                                                  step.toolResult,
-                                                  null,
-                                                  2
-                                                )}
+                                        ) : (
+                                          <pre className="text-xs text-slate-600 dark:text-slate-400 overflow-x-auto">
+                                            {JSON.stringify(step.toolArgs, null, 2)}
                                           </pre>
-                                        </div>
-                                      )}
+                                        )}
+                                      </div>
+                                    )}
+                                    {step.type === 'tool_result' && step.toolResult && (
+                                      <div className="bg-white dark:bg-slate-900 rounded-lg p-3 text-sm">
+                                        <p className="text-xs text-slate-500 mb-1 font-medium">
+                                          执行结果:
+                                        </p>
+                                        <pre className="text-xs text-slate-600 dark:text-slate-400 overflow-x-auto whitespace-pre-wrap">
+                                          {typeof step.toolResult === 'string'
+                                            ? step.toolResult
+                                            : JSON.stringify(step.toolResult, null, 2)}
+                                        </pre>
+                                      </div>
+                                    )}
                                   </div>
                                 )}
                               </div>
@@ -967,15 +885,11 @@ export function ChatKitPanel({
                                 {message.success !== undefined && (
                                   <CheckCircle2
                                     className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
-                                      message.success
-                                        ? 'text-green-500'
-                                        : 'text-red-500'
+                                      message.success ? 'text-green-500' : 'text-red-500'
                                     }`}
                                   />
                                 )}
-                                <p className="whitespace-pre-wrap">
-                                  {message.content}
-                                </p>
+                                <p className="whitespace-pre-wrap">{message.content}</p>
                               </div>
                             </div>
                           </div>
@@ -1026,7 +940,7 @@ export function ChatKitPanel({
           <div className="flex items-end gap-3">
             <Textarea
               value={input}
-              onChange={e => setInput(e.target.value)}
+              onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleInputKeyDown}
               placeholder="描述你想要完成的任务... (Cmd+Enter 发送)"
               disabled={loading}
@@ -1049,7 +963,10 @@ export function ChatKitPanel({
                       <ListChecks className="w-4 h-4" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent align="start" className="w-72 p-3">
+                  <PopoverContent
+                    align="start"
+                    className="w-72 p-3"
+                  >
                     <div className="space-y-2">
                       <h4 className="font-medium text-sm">
                         {t.workflows?.selectWorkflow || 'Select Workflow'}
@@ -1071,15 +988,13 @@ export function ChatKitPanel({
                       ) : (
                         <ScrollArea className="h-64">
                           <div className="space-y-1">
-                            {workflows.map(workflow => (
+                            {workflows.map((workflow) => (
                               <button
                                 key={workflow.uuid}
                                 onClick={() => handleExecuteWorkflow(workflow)}
                                 className="w-full text-left p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                               >
-                                <div className="font-medium text-sm">
-                                  {workflow.name}
-                                </div>
+                                <div className="font-medium text-sm">{workflow.name}</div>
                                 <div className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
                                   {workflow.text}
                                 </div>
@@ -1092,11 +1007,14 @@ export function ChatKitPanel({
                   </PopoverContent>
                 </Popover>
               </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={8} className="max-w-xs">
+              <TooltipContent
+                side="top"
+                sideOffset={8}
+                className="max-w-xs"
+              >
                 <div className="space-y-1">
                   <p className="font-medium">
-                    {t.devicePanel?.tooltips?.workflowButton ||
-                      'Quick Workflow'}
+                    {t.devicePanel?.tooltips?.workflowButton || 'Quick Workflow'}
                   </p>
                   <p className="text-xs opacity-80">
                     {t.devicePanel?.tooltips?.workflowButtonDesc ||

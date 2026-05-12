@@ -27,6 +27,7 @@ def type_text(text: str, device_id: str | None = None) -> None:
                 "msg",
                 encoded_text,
             ],
+            check=False,
             capture_output=True,
             text=True,
         )
@@ -38,6 +39,7 @@ def clear_text(device_id: str | None = None) -> None:
     with trace_span("adb.clear_text", attrs={"device_id": device_id}):
         subprocess.run(
             adb_prefix + ["shell", "am", "broadcast", "-a", "ADB_CLEAR_TEXT"],
+            check=False,
             capture_output=True,
             text=True,
         )
@@ -52,6 +54,7 @@ def detect_and_set_adb_keyboard(device_id: str | None = None) -> str:
     ):
         result = subprocess.run(
             adb_prefix + ["shell", "settings", "get", "secure", "default_input_method"],
+            check=False,
             capture_output=True,
             text=True,
         )
@@ -64,6 +67,7 @@ def detect_and_set_adb_keyboard(device_id: str | None = None) -> str:
         ):
             subprocess.run(
                 adb_prefix + ["shell", "ime", "set", "com.android.adbkeyboard/.AdbIME"],
+                check=False,
                 capture_output=True,
                 text=True,
             )
@@ -81,5 +85,8 @@ def restore_keyboard(ime: str, device_id: str | None = None) -> None:
         attrs={"device_id": device_id},
     ):
         subprocess.run(
-            adb_prefix + ["shell", "ime", "set", ime], capture_output=True, text=True
+            adb_prefix + ["shell", "ime", "set", ime],
+            check=False,
+            capture_output=True,
+            text=True,
         )

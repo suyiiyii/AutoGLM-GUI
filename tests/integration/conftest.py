@@ -12,10 +12,10 @@ import pytest
 
 def _run_autoglm_server(port: int, llm_url: str):
     """Run AutoGLM-GUI server in a subprocess."""
-    import uvicorn
-
     # Delete config file to use environment variables
     import os
+
+    import uvicorn
 
     os.environ["AUTOGLM_BASE_URL"] = llm_url + "/v1"
     os.environ["AUTOGLM_MODEL_NAME"] = "mock-glm-model"
@@ -166,7 +166,9 @@ def mock_agent_server(request):
 
     port = find_free_port(start=19000, end=19999)
     proc = multiprocessing.Process(
-        target=_run_agent_server, args=(port, scenario_path), daemon=True
+        target=_run_agent_server,
+        args=(port, scenario_path),
+        daemon=True,
     )
     proc.start()
 
@@ -254,7 +256,7 @@ def _run_multi_agent_server(port: int):
                 "platform": "android",
                 "connection_type": "mock",
             },
-        ]
+        ],
     )
 
     app = create_app()
@@ -281,7 +283,9 @@ def local_server(mock_llm_server: str, mock_agent_server: str):
 
     # Start server in subprocess
     proc = multiprocessing.Process(
-        target=_run_autoglm_server, args=(port, llm_url), daemon=True
+        target=_run_autoglm_server,
+        args=(port, llm_url),
+        daemon=True,
     )
     proc.start()
 
@@ -294,7 +298,7 @@ def local_server(mock_llm_server: str, mock_agent_server: str):
         proc.join(timeout=2)
         if proc.is_alive():
             proc.kill()
-        raise RuntimeError(f"Server failed to start: {e}")
+        raise RuntimeError(f"Server failed to start: {e}") from e
 
     yield {
         "access_url": access_url,
@@ -327,7 +331,9 @@ def mock_agent_server_multi():
     """
     port = find_free_port(start=19000, end=19999)
     proc = multiprocessing.Process(
-        target=_run_multi_agent_server, args=(port,), daemon=True
+        target=_run_multi_agent_server,
+        args=(port,),
+        daemon=True,
     )
     proc.start()
 

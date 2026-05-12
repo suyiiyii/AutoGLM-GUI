@@ -82,7 +82,11 @@ class MockDevice(DeviceProtocol):
         self._state_machine.handle_tap(x, y)
 
     def long_press(
-        self, x: int, y: int, duration_ms: int = 3000, delay: float | None = None
+        self,
+        x: int,
+        y: int,
+        duration_ms: int = 3000,
+        delay: float | None = None,
     ) -> None:
         """Handle long press (treated as tap for testing)."""
         # Pass pixel coordinates directly to state machine (no conversion)
@@ -172,7 +176,7 @@ class MockDeviceManager(DeviceManagerProtocol):
                 model="MockPhone",
                 platform="android",
                 connection_type="mock",
-            )
+            ),
         ]
 
     def get_device(self, device_id: str) -> MockDevice:

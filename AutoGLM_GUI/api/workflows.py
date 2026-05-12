@@ -14,7 +14,7 @@ from AutoGLM_GUI.schemas import (
 router = APIRouter()
 
 
-@router.get("/api/workflows", response_model=WorkflowListResponse)
+@router.get("/api/workflows")
 def list_workflows() -> WorkflowListResponse:
     """获取所有 workflows."""
     from AutoGLM_GUI.workflow_manager import workflow_manager
@@ -24,7 +24,7 @@ def list_workflows() -> WorkflowListResponse:
     return WorkflowListResponse(workflows=workflows)
 
 
-@router.get("/api/workflows/{workflow_uuid}", response_model=WorkflowResponse)
+@router.get("/api/workflows/{workflow_uuid}")
 def get_workflow(workflow_uuid: str) -> WorkflowResponse:
     """获取单个 workflow."""
     from AutoGLM_GUI.workflow_manager import workflow_manager
@@ -35,27 +35,30 @@ def get_workflow(workflow_uuid: str) -> WorkflowResponse:
     return WorkflowResponse(**workflow)
 
 
-@router.post("/api/workflows", response_model=WorkflowResponse)
+@router.post("/api/workflows")
 def create_workflow(request: WorkflowCreate) -> WorkflowResponse:
     """创建新 workflow."""
     from AutoGLM_GUI.workflow_manager import workflow_manager
 
     try:
         workflow = workflow_manager.create_workflow(
-            name=request.name, text=request.text
+            name=request.name,
+            text=request.text,
         )
         return WorkflowResponse(**workflow)
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
-@router.put("/api/workflows/{workflow_uuid}", response_model=WorkflowResponse)
+@router.put("/api/workflows/{workflow_uuid}")
 def update_workflow(workflow_uuid: str, request: WorkflowUpdate) -> WorkflowResponse:
     """更新 workflow."""
     from AutoGLM_GUI.workflow_manager import workflow_manager
 
     workflow = workflow_manager.update_workflow(
-        uuid=workflow_uuid, name=request.name, text=request.text
+        uuid=workflow_uuid,
+        name=request.name,
+        text=request.text,
     )
     if not workflow:
         raise HTTPException(status_code=404, detail="Workflow not found")

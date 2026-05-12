@@ -57,7 +57,7 @@ class TestLocalE2E:
                             timeout=10,
                         )
                         print(
-                            f"[Local E2E] Cleaned up existing device {device_id}: {resp.status_code}"
+                            f"[Local E2E] Cleaned up existing device {device_id}: {resp.status_code}",
                         )
         except Exception as e:
             print(f"[Local E2E] Failed to cleanup devices: {e}")
@@ -229,7 +229,7 @@ class TestLocalE2E:
                             timeout=10,
                         )
                         print(
-                            f"[Local E2E] Cleaned up existing device {device_id}: {resp.status_code}"
+                            f"[Local E2E] Cleaned up existing device {device_id}: {resp.status_code}",
                         )
         except Exception as e:
             print(f"[Local E2E] Failed to cleanup devices: {e}")
@@ -340,7 +340,7 @@ class TestLocalE2E:
                 9. 确认返回
                 10. 任务完成
                 finish(message="成功完成10步微信操作任务！")""",
-            ]
+            ],
         )
 
         # Send chat instruction

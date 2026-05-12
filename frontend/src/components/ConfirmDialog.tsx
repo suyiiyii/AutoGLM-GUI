@@ -34,19 +34,17 @@ export function ConfirmDialog({
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
       <div
         className="bg-white dark:bg-gray-800 rounded-xl shadow-xl max-w-md w-full overflow-hidden transform transition-all animate-in zoom-in-95 duration-200"
-        onClick={e => e.stopPropagation()}
+        onClick={(e) => e.stopPropagation()}
       >
         <div className="p-6">
-          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
-            {title}
-          </h3>
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">{title}</h3>
           <p className="text-gray-500 dark:text-gray-400 text-sm leading-relaxed whitespace-pre-wrap">
             {content}
           </p>
         </div>
         <div className="bg-gray-50 dark:bg-gray-700/50 px-6 py-4 flex justify-end gap-3">
           <button
-            onClick={e => {
+            onClick={(e) => {
               e.stopPropagation();
               onCancel();
             }}
@@ -56,7 +54,7 @@ export function ConfirmDialog({
             {cancelText}
           </button>
           <button
-            onClick={e => {
+            onClick={(e) => {
               e.stopPropagation();
               onConfirm();
             }}

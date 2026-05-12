@@ -13,7 +13,8 @@ def is_windows() -> bool:
 
 
 def run_cmd_silently_sync(
-    cmd: Sequence[str], timeout: float | None = None
+    cmd: Sequence[str],
+    timeout: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run a command synchronously, suppressing output but preserving it in the result.
 
@@ -27,12 +28,17 @@ def run_cmd_silently_sync(
         CompletedProcess with stdout/stderr captured
     """
     return subprocess.run(
-        cmd, capture_output=True, text=True, check=False, timeout=timeout
+        cmd,
+        capture_output=True,
+        text=True,
+        check=False,
+        timeout=timeout,
     )
 
 
 async def run_cmd_silently(
-    cmd: Sequence[str], timeout: float | None = None
+    cmd: Sequence[str],
+    timeout: float | None = None,
 ) -> subprocess.CompletedProcess[str]:
     """Run a command, suppressing output but preserving it in the result; safe for async contexts on all platforms."""
     if is_windows():
@@ -48,7 +54,9 @@ async def run_cmd_silently(
 
     # Use PIPE on macOS/Linux to capture output
     process = await asyncio.create_subprocess_exec(
-        *cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+        *cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
     )
     try:
         communicate = process.communicate()
@@ -56,10 +64,10 @@ async def run_cmd_silently(
             stdout, stderr = await communicate
         else:
             stdout, stderr = await asyncio.wait_for(communicate, timeout=timeout)
-    except asyncio.TimeoutError:
+    except TimeoutError:
         process.kill()
         await process.communicate()
-        raise subprocess.TimeoutExpired(cmd, timeout or 0.0)
+        raise subprocess.TimeoutExpired(cmd, timeout or 0.0) from None
     # Decode bytes to string for API consistency across platforms
     stdout_str = stdout.decode("utf-8") if stdout else ""
     stderr_str = stderr.decode("utf-8") if stderr else ""
@@ -69,7 +77,9 @@ async def run_cmd_silently(
 
 
 async def spawn_process(
-    cmd: Sequence[str], *, capture_output: bool = False
+    cmd: Sequence[str],
+    *,
+    capture_output: bool = False,
 ) -> subprocess.Popen[bytes] | AsyncProcess:
     """Start a long-running process with optional stdio capture."""
     stdout = subprocess.PIPE if capture_output else None

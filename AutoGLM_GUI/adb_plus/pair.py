@@ -34,7 +34,8 @@ def pair_device(
     try:
         # Execute: adb pair ip:port pairing_code
         result = run_cmd_silently_sync(
-            [adb_path, "pair", address, pairing_code], timeout=30
+            [adb_path, "pair", address, pairing_code],
+            timeout=30,
         )
 
         output = result.stdout + result.stderr

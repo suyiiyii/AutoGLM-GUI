@@ -11,7 +11,7 @@ Features:
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from threading import RLock
 from typing import Self
@@ -109,7 +109,7 @@ class DeviceGroupManager:
             for group in groups:
                 if group.id == group_id:
                     group.name = name
-                    group.updated_at = datetime.now()
+                    group.updated_at = datetime.now(UTC)
                     self._save_data(groups, assignments)
                     logger.info(f"Updated device group: {name} (id={group_id})")
                     return group
@@ -145,7 +145,7 @@ class DeviceGroupManager:
                 self._save_data(groups, assignments)
                 logger.info(
                     f"Deleted device group: id={group_id}, "
-                    f"moved {moved_count} device(s) to default group"
+                    f"moved {moved_count} device(s) to default group",
                 )
                 return True
 
@@ -176,7 +176,7 @@ class DeviceGroupManager:
             # 更新 order 值
             for order, gid in enumerate(group_ids):
                 group_map[gid].order = order
-                group_map[gid].updated_at = datetime.now()
+                group_map[gid].updated_at = datetime.now(UTC)
 
             self._save_data(groups, assignments)
             logger.info(f"Reordered {len(group_ids)} groups")
@@ -206,7 +206,7 @@ class DeviceGroupManager:
 
             if old_group != group_id:
                 logger.info(
-                    f"Assigned device {serial} to group {group_id} (was: {old_group})"
+                    f"Assigned device {serial} to group {group_id} (was: {old_group})",
                 )
             return True
 
@@ -300,7 +300,7 @@ class DeviceGroupManager:
             self._assignments_cache = assignments
             self._file_mtime = current_mtime
             logger.debug(
-                f"Loaded {len(groups)} groups, {len(assignments)} device assignments"
+                f"Loaded {len(groups)} groups, {len(assignments)} device assignments",
             )
             return groups.copy(), assignments.copy()
 
@@ -311,7 +311,9 @@ class DeviceGroupManager:
             return [default_group], {}
 
     def _save_data(
-        self, groups: list[DeviceGroup], assignments: dict[str, str]
+        self,
+        groups: list[DeviceGroup],
+        assignments: dict[str, str],
     ) -> bool:
         """原子写入文件.
 
@@ -341,7 +343,7 @@ class DeviceGroupManager:
             self._assignments_cache = assignments.copy()
             self._file_mtime = self._groups_path.stat().st_mtime
             logger.debug(
-                f"Saved {len(groups)} groups, {len(assignments)} device assignments"
+                f"Saved {len(groups)} groups, {len(assignments)} device assignments",
             )
             return True
 

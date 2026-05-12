@@ -10,7 +10,6 @@ from pydantic import BaseModel, Field, field_validator, model_validator
 from AutoGLM_GUI.device_metadata_manager import DISPLAY_NAME_MAX_LENGTH
 from AutoGLM_GUI.task_store import TaskSessionStatus, TaskStatus
 
-
 TASK_IMAGE_ATTACHMENT_MAX_COUNT = 3
 TASK_IMAGE_ATTACHMENT_MAX_BYTES = 5 * 1024 * 1024
 TASK_IMAGE_ATTACHMENT_MAX_TOTAL_BYTES = 12 * 1024 * 1024
@@ -365,7 +364,7 @@ class ConfigSaveRequest(BaseModel):
         if v is not None and v.strip():
             if not re.match(r"^https?://", v):
                 raise ValueError(
-                    "decision_base_url must start with http:// or https://"
+                    "decision_base_url must start with http:// or https://",
                 )
             return v.rstrip("/")
         return None
@@ -832,7 +831,7 @@ class TaskImageAttachment(BaseModel):
         mime_type = v.strip().lower()
         if mime_type not in TASK_IMAGE_ATTACHMENT_MIME_TYPES:
             raise ValueError(
-                "unsupported image type; expected image/png, image/jpeg, or image/webp"
+                "unsupported image type; expected image/png, image/jpeg, or image/webp",
             )
         return mime_type
 
@@ -880,7 +879,8 @@ class TaskSubmitRequest(BaseModel):
     @field_validator("attachments")
     @classmethod
     def validate_attachments_count(
-        cls, v: list[TaskImageAttachment]
+        cls,
+        v: list[TaskImageAttachment],
     ) -> list[TaskImageAttachment]:
         if len(v) > TASK_IMAGE_ATTACHMENT_MAX_COUNT:
             raise ValueError("too many images (max 3)")
@@ -995,7 +995,7 @@ class ScheduledTaskCreate(BaseModel):
         parts = v.strip().split()
         if len(parts) != 5:
             raise ValueError(
-                "cron_expression must have 5 fields (minute hour day month weekday)"
+                "cron_expression must have 5 fields (minute hour day month weekday)",
             )
         return v.strip()
 
@@ -1011,7 +1011,7 @@ class ScheduledTaskCreate(BaseModel):
         """验证必须指定 device_serialnos 或 device_group_id 之一."""
         if not self.device_serialnos and not self.device_group_id:
             raise ValueError(
-                "either device_serialnos or device_group_id must be specified"
+                "either device_serialnos or device_group_id must be specified",
             )
 
 
@@ -1053,7 +1053,7 @@ class ScheduledTaskUpdate(BaseModel):
         parts = v.strip().split()
         if len(parts) != 5:
             raise ValueError(
-                "cron_expression must have 5 fields (minute hour day month weekday)"
+                "cron_expression must have 5 fields (minute hour day month weekday)",
             )
         return v.strip()
 
@@ -1252,7 +1252,7 @@ class DeviceNameUpdateRequest(BaseModel):
             return None
         if len(v) > DISPLAY_NAME_MAX_LENGTH:
             raise ValueError(
-                f"display_name too long (max {DISPLAY_NAME_MAX_LENGTH} characters)"
+                f"display_name too long (max {DISPLAY_NAME_MAX_LENGTH} characters)",
             )
         return v
 

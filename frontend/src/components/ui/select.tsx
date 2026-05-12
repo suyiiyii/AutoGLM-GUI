@@ -1,11 +1,7 @@
 import * as React from 'react';
 import { ChevronDown, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 
 interface SelectContextValue {
   value: string;
@@ -14,9 +10,7 @@ interface SelectContextValue {
   setOpen: (open: boolean) => void;
 }
 
-const SelectContext = React.createContext<SelectContextValue | undefined>(
-  undefined
-);
+const SelectContext = React.createContext<SelectContextValue | undefined>(undefined);
 
 interface SelectProps {
   value?: string;
@@ -36,7 +30,10 @@ const Select = ({ value = '', onValueChange, children }: SelectProps) => {
         setOpen,
       }}
     >
-      <Popover open={open} onOpenChange={setOpen}>
+      <Popover
+        open={open}
+        onOpenChange={setOpen}
+      >
         {children}
       </Popover>
     </SelectContext.Provider>
@@ -73,9 +70,7 @@ const SelectValue = ({ placeholder }: { placeholder?: string }) => {
   if (!context) throw new Error('SelectValue must be used within Select');
 
   return (
-    <span className={context.value ? '' : 'text-slate-500'}>
-      {context.value || placeholder}
-    </span>
+    <span className={context.value ? '' : 'text-slate-500'}>{context.value || placeholder}</span>
   );
 };
 
@@ -87,9 +82,7 @@ const SelectContent = ({
   className?: string;
 }) => {
   return (
-    <PopoverContent
-      className={cn('w-[var(--radix-popover-trigger-width)] p-1', className)}
-    >
+    <PopoverContent className={cn('w-[var(--radix-popover-trigger-width)] p-1', className)}>
       {children}
     </PopoverContent>
   );
@@ -102,12 +95,7 @@ interface SelectItemProps {
   className?: string;
 }
 
-const SelectItem = ({
-  value,
-  children,
-  disabled,
-  className,
-}: SelectItemProps) => {
+const SelectItem = ({ value, children, disabled, className }: SelectItemProps) => {
   const context = React.useContext(SelectContext);
   if (!context) throw new Error('SelectItem must be used within Select');
 

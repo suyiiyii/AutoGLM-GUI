@@ -32,6 +32,7 @@ def _is_docker_available() -> bool:
     try:
         result = subprocess.run(
             ["docker", "info"],
+            check=False,
             capture_output=True,
             timeout=5,
         )
@@ -45,7 +46,7 @@ pytestmark = [
     pytest.mark.skipif(
         not _is_docker_available(),
         reason="Docker is not installed or not running. Skip Docker E2E tests.",
-    )
+    ),
 ]
 
 
@@ -69,6 +70,7 @@ def docker_container(mock_agent_server: str, mock_llm_server: str):
     # Clean up any existing container with same name (shouldn't exist, but be safe)
     subprocess.run(
         ["docker", "rm", "-f", container_name],
+        check=False,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -90,7 +92,7 @@ def docker_container(mock_agent_server: str, mock_llm_server: str):
                 wait_time = (attempt + 1) * 5  # Exponential backoff: 5s, 10s, 15s
                 print(
                     f"[Docker E2E] Docker build failed (attempt {attempt + 1}/{max_retries}), "
-                    f"retrying in {wait_time}s..."
+                    f"retrying in {wait_time}s...",
                 )
                 time.sleep(wait_time)
             else:
@@ -138,7 +140,7 @@ def docker_container(mock_agent_server: str, mock_llm_server: str):
     )
 
     print("[Docker E2E] Waiting for container to start...")
-    for i in range(30):
+    for _i in range(30):
         try:
             resp = httpx.get(f"{access_url}/api/health", timeout=2)
             if resp.status_code == 200:
@@ -162,11 +164,13 @@ def docker_container(mock_agent_server: str, mock_llm_server: str):
     print(f"[Docker E2E] Stopping container: {container_name}")
     subprocess.run(
         ["docker", "stop", container_name],
+        check=False,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
     subprocess.run(
         ["docker", "rm", container_name],
+        check=False,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -175,6 +179,7 @@ def docker_container(mock_agent_server: str, mock_llm_server: str):
     print(f"[Docker E2E] Removing image: {image_name}")
     subprocess.run(
         ["docker", "rmi", image_name],
+        check=False,
         stdout=subprocess.DEVNULL,
         stderr=subprocess.DEVNULL,
     )
@@ -213,7 +218,7 @@ class TestDockerE2E:
                             timeout=10,
                         )
                         print(
-                            f"[Docker E2E] Cleaned up existing device {device_id}: {resp.status_code}"
+                            f"[Docker E2E] Cleaned up existing device {device_id}: {resp.status_code}",
                         )
         except Exception as e:
             print(f"[Docker E2E] Failed to cleanup devices: {e}")
@@ -240,16 +245,16 @@ class TestDockerE2E:
                 print("[Docker E2E] ")
                 print("[Docker E2E] DNS Resolution Error - Troubleshooting:")
                 print(
-                    f"[Docker E2E]   1. Check if mock agent is running: curl {remote_url}/health"
+                    f"[Docker E2E]   1. Check if mock agent is running: curl {remote_url}/health",
                 )
                 print(
-                    f"[Docker E2E]   2. Test from container: docker exec autoglm-e2e-test curl {remote_url}/health"
+                    f"[Docker E2E]   2. Test from container: docker exec autoglm-e2e-test curl {remote_url}/health",
                 )
                 print(
-                    "[Docker E2E]   3. Verify Docker Desktop supports host.docker.internal"
+                    "[Docker E2E]   3. Verify Docker Desktop supports host.docker.internal",
                 )
                 print(
-                    "[Docker E2E]   4. Try: docker run --add-host=host.docker.internal:host-gateway ..."
+                    "[Docker E2E]   4. Try: docker run --add-host=host.docker.internal:host-gateway ...",
                 )
                 print("[Docker E2E] ")
 

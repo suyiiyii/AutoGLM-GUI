@@ -50,7 +50,7 @@ class DroidRunAgent:
                 "chunk": (
                     "[DroidRun 模式] 注意：此模式需要在 Android 设备上安装 DroidRun Portal APK。\n"
                     "如未安装，请先运行：droidrun setup --device <serial>"
-                )
+                ),
             },
         }
 
@@ -59,11 +59,11 @@ class DroidRunAgent:
             from droidrun.agent.codeact.events import (  # pyright: ignore[reportMissingImports]
                 CodeActResponseEvent,
             )
-            from droidrun.agent.droid.droid_agent import (  # pyright: ignore[reportMissingImports]
-                DroidAgent,
-            )
             from droidrun.agent.droid import (  # pyright: ignore[reportMissingImports]
                 events as droid_events,
+            )
+            from droidrun.agent.droid.droid_agent import (  # pyright: ignore[reportMissingImports]
+                DroidAgent,
             )
             from droidrun.agent.utils.llm_picker import (  # pyright: ignore[reportMissingImports]
                 load_llm,
@@ -78,7 +78,7 @@ class DroidRunAgent:
                 "data": {
                     "message": (
                         f"droidrun 未安装，请运行：uv pip install droidrun\n错误：{e}"
-                    )
+                    ),
                 },
             }
             return
@@ -86,12 +86,14 @@ class DroidRunAgent:
         # droidrun 0.4.x: CodeActResultEvent; 0.5.x: FastAgentResultEvent
         codeact_result_event_cls = getattr(droid_events, "CodeActResultEvent", None)
         fast_agent_result_event_cls = getattr(
-            droid_events, "FastAgentResultEvent", None
+            droid_events,
+            "FastAgentResultEvent",
+            None,
         )
-        ExecutorResultEvent = droid_events.ExecutorResultEvent
-        FinalizeEvent = droid_events.FinalizeEvent
-        ManagerPlanEvent = droid_events.ManagerPlanEvent
-        ResultEvent = droid_events.ResultEvent
+        executor_result_event = droid_events.ExecutorResultEvent
+        finalize_event = droid_events.FinalizeEvent
+        manager_plan_event = droid_events.ManagerPlanEvent
+        result_event = droid_events.ResultEvent
 
         # 利用闭包将已导入的事件类型内联到转换函数中
         def convert_event(event: Any) -> dict[str, Any] | None:
@@ -111,10 +113,14 @@ class DroidRunAgent:
             )
             if is_codeact_result:
                 summary = getattr(event, "summary", None) or getattr(
-                    event, "reason", ""
+                    event,
+                    "reason",
+                    "",
                 )
                 action = getattr(event, "action", None) or getattr(
-                    event, "instruction", "code execution"
+                    event,
+                    "instruction",
+                    "code execution",
                 )
                 success = getattr(event, "success", getattr(event, "outcome", True))
                 self._step_count += 1
@@ -134,13 +140,13 @@ class DroidRunAgent:
                 }
 
             # ── Manager / Executor 事件（reasoning=True 模式）──
-            if isinstance(event, ManagerPlanEvent):
+            if isinstance(event, manager_plan_event):
                 text = event.current_subgoal
                 if event.thought:
                     text = f"{event.thought}\n[子目标] {event.current_subgoal}"
                 return {"type": "thinking", "data": {"chunk": text}}
 
-            if isinstance(event, ExecutorResultEvent):
+            if isinstance(event, executor_result_event):
                 self._step_count += 1
                 return {
                     "type": "step",
@@ -158,7 +164,7 @@ class DroidRunAgent:
                 }
 
             # ── 最终结果事件 ──
-            if isinstance(event, ResultEvent):
+            if isinstance(event, result_event):
                 return {
                     "type": "done",
                     "data": {
@@ -168,7 +174,7 @@ class DroidRunAgent:
                     },
                 }
 
-            if isinstance(event, FinalizeEvent):
+            if isinstance(event, finalize_event):
                 return {
                     "type": "thinking",
                     "data": {"chunk": f"[完成中] {event.reason}"},

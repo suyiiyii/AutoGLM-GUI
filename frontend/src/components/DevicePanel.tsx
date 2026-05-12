@@ -30,19 +30,11 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from '@/components/ui/popover';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useTranslation } from '../lib/i18n-context';
 import { HistoryItemCard } from './HistoryItemCard';
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipTrigger,
-} from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { ImagePreview } from '@/components/ui/image-preview';
 import {
   useTaskSessionConversation,
@@ -67,11 +59,7 @@ interface DevicePanelProps {
   unlimitedStepsEnabled?: boolean;
 }
 
-const IMAGE_ATTACHMENT_TYPES = new Set([
-  'image/png',
-  'image/jpeg',
-  'image/webp',
-]);
+const IMAGE_ATTACHMENT_TYPES = new Set(['image/png', 'image/jpeg', 'image/webp']);
 const MAX_IMAGE_ATTACHMENTS = 3;
 const MAX_IMAGE_ATTACHMENT_BYTES = 5 * 1024 * 1024;
 
@@ -107,10 +95,7 @@ function getStepSummary(thinking: string | undefined, action: unknown): string {
 
     if (metadata === 'finish') {
       const finishMessage = actionRecord['message'];
-      if (
-        typeof finishMessage === 'string' &&
-        finishMessage.trim().length > 0
-      ) {
+      if (typeof finishMessage === 'string' && finishMessage.trim().length > 0) {
         return `Finish: ${finishMessage}`;
       }
       return 'Finish task';
@@ -299,7 +284,7 @@ export function DevicePanel({
       const newMessages: TaskConversationMessage[] = [];
 
       // Find user message from record
-      const userMsg = selectedRecord.messages.find(m => m.role === 'user');
+      const userMsg = selectedRecord.messages.find((m) => m.role === 'user');
       if (userMsg) {
         newMessages.push({
           id: `${selectedRecord.id}-user`,
@@ -323,8 +308,8 @@ export function DevicePanel({
       const actionsList: Record<string, unknown>[] = [];
       const screenshotsList: (string | undefined)[] = [];
       selectedRecord.messages
-        .filter(m => m.role === 'assistant')
-        .forEach(m => {
+        .filter((m) => m.role === 'assistant')
+        .forEach((m) => {
           if (m.thinking) thinkingList.push(m.thinking);
           if (m.action) actionsList.push(m.action);
           // Extract screenshot directly or from loosely typed object
@@ -358,9 +343,7 @@ export function DevicePanel({
         agentMessage.id,
         agentMessage.content?.length ?? 0,
         agentMessage.currentThinking?.length ?? 0,
-        agentMessage.thinking
-          ? JSON.stringify(agentMessage.thinking).length
-          : 0,
+        agentMessage.thinking ? JSON.stringify(agentMessage.thinking).length : 0,
         agentMessage.steps ?? '',
         agentMessage.isStreaming ? 1 : 0,
       ].join('|');
@@ -386,7 +369,7 @@ export function DevicePanel({
     try {
       await deleteHistoryRecord(deviceSerial, itemId);
       // 从列表中移除已删除的项
-      setHistoryItems(prev => prev.filter(item => item.id !== itemId));
+      setHistoryItems((prev) => prev.filter((item) => item.id !== itemId));
     } catch (error) {
       console.error('Failed to delete history item:', error);
     }
@@ -397,9 +380,7 @@ export function DevicePanel({
 
   const addImageFiles = useCallback(
     async (files: File[]) => {
-      const imageFiles = files.filter(file =>
-        IMAGE_ATTACHMENT_TYPES.has(file.type)
-      );
+      const imageFiles = files.filter((file) => IMAGE_ATTACHMENT_TYPES.has(file.type));
       if (imageFiles.length === 0) {
         return;
       }
@@ -409,9 +390,7 @@ export function DevicePanel({
         return;
       }
 
-      const tooLargeFile = imageFiles.find(
-        file => file.size > MAX_IMAGE_ATTACHMENT_BYTES
-      );
+      const tooLargeFile = imageFiles.find((file) => file.size > MAX_IMAGE_ATTACHMENT_BYTES);
       if (tooLargeFile) {
         setAttachmentError('单张图片不能超过 5 MiB');
         return;
@@ -419,14 +398,12 @@ export function DevicePanel({
 
       try {
         const nextAttachments = await Promise.all(
-          imageFiles.map(file => readImageAttachment(file))
+          imageFiles.map((file) => readImageAttachment(file))
         );
-        setAttachments(current => [...current, ...nextAttachments]);
+        setAttachments((current) => [...current, ...nextAttachments]);
         setAttachmentError(null);
       } catch (readError) {
-        setAttachmentError(
-          readError instanceof Error ? readError.message : '读取图片失败'
-        );
+        setAttachmentError(readError instanceof Error ? readError.message : '读取图片失败');
       }
     },
     [attachments.length]
@@ -444,9 +421,7 @@ export function DevicePanel({
   const handlePaste = useCallback(
     (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
       const files = Array.from(event.clipboardData.files || []);
-      const hasImages = files.some(file =>
-        IMAGE_ATTACHMENT_TYPES.has(file.type)
-      );
+      const hasImages = files.some((file) => IMAGE_ATTACHMENT_TYPES.has(file.type));
       if (!hasImages) {
         return;
       }
@@ -456,19 +431,16 @@ export function DevicePanel({
     [addImageFiles]
   );
 
-  const handleDragOver = useCallback(
-    (event: React.DragEvent<HTMLDivElement>) => {
-      if (
-        Array.from(event.dataTransfer.items || []).some(item =>
-          IMAGE_ATTACHMENT_TYPES.has(item.type)
-        )
-      ) {
-        event.preventDefault();
-        setIsDraggingAttachment(true);
-      }
-    },
-    []
-  );
+  const handleDragOver = useCallback((event: React.DragEvent<HTMLDivElement>) => {
+    if (
+      Array.from(event.dataTransfer.items || []).some((item) =>
+        IMAGE_ATTACHMENT_TYPES.has(item.type)
+      )
+    ) {
+      event.preventDefault();
+      setIsDraggingAttachment(true);
+    }
+  }, []);
 
   const handleDragLeave = useCallback(() => {
     setIsDraggingAttachment(false);
@@ -477,9 +449,7 @@ export function DevicePanel({
   const handleDrop = useCallback(
     (event: React.DragEvent<HTMLDivElement>) => {
       const files = Array.from(event.dataTransfer.files || []);
-      const hasImages = files.some(file =>
-        IMAGE_ATTACHMENT_TYPES.has(file.type)
-      );
+      const hasImages = files.some((file) => IMAGE_ATTACHMENT_TYPES.has(file.type));
       if (!hasImages) {
         return;
       }
@@ -491,7 +461,7 @@ export function DevicePanel({
   );
 
   const removeAttachment = useCallback((index: number) => {
-    setAttachments(current => current.filter((_, idx) => idx !== index));
+    setAttachments((current) => current.filter((_, idx) => idx !== index));
   }, []);
 
   const handleSend = useCallback(async () => {
@@ -519,9 +489,7 @@ export function DevicePanel({
 
   useEffect(() => {
     const latest = messages[messages.length - 1];
-    const thinkingSignature = latest?.thinking
-      ? JSON.stringify(latest.thinking).length
-      : 0;
+    const thinkingSignature = latest?.thinking ? JSON.stringify(latest.thinking).length : 0;
     const latestSignature = latest
       ? [
           latest.id,
@@ -534,8 +502,7 @@ export function DevicePanel({
       : null;
 
     const isNewMessage = messages.length > prevMessageCountRef.current;
-    const hasLatestChanged =
-      latestSignature !== prevMessageSigRef.current && messages.length > 0;
+    const hasLatestChanged = latestSignature !== prevMessageSigRef.current && messages.length > 0;
 
     prevMessageCountRef.current = messages.length;
     prevMessageSigRef.current = latestSignature;
@@ -591,8 +558,7 @@ export function DevicePanel({
     // re-layout that late-loading content (screenshots) triggers right after.
     if (performance.now() - lastPinTimeRef.current < 150) return;
 
-    const distanceFromBottom =
-      target.scrollHeight - scrollTop - target.clientHeight;
+    const distanceFromBottom = target.scrollHeight - scrollTop - target.clientHeight;
     // A generous band so a few hundred pixels of late-loading content between
     // streaming updates doesn't break following.
     if (distanceFromBottom < 150) {
@@ -614,9 +580,7 @@ export function DevicePanel({
     setShowNewMessageNotice(false);
   };
 
-  const handleInputKeyDown = (
-    event: React.KeyboardEvent<HTMLTextAreaElement>
-  ) => {
+  const handleInputKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if ((event.metaKey || event.ctrlKey) && event.key === 'Enter') {
       event.preventDefault();
       handleSend();
@@ -635,13 +599,9 @@ export function DevicePanel({
             </div>
             <div className="group">
               <div className="flex items-center gap-1">
-                <h2 className="font-bold text-slate-900 dark:text-slate-100">
-                  {deviceName}
-                </h2>
+                <h2 className="font-bold text-slate-900 dark:text-slate-100">{deviceName}</h2>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">
-                {deviceId}
-              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 font-mono">{deviceId}</p>
             </div>
           </div>
 
@@ -670,7 +630,11 @@ export function DevicePanel({
                 </Button>
               </PopoverTrigger>
 
-              <PopoverContent className="w-96 p-0" align="end" sideOffset={8}>
+              <PopoverContent
+                className="w-96 p-0"
+                align="end"
+                sideOffset={8}
+              >
                 {/* Header */}
                 <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800">
                   <h3 className="font-semibold text-sm text-slate-900 dark:text-slate-100">
@@ -692,7 +656,7 @@ export function DevicePanel({
                 <ScrollArea className="h-[400px]">
                   <div className="p-4 space-y-2">
                     {historyItems.length > 0 ? (
-                      historyItems.map(item => (
+                      historyItems.map((item) => (
                         <HistoryItemCard
                           key={item.id}
                           item={item}
@@ -751,7 +715,10 @@ export function DevicePanel({
             data-testid="chat-scroll-container"
             onScroll={handleMessagesScroll}
           >
-            <div className="p-4" ref={contentRef}>
+            <div
+              className="p-4"
+              ref={contentRef}
+            >
               {messages.length === 0 ? (
                 <div className="h-full flex flex-col items-center justify-center text-center min-h-[calc(100%-1rem)]">
                   <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
@@ -765,12 +732,10 @@ export function DevicePanel({
                   </p>
                 </div>
               ) : (
-                messages.map(message => (
+                messages.map((message) => (
                   <div
                     key={message.id}
-                    className={`flex ${
-                      message.role === 'user' ? 'justify-end' : 'justify-start'
-                    }`}
+                    className={`flex ${message.role === 'user' ? 'justify-end' : 'justify-start'}`}
                   >
                     {message.role === 'assistant' ? (
                       <div className="max-w-[85%] space-y-3">
@@ -783,15 +748,12 @@ export function DevicePanel({
                             ),
                           },
                           (_, idx) => idx
-                        ).map(idx => {
+                        ).map((idx) => {
                           const stepThinking = message.thinking?.[idx];
                           const stepAction = message.actions?.[idx];
                           const stepScreenshot = message.screenshots?.[idx];
                           const stepTimings = message.stepTimings?.[idx];
-                          const stepSummary = getStepSummary(
-                            stepThinking,
-                            stepAction
-                          );
+                          const stepSummary = getStepSummary(stepThinking, stepAction);
 
                           return (
                             <div
@@ -812,7 +774,7 @@ export function DevicePanel({
 
                               {stepTimings && (
                                 <div className="mt-3 flex flex-wrap gap-2">
-                                  {getTimingChips(stepTimings).map(chip => (
+                                  {getTimingChips(stepTimings).map((chip) => (
                                     <Badge
                                       key={`${idx}-${chip.label}`}
                                       variant="secondary"
@@ -833,23 +795,15 @@ export function DevicePanel({
                                   >
                                     {stepAction &&
                                       (() => {
-                                        const parsedAction =
-                                          stepAction as ActionPayload;
+                                        const parsedAction = stepAction as ActionPayload;
                                         const actionName = parsedAction.action;
 
                                         if (
                                           actionName &&
-                                          [
-                                            'Tap',
-                                            'Double Tap',
-                                            'Long Press',
-                                          ].includes(actionName)
+                                          ['Tap', 'Double Tap', 'Long Press'].includes(actionName)
                                         ) {
                                           const element = parsedAction.element;
-                                          if (
-                                            Array.isArray(element) &&
-                                            element.length === 2
-                                          ) {
+                                          if (Array.isArray(element) && element.length === 2) {
                                             const left = `${(Math.max(0, Math.min(element[0], 1000)) / 1000) * 100}%`;
                                             const top = `${(Math.max(0, Math.min(element[1], 1000)) / 1000) * 100}%`;
                                             return (
@@ -870,33 +824,13 @@ export function DevicePanel({
                                             end.length === 2
                                           ) {
                                             const x1 =
-                                              (Math.max(
-                                                0,
-                                                Math.min(start[0], 1000)
-                                              ) /
-                                                1000) *
-                                              100;
+                                              (Math.max(0, Math.min(start[0], 1000)) / 1000) * 100;
                                             const y1 =
-                                              (Math.max(
-                                                0,
-                                                Math.min(start[1], 1000)
-                                              ) /
-                                                1000) *
-                                              100;
+                                              (Math.max(0, Math.min(start[1], 1000)) / 1000) * 100;
                                             const x2 =
-                                              (Math.max(
-                                                0,
-                                                Math.min(end[0], 1000)
-                                              ) /
-                                                1000) *
-                                              100;
+                                              (Math.max(0, Math.min(end[0], 1000)) / 1000) * 100;
                                             const y2 =
-                                              (Math.max(
-                                                0,
-                                                Math.min(end[1], 1000)
-                                              ) /
-                                                1000) *
-                                              100;
+                                              (Math.max(0, Math.min(end[1], 1000)) / 1000) * 100;
                                             return (
                                               <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
                                                 <defs>
@@ -986,15 +920,11 @@ export function DevicePanel({
                           >
                             <CheckCircle2
                               className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
-                                message.success === false
-                                  ? 'text-red-500'
-                                  : 'text-green-500'
+                                message.success === false ? 'text-red-500' : 'text-green-500'
                               }`}
                             />
                             <div>
-                              <p className="whitespace-pre-wrap">
-                                {message.content}
-                              </p>
+                              <p className="whitespace-pre-wrap">{message.content}</p>
                               {message.steps !== undefined && (
                                 <p className="text-xs mt-2 opacity-60 text-slate-500 dark:text-slate-400">
                                   {message.steps} steps completed
@@ -1015,25 +945,20 @@ export function DevicePanel({
                     ) : (
                       <div className="max-w-[75%]">
                         <div className="chat-bubble-user px-4 py-3 space-y-2">
-                          {message.attachments &&
-                            message.attachments.length > 0 && (
-                              <div className="grid grid-cols-2 gap-2">
-                                {message.attachments.map((attachment, idx) => (
-                                  <img
-                                    key={`${message.id}-attachment-${idx}`}
-                                    src={`data:${attachment.mime_type};base64,${attachment.data}`}
-                                    alt={
-                                      attachment.name || `Attachment ${idx + 1}`
-                                    }
-                                    className="h-24 w-full rounded-lg object-cover border border-white/20"
-                                  />
-                                ))}
-                              </div>
-                            )}
+                          {message.attachments && message.attachments.length > 0 && (
+                            <div className="grid grid-cols-2 gap-2">
+                              {message.attachments.map((attachment, idx) => (
+                                <img
+                                  key={`${message.id}-attachment-${idx}`}
+                                  src={`data:${attachment.mime_type};base64,${attachment.data}`}
+                                  alt={attachment.name || `Attachment ${idx + 1}`}
+                                  className="h-24 w-full rounded-lg object-cover border border-white/20"
+                                />
+                              ))}
+                            </div>
+                          )}
                           {message.content && (
-                            <p className="whitespace-pre-wrap">
-                              {message.content}
-                            </p>
+                            <p className="whitespace-pre-wrap">{message.content}</p>
                           )}
                         </div>
                         <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 text-right">
@@ -1063,9 +988,7 @@ export function DevicePanel({
         {/* Input area */}
         <div
           className={`p-4 border-t border-slate-200 dark:border-slate-800 ${
-            isDraggingAttachment
-              ? 'bg-sky-50 dark:bg-sky-950/20'
-              : 'bg-transparent'
+            isDraggingAttachment ? 'bg-sky-50 dark:bg-sky-950/20' : 'bg-transparent'
           }`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
@@ -1106,14 +1029,10 @@ export function DevicePanel({
           <div className="flex items-end gap-3">
             <Textarea
               value={input}
-              onChange={e => setInput(e.target.value)}
+              onChange={(e) => setInput(e.target.value)}
               onKeyDown={handleInputKeyDown}
               onPaste={handlePaste}
-              placeholder={
-                !isConfigured
-                  ? t.devicePanel.configureFirst
-                  : t.devicePanel.whatToDo
-              }
+              placeholder={!isConfigured ? t.devicePanel.configureFirst : t.devicePanel.whatToDo}
               disabled={loading}
               className="flex-1 min-h-[40px] max-h-[120px] resize-none"
               rows={1}
@@ -1124,16 +1043,17 @@ export function DevicePanel({
                   type="button"
                   variant="outline"
                   size="icon"
-                  disabled={
-                    loading || attachments.length >= MAX_IMAGE_ATTACHMENTS
-                  }
+                  disabled={loading || attachments.length >= MAX_IMAGE_ATTACHMENTS}
                   className="h-10 w-10 flex-shrink-0"
                   onClick={() => fileInputRef.current?.click()}
                 >
                   <ImagePlus className="w-4 h-4" />
                 </Button>
               </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={8}>
+              <TooltipContent
+                side="top"
+                sideOffset={8}
+              >
                 添加图片
               </TooltipContent>
             </Tooltip>
@@ -1153,11 +1073,12 @@ export function DevicePanel({
                       <ListChecks className="w-4 h-4" />
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent align="start" className="w-72 p-3">
+                  <PopoverContent
+                    align="start"
+                    className="w-72 p-3"
+                  >
                     <div className="space-y-2">
-                      <h4 className="font-medium text-sm">
-                        {t.workflows.selectWorkflow}
-                      </h4>
+                      <h4 className="font-medium text-sm">{t.workflows.selectWorkflow}</h4>
                       {workflows.length === 0 ? (
                         <div className="text-sm text-slate-500 dark:text-slate-400 space-y-1">
                           <p>{t.workflows.empty}</p>
@@ -1175,15 +1096,13 @@ export function DevicePanel({
                       ) : (
                         <ScrollArea className="h-64">
                           <div className="space-y-1">
-                            {workflows.map(workflow => (
+                            {workflows.map((workflow) => (
                               <button
                                 key={workflow.uuid}
                                 onClick={() => handleExecuteWorkflow(workflow)}
                                 className="w-full text-left p-2 rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
                               >
-                                <div className="font-medium text-sm">
-                                  {workflow.name}
-                                </div>
+                                <div className="font-medium text-sm">{workflow.name}</div>
                                 <div className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
                                   {workflow.text}
                                 </div>
@@ -1196,14 +1115,14 @@ export function DevicePanel({
                   </PopoverContent>
                 </Popover>
               </TooltipTrigger>
-              <TooltipContent side="top" sideOffset={8} className="max-w-xs">
+              <TooltipContent
+                side="top"
+                sideOffset={8}
+                className="max-w-xs"
+              >
                 <div className="space-y-1">
-                  <p className="font-medium">
-                    {t.devicePanel.tooltips.workflowButton}
-                  </p>
-                  <p className="text-xs opacity-80">
-                    {t.devicePanel.tooltips.workflowButtonDesc}
-                  </p>
+                  <p className="font-medium">{t.devicePanel.tooltips.workflowButton}</p>
+                  <p className="text-xs opacity-80">{t.devicePanel.tooltips.workflowButtonDesc}</p>
                 </div>
               </TooltipContent>
             </Tooltip>
@@ -1228,9 +1147,7 @@ export function DevicePanel({
             {!loading && (
               <Button
                 onClick={handleSend}
-                disabled={
-                  (!input.trim() && attachments.length === 0) || !sessionReady
-                }
+                disabled={(!input.trim() && attachments.length === 0) || !sessionReady}
                 size="icon"
                 variant="twitter"
                 className="h-10 w-10 rounded-full flex-shrink-0"

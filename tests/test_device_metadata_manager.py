@@ -2,12 +2,13 @@
 
 import json
 import tempfile
-import pytest
 from pathlib import Path
 
+import pytest
+
 from AutoGLM_GUI.device_metadata_manager import (
-    DeviceMetadataManager,
     DISPLAY_NAME_MAX_LENGTH,
+    DeviceMetadataManager,
 )
 
 
@@ -233,7 +234,7 @@ class TestDeviceMetadataManager:
         DeviceMetadataManager._instance = None
         with tempfile.TemporaryDirectory() as temp_dir:
             fresh_manager = DeviceMetadataManager.get_instance(
-                storage_dir=Path(temp_dir)
+                storage_dir=Path(temp_dir),
             )
 
             all_metadata = fresh_manager.list_all_metadata()

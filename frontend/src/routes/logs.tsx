@@ -39,8 +39,7 @@ function LogsComponent() {
     try {
       setLoading(true);
       setError('');
-      const electronAPI = (window as Window & { electronAPI?: ElectronAPI })
-        .electronAPI;
+      const electronAPI = (window as Window & { electronAPI?: ElectronAPI }).electronAPI;
       if (!electronAPI?.logs) return;
       const files = await electronAPI.logs.listFiles();
       setLogFiles(files);
@@ -53,8 +52,7 @@ function LogsComponent() {
   }, [t.logs.loadFailed]);
 
   useEffect(() => {
-    const electronAPI = (window as Window & { electronAPI?: ElectronAPI })
-      .electronAPI;
+    const electronAPI = (window as Window & { electronAPI?: ElectronAPI }).electronAPI;
     if (electronAPI?.logs) {
       setIsElectron(true);
       loadLogFiles();
@@ -65,8 +63,7 @@ function LogsComponent() {
     setContentLoading(true);
     setError('');
     try {
-      const electronAPI = (window as Window & { electronAPI?: ElectronAPI })
-        .electronAPI;
+      const electronAPI = (window as Window & { electronAPI?: ElectronAPI }).electronAPI;
       if (!electronAPI?.logs) return;
       const content = await electronAPI.logs.readFile(filename);
       setSelectedLog(filename);
@@ -81,14 +78,11 @@ function LogsComponent() {
 
   const openLogsFolder = async () => {
     try {
-      const electronAPI = (window as Window & { electronAPI?: ElectronAPI })
-        .electronAPI;
+      const electronAPI = (window as Window & { electronAPI?: ElectronAPI }).electronAPI;
       if (!electronAPI?.logs) return;
       const result = await electronAPI.logs.openFolder();
       if (!result.success) {
-        setError(
-          t.logs.openFolderFailed.replace('{error}', result.error || '')
-        );
+        setError(t.logs.openFolderFailed.replace('{error}', result.error || ''));
       }
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
@@ -97,9 +91,9 @@ function LogsComponent() {
   };
 
   const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return bytes + ' B';
-    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
-    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+    if (bytes < 1024) return `${bytes} B`;
+    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   };
 
   const formatDate = (date: Date) => {
@@ -133,12 +127,14 @@ function LogsComponent() {
               disabled={loading}
               title={t.logs.refresh}
             >
-              <RefreshCw
-                className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`}
-              />
+              <RefreshCw className={`w-4 h-4 ${loading ? 'animate-spin' : ''}`} />
             </Button>
           </div>
-          <Button variant="outline" className="w-full" onClick={openLogsFolder}>
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={openLogsFolder}
+          >
             <FolderOpen className="w-4 h-4 mr-2" />
             {t.logs.openFolder}
           </Button>
@@ -146,18 +142,14 @@ function LogsComponent() {
 
         <div className="flex-1 overflow-y-auto">
           {logFiles.length === 0 ? (
-            <div className="p-4 text-center text-slate-500 text-sm">
-              {t.logs.noLogs}
-            </div>
+            <div className="p-4 text-center text-slate-500 text-sm">{t.logs.noLogs}</div>
           ) : (
             <div className="divide-y divide-slate-200 dark:divide-slate-800">
-              {logFiles.map(file => (
+              {logFiles.map((file) => (
                 <div
                   key={file.name}
                   className={`p-4 hover:bg-slate-50 dark:hover:bg-slate-900 cursor-pointer transition-colors ${
-                    selectedLog === file.name
-                      ? 'bg-slate-50 dark:bg-slate-900'
-                      : ''
+                    selectedLog === file.name ? 'bg-slate-50 dark:bg-slate-900' : ''
                   }`}
                   onClick={() => !file.isCompressed && viewLogFile(file.name)}
                 >
@@ -168,12 +160,9 @@ function LogsComponent() {
                       <FileText className="w-5 h-5 text-slate-400 flex-shrink-0 mt-0.5" />
                     )}
                     <div className="flex-1 min-w-0">
-                      <div className="font-medium text-sm truncate">
-                        {file.name}
-                      </div>
+                      <div className="font-medium text-sm truncate">{file.name}</div>
                       <div className="text-xs text-slate-500 mt-1">
-                        {formatFileSize(file.size)} •{' '}
-                        {formatDate(file.modified)}
+                        {formatFileSize(file.size)} • {formatDate(file.modified)}
                       </div>
                     </div>
                   </div>
@@ -201,9 +190,7 @@ function LogsComponent() {
                   <div className="text-slate-500">{t.logs.loading}</div>
                 </div>
               ) : (
-                <pre className="text-xs font-mono whitespace-pre-wrap break-all">
-                  {logContent}
-                </pre>
+                <pre className="text-xs font-mono whitespace-pre-wrap break-all">{logContent}</pre>
               )}
             </div>
           </>
@@ -221,9 +208,7 @@ function LogsComponent() {
         <div className="fixed bottom-4 right-4 max-w-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 shadow-lg">
           <div className="flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
-            <div className="flex-1 text-sm text-red-600 dark:text-red-400">
-              {error}
-            </div>
+            <div className="flex-1 text-sm text-red-600 dark:text-red-400">{error}</div>
             <Button
               variant="ghost"
               size="icon"

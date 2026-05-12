@@ -89,9 +89,7 @@ function ScheduledTasksComponent() {
   const [groups, setGroups] = useState<DeviceGroup[]>([]);
   const [loading, setLoading] = useState(true);
   const [showDialog, setShowDialog] = useState(false);
-  const [editingTask, setEditingTask] = useState<ScheduledTaskResponse | null>(
-    null
-  );
+  const [editingTask, setEditingTask] = useState<ScheduledTaskResponse | null>(null);
   const [formData, setFormData] = useState<TaskFormData>({
     name: '',
     workflow_uuid: '',
@@ -101,8 +99,7 @@ function ScheduledTasksComponent() {
     enabled: true,
     execution_mode: 'classic',
   });
-  const [deviceSelectionMode, setDeviceSelectionMode] =
-    useState<DeviceSelectionMode>('devices');
+  const [deviceSelectionMode, setDeviceSelectionMode] = useState<DeviceSelectionMode>('devices');
   const [saving, setSaving] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
@@ -115,13 +112,12 @@ function ScheduledTasksComponent() {
   const loadData = async () => {
     try {
       setLoading(true);
-      const [tasksData, workflowsData, devicesData, groupsData] =
-        await Promise.all([
-          listScheduledTasks(),
-          listWorkflows(),
-          getDevices(),
-          listDeviceGroups(),
-        ]);
+      const [tasksData, workflowsData, devicesData, groupsData] = await Promise.all([
+        listScheduledTasks(),
+        listWorkflows(),
+        getDevices(),
+        listDeviceGroups(),
+      ]);
       setTasks(tasksData.tasks);
       setWorkflows(workflowsData.workflows);
       setDevices(devicesData);
@@ -174,10 +170,8 @@ function ScheduledTasksComponent() {
         cron_expression: formData.cron_expression,
         enabled: formData.enabled,
         execution_mode: formData.execution_mode,
-        device_serialnos:
-          deviceSelectionMode === 'devices' ? formData.device_serialnos : null,
-        device_group_id:
-          deviceSelectionMode === 'group' ? formData.device_group_id : null,
+        device_serialnos: deviceSelectionMode === 'devices' ? formData.device_serialnos : null,
+        device_group_id: deviceSelectionMode === 'group' ? formData.device_group_id : null,
       };
 
       if (editingTask) {
@@ -220,27 +214,24 @@ function ScheduledTasksComponent() {
   };
 
   const getWorkflowName = (uuid: string): string => {
-    const workflow = workflows.find(w => w.uuid === uuid);
+    const workflow = workflows.find((w) => w.uuid === uuid);
     return workflow?.name || uuid;
   };
 
   const getDeviceName = (serialno: string): string => {
-    const device = devices.find(d => d.serial === serialno);
+    const device = devices.find((d) => d.serial === serialno);
     return device?.model || serialno;
   };
 
   const getGroupName = (groupId: string): string => {
-    const group = groups.find(g => g.id === groupId);
+    const group = groups.find((g) => g.id === groupId);
     return group?.name || groupId;
   };
 
-  const getDeviceNames = (
-    serialnos: string[],
-    groupId: string | null | undefined
-  ): string => {
+  const getDeviceNames = (serialnos: string[], groupId: string | null | undefined): string => {
     // If using group, show group name
     if (groupId) {
-      const group = groups.find(g => g.id === groupId);
+      const group = groups.find((g) => g.id === groupId);
       if (group) {
         return `${group.name} (${group.device_count} ${t.scheduledTasks.groupDevices || 'devices'})`;
       }
@@ -250,7 +241,7 @@ function ScheduledTasksComponent() {
     // Otherwise show device list
     if (serialnos.length === 0) return '-';
     if (serialnos.length === 1) return getDeviceName(serialnos[0]);
-    const names = serialnos.map(s => getDeviceName(s));
+    const names = serialnos.map((s) => getDeviceName(s));
     const firstName = names[0];
     const remaining = names.length - 1;
     return `${firstName} (+${remaining})`;
@@ -279,8 +270,7 @@ function ScheduledTasksComponent() {
   const isFormValid =
     formData.name.trim() &&
     formData.workflow_uuid &&
-    ((deviceSelectionMode === 'devices' &&
-      formData.device_serialnos.length > 0) ||
+    ((deviceSelectionMode === 'devices' && formData.device_serialnos.length > 0) ||
       (deviceSelectionMode === 'group' && formData.device_group_id)) &&
     formData.cron_expression.trim();
 
@@ -302,22 +292,21 @@ function ScheduledTasksComponent() {
         </div>
       ) : tasks.length === 0 ? (
         <div className="text-center py-12">
-          <p className="text-slate-500 dark:text-slate-400">
-            {t.scheduledTasks.noTasks}
-          </p>
+          <p className="text-slate-500 dark:text-slate-400">{t.scheduledTasks.noTasks}</p>
           <p className="text-sm text-slate-400 dark:text-slate-500 mt-2">
             {t.scheduledTasks.noTasksDesc}
           </p>
         </div>
       ) : (
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {tasks.map(task => (
-            <Card key={task.id} className="hover:shadow-md transition-shadow">
+          {tasks.map((task) => (
+            <Card
+              key={task.id}
+              className="hover:shadow-md transition-shadow"
+            >
               <CardHeader className="pb-2">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg truncate flex-1 mr-2">
-                    {task.name}
-                  </CardTitle>
+                  <CardTitle className="text-lg truncate flex-1 mr-2">{task.name}</CardTitle>
                   <Switch
                     checked={task.enabled}
                     onCheckedChange={() => handleToggleEnabled(task)}
@@ -331,9 +320,7 @@ function ScheduledTasksComponent() {
                     <span className="text-slate-500 dark:text-slate-400">
                       {t.scheduledTasks.workflow}:{' '}
                     </span>
-                    <span className="font-medium">
-                      {getWorkflowName(task.workflow_uuid)}
-                    </span>
+                    <span className="font-medium">{getWorkflowName(task.workflow_uuid)}</span>
                   </div>
 
                   {/* Device */}
@@ -346,15 +333,10 @@ function ScheduledTasksComponent() {
                       title={
                         task.device_group_id
                           ? getGroupName(task.device_group_id)
-                          : task.device_serialnos
-                              .map(s => getDeviceName(s))
-                              .join(', ')
+                          : task.device_serialnos.map((s) => getDeviceName(s)).join(', ')
                       }
                     >
-                      {getDeviceNames(
-                        task.device_serialnos,
-                        task.device_group_id
-                      )}
+                      {getDeviceNames(task.device_serialnos, task.device_group_id)}
                     </span>
                   </div>
 
@@ -363,7 +345,10 @@ function ScheduledTasksComponent() {
                     <span className="text-slate-500 dark:text-slate-400">
                       {t.scheduledTasks.executionMode}:{' '}
                     </span>
-                    <Badge variant="secondary" className="capitalize">
+                    <Badge
+                      variant="secondary"
+                      className="capitalize"
+                    >
                       {task.execution_mode === 'layered'
                         ? t.scheduledTasks.executionModeOption.layered
                         : t.scheduledTasks.executionModeOption.classic}
@@ -371,7 +356,10 @@ function ScheduledTasksComponent() {
                   </div>
 
                   <div className="text-sm">
-                    <Badge variant="outline" className="font-mono">
+                    <Badge
+                      variant="outline"
+                      className="font-mono"
+                    >
                       <Clock className="w-3 h-3 mr-1" />
                       {task.cron_expression}
                     </Badge>
@@ -398,15 +386,12 @@ function ScheduledTasksComponent() {
                           typeof task.last_run_total_count === 'number' &&
                           task.last_run_total_count > 1 && (
                             <span className="text-xs text-slate-500">
-                              ({task.last_run_success_count}/
-                              {task.last_run_total_count})
+                              ({task.last_run_success_count}/{task.last_run_total_count})
                             </span>
                           )}
                       </>
                     ) : (
-                      <span className="text-slate-400">
-                        {t.scheduledTasks.never}
-                      </span>
+                      <span className="text-slate-400">{t.scheduledTasks.never}</span>
                     )}
                   </div>
 
@@ -448,7 +433,10 @@ function ScheduledTasksComponent() {
       )}
 
       {/* Create/Edit Dialog */}
-      <Dialog open={showDialog} onOpenChange={setShowDialog}>
+      <Dialog
+        open={showDialog}
+        onOpenChange={setShowDialog}
+      >
         <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
             <DialogTitle>
@@ -462,9 +450,7 @@ function ScheduledTasksComponent() {
               <Input
                 id="name"
                 value={formData.name}
-                onChange={e =>
-                  setFormData(prev => ({ ...prev, name: e.target.value }))
-                }
+                onChange={(e) => setFormData((prev) => ({ ...prev, name: e.target.value }))}
                 placeholder={t.scheduledTasks.taskNamePlaceholder}
               />
             </div>
@@ -480,17 +466,18 @@ function ScheduledTasksComponent() {
                 <Select
                   value={formData.workflow_uuid}
                   onValueChange={(value: string) =>
-                    setFormData(prev => ({ ...prev, workflow_uuid: value }))
+                    setFormData((prev) => ({ ...prev, workflow_uuid: value }))
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue
-                      placeholder={t.scheduledTasks.selectWorkflow}
-                    />
+                    <SelectValue placeholder={t.scheduledTasks.selectWorkflow} />
                   </SelectTrigger>
                   <SelectContent>
-                    {workflows.map(workflow => (
-                      <SelectItem key={workflow.uuid} value={workflow.uuid}>
+                    {workflows.map((workflow) => (
+                      <SelectItem
+                        key={workflow.uuid}
+                        value={workflow.uuid}
+                      >
                         {workflow.name}
                       </SelectItem>
                     ))}
@@ -503,8 +490,8 @@ function ScheduledTasksComponent() {
               <Label>{t.scheduledTasks.executionMode}</Label>
               <Select
                 value={formData.execution_mode}
-                onValueChange={value =>
-                  setFormData(prev => ({
+                onValueChange={(value) =>
+                  setFormData((prev) => ({
                     ...prev,
                     execution_mode: value === 'layered' ? 'layered' : 'classic',
                   }))
@@ -531,26 +518,22 @@ function ScheduledTasksComponent() {
               <div className="flex gap-2 mb-2">
                 <Button
                   type="button"
-                  variant={
-                    deviceSelectionMode === 'devices' ? 'default' : 'outline'
-                  }
+                  variant={deviceSelectionMode === 'devices' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => {
                     setDeviceSelectionMode('devices');
-                    setFormData(prev => ({ ...prev, device_group_id: null }));
+                    setFormData((prev) => ({ ...prev, device_group_id: null }));
                   }}
                 >
                   {t.scheduledTasks.selectDevice || '选择设备'}
                 </Button>
                 <Button
                   type="button"
-                  variant={
-                    deviceSelectionMode === 'group' ? 'default' : 'outline'
-                  }
+                  variant={deviceSelectionMode === 'group' ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => {
                     setDeviceSelectionMode('group');
-                    setFormData(prev => ({ ...prev, device_serialnos: [] }));
+                    setFormData((prev) => ({ ...prev, device_serialnos: [] }));
                   }}
                 >
                   {t.scheduledTasks.selectGroup || '选择分组'}
@@ -566,32 +549,26 @@ function ScheduledTasksComponent() {
                 ) : (
                   <>
                     <div className="border rounded-md p-2 space-y-1 max-h-40 overflow-y-auto">
-                      {devices.map(device => (
+                      {devices.map((device) => (
                         <label
                           key={device.serial}
                           className="flex items-center gap-2 p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded cursor-pointer"
                         >
                           <input
                             type="checkbox"
-                            checked={formData.device_serialnos.includes(
-                              device.serial
-                            )}
-                            onChange={e => {
+                            checked={formData.device_serialnos.includes(device.serial)}
+                            onChange={(e) => {
                               const checked = e.target.checked;
-                              setFormData(prev => ({
+                              setFormData((prev) => ({
                                 ...prev,
                                 device_serialnos: checked
                                   ? [...prev.device_serialnos, device.serial]
-                                  : prev.device_serialnos.filter(
-                                      s => s !== device.serial
-                                    ),
+                                  : prev.device_serialnos.filter((s) => s !== device.serial),
                               }));
                             }}
                             className="rounded border-gray-300"
                           />
-                          <span className="text-sm">
-                            {device.model || device.serial}
-                          </span>
+                          <span className="text-sm">{device.model || device.serial}</span>
                           {device.state === 'online' && (
                             <span className="ml-auto w-2 h-2 bg-green-500 rounded-full" />
                           )}
@@ -608,29 +585,28 @@ function ScheduledTasksComponent() {
                 )
               ) : // Group selection
               groups.length === 0 ? (
-                <p className="text-sm text-amber-600 dark:text-amber-400">
-                  暂无分组
-                </p>
+                <p className="text-sm text-amber-600 dark:text-amber-400">暂无分组</p>
               ) : (
                 <Select
                   value={formData.device_group_id || ''}
                   onValueChange={(value: string) =>
-                    setFormData(prev => ({
+                    setFormData((prev) => ({
                       ...prev,
                       device_group_id: value || null,
                     }))
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue
-                      placeholder={t.scheduledTasks.selectGroup || '选择分组'}
-                    />
+                    <SelectValue placeholder={t.scheduledTasks.selectGroup || '选择分组'} />
                   </SelectTrigger>
                   <SelectContent>
-                    {groups.map(group => (
-                      <SelectItem key={group.id} value={group.id}>
-                        {group.name} ({group.device_count}{' '}
-                        {t.deviceGroups?.deviceCount || '台设备'})
+                    {groups.map((group) => (
+                      <SelectItem
+                        key={group.id}
+                        value={group.id}
+                      >
+                        {group.name} ({group.device_count} {t.deviceGroups?.deviceCount || '台设备'}
+                        )
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -644,8 +620,8 @@ function ScheduledTasksComponent() {
               <Input
                 id="cron"
                 value={formData.cron_expression}
-                onChange={e =>
-                  setFormData(prev => ({
+                onChange={(e) =>
+                  setFormData((prev) => ({
                     ...prev,
                     cron_expression: e.target.value,
                   }))
@@ -662,33 +638,35 @@ function ScheduledTasksComponent() {
             <div className="space-y-2">
               <Label>{t.scheduledTasks.presets}</Label>
               <div className="flex flex-wrap gap-2">
-                {cronPresets.map(preset => (
+                {cronPresets.map((preset) => (
                   <Button
                     key={preset.key}
                     variant="outline"
                     size="sm"
                     onClick={() =>
-                      setFormData(prev => ({
+                      setFormData((prev) => ({
                         ...prev,
                         cron_expression: preset.cron,
                       }))
                     }
                   >
-                    {
-                      t.scheduledTasks.preset[
-                        preset.key as keyof typeof t.scheduledTasks.preset
-                      ]
-                    }
+                    {t.scheduledTasks.preset[preset.key as keyof typeof t.scheduledTasks.preset]}
                   </Button>
                 ))}
               </div>
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setShowDialog(false)}>
+            <Button
+              variant="outline"
+              onClick={() => setShowDialog(false)}
+            >
               {t.common.cancel}
             </Button>
-            <Button onClick={handleSave} disabled={!isFormValid || saving}>
+            <Button
+              onClick={handleSave}
+              disabled={!isFormValid || saving}
+            >
               {saving ? (
                 <>
                   <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -703,19 +681,18 @@ function ScheduledTasksComponent() {
       </Dialog>
 
       {/* Delete Dialog */}
-      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+      <AlertDialog
+        open={deleteDialogOpen}
+        onOpenChange={setDeleteDialogOpen}
+      >
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{t.common.delete}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t.scheduledTasks.deleteConfirm}
-            </AlertDialogDescription>
+            <AlertDialogDescription>{t.scheduledTasks.deleteConfirm}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel>{t.common.cancel}</AlertDialogCancel>
-            <AlertDialogAction onClick={handleDelete}>
-              {t.common.confirm}
-            </AlertDialogAction>
+            <AlertDialogAction onClick={handleDelete}>{t.common.confirm}</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>

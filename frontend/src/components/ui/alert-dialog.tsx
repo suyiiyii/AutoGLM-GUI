@@ -17,43 +17,49 @@ interface AlertDialogProps {
 
 const AlertDialog = ({ open, onOpenChange, children }: AlertDialogProps) => {
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={onOpenChange}
+    >
       {children}
     </Dialog>
   );
 };
 
-const AlertDialogContent = React.forwardRef<
-  HTMLDivElement,
-  React.HTMLAttributes<HTMLDivElement>
->(({ className, ...props }, ref) => (
-  <DialogContent
-    ref={ref}
-    className={cn('sm:max-w-[425px]', className)}
-    {...props}
-  />
-));
+const AlertDialogContent = React.forwardRef<HTMLDivElement, React.HTMLAttributes<HTMLDivElement>>(
+  ({ className, ...props }, ref) => (
+    <DialogContent
+      ref={ref}
+      className={cn('sm:max-w-[425px]', className)}
+      {...props}
+    />
+  )
+);
 AlertDialogContent.displayName = 'AlertDialogContent';
 
-const AlertDialogHeader = ({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) => (
-  <DialogHeader className={cn(className)} {...props} />
+const AlertDialogHeader = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <DialogHeader
+    className={cn(className)}
+    {...props}
+  />
 );
 
-const AlertDialogFooter = ({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) => (
-  <DialogFooter className={cn(className)} {...props} />
+const AlertDialogFooter = ({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) => (
+  <DialogFooter
+    className={cn(className)}
+    {...props}
+  />
 );
 
 const AlertDialogTitle = React.forwardRef<
   HTMLHeadingElement,
   React.HTMLAttributes<HTMLHeadingElement>
 >(({ className, ...props }, ref) => (
-  <DialogTitle ref={ref} className={cn(className)} {...props} />
+  <DialogTitle
+    ref={ref}
+    className={cn(className)}
+    {...props}
+  />
 ));
 AlertDialogTitle.displayName = 'AlertDialogTitle';
 
@@ -73,7 +79,11 @@ const AlertDialogAction = React.forwardRef<
   HTMLButtonElement,
   React.ButtonHTMLAttributes<HTMLButtonElement>
 >(({ className, ...props }, ref) => (
-  <Button ref={ref} className={cn(className)} {...props} />
+  <Button
+    ref={ref}
+    className={cn(className)}
+    {...props}
+  />
 ));
 AlertDialogAction.displayName = 'AlertDialogAction';
 
@@ -81,7 +91,12 @@ const AlertDialogCancel = React.forwardRef<
   HTMLButtonElement,
   React.ButtonHTMLAttributes<HTMLButtonElement>
 >(({ className, ...props }, ref) => (
-  <Button ref={ref} variant="outline" className={cn(className)} {...props} />
+  <Button
+    ref={ref}
+    variant="outline"
+    className={cn(className)}
+    {...props}
+  />
 ));
 AlertDialogCancel.displayName = 'AlertDialogCancel';
 

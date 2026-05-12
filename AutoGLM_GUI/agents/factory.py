@@ -6,8 +6,8 @@ making it easy to add new agent types without modifying existing code.
 
 from __future__ import annotations
 
-from typing import Any
 from collections.abc import Callable
+from typing import Any
 
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.device_protocol import DeviceProtocol
@@ -15,7 +15,6 @@ from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.types import AgentSpecificConfig
 
 from .protocols import AsyncAgent
-
 
 # Agent registry: agent_type -> (creator_function, config_schema)
 AGENT_REGISTRY: dict[str, Callable[..., AsyncAgent]] = {}
@@ -76,7 +75,7 @@ def create_agent(
     if agent_type not in AGENT_REGISTRY:
         available = ", ".join(AGENT_REGISTRY.keys())
         raise ValueError(
-            f"Unknown agent type: '{agent_type}'. Available types: {available}"
+            f"Unknown agent type: '{agent_type}'. Available types: {available}",
         )
 
     creator = AGENT_REGISTRY[agent_type]

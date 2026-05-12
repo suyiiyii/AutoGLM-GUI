@@ -11,9 +11,8 @@ import copy
 import json
 import time
 from abc import ABC, abstractmethod
-from collections.abc import AsyncGenerator
+from collections.abc import AsyncGenerator, AsyncIterator, Callable
 from typing import Any
-from collections.abc import AsyncIterator, Callable
 
 from openai import AsyncOpenAI
 
@@ -23,7 +22,6 @@ from AutoGLM_GUI.device_protocol import DeviceProtocol
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.model import MessageBuilder
 from AutoGLM_GUI.trace import summarize_text, trace_span
-
 
 WATCHDOG_MAX_RUNTIME_SECONDS = 60 * 60
 WATCHDOG_REPEATED_ACTION_LIMIT = 12
@@ -72,7 +70,7 @@ class AsyncAgentBase(ABC):
             system_prompt = self._get_default_system_prompt(self.agent_config.lang)
 
         self._initial_system_message = MessageBuilder.create_system_message(
-            system_prompt
+            system_prompt,
         )
 
         # State
@@ -137,12 +135,12 @@ class AsyncAgentBase(ABC):
                     ):
                         screenshot = await asyncio.to_thread(self.device.get_screenshot)
                         current_app = await asyncio.to_thread(
-                            self.device.get_current_app
+                            self.device.get_current_app,
                         )
                 except Exception as e:
                     logger.error(f"Failed to get device info: {e}")
                     stream_span.set_attributes(
-                        {"success": False, "error_kind": "initial_device_state"}
+                        {"success": False, "error_kind": "initial_device_state"},
                     )
                     yield {"type": "error", "data": {"message": f"Device error: {e}"}}
                     yield {
@@ -196,7 +194,7 @@ class AsyncAgentBase(ABC):
                                         "action_name": (
                                             event["data"].get("action") or {}
                                         ).get("action"),
-                                    }
+                                    },
                                 )
                             if event["type"] == "step":
                                 action_signature = json.dumps(
@@ -217,20 +215,21 @@ class AsyncAgentBase(ABC):
                             yield event
 
                             if event["type"] == "step" and event["data"].get(
-                                "finished"
+                                "finished",
                             ):
                                 success = event["data"].get("success", True)
                                 stream_span.set_attributes(
                                     {
                                         "success": success,
                                         "steps": self._step_count,
-                                    }
+                                    },
                                 )
                                 yield {
                                     "type": "done",
                                     "data": {
                                         "message": event["data"].get(
-                                            "message", "Task completed"
+                                            "message",
+                                            "Task completed",
                                         ),
                                         "steps": self._step_count,
                                         "success": success,
@@ -244,7 +243,7 @@ class AsyncAgentBase(ABC):
                                         "success": False,
                                         "steps": self._step_count,
                                         "error_kind": "watchdog_repeated_actions",
-                                    }
+                                    },
                                 )
                                 yield {
                                     "type": "done",
@@ -263,7 +262,7 @@ class AsyncAgentBase(ABC):
                                         "success": False,
                                         "steps": self._step_count,
                                         "error_kind": "watchdog_no_progress",
-                                    }
+                                    },
                                 )
                                 yield {
                                     "type": "done",
@@ -285,7 +284,7 @@ class AsyncAgentBase(ABC):
                                         "success": False,
                                         "steps": self._step_count,
                                         "error_kind": "watchdog_timeout",
-                                    }
+                                    },
                                 )
                                 yield {
                                     "type": "done",
@@ -303,7 +302,7 @@ class AsyncAgentBase(ABC):
                         "success": False,
                         "steps": self._step_count,
                         "error_kind": "max_steps",
-                    }
+                    },
                 )
                 yield {
                     "type": "done",
@@ -321,7 +320,7 @@ class AsyncAgentBase(ABC):
                         "success": False,
                         "steps": self._step_count,
                         "error_kind": "cancelled",
-                    }
+                    },
                 )
                 yield {
                     "type": "cancelled",

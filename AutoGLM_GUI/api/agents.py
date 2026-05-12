@@ -2,7 +2,6 @@
 
 import asyncio
 import json
-
 from typing import Any
 
 from fastapi import APIRouter, HTTPException
@@ -27,7 +26,9 @@ SSEPayload = dict[str, Any]
 
 
 def _create_sse_event(
-    event_type: str, data: SSEPayload, role: str = "assistant"
+    event_type: str,
+    data: SSEPayload,
+    role: str = "assistant",
 ) -> SSEPayload:
     """Create an SSE event with standardized fields including role."""
     event_data = {"type": event_type, "role": role, **data}
@@ -56,7 +57,7 @@ async def _create_legacy_chat_task(request: ChatRequest) -> dict[str, Any]:
     )
 
 
-@router.post("/api/chat", response_model=ChatResponse)
+@router.post("/api/chat")
 async def chat(request: ChatRequest) -> ChatResponse:
     """Compatibility wrapper around the new task-backed chat flow."""
     from AutoGLM_GUI.task_manager import task_manager
@@ -126,7 +127,7 @@ async def chat_stream(request: ChatRequest):
     )
 
 
-@router.get("/api/status", response_model=StatusResponse)
+@router.get("/api/status")
 def get_status(device_id: str | None = None) -> StatusResponse:
     """获取 Agent 状态和版本信息（多设备支持）。"""
     from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
@@ -172,7 +173,10 @@ def reset_agent(request: ResetRequest) -> dict[str, Any]:
             "message": f"Agent reset for device {device_id}",
         }
     except AgentNotInitializedError:
-        raise HTTPException(status_code=404, detail=f"Device {device_id} not found")
+        raise HTTPException(
+            status_code=404,
+            detail=f"Device {device_id} not found",
+        ) from None
 
 
 @router.post("/api/chat/abort")
@@ -189,7 +193,7 @@ async def abort_chat(request: AbortRequest) -> dict[str, Any]:
     )
     if not success:
         success = await PhoneAgentManager.get_instance().abort_streaming_chat_async(
-            request.device_id
+            request.device_id,
         )
 
     return {
@@ -198,7 +202,7 @@ async def abort_chat(request: AbortRequest) -> dict[str, Any]:
     }
 
 
-@router.get("/api/config", response_model=ConfigResponse)
+@router.get("/api/config")
 def get_config_endpoint() -> ConfigResponse:
     """获取当前有效配置."""
     from AutoGLM_GUI.config_manager import config_manager
@@ -309,9 +313,12 @@ def save_config_endpoint(request: ConfigSaveRequest) -> dict[str, Any]:
         }
 
     except ValidationError as e:
-        raise HTTPException(status_code=400, detail=f"Invalid configuration: {e}")
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid configuration: {e}",
+        ) from e
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 @router.delete("/api/config")
@@ -328,7 +335,7 @@ def delete_config_endpoint() -> dict[str, Any]:
         return {"success": True, "message": "Configuration deleted"}
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        raise HTTPException(status_code=500, detail=str(e)) from e
 
 
 # ✅ 已删除 /api/agents/reinit-all 端点

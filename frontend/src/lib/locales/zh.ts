@@ -54,8 +54,7 @@ export const zh = {
     decisionBaseUrl: '决策模型 Base URL',
     decisionApiKey: '决策模型 API Key',
     decisionModelName: '决策模型名称',
-    decisionModelHint:
-      '决策模型用于分层代理的规划层。使用分层代理模式时必须配置决策模型。',
+    decisionModelHint: '决策模型用于分层代理的规划层。使用分层代理模式时必须配置决策模型。',
   },
   deviceSidebar: {
     devices: '设备',
@@ -189,10 +188,8 @@ export const zh = {
     showWidthControls: '显示宽度控制',
     hideWidthControls: '隐藏宽度控制',
     videoUnavailableWarning: '视频流不可用',
-    requireHttpsOrLocalhost:
-      '视频流需要 HTTPS 或 localhost 环境。建议下载桌面应用以获得完整功能。',
-    browserNotSupported:
-      '当前浏览器不支持 WebCodecs API。请使用最新版 Chrome 或 Edge 浏览器。',
+    requireHttpsOrLocalhost: '视频流需要 HTTPS 或 localhost 环境。建议下载桌面应用以获得完整功能。',
+    browserNotSupported: '当前浏览器不支持 WebCodecs API。请使用最新版 Chrome 或 Edge 浏览器。',
     decoderInitFailed: '视频解码器初始化失败',
     codecNotSupported: '设备编解码器不支持',
     unknownError: '未知错误',
@@ -218,8 +215,7 @@ export const zh = {
     disconnectWifiTitle: '断开 WiFi',
     disconnectWifiContent: '确定要断开 WiFi 连接吗？',
     disconnectAllTitle: '断开所有连接',
-    disconnectAllContent:
-      '确定要断开此设备的所有连接吗？这将断开 USB 和 WiFi 连接。',
+    disconnectAllContent: '确定要断开此设备的所有连接吗？这将断开 USB 和 WiFi 连接。',
     deleteDeviceTitle: '删除设备',
     deleteDeviceContent: '确定要删除此设备吗？这将断开连接。',
     editName: '编辑设备名称',
@@ -454,8 +450,7 @@ export const zh = {
     editTitle: '编辑分组',
     editDescription: '修改分组名称。',
     deleteTitle: '删除分组',
-    deleteContent:
-      '确定要删除分组 "{name}" 吗？该分组内的设备将被移回默认分组。',
+    deleteContent: '确定要删除分组 "{name}" 吗？该分组内的设备将被移回默认分组。',
     groupNameLabel: '分组名称',
     groupNamePlaceholder: '请输入分组名称',
     defaultGroup: '默认',

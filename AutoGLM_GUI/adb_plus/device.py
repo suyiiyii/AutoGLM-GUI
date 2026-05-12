@@ -30,21 +30,23 @@ async def check_device_available(device_id: str | None = None) -> None:
         # Check for common error patterns
         if "not found" in error_output.lower() or "offline" in error_output.lower():
             raise DeviceNotAvailableError(
-                f"Device {device_id} is not available: {error_output}"
+                f"Device {device_id} is not available: {error_output}",
             )
 
         if state != "device":
             raise DeviceNotAvailableError(
-                f"Device {device_id} is not available (state: {state or 'offline'})"
+                f"Device {device_id} is not available (state: {state or 'offline'})",
             )
 
         logger.debug(f"Device {device_id} is available (state: {state})")
 
     except TimeoutError:
-        raise DeviceNotAvailableError(f"Device {device_id} connection timed out")
+        raise DeviceNotAvailableError(
+            f"Device {device_id} connection timed out",
+        ) from None
     except FileNotFoundError:
-        raise DeviceNotAvailableError("ADB executable not found")
+        raise DeviceNotAvailableError("ADB executable not found") from None
     except DeviceNotAvailableError:
         raise
     except Exception as e:
-        raise DeviceNotAvailableError(f"Failed to check device {device_id}: {e}")
+        raise DeviceNotAvailableError(f"Failed to check device {device_id}: {e}") from e

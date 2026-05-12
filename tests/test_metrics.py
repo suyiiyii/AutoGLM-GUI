@@ -82,12 +82,13 @@ def test_metrics_no_errors(client):
 
 def test_metrics_capture_trace_latency_histograms():
     """Test that trace latency summaries are exported as Prometheus histograms."""
+    from prometheus_client import generate_latest
+
     from AutoGLM_GUI.metrics import (
         get_metrics_registry,
         record_trace_latency_metrics,
         reset_trace_latency_metrics,
     )
-    from prometheus_client import generate_latest
 
     reset_trace_latency_metrics()
 
@@ -138,13 +139,14 @@ def test_metrics_capture_trace_latency_histograms():
 
 def test_metrics_capture_failed_agents():
     """Test that failed agent initialization is captured in metrics."""
+    from prometheus_client import generate_latest
+
+    from AutoGLM_GUI.metrics import get_metrics_registry
     from AutoGLM_GUI.phone_agent_manager import (
         AgentMetadata,
         AgentState,
         PhoneAgentManager,
     )
-    from AutoGLM_GUI.metrics import get_metrics_registry
-    from prometheus_client import generate_latest
 
     manager = PhoneAgentManager.get_instance()
 

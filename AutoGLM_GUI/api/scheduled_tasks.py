@@ -67,13 +67,13 @@ def _task_to_response(task: ScheduledTask) -> ScheduledTaskResponse:
     )
 
 
-@router.get("/api/scheduled-tasks", response_model=ScheduledTaskListResponse)
+@router.get("/api/scheduled-tasks")
 def list_scheduled_tasks() -> ScheduledTaskListResponse:
     tasks = scheduler_manager.list_tasks()
     return ScheduledTaskListResponse(tasks=[_task_to_response(t) for t in tasks])
 
 
-@router.post("/api/scheduled-tasks", response_model=ScheduledTaskResponse)
+@router.post("/api/scheduled-tasks")
 def create_scheduled_task(request: ScheduledTaskCreate) -> ScheduledTaskResponse:
     from AutoGLM_GUI.workflow_manager import workflow_manager
 
@@ -93,7 +93,7 @@ def create_scheduled_task(request: ScheduledTaskCreate) -> ScheduledTaskResponse
     return _task_to_response(task)
 
 
-@router.get("/api/scheduled-tasks/{task_id}", response_model=ScheduledTaskResponse)
+@router.get("/api/scheduled-tasks/{task_id}")
 def get_scheduled_task(task_id: str) -> ScheduledTaskResponse:
     task = scheduler_manager.get_task(task_id)
     if not task:
@@ -101,9 +101,10 @@ def get_scheduled_task(task_id: str) -> ScheduledTaskResponse:
     return _task_to_response(task)
 
 
-@router.put("/api/scheduled-tasks/{task_id}", response_model=ScheduledTaskResponse)
+@router.put("/api/scheduled-tasks/{task_id}")
 def update_scheduled_task(
-    task_id: str, request: ScheduledTaskUpdate
+    task_id: str,
+    request: ScheduledTaskUpdate,
 ) -> ScheduledTaskResponse:
     update_data = request.model_dump(exclude_unset=True)
     task = scheduler_manager.update_task(task_id, **update_data)

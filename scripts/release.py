@@ -54,7 +54,9 @@ def parse_version(version: str) -> tuple[int, int, int]:
 
 
 def bump_version(
-    current: str, bump_type: str = "patch", target_version: str | None = None
+    current: str,
+    bump_type: str = "patch",
+    target_version: str | None = None,
 ) -> str:
     """Bump version number based on bump type or return target version."""
     if target_version:
@@ -189,7 +191,9 @@ def update_readme_download_links(new_version: str) -> bool:
 
 
 def git_commit_version(
-    version: str, dry_run: bool = False, skip_readme: bool = False
+    version: str,
+    dry_run: bool = False,
+    skip_readme: bool = False,
 ) -> bool:
     """Commit version bumps in pyproject.toml, electron/package.json, and README.md."""
     print("Committing version bump to git...")
@@ -211,6 +215,7 @@ def git_commit_version(
         # Stage files
         result = subprocess.run(
             ["git", "add"] + files_to_add,
+            check=False,
             cwd=ROOT_DIR,
             capture_output=True,
             text=True,
@@ -223,6 +228,7 @@ def git_commit_version(
         # Commit the change
         result = subprocess.run(
             ["git", "commit", "-m", f"release v{version}"],
+            check=False,
             cwd=ROOT_DIR,
             capture_output=True,
             text=True,
@@ -253,6 +259,7 @@ def create_git_tag(version: str, dry_run: bool = False) -> bool:
     try:
         result = subprocess.run(
             ["git", "tag", "-a", tag_name, "-m", f"release {tag_name}"],
+            check=False,
             cwd=ROOT_DIR,
             capture_output=True,
             text=True,
@@ -277,6 +284,7 @@ def run_uv_sync() -> bool:
     try:
         result = subprocess.run(
             ["uv", "sync"],
+            check=False,
             cwd=ROOT_DIR,
             capture_output=True,
             text=True,
@@ -297,20 +305,28 @@ def run_uv_sync() -> bool:
 def main() -> int:
     """Main release process."""
     parser = argparse.ArgumentParser(
-        description="Release AutoGLM-GUI with version bump"
+        description="Release AutoGLM-GUI with version bump",
     )
     bump_group = parser.add_mutually_exclusive_group()
     bump_group.add_argument(
-        "--major", action="store_true", help="Bump major version (X.0.0)"
+        "--major",
+        action="store_true",
+        help="Bump major version (X.0.0)",
     )
     bump_group.add_argument(
-        "--minor", action="store_true", help="Bump minor version (x.X.0)"
+        "--minor",
+        action="store_true",
+        help="Bump minor version (x.X.0)",
     )
     bump_group.add_argument(
-        "--patch", action="store_true", help="Bump patch version (x.x.X) [default]"
+        "--patch",
+        action="store_true",
+        help="Bump patch version (x.x.X) [default]",
     )
     bump_group.add_argument(
-        "--version", type=str, help="Set specific version (e.g., 1.2.3)"
+        "--version",
+        type=str,
+        help="Set specific version (e.g., 1.2.3)",
     )
     parser.add_argument(
         "--dry-run",
@@ -365,12 +381,13 @@ def main() -> int:
         print()
 
     ## run uv sync
-    if not args.dry_run:
-        if not run_uv_sync():
-            return 1
+    if not args.dry_run and not run_uv_sync():
+        return 1
 
     if not git_commit_version(
-        new_version, dry_run=args.dry_run, skip_readme=args.no_readme
+        new_version,
+        dry_run=args.dry_run,
+        skip_readme=args.no_readme,
     ):
         return 1
     print()

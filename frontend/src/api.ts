@@ -155,12 +155,7 @@ export interface CancelledEvent {
   message: string;
 }
 
-export type StreamEvent =
-  | ThinkingEvent
-  | StepEvent
-  | DoneEvent
-  | ErrorEvent
-  | CancelledEvent;
+export type StreamEvent = ThinkingEvent | StepEvent | DoneEvent | ErrorEvent | CancelledEvent;
 
 export interface TapRequest {
   x: number;
@@ -365,25 +360,15 @@ export async function getDevices(): Promise<Device[]> {
   return response.data.devices;
 }
 
-export async function connectWifi(
-  payload: WiFiConnectRequest
-): Promise<WiFiConnectResponse> {
-  const res = await axios.post<WiFiConnectResponse>(
-    '/api/devices/connect_wifi',
-    payload
-  );
+export async function connectWifi(payload: WiFiConnectRequest): Promise<WiFiConnectResponse> {
+  const res = await axios.post<WiFiConnectResponse>('/api/devices/connect_wifi', payload);
   return res.data;
 }
 
-export async function disconnectWifi(
-  deviceId: string
-): Promise<WiFiDisconnectResponse> {
-  const response = await axios.post<WiFiDisconnectResponse>(
-    '/api/devices/disconnect_wifi',
-    {
-      device_id: deviceId,
-    }
-  );
+export async function disconnectWifi(deviceId: string): Promise<WiFiDisconnectResponse> {
+  const response = await axios.post<WiFiDisconnectResponse>('/api/devices/disconnect_wifi', {
+    device_id: deviceId,
+  });
   return response.data;
 }
 
@@ -397,13 +382,8 @@ export async function connectWifiManual(
   return res.data;
 }
 
-export async function pairWifi(
-  payload: WiFiPairRequest
-): Promise<WiFiPairResponse> {
-  const res = await axios.post<WiFiPairResponse>(
-    '/api/devices/pair_wifi',
-    payload
-  );
+export async function pairWifi(payload: WiFiPairRequest): Promise<WiFiPairResponse> {
+  const res = await axios.post<WiFiPairResponse>('/api/devices/pair_wifi', payload);
   return res.data;
 }
 
@@ -420,30 +400,21 @@ export async function discoverRemoteDevices(
 export async function addRemoteDevice(
   payload: RemoteDeviceAddRequest
 ): Promise<RemoteDeviceAddResponse> {
-  const res = await axios.post<RemoteDeviceAddResponse>(
-    '/api/devices/add_remote',
-    payload
-  );
+  const res = await axios.post<RemoteDeviceAddResponse>('/api/devices/add_remote', payload);
   return res.data;
 }
 
-export async function removeRemoteDevice(
-  serial: string
-): Promise<RemoteDeviceRemoveResponse> {
-  const res = await axios.post<RemoteDeviceRemoveResponse>(
-    '/api/devices/remove_remote',
-    { serial }
-  );
+export async function removeRemoteDevice(serial: string): Promise<RemoteDeviceRemoveResponse> {
+  const res = await axios.post<RemoteDeviceRemoveResponse>('/api/devices/remove_remote', {
+    serial,
+  });
   return res.data;
 }
 
 export async function createTerminalSession(
   payload: TerminalSessionCreateRequest = {}
 ): Promise<TerminalSessionCreateResponse> {
-  const res = await axios.post<TerminalSessionCreateResponse>(
-    '/api/terminal/sessions',
-    payload
-  );
+  const res = await axios.post<TerminalSessionCreateResponse>('/api/terminal/sessions', payload);
   return res.data;
 }
 
@@ -451,12 +422,9 @@ export async function getTerminalSession(
   sessionId: string,
   sessionToken: string
 ): Promise<TerminalSession> {
-  const res = await axios.get<TerminalSession>(
-    `/api/terminal/sessions/${sessionId}`,
-    {
-      params: { token: sessionToken },
-    }
-  );
+  const res = await axios.get<TerminalSession>(`/api/terminal/sessions/${sessionId}`, {
+    params: { token: sessionToken },
+  });
   return res.data;
 }
 
@@ -497,7 +465,7 @@ export function sendMessageStream(
     body: JSON.stringify({ message, device_id: deviceId }),
     signal: controller.signal,
   })
-    .then(async response => {
+    .then(async (response) => {
       await readServerEventStream(
         response,
         (eventType, data) => {
@@ -518,7 +486,7 @@ export function sendMessageStream(
         'Failed to parse SSE data:'
       );
     })
-    .catch(error => {
+    .catch((error) => {
       if (error.name === 'AbortError') {
         // User manually cancelled the connection
         if (onCancelled) {
@@ -560,14 +528,8 @@ export async function abortChat(deviceId: string): Promise<{
   return res.data;
 }
 
-export async function getScreenshot(
-  deviceId?: string | null
-): Promise<ScreenshotResponse> {
-  const res = await axios.post(
-    '/api/screenshot',
-    { device_id: deviceId ?? null },
-    {}
-  );
+export async function getScreenshot(deviceId?: string | null): Promise<ScreenshotResponse> {
+  const res = await axios.post('/api/screenshot', { device_id: deviceId ?? null }, {});
   return res.data;
 }
 
@@ -606,10 +568,7 @@ export async function sendSwipe(
   };
 
   try {
-    const res = await axios.post<SwipeResponse>(
-      '/api/control/swipe',
-      swipeData
-    );
+    const res = await axios.post<SwipeResponse>('/api/control/swipe', swipeData);
     return res.data;
   } catch (error) {
     console.error('[API] Swipe request failed:', error);
@@ -709,9 +668,7 @@ export async function getConfig(): Promise<ConfigResponse> {
   return res.data;
 }
 
-export async function saveConfig(
-  config: ConfigSaveRequest
-): Promise<ConfigSaveResponse> {
+export async function saveConfig(config: ConfigSaveRequest): Promise<ConfigSaveResponse> {
   const res = await axios.post<ConfigSaveResponse>('/api/config', config);
   return res.data;
 }
@@ -733,9 +690,7 @@ export interface ReinitAllAgentsResponse {
 }
 
 export async function reinitAllAgents(): Promise<ReinitAllAgentsResponse> {
-  const res = await axios.post<ReinitAllAgentsResponse>(
-    '/api/agents/reinit-all'
-  );
+  const res = await axios.post<ReinitAllAgentsResponse>('/api/agents/reinit-all');
   return res.data;
 }
 
@@ -754,9 +709,7 @@ export async function checkVersion(): Promise<VersionCheckResponse> {
 }
 
 export async function discoverMdnsDevices(): Promise<MdnsDiscoverResponse> {
-  const res = await axios.get<MdnsDiscoverResponse>(
-    '/api/devices/discover_mdns'
-  );
+  const res = await axios.get<MdnsDiscoverResponse>('/api/devices/discover_mdns');
   return res.data;
 }
 
@@ -784,31 +737,20 @@ export interface QRPairCancelResponse {
   message: string;
 }
 
-export async function generateQRPairing(
-  timeout: number = 90
-): Promise<QRPairGenerateResponse> {
-  const res = await axios.post<QRPairGenerateResponse>(
-    '/api/devices/qr_pair/generate',
-    { timeout }
-  );
+export async function generateQRPairing(timeout: number = 90): Promise<QRPairGenerateResponse> {
+  const res = await axios.post<QRPairGenerateResponse>('/api/devices/qr_pair/generate', {
+    timeout,
+  });
   return res.data;
 }
 
-export async function getQRPairingStatus(
-  sessionId: string
-): Promise<QRPairStatusResponse> {
-  const res = await axios.get<QRPairStatusResponse>(
-    `/api/devices/qr_pair/status/${sessionId}`
-  );
+export async function getQRPairingStatus(sessionId: string): Promise<QRPairStatusResponse> {
+  const res = await axios.get<QRPairStatusResponse>(`/api/devices/qr_pair/status/${sessionId}`);
   return res.data;
 }
 
-export async function cancelQRPairing(
-  sessionId: string
-): Promise<QRPairCancelResponse> {
-  const res = await axios.delete<QRPairCancelResponse>(
-    `/api/devices/qr_pair/${sessionId}`
-  );
+export async function cancelQRPairing(sessionId: string): Promise<QRPairCancelResponse> {
+  const res = await axios.delete<QRPairCancelResponse>(`/api/devices/qr_pair/${sessionId}`);
   return res.data;
 }
 
@@ -844,9 +786,7 @@ export async function getWorkflow(uuid: string): Promise<Workflow> {
   return res.data;
 }
 
-export async function createWorkflow(
-  request: WorkflowCreateRequest
-): Promise<Workflow> {
+export async function createWorkflow(request: WorkflowCreateRequest): Promise<Workflow> {
   const res = await axios.post<Workflow>('/api/workflows', request);
   return res.data;
 }
@@ -957,21 +897,13 @@ export async function createTaskSession(
   return res.data;
 }
 
-export async function getTaskSession(
-  sessionId: string
-): Promise<TaskSessionResponse> {
-  const res = await axios.get<TaskSessionResponse>(
-    `/api/task-sessions/${sessionId}`
-  );
+export async function getTaskSession(sessionId: string): Promise<TaskSessionResponse> {
+  const res = await axios.get<TaskSessionResponse>(`/api/task-sessions/${sessionId}`);
   return res.data;
 }
 
-export async function resetTaskSession(
-  sessionId: string
-): Promise<TaskSessionResetResponse> {
-  const res = await axios.post<TaskSessionResetResponse>(
-    `/api/task-sessions/${sessionId}/reset`
-  );
+export async function resetTaskSession(sessionId: string): Promise<TaskSessionResetResponse> {
+  const res = await axios.post<TaskSessionResetResponse>(`/api/task-sessions/${sessionId}/reset`);
   return res.data;
 }
 
@@ -980,10 +912,9 @@ export async function listTaskSessionTasks(
   limit: number = 50,
   offset: number = 0
 ): Promise<TaskRunListResponse> {
-  const res = await axios.get<TaskRunListResponse>(
-    `/api/task-sessions/${sessionId}/tasks`,
-    { params: { limit, offset } }
-  );
+  const res = await axios.get<TaskRunListResponse>(`/api/task-sessions/${sessionId}/tasks`, {
+    params: { limit, offset },
+  });
   return res.data;
 }
 
@@ -992,10 +923,10 @@ export async function submitTaskSessionTask(
   message: string,
   attachments: TaskImageAttachment[] = []
 ): Promise<TaskRunResponse> {
-  const res = await axios.post<TaskRunResponse>(
-    `/api/task-sessions/${sessionId}/tasks`,
-    { message, attachments }
-  );
+  const res = await axios.post<TaskRunResponse>(`/api/task-sessions/${sessionId}/tasks`, {
+    message,
+    attachments,
+  });
   return res.data;
 }
 
@@ -1008,19 +939,14 @@ export async function listTaskEvents(
   taskId: string,
   afterSeq: number = 0
 ): Promise<TaskEventListResponse> {
-  const res = await axios.get<TaskEventListResponse>(
-    `/api/tasks/${taskId}/events`,
-    { params: { after_seq: afterSeq } }
-  );
+  const res = await axios.get<TaskEventListResponse>(`/api/tasks/${taskId}/events`, {
+    params: { after_seq: afterSeq },
+  });
   return res.data;
 }
 
-export async function cancelTaskRun(
-  taskId: string
-): Promise<TaskCancelResponse> {
-  const res = await axios.post<TaskCancelResponse>(
-    `/api/tasks/${taskId}/cancel`
-  );
+export async function cancelTaskRun(taskId: string): Promise<TaskCancelResponse> {
+  const res = await axios.post<TaskCancelResponse>(`/api/tasks/${taskId}/cancel`);
   return res.data;
 }
 
@@ -1036,20 +962,19 @@ export function streamTaskEvents(
     method: 'GET',
     signal: controller.signal,
   })
-    .then(async response => {
+    .then(async (response) => {
       await readServerEventStream(
         response,
         (eventType, data) => {
           onEvent({
             ...(data as TaskEventRecordResponse),
-            event_type:
-              (data as TaskEventRecordResponse).event_type || eventType,
+            event_type: (data as TaskEventRecordResponse).event_type || eventType,
           });
         },
         'Failed to parse task SSE data:'
       );
     })
-    .catch(error => {
+    .catch((error) => {
       if (error.name === 'AbortError') {
         return;
       }
@@ -1128,16 +1053,11 @@ export async function getHistoryRecord(
   serialno: string,
   recordId: string
 ): Promise<HistoryRecordResponse> {
-  const res = await axios.get<HistoryRecordResponse>(
-    `/api/history/${serialno}/${recordId}`
-  );
+  const res = await axios.get<HistoryRecordResponse>(`/api/history/${serialno}/${recordId}`);
   return res.data;
 }
 
-export async function deleteHistoryRecord(
-  serialno: string,
-  recordId: string
-): Promise<void> {
+export async function deleteHistoryRecord(serialno: string, recordId: string): Promise<void> {
   await axios.delete(`/api/history/${serialno}/${recordId}`);
 }
 
@@ -1192,28 +1112,19 @@ export interface ScheduledTaskUpdate {
 }
 
 export async function listScheduledTasks(): Promise<ScheduledTaskListResponse> {
-  const res = await axios.get<ScheduledTaskListResponse>(
-    '/api/scheduled-tasks'
-  );
+  const res = await axios.get<ScheduledTaskListResponse>('/api/scheduled-tasks');
   return res.data;
 }
 
 export async function createScheduledTask(
   data: ScheduledTaskCreate
 ): Promise<ScheduledTaskResponse> {
-  const res = await axios.post<ScheduledTaskResponse>(
-    '/api/scheduled-tasks',
-    data
-  );
+  const res = await axios.post<ScheduledTaskResponse>('/api/scheduled-tasks', data);
   return res.data;
 }
 
-export async function getScheduledTask(
-  taskId: string
-): Promise<ScheduledTaskResponse> {
-  const res = await axios.get<ScheduledTaskResponse>(
-    `/api/scheduled-tasks/${taskId}`
-  );
+export async function getScheduledTask(taskId: string): Promise<ScheduledTaskResponse> {
+  const res = await axios.get<ScheduledTaskResponse>(`/api/scheduled-tasks/${taskId}`);
   return res.data;
 }
 
@@ -1221,10 +1132,7 @@ export async function updateScheduledTask(
   taskId: string,
   data: ScheduledTaskUpdate
 ): Promise<ScheduledTaskResponse> {
-  const res = await axios.put<ScheduledTaskResponse>(
-    `/api/scheduled-tasks/${taskId}`,
-    data
-  );
+  const res = await axios.put<ScheduledTaskResponse>(`/api/scheduled-tasks/${taskId}`, data);
   return res.data;
 }
 
@@ -1232,21 +1140,13 @@ export async function deleteScheduledTask(taskId: string): Promise<void> {
   await axios.delete(`/api/scheduled-tasks/${taskId}`);
 }
 
-export async function enableScheduledTask(
-  taskId: string
-): Promise<ScheduledTaskResponse> {
-  const res = await axios.post<ScheduledTaskResponse>(
-    `/api/scheduled-tasks/${taskId}/enable`
-  );
+export async function enableScheduledTask(taskId: string): Promise<ScheduledTaskResponse> {
+  const res = await axios.post<ScheduledTaskResponse>(`/api/scheduled-tasks/${taskId}/enable`);
   return res.data;
 }
 
-export async function disableScheduledTask(
-  taskId: string
-): Promise<ScheduledTaskResponse> {
-  const res = await axios.post<ScheduledTaskResponse>(
-    `/api/scheduled-tasks/${taskId}/disable`
-  );
+export async function disableScheduledTask(taskId: string): Promise<ScheduledTaskResponse> {
+  const res = await axios.post<ScheduledTaskResponse>(`/api/scheduled-tasks/${taskId}/disable`);
   return res.data;
 }
 
@@ -1261,19 +1161,14 @@ export async function updateDeviceName(
   serial: string,
   displayName: string | null
 ): Promise<DeviceNameResponse> {
-  const res = await axios.put<DeviceNameResponse>(
-    `/api/devices/${serial}/name`,
-    { display_name: displayName }
-  );
+  const res = await axios.put<DeviceNameResponse>(`/api/devices/${serial}/name`, {
+    display_name: displayName,
+  });
   return res.data;
 }
 
-export async function getDeviceName(
-  serial: string
-): Promise<DeviceNameResponse> {
-  const res = await axios.get<DeviceNameResponse>(
-    `/api/devices/${serial}/name`
-  );
+export async function getDeviceName(serial: string): Promise<DeviceNameResponse> {
+  const res = await axios.get<DeviceNameResponse>(`/api/devices/${serial}/name`);
   return res.data;
 }
 
@@ -1309,32 +1204,24 @@ export async function createDeviceGroup(name: string): Promise<DeviceGroup> {
   return res.data;
 }
 
-export async function updateDeviceGroup(
-  groupId: string,
-  name: string
-): Promise<DeviceGroup> {
+export async function updateDeviceGroup(groupId: string, name: string): Promise<DeviceGroup> {
   const res = await axios.put<DeviceGroup>(`/api/device-groups/${groupId}`, {
     name,
   });
   return res.data;
 }
 
-export async function deleteDeviceGroup(
-  groupId: string
-): Promise<DeviceGroupOperationResponse> {
-  const res = await axios.delete<DeviceGroupOperationResponse>(
-    `/api/device-groups/${groupId}`
-  );
+export async function deleteDeviceGroup(groupId: string): Promise<DeviceGroupOperationResponse> {
+  const res = await axios.delete<DeviceGroupOperationResponse>(`/api/device-groups/${groupId}`);
   return res.data;
 }
 
 export async function reorderDeviceGroups(
   groupIds: string[]
 ): Promise<DeviceGroupOperationResponse> {
-  const res = await axios.put<DeviceGroupOperationResponse>(
-    '/api/device-groups/reorder',
-    { group_ids: groupIds }
-  );
+  const res = await axios.put<DeviceGroupOperationResponse>('/api/device-groups/reorder', {
+    group_ids: groupIds,
+  });
   return res.data;
 }
 
@@ -1342,9 +1229,8 @@ export async function assignDeviceToGroup(
   serial: string,
   groupId: string
 ): Promise<DeviceGroupOperationResponse> {
-  const res = await axios.put<DeviceGroupOperationResponse>(
-    `/api/devices/${serial}/group`,
-    { group_id: groupId }
-  );
+  const res = await axios.put<DeviceGroupOperationResponse>(`/api/devices/${serial}/group`, {
+    group_id: groupId,
+  });
   return res.data;
 }

@@ -146,9 +146,7 @@ def _is_new_log_entry(line: str) -> bool:
     """Check if a line is a new timestamped debug log entry."""
     if len(line) > 25 and line[4] == "-" and line[10] == "T" and line[23] == "Z":
         return True
-    if line.startswith(_LOG_ENTRY_PREFIXES):
-        return True
-    return False
+    return bool(line.startswith(_LOG_ENTRY_PREFIXES))
 
 
 def _strip_timestamp(line: str) -> str:

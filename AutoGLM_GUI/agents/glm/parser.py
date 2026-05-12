@@ -99,7 +99,8 @@ class GLMParser:
         return params
 
     def _parse_value(
-        self, value_str: str
+        self,
+        value_str: str,
     ) -> str | int | float | bool | list[Any] | dict[str, Any] | None:
         value_str = value_str.strip()
 
