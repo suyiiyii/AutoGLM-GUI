@@ -1,7 +1,8 @@
 """History API routes."""
 
 import json
-from typing import Any
+from collections.abc import Callable
+from typing import Any, cast
 
 from fastapi import APIRouter, HTTPException
 
@@ -16,6 +17,7 @@ from AutoGLM_GUI.schemas import (
     TraceSummaryResponse,
 )
 from AutoGLM_GUI.task_store import TERMINAL_TASK_STATUSES, TaskStatus, task_store
+from AutoGLM_GUI.trace import delete_replay_run
 
 router = APIRouter()
 
@@ -321,7 +323,48 @@ def _list_merged_history(
     return merged
 
 
-@router.get("/api/history/{serialno}", response_model=HistoryListResponse)
+@router.get(
+    "/api/history/{serialno:path}/{record_id}",
+    response_model=HistoryRecordResponse,
+)
+def get_history_record(serialno: str, record_id: str) -> HistoryRecordResponse:
+    task_record = task_store.get_task(record_id)
+    if (
+        task_record is not None
+        and task_record["device_serial"] == serialno
+        and _is_terminal_task_record(task_record)
+    ):
+        return _build_history_record_from_task(task_record)
+
+    record = history_manager.get_record(serialno, record_id)
+    if not record:
+        raise HTTPException(status_code=404, detail="Record not found")
+
+    return _build_history_record_response(record)
+
+
+@router.delete("/api/history/{serialno:path}/{record_id}")
+def delete_history_record(serialno: str, record_id: str) -> dict[str, Any]:
+    task_record = task_store.get_task(record_id)
+    trace_id = None
+    if task_record is not None and task_record["device_serial"] == serialno:
+        if not _is_terminal_task_record(task_record):
+            raise HTTPException(
+                status_code=409,
+                detail="Cannot delete task history while task is still active",
+            )
+        trace_id = task_record.get("trace_id")
+        success = task_store.delete_task(record_id)
+    else:
+        success = history_manager.delete_record(serialno, record_id)
+    if not success:
+        raise HTTPException(status_code=404, detail="Record not found")
+    if trace_id:
+        delete_replay_run(str(trace_id))
+    return {"success": True, "message": "Record deleted"}
+
+
+@router.get("/api/history/{serialno:path}", response_model=HistoryListResponse)
 def list_history(
     serialno: str, limit: int = 50, offset: int = 0, mode: str | None = None
 ) -> HistoryListResponse:
@@ -346,42 +389,14 @@ def list_history(
     )
 
 
-@router.get("/api/history/{serialno}/{record_id}", response_model=HistoryRecordResponse)
-def get_history_record(serialno: str, record_id: str) -> HistoryRecordResponse:
-    task_record = task_store.get_task(record_id)
-    if (
-        task_record is not None
-        and task_record["device_serial"] == serialno
-        and _is_terminal_task_record(task_record)
-    ):
-        return _build_history_record_from_task(task_record)
-
-    record = history_manager.get_record(serialno, record_id)
-    if not record:
-        raise HTTPException(status_code=404, detail="Record not found")
-
-    return _build_history_record_response(record)
-
-
-@router.delete("/api/history/{serialno}/{record_id}")
-def delete_history_record(serialno: str, record_id: str) -> dict[str, Any]:
-    task_record = task_store.get_task(record_id)
-    if task_record is not None and task_record["device_serial"] == serialno:
-        if not _is_terminal_task_record(task_record):
-            raise HTTPException(
-                status_code=409,
-                detail="Cannot delete task history while task is still active",
-            )
-        success = task_store.delete_task(record_id)
-    else:
-        success = history_manager.delete_record(serialno, record_id)
-    if not success:
-        raise HTTPException(status_code=404, detail="Record not found")
-    return {"success": True, "message": "Record deleted"}
-
-
-@router.delete("/api/history/{serialno}")
+@router.delete("/api/history/{serialno:path}")
 def clear_history(serialno: str) -> dict[str, Any]:
+    trace_ids: list[str] = []
+    list_trace_ids = getattr(task_store, "list_terminal_trace_ids_for_device", None)
+    if callable(list_trace_ids):
+        trace_ids = cast(Callable[[str], list[str]], list_trace_ids)(serialno)
     task_store.clear_device_history(serialno)
     history_manager.clear_device_history(serialno)
+    for trace_id in trace_ids:
+        delete_replay_run(str(trace_id))
     return {"success": True, "message": f"History cleared for {serialno}"}

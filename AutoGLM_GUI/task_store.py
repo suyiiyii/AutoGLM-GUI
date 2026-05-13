@@ -760,6 +760,28 @@ class TaskStore:
             )
             return [str(row["device_id"]) for row in rows]
 
+    def list_terminal_trace_ids_for_device(self, device_serial: str) -> list[str]:
+        self._ensure_ready()
+        with self._lock:
+            rows = self._fetchall(
+                """
+                SELECT DISTINCT trace_id
+                FROM task_runs
+                WHERE device_serial = ?
+                  AND trace_id IS NOT NULL
+                  AND status IN (?, ?, ?, ?)
+                ORDER BY trace_id ASC
+                """,
+                (
+                    device_serial,
+                    TaskStatus.SUCCEEDED.value,
+                    TaskStatus.FAILED.value,
+                    TaskStatus.CANCELLED.value,
+                    TaskStatus.INTERRUPTED.value,
+                ),
+            )
+            return [str(row["trace_id"]) for row in rows if row["trace_id"]]
+
     def get_latest_active_chat_task(
         self, device_id: str, mode: str | None = None
     ) -> TaskRecord | None:

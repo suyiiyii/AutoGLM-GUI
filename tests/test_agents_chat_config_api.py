@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import base64
+import json
 from types import SimpleNamespace
 from typing import Any
 
@@ -159,6 +161,9 @@ def env(monkeypatch: pytest.MonkeyPatch, tmp_path) -> dict[str, Any]:
     fake_config_manager = FakeConfigManager()
     isolated_store = task_store_module.TaskStore(tmp_path / "tasks.db")
     isolated_task_manager = task_manager_module.TaskManager(isolated_store)
+    monkeypatch.setenv("AUTOGLM_TRACE_ENABLED", "1")
+    monkeypatch.setenv("AUTOGLM_TRACE_REPLAY_ENABLED", "1")
+    monkeypatch.setenv("AUTOGLM_TRACE_FILE", str(tmp_path / "trace.jsonl"))
 
     monkeypatch.setattr(
         phone_agent_manager_module.PhoneAgentManager,
@@ -184,6 +189,7 @@ def env(monkeypatch: pytest.MonkeyPatch, tmp_path) -> dict[str, Any]:
             "config_manager": fake_config_manager,
             "task_manager": isolated_task_manager,
             "task_store": isolated_store,
+            "tmp_path": tmp_path,
         }
 
     asyncio.run(isolated_task_manager.shutdown())
@@ -386,6 +392,60 @@ def test_chat_stream_persists_step_timings_from_trace_context(
     assert isinstance(timings, dict)
     assert timings["step"] == 1
     assert timings["llm_duration_ms"] >= 0
+
+
+def test_chat_stream_writes_replay_trace(
+    env: dict[str, Any],
+) -> None:
+    screenshot = base64.b64encode(b"screen bytes").decode("ascii")
+    env["phone_manager"].agent.stream_events = [
+        {
+            "type": "step",
+            "data": {
+                "step": 1,
+                "thinking": "locating button",
+                "action": {"_metadata": "do", "action": "Tap", "element": [1, 2]},
+                "success": True,
+                "finished": False,
+                "screenshot": screenshot,
+            },
+        },
+        {
+            "type": "done",
+            "data": {"message": "finished", "success": True, "steps": 1},
+        },
+    ]
+
+    response = env["client"].post(
+        "/api/chat/stream",
+        json={"device_id": "device-4", "message": "open settings"},
+    )
+
+    assert response.status_code == 200
+    tasks, total = env["task_store"].list_tasks(limit=10, offset=0)
+    assert total == 1
+    task = tasks[0]
+    trace_id = str(task["trace_id"])
+    replay_file = env["tmp_path"] / "runs" / trace_id / "replay.jsonl"
+    replay_records = [json.loads(line) for line in replay_file.read_text().splitlines()]
+    event_names = {record["event_name"] for record in replay_records}
+    assert "autoglm.task.start" in event_names
+    assert "autoglm.step" in event_names
+    assert "autoglm.task.done" in event_names
+    assert "autoglm.trace.summary" in event_names
+    assert "autoglm.task.status" in event_names
+
+    events = env["task_store"].list_task_events(str(task["id"]))
+    step_event = next(event for event in events if event["event_type"] == "step")
+    step_record = next(
+        record for record in replay_records if record["event_name"] == "autoglm.step"
+    )
+    assert step_record["event_seq"] == step_event["seq"]
+    assert step_record["step"]["thinking"] == "locating button"
+    assert step_record["step"]["action"]["action"] == "Tap"
+    assert screenshot not in json.dumps(step_record, ensure_ascii=False)
+    screenshot_ref = step_record["step"]["artifacts"]["screenshot"]
+    assert (env["tmp_path"] / "runs" / trace_id / screenshot_ref["path"]).exists()
 
 
 def test_get_config_masks_empty_api_key_and_maps_conflicts(

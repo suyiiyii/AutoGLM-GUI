@@ -10,7 +10,7 @@ import httpx
 import pytest
 
 
-def _run_autoglm_server(port: int, llm_url: str):
+def _run_autoglm_server(port: int, llm_url: str, trace_file: str):
     """Run AutoGLM-GUI server in a subprocess."""
     import uvicorn
 
@@ -20,6 +20,10 @@ def _run_autoglm_server(port: int, llm_url: str):
     os.environ["AUTOGLM_BASE_URL"] = llm_url + "/v1"
     os.environ["AUTOGLM_MODEL_NAME"] = "mock-glm-model"
     os.environ["AUTOGLM_API_KEY"] = "mock-key"
+    os.environ["AUTOGLM_TRACE_ENABLED"] = "1"
+    os.environ["AUTOGLM_TRACE_REPLAY_ENABLED"] = "1"
+    os.environ["AUTOGLM_TRACE_CAPTURE_SCREENSHOT"] = "artifact"
+    os.environ["AUTOGLM_TRACE_FILE"] = trace_file
     os.environ["HOME"] = "/tmp"  # Override HOME to avoid loading user config
 
     # Import and run the server
@@ -262,7 +266,7 @@ def _run_multi_agent_server(port: int):
 
 
 @pytest.fixture
-def local_server(mock_llm_server: str, mock_agent_server: str):
+def local_server(mock_llm_server: str, mock_agent_server: str, tmp_path: Path):
     """Start AutoGLM-GUI server locally (function-scoped for isolation).
 
     Each test gets a fresh server instance on a unique port.
@@ -274,14 +278,18 @@ def local_server(mock_llm_server: str, mock_agent_server: str):
     access_url = f"http://127.0.0.1:{port}"
     remote_url = mock_agent_server
     llm_url = mock_llm_server
+    trace_file = tmp_path / "trace.jsonl"
 
     print(f"\n[Local E2E] Starting server on port {port}")
     print(f"[Local E2E] Access URL: {access_url}")
     print(f"[Local E2E] LLM URL: {llm_url}")
+    print(f"[Local E2E] Trace file: {trace_file}")
 
     # Start server in subprocess
     proc = multiprocessing.Process(
-        target=_run_autoglm_server, args=(port, llm_url), daemon=True
+        target=_run_autoglm_server,
+        args=(port, llm_url, str(trace_file)),
+        daemon=True,
     )
     proc.start()
 
@@ -301,6 +309,8 @@ def local_server(mock_llm_server: str, mock_agent_server: str):
         "remote_url": remote_url,  # Will be set by test
         "llm_url": llm_url,
         "port": port,
+        "trace_file": trace_file,
+        "trace_root": tmp_path,
     }
 
     # Cleanup: Stop server

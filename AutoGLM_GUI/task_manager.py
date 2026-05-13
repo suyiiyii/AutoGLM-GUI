@@ -12,6 +12,7 @@ from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.metrics import record_trace_latency_metrics
 from AutoGLM_GUI.task_store import (
     TERMINAL_TASK_STATUSES,
+    TaskEventRecord,
     TaskRecord,
     TaskSessionRecord,
     TaskStatus,
@@ -315,8 +316,7 @@ class TaskManager:
                 steps=step_count,
             )
             if trace_summary_dict is not None:
-                await asyncio.to_thread(
-                    self.store.append_event,
+                await self._append_task_event(
                     task_id=task_id,
                     event_type="trace_summary",
                     payload={
@@ -324,6 +324,8 @@ class TaskManager:
                         "step_summaries": step_summaries,
                     },
                     role="system",
+                    trace_id=trace_id,
+                    replay_source=metrics_source,
                 )
             record_trace_latency_metrics(
                 source=metrics_source,
@@ -336,6 +338,54 @@ class TaskManager:
                 task_id,
                 exc_info=True,
             )
+
+    async def _write_replay_task_start(
+        self,
+        *,
+        task: TaskRecord,
+        trace_id: str,
+        source: str,
+    ) -> None:
+        replay_task = {**task, "trace_id": trace_id}
+        await asyncio.to_thread(
+            trace_module.write_replay_task_start,
+            task_id=str(task["id"]),
+            trace_id=trace_id,
+            task=replay_task,
+            source=source,
+        )
+
+    async def _append_task_event(
+        self,
+        *,
+        task_id: str,
+        event_type: str,
+        payload: dict[str, Any],
+        role: str = "assistant",
+        trace_id: str | None = None,
+        replay_source: str | None = None,
+        task: TaskRecord | None = None,
+    ) -> TaskEventRecord:
+        event_record = await asyncio.to_thread(
+            self.store.append_event,
+            task_id=task_id,
+            event_type=event_type,
+            payload=payload,
+            role=role,
+        )
+        if trace_id and replay_source:
+            replay_task = task
+            if replay_task is None:
+                replay_task = await asyncio.to_thread(self.store.get_task, task_id)
+            await asyncio.to_thread(
+                trace_module.write_replay_event,
+                task_id=task_id,
+                trace_id=trace_id,
+                event_record=event_record,
+                source=replay_source,
+                task=replay_task,
+            )
+        return event_record
 
     async def _finalize_traced_task(
         self,
@@ -360,6 +410,7 @@ class TaskManager:
                     step_count=step_count,
                     trace_id=trace_id,
                     mark_complete=False,
+                    replay_source=metrics_source,
                 )
                 await self._record_trace_artifacts(
                     task_id=task_id,
@@ -425,6 +476,11 @@ class TaskManager:
         try:
             with trace_module.trace_context(trace_id):
                 await asyncio.to_thread(self.store.set_task_trace_id, task_id, trace_id)
+                await self._write_replay_task_start(
+                    task=task,
+                    trace_id=trace_id,
+                    source="classic_chat",
+                )
                 acquired = await manager.acquire_device_async(
                     device_id,
                     auto_initialize=True,
@@ -492,12 +548,14 @@ class TaskManager:
                             if timings is not None:
                                 event_data = {**event_data, "timings": timings}
 
-                        await asyncio.to_thread(
-                            self.store.append_event,
+                        await self._append_task_event(
                             task_id=task_id,
                             event_type=event_type,
                             payload=event_data,
                             role="assistant",
+                            trace_id=trace_id,
+                            replay_source="classic_chat",
+                            task=task,
                         )
 
                     if event_type == "done":
@@ -631,6 +689,11 @@ class TaskManager:
         try:
             with trace_module.trace_context(trace_id):
                 await asyncio.to_thread(self.store.set_task_trace_id, task_id, trace_id)
+                await self._write_replay_task_start(
+                    task=task,
+                    trace_id=trace_id,
+                    source=metrics_source,
+                )
                 run = start_run(
                     task_id=task_id,
                     session_id=session_id,
@@ -641,12 +704,14 @@ class TaskManager:
                 async for event in run.stream_events():
                     event_type = str(event["type"])
                     event_payload = dict(event.get("payload", {}))
-                    await asyncio.to_thread(
-                        self.store.append_event,
+                    await self._append_task_event(
                         task_id=task_id,
                         event_type=event_type,
                         payload=event_payload,
                         role="assistant",
+                        trace_id=trace_id,
+                        replay_source=metrics_source,
+                        task=task,
                     )
 
                     if event_type == "tool_result":
@@ -741,6 +806,11 @@ class TaskManager:
         try:
             with trace_module.trace_context(trace_id):
                 await asyncio.to_thread(self.store.set_task_trace_id, task_id, trace_id)
+                await self._write_replay_task_start(
+                    task=task,
+                    trace_id=trace_id,
+                    source="scheduled",
+                )
                 acquired = await manager.acquire_device_async(
                     device_id,
                     auto_initialize=True,
@@ -776,12 +846,14 @@ class TaskManager:
                         event_type = event["type"]
                         event_data = dict(event.get("data", {}))
                         if event_type == "thinking":
-                            await asyncio.to_thread(
-                                self.store.append_event,
+                            await self._append_task_event(
                                 task_id=task_id,
                                 event_type="thinking",
                                 payload=event_data,
                                 role="assistant",
+                                trace_id=trace_id,
+                                replay_source="scheduled",
+                                task=task,
                             )
                         elif event_type == "step":
                             step_count = max(
@@ -794,12 +866,14 @@ class TaskManager:
                             )
                             if timings is not None:
                                 event_data = {**event_data, "timings": timings}
-                            await asyncio.to_thread(
-                                self.store.append_event,
+                            await self._append_task_event(
                                 task_id=task_id,
                                 event_type="step",
                                 payload=event_data,
                                 role="assistant",
+                                trace_id=trace_id,
+                                replay_source="scheduled",
+                                task=task,
                             )
                         elif event_type == "done":
                             final_message = str(
@@ -825,8 +899,7 @@ class TaskManager:
                             )
                             final_status = TaskStatus.FAILED.value
                             stop_reason = str(event_data.get("stop_reason", "error"))
-                            await asyncio.to_thread(
-                                self.store.append_event,
+                            await self._append_task_event(
                                 task_id=task_id,
                                 event_type="error",
                                 payload={
@@ -834,6 +907,9 @@ class TaskManager:
                                     "stop_reason": stop_reason,
                                 },
                                 role="assistant",
+                                trace_id=trace_id,
+                                replay_source="scheduled",
+                                task=task,
                             )
                         elif event_type == "cancelled":
                             final_message = str(
@@ -914,6 +990,7 @@ class TaskManager:
         stop_reason: str | None = None,
         trace_id: str | None = None,
         mark_complete: bool = True,
+        replay_source: str = "task_finalize",
     ) -> None:
         normalized_stop_reason = stop_reason
         if normalized_stop_reason is None:
@@ -950,12 +1027,13 @@ class TaskManager:
 
         existing_events = await asyncio.to_thread(self.store.list_task_events, task_id)
         if not any(event["event_type"] == event_type for event in existing_events):
-            await asyncio.to_thread(
-                self.store.append_event,
+            await self._append_task_event(
                 task_id=task_id,
                 event_type=event_type,
                 payload=payload,
                 role="assistant",
+                trace_id=trace_id,
+                replay_source=replay_source if trace_id else None,
             )
 
         await asyncio.to_thread(
@@ -968,12 +1046,33 @@ class TaskManager:
             step_count=step_count,
             trace_id=trace_id,
         )
+        if trace_id:
+            status_events = await asyncio.to_thread(
+                self.store.list_task_events, task_id
+            )
+            final_status_event = next(
+                (
+                    event
+                    for event in reversed(status_events)
+                    if event["event_type"] == "status"
+                ),
+                None,
+            )
+            if final_status_event is not None:
+                final_task = await asyncio.to_thread(self.store.get_task, task_id)
+                await asyncio.to_thread(
+                    trace_module.write_replay_event,
+                    task_id=task_id,
+                    trace_id=trace_id,
+                    event_record=final_status_event,
+                    source=replay_source,
+                    task=final_task,
+                )
         if mark_complete:
             self._mark_task_complete(task_id)
 
     async def _fail_task(self, task: TaskRecord, message: str) -> None:
-        await asyncio.to_thread(
-            self.store.append_event,
+        await self._append_task_event(
             task_id=task["id"],
             event_type="error",
             payload={"message": message, "stop_reason": "error"},
@@ -988,8 +1087,7 @@ class TaskManager:
         )
 
     async def _interrupt_task(self, task: TaskRecord, message: str) -> None:
-        await asyncio.to_thread(
-            self.store.append_event,
+        await self._append_task_event(
             task_id=task["id"],
             event_type="error",
             payload={"message": message, "stop_reason": "service_interrupted"},

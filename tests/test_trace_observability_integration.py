@@ -35,6 +35,12 @@ def _load_trace_records(trace_file: Path, trace_id: str) -> list[dict[str, Any]]
     return records
 
 
+def _load_replay_records(trace_file: Path, trace_id: str) -> list[dict[str, Any]]:
+    replay_file = trace_file.parent / "runs" / trace_id / "replay.jsonl"
+    assert replay_file.exists(), f"Replay file was not written: {replay_file}"
+    return [json.loads(line) for line in replay_file.read_text().splitlines()]
+
+
 def _fake_adb_run(*_: Any, **__: Any) -> SimpleNamespace:
     return SimpleNamespace(stdout="", stderr="", returncode=0)
 
@@ -279,6 +285,24 @@ def test_layered_task_trace_observability_covers_debug_surface(
             "task_store.task.finish",
         }
         assert expected_spans <= span_names
+
+        replay_records = _load_replay_records(trace_file, str(final_task["trace_id"]))
+        replay_event_names = {record["event_name"] for record in replay_records}
+        assert {
+            "autoglm.task.start",
+            "autoglm.layered.tool_call",
+            "autoglm.layered.tool_result",
+            "autoglm.layered.message",
+            "autoglm.task.done",
+            "autoglm.trace.summary",
+            "autoglm.task.status",
+        } <= replay_event_names
+        tool_call_record = next(
+            record
+            for record in replay_records
+            if record["event_name"] == "autoglm.layered.tool_call"
+        )
+        assert tool_call_record["payload"]["tool_name"] == "chat"
 
         metrics_output = generate_latest(get_metrics_registry()).decode("utf-8")
         assert "autoglm_trace_task_duration_seconds_bucket" in metrics_output
