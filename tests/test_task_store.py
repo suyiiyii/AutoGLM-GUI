@@ -68,6 +68,63 @@ def test_task_store_persists_trace_id(tmp_path: Path) -> None:
     assert finished["trace_id"] == "trace-finish"
 
 
+def test_task_store_lists_terminal_trace_ids_for_device(tmp_path: Path) -> None:
+    store = TaskStore(tmp_path / "tasks.db")
+
+    terminal = store.create_task_run(
+        source="chat",
+        executor_key="classic_chat",
+        device_id="device-1",
+        device_serial="serial-1",
+        input_text="完成任务",
+        trace_id="trace-terminal",
+    )
+    duplicate_trace = store.create_task_run(
+        source="chat",
+        executor_key="classic_chat",
+        device_id="device-1",
+        device_serial="serial-1",
+        input_text="同一个 trace",
+        trace_id="trace-terminal",
+    )
+    active = store.create_task_run(
+        source="chat",
+        executor_key="classic_chat",
+        device_id="device-1",
+        device_serial="serial-1",
+        input_text="还在运行",
+        trace_id="trace-active",
+        status=TaskStatus.RUNNING.value,
+    )
+    other_device = store.create_task_run(
+        source="chat",
+        executor_key="classic_chat",
+        device_id="device-2",
+        device_serial="serial-2",
+        input_text="其他设备",
+        trace_id="trace-other",
+    )
+    no_trace = store.create_task_run(
+        source="chat",
+        executor_key="classic_chat",
+        device_id="device-1",
+        device_serial="serial-1",
+        input_text="无 trace",
+    )
+
+    for task in (terminal, duplicate_trace, other_device, no_trace):
+        store.update_task_terminal(
+            task_id=task["id"],
+            status=TaskStatus.SUCCEEDED.value,
+            final_message="完成",
+            error_message=None,
+            step_count=1,
+        )
+
+    assert active["status"] == TaskStatus.RUNNING.value
+    assert store.list_terminal_trace_ids_for_device("serial-1") == ["trace-terminal"]
+
+
 def test_task_store_can_cancel_queued_tasks_and_interrupt_running(
     tmp_path: Path,
 ) -> None:

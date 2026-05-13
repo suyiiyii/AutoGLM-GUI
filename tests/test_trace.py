@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import base64
 import json
+from datetime import datetime, timezone
 from pathlib import Path
 
 import pytest
@@ -19,6 +20,7 @@ from AutoGLM_GUI.trace import (
     trace_context,
     trace_sleep,
     trace_span,
+    write_trace_artifact,
     write_replay_event,
     write_replay_task_start,
 )
@@ -302,6 +304,120 @@ def test_replay_trace_can_be_disabled_and_deleted(
     assert not (trace_file.parent / "runs" / "trace-delete").exists()
 
 
+def test_replay_trace_defensive_branches(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    trace_file = tmp_path / "trace.jsonl"
+    monkeypatch.setenv("AUTOGLM_TRACE_FILE", str(trace_file))
+    monkeypatch.setenv("AUTOGLM_TRACE_ENABLED", "1")
+    monkeypatch.setenv("AUTOGLM_TRACE_REPLAY_ENABLED", "1")
+
+    assert delete_replay_run(None) is False
+    assert delete_replay_run("missing-run") is False
+
+    artifact = write_trace_artifact(
+        trace_id="trace-defensive",
+        name="   ...   ",
+        mime_type="text/plain",
+        data_bytes=b"artifact bytes",
+    )
+    assert artifact is not None
+    assert artifact["id"] == "artifact"
+    assert artifact["path"] == "artifacts/artifact.txt"
+
+    decoded_artifact = write_trace_artifact(
+        trace_id="trace-defensive",
+        name="raw-response",
+        mime_type="application/json",
+        data_base64=base64.b64encode(b"{}").decode("ascii").rstrip("="),
+    )
+    assert decoded_artifact is not None
+    assert decoded_artifact["path"] == "artifacts/raw-response.json"
+
+    with pytest.raises(ValueError, match="data_base64 or data_bytes is required"):
+        write_trace_artifact(
+            trace_id="trace-defensive",
+            name="missing-data",
+            mime_type="application/json",
+        )
+
+    created_at = datetime(2026, 5, 13, 12, tzinfo=timezone.utc)
+    write_replay_event(
+        task_id="task-1",
+        trace_id="trace-defensive",
+        source="classic_chat",
+        event_record={
+            "seq": 1,
+            "event_type": "message",
+            "role": "assistant",
+            "created_at": created_at,
+            "payload": {
+                "path": tmp_path / "payload.json",
+                "timestamp": created_at,
+                "custom": RuntimeError("boom"),
+            },
+        },
+    )
+    write_replay_event(
+        task_id="task-1",
+        trace_id="trace-defensive",
+        source="classic_chat",
+        event_record={
+            "seq": 2,
+            "event_type": "message",
+            "role": "assistant",
+            "created_at": "now",
+            "payload": ["not", "a", "dict"],
+        },
+    )
+
+    monkeypatch.setenv("AUTOGLM_TRACE_CAPTURE_SCREENSHOT", "invalid-mode")
+    write_replay_event(
+        task_id="task-1",
+        trace_id="trace-defensive",
+        source="classic_chat",
+        event_record={
+            "seq": 3,
+            "event_type": "step",
+            "role": "assistant",
+            "created_at": "now",
+            "payload": {
+                "step": 3,
+                "success": True,
+                "screenshot": base64.b64encode(b"x").decode("ascii").rstrip("="),
+            },
+        },
+    )
+
+    records = _read_replay_records(trace_file, "trace-defensive")
+    message_payload = records[0]["payload"]
+    assert message_payload["path"] == str(tmp_path / "payload.json")
+    assert message_payload["timestamp"] == created_at.isoformat()
+    assert message_payload["custom"] == "boom"
+    assert records[1]["payload"] == {}
+    assert records[2]["step"]["artifacts"]["screenshot"]["size_bytes"] == 1
+
+    monkeypatch.setenv("AUTOGLM_TRACE_REPLAY_ENABLED", "0")
+    assert (
+        write_trace_artifact(
+            trace_id="trace-disabled-artifact",
+            name="disabled",
+            mime_type="text/plain",
+            data_bytes=b"disabled",
+        )
+        is None
+    )
+    assert (
+        write_replay_task_start(
+            task_id="task-disabled",
+            trace_id="trace-disabled-start",
+            task={"id": "task-disabled"},
+            source="classic_chat",
+        )
+        is None
+    )
+
+
 def test_export_trace_otlp_jsonl(
     tmp_path: Path, monkeypatch: pytest.MonkeyPatch
 ) -> None:
@@ -320,8 +436,39 @@ def test_export_trace_otlp_jsonl(
             with trace_span("action.execute", attrs={"step": 1}):
                 raise RuntimeError("export boom")
 
+    with trace_file.open("a", encoding="utf-8") as file:
+        file.write("\n")
+        file.write(
+            json.dumps(
+                {
+                    "record_type": "event",
+                    "trace_id": "trace-export",
+                    "event_name": "autoglm.step",
+                }
+            )
+        )
+        file.write("\n")
+        file.write(
+            json.dumps(
+                {
+                    "schema": "autoglm.trace.span.v1",
+                    "record_type": "span",
+                    "trace_id": "trace-export",
+                    "span_id": "manual-span",
+                    "parent_span_id": None,
+                    "name": "tool.call",
+                    "status": "ok",
+                    "start_time": "not-a-timestamp",
+                    "end_time": None,
+                    "duration_ms": 0,
+                    "attrs": {"ratio": 1.5},
+                }
+            )
+        )
+        file.write("\n")
+
     exported = export_otlp_jsonl(trace_file, output_file, trace_id="trace-export")
-    assert exported == 2
+    assert exported == 3
     otlp_records = [
         json.loads(line) for line in output_file.read_text().splitlines() if line
     ]
@@ -331,9 +478,15 @@ def test_export_trace_otlp_jsonl(
     span_by_name = {span["name"]: span for span in spans}
     llm_span = span_by_name["step.llm"]
     action_span = span_by_name["action.execute"]
+    tool_span = span_by_name["tool.call"]
     assert llm_span["traceId"] == "trace-export"
     assert llm_span["status"]["code"] == 1
     assert action_span["status"]["code"] == 2
     attrs = {item["key"]: item["value"] for item in llm_span["attributes"]}
     assert attrs["openinference.span.kind"]["stringValue"] == "LLM"
     assert attrs["gen_ai.request.model"]["stringValue"] == "mock-model"
+    tool_attrs = {item["key"]: item["value"] for item in tool_span["attributes"]}
+    assert tool_attrs["ratio"]["doubleValue"] == 1.5
+    assert tool_attrs["openinference.span.kind"]["stringValue"] == "TOOL"
+    assert "startTimeUnixNano" not in tool_span
+    assert "endTimeUnixNano" not in tool_span
