@@ -7,6 +7,9 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Iterable
 
+_OTLP_STATUS_CODE_OK = 1
+_OTLP_STATUS_CODE_ERROR = 2
+
 
 def _unix_nano(timestamp: Any) -> str | None:
     if not isinstance(timestamp, str) or not timestamp:
@@ -62,9 +65,9 @@ def span_to_otlp_json(record: dict[str, Any]) -> dict[str, Any]:
         "name": str(record.get("name", "")),
         "attributes": _attributes(_semantic_attrs(record)),
         "status": {
-            "code": "STATUS_CODE_ERROR"
+            "code": _OTLP_STATUS_CODE_ERROR
             if record.get("status") == "error"
-            else "STATUS_CODE_OK"
+            else _OTLP_STATUS_CODE_OK
         },
     }
     parent_span_id = record.get("parent_span_id")

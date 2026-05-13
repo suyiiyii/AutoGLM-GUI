@@ -316,13 +316,24 @@ def test_export_trace_otlp_jsonl(
             attrs={"step": 1, "model_name": "mock-model"},
         ):
             pass
+        with pytest.raises(RuntimeError, match="export boom"):
+            with trace_span("action.execute", attrs={"step": 1}):
+                raise RuntimeError("export boom")
 
     exported = export_otlp_jsonl(trace_file, output_file, trace_id="trace-export")
-    assert exported == 1
-    otlp = json.loads(output_file.read_text().splitlines()[0])
-    span = otlp["resourceSpans"][0]["scopeSpans"][0]["spans"][0]
-    assert span["traceId"] == "trace-export"
-    assert span["name"] == "step.llm"
-    attrs = {item["key"]: item["value"] for item in span["attributes"]}
+    assert exported == 2
+    otlp_records = [
+        json.loads(line) for line in output_file.read_text().splitlines() if line
+    ]
+    spans = [
+        item["resourceSpans"][0]["scopeSpans"][0]["spans"][0] for item in otlp_records
+    ]
+    span_by_name = {span["name"]: span for span in spans}
+    llm_span = span_by_name["step.llm"]
+    action_span = span_by_name["action.execute"]
+    assert llm_span["traceId"] == "trace-export"
+    assert llm_span["status"]["code"] == 1
+    assert action_span["status"]["code"] == 2
+    attrs = {item["key"]: item["value"] for item in llm_span["attributes"]}
     assert attrs["openinference.span.kind"]["stringValue"] == "LLM"
     assert attrs["gen_ai.request.model"]["stringValue"] == "mock-model"
