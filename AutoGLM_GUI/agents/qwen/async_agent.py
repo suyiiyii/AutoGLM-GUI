@@ -288,11 +288,12 @@ class AsyncQwenAgent(AsyncAgentBase, AsyncAgent):
                     )
                 action = {"_metadata": "finish", "message": action_str}
 
-            logger.info(f"raw_content: \n\n {raw_content}\n\n")
-            logger.info(f"thinking_parts: \n\n {thinking_parts}\n\n")
-            logger.info(f"parsed_thinking: \n\n{parsed_thinking}\n\n")
-            logger.info(f"action_str: \n\n{action_str}\n\n")
-            logger.info(f"action: \n\n{action}\n\n")
+            if self.agent_config.verbose:
+                logger.debug(f"raw_content: \n\n {raw_content}\n\n")
+                logger.debug(f"thinking_parts: \n\n {thinking_parts}\n\n")
+                logger.debug(f"parsed_thinking: \n\n{parsed_thinking}\n\n")
+                logger.debug(f"action_str: \n\n{action_str}\n\n")
+                logger.debug(f"action: \n\n{action}\n\n")
 
         if self.agent_config.verbose:
             msgs = get_messages(self.agent_config.lang)
@@ -437,7 +438,5 @@ class AsyncQwenAgent(AsyncAgentBase, AsyncAgent):
                     if not is_potential_marker and len(buffer) > 0:
                         yield {"type": "thinking", "content": buffer}
                         buffer = ""
-        except Exception as err:
-            logger.warning(f"_stream_openai error: {err}")
         finally:
             await stream.close()
