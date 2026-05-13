@@ -9,6 +9,7 @@ wheels/
 .mypy_cache/
 .tox/
 .coverage
+coverage.xml
 coverage/
 
 # Virtual environments
