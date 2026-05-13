@@ -11,7 +11,7 @@ Features:
 from __future__ import annotations
 
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from threading import RLock
 from typing import Self
@@ -109,7 +109,7 @@ class DeviceGroupManager:
             for group in groups:
                 if group.id == group_id:
                     group.name = name
-                    group.updated_at = datetime.now()
+                    group.updated_at = datetime.now(tz=timezone.utc)
                     self._save_data(groups, assignments)
                     logger.info(f"Updated device group: {name} (id={group_id})")
                     return group

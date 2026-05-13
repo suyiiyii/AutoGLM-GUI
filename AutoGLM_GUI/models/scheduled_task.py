@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any
 from uuid import uuid4
 
@@ -105,10 +105,10 @@ class ScheduledTask:
             execution_mode=data.get("execution_mode", "classic"),
             created_at=datetime.fromisoformat(data["created_at"])
             if data.get("created_at")
-            else datetime.now(),
+            else datetime.now(tz=timezone.utc),
             updated_at=datetime.fromisoformat(data["updated_at"])
             if data.get("updated_at")
-            else datetime.now(),
+            else datetime.now(tz=timezone.utc),
             last_run_time=datetime.fromisoformat(data["last_run_time"])
             if data.get("last_run_time")
             else None,

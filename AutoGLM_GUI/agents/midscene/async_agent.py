@@ -216,6 +216,7 @@ class AsyncMidsceneAgent:
                 capture_output=True,
                 text=True,
                 timeout=10,
+                check=True,
             )
             if result.returncode == 0 and result.stdout.strip():
                 cls._shell_path_cache = result.stdout.strip()

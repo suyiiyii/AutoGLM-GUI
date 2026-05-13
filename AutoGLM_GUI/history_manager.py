@@ -5,7 +5,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Self
 
@@ -113,7 +113,7 @@ class HistoryManager:
             },
         ):
             try:
-                history.last_updated = datetime.now()
+                history.last_updated = datetime.now(tz=timezone.utc)
                 with open(temp_path, "w", encoding="utf-8") as f:
                     json.dump(history.to_dict(), f, indent=2, ensure_ascii=False)
                 temp_path.replace(path)

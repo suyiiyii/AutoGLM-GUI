@@ -29,6 +29,7 @@ def touch_down(
     subprocess.run(
         adb_prefix + ["shell", "input", "motionevent", "DOWN", str(x), str(y)],
         capture_output=True,
+        check=True,
     )
     if delay > 0:
         time.sleep(delay)
@@ -56,6 +57,7 @@ def touch_move(
     subprocess.run(
         adb_prefix + ["shell", "input", "motionevent", "MOVE", str(x), str(y)],
         capture_output=True,
+        check=True,
     )
     if delay > 0:
         time.sleep(delay)
@@ -83,6 +85,7 @@ def touch_up(
     subprocess.run(
         adb_prefix + ["shell", "input", "motionevent", "UP", str(x), str(y)],
         capture_output=True,
+        check=True,
     )
     if delay > 0:
         time.sleep(delay)

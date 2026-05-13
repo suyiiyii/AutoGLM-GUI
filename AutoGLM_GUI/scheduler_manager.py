@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Self
 from uuid import uuid4
@@ -97,7 +97,7 @@ class SchedulerManager:
             if value is not None and hasattr(task, key):
                 setattr(task, key, value)
 
-        task.updated_at = datetime.now()
+        task.updated_at = datetime.now(tz=timezone.utc)
         self._save_tasks()
 
         if old_enabled and not task.enabled:
@@ -136,7 +136,7 @@ class SchedulerManager:
             return True
 
         task.enabled = enabled
-        task.updated_at = datetime.now()
+        task.updated_at = datetime.now(tz=timezone.utc)
         self._save_tasks()
 
         if enabled:
@@ -227,7 +227,7 @@ class SchedulerManager:
                 device_model=device.model or serialno,
             )
 
-        start_time = datetime.now()
+        start_time = datetime.now(tz=timezone.utc)
         messages: list[MessageRecord] = [
             MessageRecord(
                 role="user",
@@ -250,7 +250,7 @@ class SchedulerManager:
                         MessageRecord(
                             role="assistant",
                             content="",
-                            timestamp=datetime.now(),
+                            timestamp=datetime.now(tz=timezone.utc),
                             thinking=step_data.get("thinking", ""),
                             action=step_data.get("action", {}),
                             step=step_data.get("step", 0),
@@ -266,7 +266,7 @@ class SchedulerManager:
                     break
 
             steps = agent.step_count
-            end_time = datetime.now()
+            end_time = datetime.now(tz=timezone.utc)
             device_model = device.model or serialno
 
             record = ConversationRecord(
@@ -292,7 +292,7 @@ class SchedulerManager:
             )
 
         except Exception as e:
-            end_time = datetime.now()
+            end_time = datetime.now(tz=timezone.utc)
             error_msg = str(e)
             device_model = device.model or serialno
 
@@ -474,7 +474,7 @@ class SchedulerManager:
         success_count: int,
         total_count: int,
     ) -> None:
-        task.last_run_time = datetime.now()
+        task.last_run_time = datetime.now(tz=timezone.utc)
         task.last_run_status = status
         task.last_run_success = status == "success"
         task.last_run_success_count = success_count

@@ -7,6 +7,7 @@ from enum import Enum
 
 from AutoGLM_GUI.adb.timing import TIMING_CONFIG
 from AutoGLM_GUI.adb_plus.ip import get_wifi_ip
+from AutoGLM_GUI.logger import logger
 
 
 class ConnectionType(Enum):
@@ -183,7 +184,7 @@ class ADBConnection:
             return devices
 
         except Exception as e:
-            print(f"Error listing devices: {e}")
+            logger.error(f"Error listing devices: {e}")
             return []
 
     def get_device_info(self, device_id: str | None = None) -> DeviceInfo | None:
@@ -294,14 +295,20 @@ class ADBConnection:
         try:
             # Kill server
             subprocess.run(
-                [self.adb_path, "kill-server"], capture_output=True, timeout=5
+                [self.adb_path, "kill-server"],
+                capture_output=True,
+                timeout=5,
+                check=True,
             )
 
             time.sleep(TIMING_CONFIG.connection.server_restart_delay)
 
             # Start server
             subprocess.run(
-                [self.adb_path, "start-server"], capture_output=True, timeout=5
+                [self.adb_path, "start-server"],
+                capture_output=True,
+                timeout=5,
+                check=True,
             )
 
             return True, "ADB server restarted"
