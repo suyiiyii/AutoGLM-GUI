@@ -1,0 +1,40 @@
+name: Codecov
+
+on:
+  pull_request:
+    branches: [main, dev]
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+jobs:
+  coverage:
+    name: Python Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python & uv
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: "3.11"
+          frozen: "true"
+
+      - name: Run tests with coverage
+        run: |
+          uv run pytest -v --cov=AutoGLM_GUI --cov-report=xml:coverage.xml --cov-report=term-missing:skip-covered
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.xml
+          flags: backend
+          name: backend-py311
+          fail_ci_if_error: true
+          verbose: true
