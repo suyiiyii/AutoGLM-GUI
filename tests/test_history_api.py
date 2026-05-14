@@ -292,6 +292,73 @@ def test_history_excludes_active_task_records(
     assert all(record["id"] != "task-active" for record in data["records"])
 
 
+def test_list_history_supports_remote_serial_with_slashes(
+    client: TestClient, fake_task_store: FakeTaskStore
+) -> None:
+    remote_serial = "remote:http://127.0.0.1:19000:mock_device_001"
+    fake_task_store.tasks["task-remote"] = {
+        "id": "task-remote",
+        "source": "chat",
+        "executor_key": "classic_chat",
+        "session_id": "session-remote",
+        "scheduled_task_id": None,
+        "workflow_uuid": None,
+        "schedule_fire_id": None,
+        "device_id": "dev-remote",
+        "device_serial": remote_serial,
+        "status": "SUCCEEDED",
+        "input_text": "远程设备任务",
+        "final_message": "完成",
+        "error_message": None,
+        "trace_id": "trace-remote",
+        "step_count": 1,
+        "created_at": "2026-01-04T09:00:00",
+        "started_at": "2026-01-04T09:00:01",
+        "finished_at": "2026-01-04T09:00:02",
+    }
+
+    response = client.get(f"/api/history/{remote_serial}")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert data["records"][0]["id"] == "task-remote"
+    assert data["records"][0]["trace_id"] == "trace-remote"
+
+
+def test_get_history_record_supports_remote_serial_with_slashes(
+    client: TestClient, fake_task_store: FakeTaskStore
+) -> None:
+    remote_serial = "remote:http://127.0.0.1:19000:mock_device_001"
+    fake_task_store.tasks["task-remote"] = {
+        "id": "task-remote",
+        "source": "chat",
+        "executor_key": "classic_chat",
+        "session_id": "session-remote",
+        "scheduled_task_id": None,
+        "workflow_uuid": None,
+        "schedule_fire_id": None,
+        "device_id": "dev-remote",
+        "device_serial": remote_serial,
+        "status": "SUCCEEDED",
+        "input_text": "远程设备任务",
+        "final_message": "完成",
+        "error_message": None,
+        "trace_id": "trace-remote",
+        "step_count": 1,
+        "created_at": "2026-01-04T09:00:00",
+        "started_at": "2026-01-04T09:00:01",
+        "finished_at": "2026-01-04T09:00:02",
+    }
+
+    response = client.get(f"/api/history/{remote_serial}/task-remote")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == "task-remote"
+    assert data["trace_id"] == "trace-remote"
+
+
 def test_list_history_filters_by_classic_mode(
     client: TestClient, fake_task_store: FakeTaskStore
 ) -> None:
@@ -684,3 +751,44 @@ def test_clear_history_removes_replay_runs(
     assert response.status_code == 200
     assert not (tmp_path / "runs" / "trace-a").exists()
     assert not (tmp_path / "runs" / "trace-b").exists()
+
+
+def test_clear_history_supports_remote_serial_with_slashes(
+    client: TestClient,
+    fake_task_store: FakeTaskStore,
+    tmp_path: Path,
+) -> None:
+    remote_serial = "remote:http://127.0.0.1:19000:mock_device_001"
+    fake_task_store.tasks["task-remote"] = {
+        "id": "task-remote",
+        "source": "chat",
+        "executor_key": "classic_chat",
+        "session_id": "session-remote",
+        "scheduled_task_id": None,
+        "workflow_uuid": None,
+        "schedule_fire_id": None,
+        "device_id": "dev-remote",
+        "device_serial": remote_serial,
+        "status": "SUCCEEDED",
+        "input_text": "远程设备任务",
+        "final_message": "完成",
+        "error_message": None,
+        "trace_id": "trace-remote",
+        "step_count": 1,
+        "created_at": "2026-01-04T09:00:00",
+        "started_at": "2026-01-04T09:00:01",
+        "finished_at": "2026-01-04T09:00:02",
+    }
+    replay_dir = tmp_path / "runs" / "trace-remote"
+    replay_dir.mkdir(parents=True)
+    (replay_dir / "replay.jsonl").write_text("{}", encoding="utf-8")
+
+    response = client.delete(f"/api/history/{remote_serial}")
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "success": True,
+        "message": f"History cleared for {remote_serial}",
+    }
+    assert "task-remote" not in fake_task_store.tasks
+    assert not replay_dir.exists()

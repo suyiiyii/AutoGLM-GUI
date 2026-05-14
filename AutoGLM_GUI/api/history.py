@@ -4,7 +4,7 @@ import json
 from collections.abc import Callable
 from typing import Any, cast
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Request
 
 from AutoGLM_GUI.history_manager import history_manager
 from AutoGLM_GUI.scheduler_manager import scheduler_manager
@@ -323,11 +323,47 @@ def _list_merged_history(
     return merged
 
 
-@router.get(
-    "/api/history/{serialno:path}/{record_id}",
-    response_model=HistoryRecordResponse,
-)
-def get_history_record(serialno: str, record_id: str) -> HistoryRecordResponse:
+def _has_history_for_serial(serialno: str) -> bool:
+    task_records, task_total = task_store.list_tasks(
+        device_serial=serialno, limit=1, offset=0
+    )
+    if task_total > 0 or task_records:
+        return True
+    return history_manager.get_total_count(serialno) > 0
+
+
+def _record_path_candidate(history_path: str) -> tuple[str, str] | None:
+    if "/" not in history_path:
+        return None
+    serialno, record_id = history_path.rsplit("/", 1)
+    if not serialno or not record_id:
+        return None
+    return serialno, record_id
+
+
+def _path_should_resolve_as_record(
+    history_path: str, *, force_list: bool = False
+) -> bool:
+    if force_list:
+        return False
+    candidate = _record_path_candidate(history_path)
+    if candidate is None:
+        return False
+
+    serialno, record_id = candidate
+    task_record = task_store.get_task(record_id)
+    if task_record is not None:
+        return task_record["device_serial"] == serialno
+    if history_manager.get_record(serialno, record_id) is not None:
+        return True
+    if _has_history_for_serial(history_path):
+        return False
+    return _has_history_for_serial(serialno)
+
+
+def _get_history_record_response(
+    serialno: str, record_id: str
+) -> HistoryRecordResponse:
     task_record = task_store.get_task(record_id)
     if (
         task_record is not None
@@ -343,8 +379,7 @@ def get_history_record(serialno: str, record_id: str) -> HistoryRecordResponse:
     return _build_history_record_response(record)
 
 
-@router.delete("/api/history/{serialno:path}/{record_id}")
-def delete_history_record(serialno: str, record_id: str) -> dict[str, Any]:
+def _delete_history_record(serialno: str, record_id: str) -> dict[str, Any]:
     task_record = task_store.get_task(record_id)
     trace_id = None
     if task_record is not None and task_record["device_serial"] == serialno:
@@ -364,9 +399,8 @@ def delete_history_record(serialno: str, record_id: str) -> dict[str, Any]:
     return {"success": True, "message": "Record deleted"}
 
 
-@router.get("/api/history/{serialno:path}", response_model=HistoryListResponse)
-def list_history(
-    serialno: str, limit: int = 50, offset: int = 0, mode: str | None = None
+def _list_history_response(
+    serialno: str, limit: int, offset: int, mode: str | None
 ) -> HistoryListResponse:
     if limit < 1 or limit > 100:
         raise HTTPException(status_code=400, detail="limit must be between 1 and 100")
@@ -389,8 +423,7 @@ def list_history(
     )
 
 
-@router.delete("/api/history/{serialno:path}")
-def clear_history(serialno: str) -> dict[str, Any]:
+def _clear_history(serialno: str) -> dict[str, Any]:
     trace_ids: list[str] = []
     list_trace_ids = getattr(task_store, "list_terminal_trace_ids_for_device", None)
     if callable(list_trace_ids):
@@ -400,3 +433,46 @@ def clear_history(serialno: str) -> dict[str, Any]:
     for trace_id in trace_ids:
         delete_replay_run(str(trace_id))
     return {"success": True, "message": f"History cleared for {serialno}"}
+
+
+@router.get(
+    "/api/history/{serialno}/{record_id}",
+    response_model=HistoryRecordResponse,
+)
+def get_history_record(serialno: str, record_id: str) -> HistoryRecordResponse:
+    return _get_history_record_response(serialno, record_id)
+
+
+@router.delete("/api/history/{serialno}/{record_id}")
+def delete_history_record(serialno: str, record_id: str) -> dict[str, Any]:
+    return _delete_history_record(serialno, record_id)
+
+
+@router.get(
+    "/api/history/{serialno:path}",
+    response_model=HistoryListResponse | HistoryRecordResponse,
+)
+def list_history(
+    request: Request,
+    serialno: str,
+    limit: int = 50,
+    offset: int = 0,
+    mode: str | None = None,
+) -> HistoryListResponse | HistoryRecordResponse:
+    force_list = any(key in request.query_params for key in {"limit", "offset", "mode"})
+    if _path_should_resolve_as_record(serialno, force_list=force_list):
+        record_serialno, record_id = cast(
+            tuple[str, str], _record_path_candidate(serialno)
+        )
+        return _get_history_record_response(record_serialno, record_id)
+    return _list_history_response(serialno, limit, offset, mode)
+
+
+@router.delete("/api/history/{serialno:path}")
+def clear_history(serialno: str) -> dict[str, Any]:
+    if _path_should_resolve_as_record(serialno):
+        record_serialno, record_id = cast(
+            tuple[str, str], _record_path_candidate(serialno)
+        )
+        return _delete_history_record(record_serialno, record_id)
+    return _clear_history(serialno)
