@@ -63,6 +63,10 @@ class ConfigFileData(TypedDict, total=False):
     decision_base_url: str
     decision_model_name: str
     decision_api_key: str
+    chat_base_url: str
+    chat_model_name: str
+    chat_api_key: str
+    chat_enable_thinking: bool
 
 
 class ConfigModel(BaseModel):
@@ -85,6 +89,12 @@ class ConfigModel(BaseModel):
     decision_base_url: str | None = None
     decision_model_name: str | None = None
     decision_api_key: str | None = None
+
+    # 对话模型配置（用于对话模式）
+    chat_base_url: str | None = None
+    chat_model_name: str | None = None
+    chat_api_key: str | None = None
+    chat_enable_thinking: bool = True
 
     @field_validator("default_max_steps")
     @classmethod
@@ -141,6 +151,24 @@ class ConfigModel(BaseModel):
             raise ValueError(f"layered_max_turns must be >= {LAYERED_MAX_TURNS_MIN}")
         return v
 
+    @field_validator("chat_base_url")
+    @classmethod
+    def validate_chat_base_url(cls, v: str | None) -> str | None:
+        """验证 chat_base_url 格式."""
+        if v is not None and v.strip():
+            if not v.startswith(("http://", "https://")):
+                raise ValueError("chat_base_url must start with http:// or https://")
+            return v.rstrip("/")
+        return v
+
+    @field_validator("chat_model_name")
+    @classmethod
+    def validate_chat_model_name(cls, v: str | None) -> str | None:
+        """验证 chat_model_name 非空."""
+        if v is not None and (not v or not v.strip()):
+            raise ValueError("chat_model_name cannot be empty string")
+        return v.strip() if v else v
+
 
 # ==================== 配置层数据类 ====================
 
@@ -162,6 +190,11 @@ class ConfigLayer:
     decision_base_url: str | None = None
     decision_model_name: str | None = None
     decision_api_key: str | None = None
+    # 对话模型配置
+    chat_base_url: str | None = None
+    chat_model_name: str | None = None
+    chat_api_key: str | None = None
+    chat_enable_thinking: bool | None = None
 
     source: ConfigSource = ConfigSource.DEFAULT
     explicit_keys: set[str] = field(default_factory=set, repr=False)
@@ -184,6 +217,10 @@ class ConfigLayer:
             "decision_base_url": self.decision_base_url,
             "decision_model_name": self.decision_model_name,
             "decision_api_key": self.decision_api_key,
+            "chat_base_url": self.chat_base_url,
+            "chat_model_name": self.chat_model_name,
+            "chat_api_key": self.chat_api_key,
+            "chat_enable_thinking": self.chat_enable_thinking,
         }
         return cast(
             ConfigFileData,
@@ -252,6 +289,10 @@ class UnifiedConfigManager:
             decision_base_url=None,
             decision_model_name=None,
             decision_api_key=None,
+            chat_base_url=None,
+            chat_model_name=None,
+            chat_api_key=None,
+            chat_enable_thinking=None,
             source=ConfigSource.DEFAULT,
         )
 
@@ -316,6 +357,10 @@ class UnifiedConfigManager:
         - AUTOGLM_DECISION_API_KEY
         - AUTOGLM_DEFAULT_MAX_STEPS
         - AUTOGLM_LAYERED_MAX_TURNS
+        - AUTOGLM_CHAT_BASE_URL
+        - AUTOGLM_CHAT_MODEL_NAME
+        - AUTOGLM_CHAT_API_KEY
+        - AUTOGLM_CHAT_ENABLE_THINKING
         """
         base_url = os.getenv("AUTOGLM_BASE_URL")
         model_name = os.getenv("AUTOGLM_MODEL_NAME")
@@ -325,6 +370,20 @@ class UnifiedConfigManager:
         decision_base_url = os.getenv("AUTOGLM_DECISION_BASE_URL")
         decision_model_name = os.getenv("AUTOGLM_DECISION_MODEL_NAME")
         decision_api_key = os.getenv("AUTOGLM_DECISION_API_KEY")
+
+        # 对话模型环境变量
+        chat_base_url = os.getenv("AUTOGLM_CHAT_BASE_URL")
+        chat_model_name = os.getenv("AUTOGLM_CHAT_MODEL_NAME")
+        chat_api_key = os.getenv("AUTOGLM_CHAT_API_KEY")
+        chat_enable_thinking_str = os.getenv("AUTOGLM_CHAT_ENABLE_THINKING")
+        chat_enable_thinking: bool | None = None
+        if chat_enable_thinking_str is not None:
+            chat_enable_thinking = chat_enable_thinking_str.lower() in (
+                "1",
+                "true",
+                "yes",
+                "on",
+            )
 
         default_max_steps_str = os.getenv("AUTOGLM_DEFAULT_MAX_STEPS")
         default_max_steps = None
@@ -351,6 +410,10 @@ class UnifiedConfigManager:
             "decision_base_url": decision_base_url if decision_base_url else None,
             "decision_model_name": decision_model_name if decision_model_name else None,
             "decision_api_key": decision_api_key if decision_api_key else None,
+            "chat_base_url": chat_base_url if chat_base_url else None,
+            "chat_model_name": chat_model_name if chat_model_name else None,
+            "chat_api_key": chat_api_key if chat_api_key else None,
+            "chat_enable_thinking": chat_enable_thinking,
         }
         self._env_layer = ConfigLayer(
             **env_values,
@@ -424,6 +487,10 @@ class UnifiedConfigManager:
                 "decision_base_url": config_data.get("decision_base_url"),
                 "decision_model_name": config_data.get("decision_model_name"),
                 "decision_api_key": config_data.get("decision_api_key"),
+                "chat_base_url": config_data.get("chat_base_url"),
+                "chat_model_name": config_data.get("chat_model_name"),
+                "chat_api_key": config_data.get("chat_api_key"),
+                "chat_enable_thinking": config_data.get("chat_enable_thinking"),
             }
             self._file_layer = ConfigLayer(
                 **file_values,
@@ -462,6 +529,10 @@ class UnifiedConfigManager:
         decision_base_url: str | None = None,
         decision_model_name: str | None = None,
         decision_api_key: str | None = None,
+        chat_base_url: str | None = None,
+        chat_model_name: str | None = None,
+        chat_api_key: str | None = None,
+        chat_enable_thinking: bool = True,
         merge_mode: bool = True,
         default_max_steps_set: bool = False,
         layered_max_turns_set: bool = False,
@@ -518,6 +589,15 @@ class UnifiedConfigManager:
             if decision_api_key is not None:
                 new_config["decision_api_key"] = decision_api_key
 
+            # 对话模型配置
+            if chat_base_url is not None:
+                new_config["chat_base_url"] = chat_base_url
+            if chat_model_name is not None:
+                new_config["chat_model_name"] = chat_model_name
+            if chat_api_key is not None:
+                new_config["chat_api_key"] = chat_api_key
+            new_config["chat_enable_thinking"] = chat_enable_thinking
+
             # 合并模式：保留现有文件中未提供的字段
             if merge_mode and self._config_path.exists():
                 try:
@@ -534,6 +614,10 @@ class UnifiedConfigManager:
                         "decision_base_url",
                         "decision_model_name",
                         "decision_api_key",
+                        "chat_base_url",
+                        "chat_model_name",
+                        "chat_api_key",
+                        "chat_enable_thinking",
                     ]
                     for key in preserve_keys:
                         if key not in new_config and key in existing:
@@ -625,6 +709,10 @@ class UnifiedConfigManager:
             "decision_model_name",
             "decision_api_key",
             "layered_max_turns",
+            "chat_base_url",
+            "chat_model_name",
+            "chat_api_key",
+            "chat_enable_thinking",
         ]
 
         for key in config_keys:
@@ -773,6 +861,25 @@ class UnifiedConfigManager:
         else:
             os.environ["AUTOGLM_LAYERED_MAX_TURNS"] = str(config.layered_max_turns)
 
+        if config.chat_base_url is not None:
+            os.environ["AUTOGLM_CHAT_BASE_URL"] = config.chat_base_url
+        else:
+            os.environ.pop("AUTOGLM_CHAT_BASE_URL", None)
+
+        if config.chat_model_name is not None:
+            os.environ["AUTOGLM_CHAT_MODEL_NAME"] = config.chat_model_name
+        else:
+            os.environ.pop("AUTOGLM_CHAT_MODEL_NAME", None)
+
+        if config.chat_api_key is not None:
+            os.environ["AUTOGLM_CHAT_API_KEY"] = config.chat_api_key
+        else:
+            os.environ.pop("AUTOGLM_CHAT_API_KEY", None)
+
+        os.environ["AUTOGLM_CHAT_ENABLE_THINKING"] = (
+            "1" if config.chat_enable_thinking else "0"
+        )
+
         logger.debug("Configuration synced to environment variables")
 
     # ==================== 工具方法 ====================
@@ -806,6 +913,10 @@ class UnifiedConfigManager:
                 "decision_model_name": config.decision_model_name,
                 "decision_api_key": config.decision_api_key,
                 "layered_max_turns": config.layered_max_turns,
+                "chat_base_url": config.chat_base_url,
+                "chat_model_name": config.chat_model_name,
+                "chat_api_key": config.chat_api_key,
+                "chat_enable_thinking": config.chat_enable_thinking,
             },
         )
 

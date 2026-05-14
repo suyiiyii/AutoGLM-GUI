@@ -27,10 +27,12 @@ router = APIRouter()
 _MODE_EXECUTOR_KEYS: dict[str, set[str]] = {
     "classic": {"classic_chat"},
     "layered": {"layered_chat"},
+    "chat": {"chat"},
 }
 _MODE_LEGACY_SOURCES: dict[str, set[str]] = {
     "classic": {"chat"},
     "layered": {"layered"},
+    "chat": {"chat"},
 }
 _TRACE_SUMMARY_FIELDS = set(TraceSummaryResponse.model_fields)
 
@@ -167,6 +169,9 @@ def _build_history_record_from_task(
             attachments=user_attachments,
         )
     ]
+    # Track the latest assistant message so thinking/content events can
+    # update it instead of creating duplicates.
+    latest_assistant_msg: MessageRecordResponse | None = None
     # Sequence index for layered tool-call cycles so the UI can group a tool
     # call together with its result under a single "step".
     layered_step = 0
@@ -176,16 +181,15 @@ def _build_history_record_from_task(
         if event_type == "user_message":
             continue
         if event_type == "step":
-            messages.append(
-                MessageRecordResponse(
-                    role="assistant",
-                    content="",
-                    timestamp=event["created_at"],
-                    thinking=payload.get("thinking"),
-                    action=payload.get("action"),
-                    step=payload.get("step"),
-                )
+            latest_assistant_msg = MessageRecordResponse(
+                role="assistant",
+                content="",
+                timestamp=event["created_at"],
+                thinking=payload.get("thinking"),
+                action=payload.get("action"),
+                step=payload.get("step"),
             )
+            messages.append(latest_assistant_msg)
             timings = payload.get("timings")
             if isinstance(timings, dict):
                 step_timings.append(StepTimingSummaryResponse(**timings))
@@ -201,37 +205,113 @@ def _build_history_record_from_task(
                     existing_timing_keys.add(timing_key)
         elif event_type == "tool_call":
             layered_step += 1
-            messages.append(
-                MessageRecordResponse(
-                    role="assistant",
-                    content="",
-                    timestamp=event["created_at"],
-                    action={
-                        "tool_name": payload.get("tool_name"),
-                        "tool_args": payload.get("tool_args", {}),
-                    },
-                    step=layered_step,
-                )
+            latest_assistant_msg = MessageRecordResponse(
+                role="assistant",
+                content="",
+                timestamp=event["created_at"],
+                action={
+                    "tool_name": payload.get("tool_name"),
+                    "tool_args": payload.get("tool_args", {}),
+                },
+                step=layered_step,
             )
+            messages.append(latest_assistant_msg)
         elif event_type == "tool_result":
-            messages.append(
-                MessageRecordResponse(
-                    role="assistant",
-                    content=_tool_result_text(payload),
-                    timestamp=event["created_at"],
-                    step=layered_step or None,
-                )
+            latest_assistant_msg = MessageRecordResponse(
+                role="assistant",
+                content=_tool_result_text(payload),
+                timestamp=event["created_at"],
+                step=layered_step or None,
             )
+            messages.append(latest_assistant_msg)
         elif event_type == "message":
             content = payload.get("content")
             if content:
-                messages.append(
-                    MessageRecordResponse(
+                latest_assistant_msg = MessageRecordResponse(
+                    role="assistant",
+                    content=str(content),
+                    timestamp=event["created_at"],
+                )
+                messages.append(latest_assistant_msg)
+        # Chat mode events: thinking, content, done
+        elif event_type == "thinking":
+            chunk = payload.get("chunk", "")
+            if chunk:
+                if (
+                    latest_assistant_msg is not None
+                    and latest_assistant_msg.role == "assistant"
+                    and latest_assistant_msg.step is None
+                    and latest_assistant_msg.action is None
+                ):
+                    # Update existing assistant message thinking
+                    latest_assistant_msg.thinking = chunk
+                else:
+                    latest_assistant_msg = MessageRecordResponse(
                         role="assistant",
-                        content=str(content),
+                        content="",
+                        timestamp=event["created_at"],
+                        thinking=chunk,
+                    )
+                    messages.append(latest_assistant_msg)
+        elif event_type == "content":
+            chunk = payload.get("chunk", "")
+            if chunk:
+                if (
+                    latest_assistant_msg is not None
+                    and latest_assistant_msg.role == "assistant"
+                    and latest_assistant_msg.step is None
+                    and latest_assistant_msg.action is None
+                    and latest_assistant_msg.thinking is not None
+                ):
+                    # If the latest assistant msg already has thinking,
+                    # update its content (thinking + content pair).
+                    latest_assistant_msg.content = chunk
+                elif (
+                    latest_assistant_msg is not None
+                    and latest_assistant_msg.role == "assistant"
+                    and latest_assistant_msg.step is None
+                    and latest_assistant_msg.action is None
+                    and latest_assistant_msg.content
+                ):
+                    # Update existing content-only assistant message
+                    latest_assistant_msg.content = chunk
+                else:
+                    latest_assistant_msg = MessageRecordResponse(
+                        role="assistant",
+                        content=chunk,
                         timestamp=event["created_at"],
                     )
-                )
+                    messages.append(latest_assistant_msg)
+        elif event_type == "done":
+            done_message = payload.get("message", "")
+            if done_message:
+                if (
+                    latest_assistant_msg is not None
+                    and latest_assistant_msg.role == "assistant"
+                    and latest_assistant_msg.step is None
+                    and latest_assistant_msg.action is None
+                    and not latest_assistant_msg.content
+                ):
+                    # Only update if the latest assistant msg has no content yet
+                    # (e.g. a thinking-only msg or an empty msg).
+                    latest_assistant_msg.content = done_message
+                elif (
+                    latest_assistant_msg is not None
+                    and latest_assistant_msg.role == "assistant"
+                    and latest_assistant_msg.step is None
+                    and latest_assistant_msg.action is None
+                    and latest_assistant_msg.content == done_message
+                ):
+                    # Content already matches done_message (chat mode content
+                    # followed by done with the same text) – skip duplicate.
+                    pass
+                else:
+                    latest_assistant_msg = MessageRecordResponse(
+                        role="assistant",
+                        content=done_message,
+                        timestamp=event["created_at"],
+                    )
+                    messages.append(latest_assistant_msg)
 
     source_detail = record.get("session_id") or ""
     if record["source"] == "scheduled" and record.get("scheduled_task_id"):
@@ -290,6 +370,157 @@ def _is_terminal_task_record(record: dict[str, Any]) -> bool:
     return record["status"] in TERMINAL_TASK_STATUSES
 
 
+def _merge_chat_history_by_session(
+    records: list[HistoryRecordResponse],
+) -> list[HistoryRecordResponse]:
+    """将同一 session 的多个 chat task_run 合并为一个历史记录项."""
+    from collections import OrderedDict
+
+    session_groups: OrderedDict[str, list[HistoryRecordResponse]] = OrderedDict()
+    for record in records:
+        session_id = record.source_detail
+        if not session_id:
+            # 没有 session_id 的单独保留
+            session_groups[record.id] = [record]
+        else:
+            if session_id not in session_groups:
+                session_groups[session_id] = []
+            session_groups[session_id].append(record)
+
+    merged_records: list[HistoryRecordResponse] = []
+    for group in session_groups.values():
+        if len(group) == 1:
+            merged_records.append(group[0])
+            continue
+
+        # 按 start_time 排序，确保消息顺序正确
+        group.sort(key=lambda r: r.start_time)
+
+        # 合并 messages
+        all_messages: list[MessageRecordResponse] = []
+        for record in group:
+            all_messages.extend(record.messages)
+        # 按 timestamp 排序
+        all_messages.sort(key=lambda m: m.timestamp)
+
+        # 合并 step_timings
+        all_step_timings: list[StepTimingSummaryResponse] = []
+        for record in group:
+            all_step_timings.extend(record.step_timings)
+
+        # 合并 trace_summary
+        merged_trace_summary: TraceSummaryResponse | None = None
+        for record in group:
+            if record.trace_summary is not None:
+                if merged_trace_summary is None:
+                    merged_trace_summary = TraceSummaryResponse(
+                        trace_id=record.trace_summary.trace_id,
+                        steps=record.trace_summary.steps,
+                        total_duration_ms=record.trace_summary.total_duration_ms,
+                        screenshot_duration_ms=record.trace_summary.screenshot_duration_ms,
+                        current_app_duration_ms=record.trace_summary.current_app_duration_ms,
+                        llm_duration_ms=record.trace_summary.llm_duration_ms,
+                        parse_action_duration_ms=record.trace_summary.parse_action_duration_ms,
+                        execute_action_duration_ms=record.trace_summary.execute_action_duration_ms,
+                        update_context_duration_ms=record.trace_summary.update_context_duration_ms,
+                        adb_duration_ms=record.trace_summary.adb_duration_ms,
+                        sleep_duration_ms=record.trace_summary.sleep_duration_ms,
+                        other_duration_ms=record.trace_summary.other_duration_ms,
+                    )
+                else:
+                    merged_trace_summary = TraceSummaryResponse(
+                        trace_id=merged_trace_summary.trace_id,
+                        steps=merged_trace_summary.steps + record.trace_summary.steps,
+                        total_duration_ms=round(
+                            merged_trace_summary.total_duration_ms
+                            + record.trace_summary.total_duration_ms,
+                            3,
+                        ),
+                        screenshot_duration_ms=round(
+                            merged_trace_summary.screenshot_duration_ms
+                            + record.trace_summary.screenshot_duration_ms,
+                            3,
+                        ),
+                        current_app_duration_ms=round(
+                            merged_trace_summary.current_app_duration_ms
+                            + record.trace_summary.current_app_duration_ms,
+                            3,
+                        ),
+                        llm_duration_ms=round(
+                            merged_trace_summary.llm_duration_ms
+                            + record.trace_summary.llm_duration_ms,
+                            3,
+                        ),
+                        parse_action_duration_ms=round(
+                            merged_trace_summary.parse_action_duration_ms
+                            + record.trace_summary.parse_action_duration_ms,
+                            3,
+                        ),
+                        execute_action_duration_ms=round(
+                            merged_trace_summary.execute_action_duration_ms
+                            + record.trace_summary.execute_action_duration_ms,
+                            3,
+                        ),
+                        update_context_duration_ms=round(
+                            merged_trace_summary.update_context_duration_ms
+                            + record.trace_summary.update_context_duration_ms,
+                            3,
+                        ),
+                        adb_duration_ms=round(
+                            merged_trace_summary.adb_duration_ms
+                            + record.trace_summary.adb_duration_ms,
+                            3,
+                        ),
+                        sleep_duration_ms=round(
+                            merged_trace_summary.sleep_duration_ms
+                            + record.trace_summary.sleep_duration_ms,
+                            3,
+                        ),
+                        other_duration_ms=round(
+                            merged_trace_summary.other_duration_ms
+                            + record.trace_summary.other_duration_ms,
+                            3,
+                        ),
+                    )
+
+        # 计算合并后的字段
+        # 对话模式下 steps 表示轮数（task_run 数量），而不是内部 step_count 总和
+        total_steps = len(group)
+        total_duration_ms = sum(r.duration_ms for r in group)
+        all_success = all(r.success for r in group)
+        first_task_text = group[0].task_text
+        first_start_time = group[0].start_time
+        last_end_time = group[-1].end_time
+        last_final_message = group[-1].final_message
+        first_trace_id = group[0].trace_id
+        first_source = group[0].source
+        session_id = group[0].source_detail
+
+        merged_records.append(
+            HistoryRecordResponse(
+                id=session_id,
+                task_text=first_task_text,
+                final_message=last_final_message,
+                success=all_success,
+                steps=total_steps,
+                start_time=first_start_time,
+                end_time=last_end_time,
+                duration_ms=total_duration_ms,
+                source=first_source,
+                source_detail=session_id,
+                error_message=None,
+                trace_id=first_trace_id,
+                step_timings=all_step_timings,
+                trace_summary=merged_trace_summary,
+                messages=all_messages,
+            )
+        )
+
+    # 按 start_time 倒序排列
+    merged_records.sort(key=lambda item: item.start_time, reverse=True)
+    return merged_records
+
+
 def _list_merged_history(
     serialno: str, mode: str | None = None
 ) -> list[HistoryRecordResponse]:
@@ -319,6 +550,11 @@ def _list_merged_history(
         if _is_terminal_task_record(record)
     ]
     merged.extend(_build_history_record_response(record) for record in legacy_records)
+
+    # 对话模式下按 session 合并同一聊天框的多轮对话
+    if mode == "chat":
+        merged = _merge_chat_history_by_session(merged)
+
     merged.sort(key=lambda item: item.start_time, reverse=True)
     return merged
 
@@ -440,11 +676,46 @@ def _clear_history(serialno: str) -> dict[str, Any]:
     response_model=HistoryRecordResponse,
 )
 def get_history_record(serialno: str, record_id: str) -> HistoryRecordResponse:
+    task_record = task_store.get_task(record_id)
+    if (
+        task_record is not None
+        and task_record["device_serial"] == serialno
+        and _is_terminal_task_record(task_record)
+    ):
+        return _build_history_record_from_task(task_record)
+
+    # 对话模式下 record_id 可能是 session_id，尝试按 session 查找并合并
+    session_tasks, _ = task_store.list_tasks(
+        device_serial=serialno, session_id=record_id, limit=10000, offset=0
+    )
+    if session_tasks:
+        records = [
+            _build_history_record_from_task(r, include_attachments=True)
+            for r in session_tasks
+            if _is_terminal_task_record(r)
+        ]
+        if records:
+            merged = _merge_chat_history_by_session(records)
+            for item in merged:
+                if item.id == record_id:
+                    return item
+            # fallback: 返回合并后的第一个
+            return merged[0]
+
     return _get_history_record_response(serialno, record_id)
 
 
 @router.delete("/api/history/{serialno}/{record_id}")
 def delete_history_record(serialno: str, record_id: str) -> dict[str, Any]:
+    task_record = task_store.get_task(record_id)
+    if task_record is not None and task_record["device_serial"] == serialno:
+        return _delete_history_record(serialno, record_id)
+
+    # 尝试按 session_id 删除（对话模式）
+    deleted_count = task_store.delete_tasks_by_session(record_id)
+    if deleted_count > 0:
+        return {"success": True, "message": "Record deleted"}
+
     return _delete_history_record(serialno, record_id)
 
 

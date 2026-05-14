@@ -225,6 +225,10 @@ def get_config_endpoint() -> ConfigResponse:
         decision_base_url=effective_config.decision_base_url,
         decision_model_name=effective_config.decision_model_name,
         decision_api_key=effective_config.decision_api_key,
+        chat_base_url=effective_config.chat_base_url,
+        chat_model_name=effective_config.chat_model_name,
+        chat_api_key=effective_config.chat_api_key,
+        chat_enable_thinking=effective_config.chat_enable_thinking,
         conflicts=[
             {
                 "field": c.field,
@@ -271,6 +275,10 @@ def save_config_endpoint(request: ConfigSaveRequest) -> dict[str, Any]:
             decision_base_url=request.decision_base_url,
             decision_model_name=request.decision_model_name,
             decision_api_key=request.decision_api_key,
+            chat_base_url=request.chat_base_url,
+            chat_model_name=request.chat_model_name,
+            chat_api_key=request.chat_api_key,
+            chat_enable_thinking=request.chat_enable_thinking,
             merge_mode=True,
             default_max_steps_set="default_max_steps" in provided_fields,
             layered_max_turns_set="layered_max_turns" in provided_fields,

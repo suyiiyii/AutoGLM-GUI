@@ -56,6 +56,12 @@ export const zh = {
     decisionModelName: '决策模型名称',
     decisionModelHint:
       '决策模型用于分层代理的规划层。使用分层代理模式时必须配置决策模型。',
+    chatModelTab: '对话模型',
+    chatModelHint: '对话模型用于纯文本/图片对话模式，不涉及 GUI 操作。',
+    chatBaseUrl: '对话模型 Base URL',
+    chatApiKey: '对话模型 API Key',
+    chatModelName: '对话模型 Model Name',
+    enableThinking: '启用思考模式',
   },
   deviceSidebar: {
     devices: '设备',
@@ -373,8 +379,10 @@ export const zh = {
     modeLabel: '模式:',
     classicMode: '经典模式',
     layeredMode: '分层代理',
+    chatMode: '对话模式',
     classicModeDesc: '视觉模型直接执行任务',
     layeredModeDesc: '规划层分解任务，执行层独立完成子任务',
+    chatModeDesc: '纯文本/图片对话，不操作设备',
     maiUIModeDesc: '阿里云 MAI-UI 模型，开源高性能 GUI Agent',
   },
   historyPage: {

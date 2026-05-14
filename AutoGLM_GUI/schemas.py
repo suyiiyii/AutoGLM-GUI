@@ -293,6 +293,12 @@ class ConfigResponse(BaseModel):
     decision_model_name: str | None = None
     decision_api_key: str | None = None
 
+    # 对话模型配置（用于对话模式）
+    chat_base_url: str | None = None
+    chat_model_name: str | None = None
+    chat_api_key: str | None = None
+    chat_enable_thinking: bool = True
+
     conflicts: list[dict[str, Any]] | None = None  # 配置冲突信息（可选）
 
 
@@ -319,6 +325,12 @@ class ConfigSaveRequest(BaseModel):
     decision_base_url: str | None = None
     decision_model_name: str | None = None
     decision_api_key: str | None = None
+
+    # 对话模型配置（用于对话模式）
+    chat_base_url: str | None = None
+    chat_model_name: str | None = None
+    chat_api_key: str | None = None
+    chat_enable_thinking: bool = True
 
     @field_validator("default_max_steps")
     @classmethod
@@ -374,6 +386,24 @@ class ConfigSaveRequest(BaseModel):
     @classmethod
     def validate_decision_model_name(cls, v: str | None) -> str | None:
         """验证 decision_model_name 非空."""
+        if v is not None and v.strip():
+            return v.strip()
+        return None
+
+    @field_validator("chat_base_url")
+    @classmethod
+    def validate_chat_base_url(cls, v: str | None) -> str | None:
+        """验证 chat_base_url 格式."""
+        if v is not None and v.strip():
+            if not re.match(r"^https?://", v):
+                raise ValueError("chat_base_url must start with http:// or https://")
+            return v.rstrip("/")
+        return None
+
+    @field_validator("chat_model_name")
+    @classmethod
+    def validate_chat_model_name(cls, v: str | None) -> str | None:
+        """验证 chat_model_name 非空."""
         if v is not None and v.strip():
             return v.strip()
         return None
@@ -803,8 +833,8 @@ class TaskSessionCreate(BaseModel):
     @classmethod
     def validate_mode(cls, v: str) -> str:
         mode = v.strip()
-        if mode not in {"classic", "layered"}:
-            raise ValueError("mode must be one of: classic, layered")
+        if mode not in {"classic", "layered", "chat"}:
+            raise ValueError("mode must be one of: classic, layered, chat")
         return mode
 
 

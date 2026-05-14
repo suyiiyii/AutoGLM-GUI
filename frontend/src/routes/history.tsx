@@ -102,7 +102,13 @@ function HistoryComponent() {
         }
 
         const newOffset = reset ? 0 : offset;
-        const data = await listHistory(serial, limit, newOffset);
+        const isChatSerial = serial === 'chat';
+        const data = await listHistory(
+          serial,
+          limit,
+          newOffset,
+          isChatSerial ? 'chat' : undefined
+        );
 
         if (reset) {
           setRecords(data.records);
@@ -295,6 +301,7 @@ function HistoryComponent() {
               <SelectValue placeholder={t.historyPage.selectDevice} />
             </SelectTrigger>
             <SelectContent>
+              <SelectItem value="chat">{t.historyPage.source.chat}</SelectItem>
               {devices.length === 0 ? (
                 <SelectItem value="_none" disabled>
                   {t.historyPage.noDevices}

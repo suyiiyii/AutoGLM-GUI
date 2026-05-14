@@ -39,8 +39,11 @@ class TaskManager:
         self._executors: dict[str, TaskExecutor] = {}
         self._started = False
         self._shutdown = False
+        # session_id -> ChatAgent instance，用于对话模式多轮对话上下文保持
+        self._chat_agents: dict[str, Any] = {}
         self.register_executor("classic_chat", self._execute_classic_chat)
         self.register_executor("layered_chat", self._execute_layered_chat)
+        self.register_executor("chat", self._execute_chat_mode)
         self.register_executor("scheduled_workflow", self._execute_scheduled_workflow)
         self.register_executor(
             "scheduled_layered_workflow", self._execute_scheduled_layered_workflow
@@ -139,6 +142,7 @@ class TaskManager:
         executor_key = {
             "classic": "classic_chat",
             "layered": "layered_chat",
+            "chat": "chat",
         }.get(session_mode)
         if executor_key is None:
             raise ValueError(f"Unsupported session mode: {session_mode}")
@@ -539,6 +543,10 @@ class TaskManager:
                         event_type = event["type"]
                         event_data = dict(event.get("data", {}))
 
+                        logger.debug(
+                            f"[ChatMode] Task: {task_id}, event type: {event_type}, data_keys: {sorted(event_data.keys())}"
+                        )
+
                         if event_type == "step":
                             step_count = max(step_count, int(event_data.get("step", 0)))
                             timings = trace_module.get_step_timing_summary(
@@ -644,6 +652,173 @@ class TaskManager:
                 manager.set_error_state(device_id, final_message, context=context)
             if acquired:
                 manager.release_device(device_id, context=context)
+
+        await self._finalize_traced_task(
+            task_id=task_id,
+            trace_id=trace_id,
+            status=final_status,
+            final_message=final_message,
+            stop_reason=stop_reason,
+            step_count=step_count,
+            metrics_source="chat",
+            start_perf=start_perf,
+        )
+
+    async def _execute_chat_mode(self, task: TaskRecord) -> None:
+        from AutoGLM_GUI.agents.chat_agent import ChatAgent
+        from AutoGLM_GUI.config import AgentConfig, ModelConfig
+        from AutoGLM_GUI.config_manager import config_manager
+
+        task_id = str(task["id"])
+        session_id = str(task.get("session_id", ""))
+        trace_id = trace_module.create_trace_id()
+        start_perf = time.perf_counter()
+        final_status = TaskStatus.FAILED.value
+        final_message = ""
+        stop_reason = "error"
+        step_count = 0
+
+        config = config_manager.get_effective_config()
+        model_config = ModelConfig(
+            base_url=config.chat_base_url or config.base_url or "",
+            api_key=config.chat_api_key or config.api_key or "EMPTY",
+            model_name=config.chat_model_name or config.model_name,
+        )
+        if not config.chat_enable_thinking:
+            model_config.extra_body["chat_template_kwargs"] = {"enable_thinking": False}
+
+        agent_config = AgentConfig()
+
+        # 复用同一 session 的 ChatAgent，保持多轮对话上下文
+        if session_id and session_id in self._chat_agents:
+            agent = self._chat_agents[session_id]
+            # 更新 model_config 以应用最新配置（如 chat_enable_thinking 变更）
+            agent.model_config = model_config
+            logger.info(f"[ChatMode] Reusing ChatAgent for session {session_id}")
+        else:
+            agent = ChatAgent(
+                model_config=model_config,
+                agent_config=agent_config,
+            )
+            if session_id:
+                self._chat_agents[session_id] = agent
+                logger.info(
+                    f"[ChatMode] Created new ChatAgent for session {session_id}"
+                )
+
+        user_image_attachments = await asyncio.to_thread(
+            self._get_task_user_image_attachments,
+            task_id,
+        )
+        if user_image_attachments:
+            agent.set_user_image_attachments(user_image_attachments)
+
+        try:
+            with trace_module.trace_context(trace_id):
+                await asyncio.to_thread(self.store.set_task_trace_id, task_id, trace_id)
+
+                async def cancel_handler() -> None:
+                    await agent.cancel()
+
+                self._abort_handlers[task_id] = cancel_handler
+
+                event_type = ""
+                event_data: dict[str, Any] = {}
+
+                if task_id in self._cancel_requested:
+                    final_message = "Task cancelled by user"
+                    final_status = TaskStatus.CANCELLED.value
+                    stop_reason = "user_stopped"
+                else:
+                    async for event in agent.stream(task["input_text"]):
+                        event_type = event["type"]
+                        event_data = dict(event.get("data", {}))
+
+                        if event_type == "step":
+                            step_count = max(step_count, int(event_data.get("step", 0)))
+                            timings = trace_module.get_step_timing_summary(
+                                step_count,
+                                trace_id=trace_id,
+                            )
+                            if timings is not None:
+                                event_data = {**event_data, "timings": timings}
+
+                        await asyncio.to_thread(
+                            self.store.append_event,
+                            task_id=task_id,
+                            event_type=event_type,
+                            payload=event_data,
+                            role="assistant",
+                        )
+
+                    if event_type == "done":
+                        final_message = str(event_data.get("message", ""))
+                        final_status = (
+                            TaskStatus.SUCCEEDED.value
+                            if event_data.get("success", False)
+                            else TaskStatus.FAILED.value
+                        )
+                        stop_reason = str(
+                            event_data.get(
+                                "stop_reason",
+                                "completed"
+                                if event_data.get("success", False)
+                                else "error",
+                            )
+                        )
+                        step_count = int(event_data.get("steps", step_count))
+                    elif event_type == "error":
+                        final_message = str(event_data.get("message", "Task failed"))
+                        final_status = TaskStatus.FAILED.value
+                        stop_reason = str(event_data.get("stop_reason", "error"))
+                    elif event_type == "cancelled":
+                        final_message = str(
+                            event_data.get("message", "Task cancelled by user")
+                        )
+                        final_status = TaskStatus.CANCELLED.value
+                        stop_reason = str(event_data.get("stop_reason", "user_stopped"))
+
+                if not final_message:
+                    logger.warning(
+                        f"[ChatMode] Task {task_id} finished without final message. "
+                        f"last_event_type={event_type!r} last_event_data={event_data!r} "
+                        f"step_count={step_count} cancel_requested={task_id in self._cancel_requested}"
+                    )
+                    final_message = "Task finished without a final response"
+                    final_status = TaskStatus.FAILED.value
+                    stop_reason = "error"
+
+                if (
+                    task_id in self._cancel_requested
+                    and final_status != TaskStatus.CANCELLED.value
+                ):
+                    final_message = "Task cancelled by user"
+                    final_status = TaskStatus.CANCELLED.value
+                    stop_reason = "user_stopped"
+        except asyncio.CancelledError:
+            if task_id in self._cancel_requested:
+                final_message = "Task cancelled by user"
+                final_status = TaskStatus.CANCELLED.value
+                stop_reason = "user_stopped"
+                await self._finalize_traced_task(
+                    task_id=task_id,
+                    trace_id=trace_id,
+                    status=final_status,
+                    final_message=final_message,
+                    stop_reason=stop_reason,
+                    step_count=step_count,
+                    metrics_source="chat",
+                    start_perf=start_perf,
+                )
+                return
+            raise
+        except Exception as exc:
+            final_message = str(exc)
+            final_status = TaskStatus.FAILED.value
+            stop_reason = "error"
+        finally:
+            self._cancel_requested.discard(task_id)
+            self._abort_handlers.pop(task_id, None)
 
         await self._finalize_traced_task(
             task_id=task_id,

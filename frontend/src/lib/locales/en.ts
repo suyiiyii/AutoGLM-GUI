@@ -56,6 +56,13 @@ export const en = {
     decisionModelName: 'Decision Model Name',
     decisionModelHint:
       'Decision model is used for planning in layered agent mode. You must configure the decision model when using layered agent mode.',
+    chatModelTab: 'Chat Model',
+    chatModelHint:
+      'Chat model is used for pure text/image conversation mode without GUI operations.',
+    chatBaseUrl: 'Chat Model Base URL',
+    chatApiKey: 'Chat Model API Key',
+    chatModelName: 'Chat Model Name',
+    enableThinking: 'Enable Thinking Mode',
   },
   deviceSidebar: {
     devices: 'Devices',
@@ -379,9 +386,11 @@ export const en = {
     modeLabel: 'Mode:',
     classicMode: 'Classic',
     layeredMode: 'Layered Agent',
+    chatMode: 'Chat Mode',
     classicModeDesc: 'Vision model executes tasks directly',
     layeredModeDesc:
       'Planner decomposes tasks, executor handles subtasks independently',
+    chatModeDesc: 'Pure text/image chat, no device operations',
     maiUIModeDesc:
       'Alibaba Cloud MAI-UI model, open-source high-performance GUI Agent',
   },
