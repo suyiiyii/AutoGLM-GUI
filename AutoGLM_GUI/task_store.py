@@ -826,6 +826,28 @@ class TaskStore:
             self._conn.commit()
             return cursor.rowcount > 0
 
+    def delete_tasks_by_session(self, session_id: str) -> int:
+        """Delete all task runs belonging to a session."""
+        self._ensure_ready()
+        with self._lock:
+            assert self._conn is not None
+            cursor = self._conn.execute(
+                """
+                DELETE FROM task_runs
+                WHERE session_id = ?
+                  AND status IN (?, ?, ?, ?)
+                """,
+                (
+                    session_id,
+                    TaskStatus.SUCCEEDED.value,
+                    TaskStatus.FAILED.value,
+                    TaskStatus.CANCELLED.value,
+                    TaskStatus.INTERRUPTED.value,
+                ),
+            )
+            self._conn.commit()
+            return cursor.rowcount
+
     def clear_device_history(self, device_serial: str) -> int:
         self._ensure_ready()
         with self._lock:

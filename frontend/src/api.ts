@@ -679,6 +679,11 @@ export interface ConfigResponse {
   decision_base_url?: string;
   decision_model_name?: string;
   decision_api_key?: string;
+  // 对话模型配置
+  chat_base_url?: string;
+  chat_model_name?: string;
+  chat_api_key?: string;
+  chat_enable_thinking?: boolean;
 }
 
 export interface ConfigSaveRequest {
@@ -695,6 +700,10 @@ export interface ConfigSaveRequest {
   decision_base_url?: string;
   decision_model_name?: string;
   decision_api_key?: string;
+  chat_base_url?: string;
+  chat_model_name?: string;
+  chat_api_key?: string;
+  chat_enable_thinking?: boolean;
 }
 
 export interface ConfigSaveResponse {
@@ -947,7 +956,7 @@ export interface TaskSessionResetResponse {
 export async function createTaskSession(
   deviceId: string,
   deviceSerial: string,
-  mode: 'classic' | 'layered' = 'classic'
+  mode: 'classic' | 'layered' | 'chat' = 'classic'
 ): Promise<TaskSessionResponse> {
   const res = await axios.post<TaskSessionResponse>('/api/task-sessions', {
     device_id: deviceId,
@@ -1116,7 +1125,7 @@ export async function listHistory(
   serialno: string,
   limit: number = 50,
   offset: number = 0,
-  mode?: 'classic' | 'layered'
+  mode?: 'classic' | 'layered' | 'chat'
 ): Promise<HistoryListResponse> {
   const res = await axios.get<HistoryListResponse>(`/api/history/${serialno}`, {
     params: { limit, offset, ...(mode ? { mode } : {}) },

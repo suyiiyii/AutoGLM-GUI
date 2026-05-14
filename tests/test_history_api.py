@@ -153,6 +153,16 @@ class FakeTaskStore:
         self.events.pop(task_id, None)
         return existed
 
+    def delete_tasks_by_session(self, session_id: str) -> int:
+        to_delete = [
+            task_id
+            for task_id, task in self.tasks.items()
+            if task.get("session_id") == session_id
+        ]
+        for task_id in to_delete:
+            self.delete_task(task_id)
+        return len(to_delete)
+
     def clear_device_history(self, serialno: str) -> int:
         to_delete = [
             task_id

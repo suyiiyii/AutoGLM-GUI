@@ -280,3 +280,27 @@ def _create_qwen_agent(
 
 
 register_agent("qwen", _create_qwen_agent)
+
+
+def _create_chat_agent(
+    model_config: ModelConfig,
+    agent_config: AgentConfig,
+    agent_specific_config: AgentSpecificConfig,  # noqa: ARG001
+    device: DeviceProtocol,  # noqa: ARG001
+    takeover_callback: Callable[..., Any] | None = None,  # noqa: ARG001
+    confirmation_callback: Callable[..., Any] | None = None,  # noqa: ARG001
+) -> AsyncAgent:
+    """Create ChatAgent instance.
+
+    Pure conversation agent with no GUI/device capabilities.
+    Supports text and image input, streaming output.
+    """
+    from .chat_agent import ChatAgent
+
+    return ChatAgent(  # type: ignore[return-value]
+        model_config=model_config,
+        agent_config=agent_config,
+    )
+
+
+register_agent("chat", _create_chat_agent)

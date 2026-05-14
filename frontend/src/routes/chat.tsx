@@ -14,6 +14,7 @@ import {
 import { DeviceSidebar } from '../components/DeviceSidebar';
 import { DevicePanel } from '../components/DevicePanel';
 import { ChatKitPanel } from '../components/ChatKitPanel';
+import { ChatAgentPanel } from '../components/ChatAgentPanel';
 import { GroupManageDialog } from '../components/GroupManageDialog';
 import { Toast, type ToastType } from '../components/Toast';
 import { Button } from '@/components/ui/button';
@@ -47,6 +48,7 @@ import {
   Cpu,
   Info,
   Smartphone,
+  MessageSquare,
 } from 'lucide-react';
 import { useTranslation } from '../lib/i18n-context';
 import { usePageVisibility } from '../hooks/usePageVisibility';
@@ -175,7 +177,7 @@ function getSelectedDecisionPreset(baseUrl: string) {
 // Search params type for URL persistence
 type ChatSearchParams = {
   serial?: string;
-  mode?: 'classic' | 'chatkit';
+  mode?: 'classic' | 'chatkit' | 'chat';
 };
 
 type ElectronRelaunchAPI = {
@@ -234,7 +236,10 @@ export const Route = createFileRoute('/chat')({
     const mode = search.mode;
     return {
       serial: typeof search.serial === 'string' ? search.serial : undefined,
-      mode: mode === 'classic' || mode === 'chatkit' ? mode : undefined,
+      mode:
+        mode === 'classic' || mode === 'chatkit' || mode === 'chat'
+          ? mode
+          : undefined,
     };
   },
 });
@@ -248,7 +253,7 @@ function ChatComponent() {
   const [currentDeviceId, setCurrentDeviceId] = useState<string>('');
   // Chat mode: 'classic' for DevicePanel (single model), 'chatkit' for ChatKitPanel (layered agent)
   // Initialize from URL search params if available
-  const [chatMode, setChatMode] = useState<'classic' | 'chatkit'>(
+  const [chatMode, setChatMode] = useState<'classic' | 'chatkit' | 'chat'>(
     searchParams.mode || 'classic'
   );
 
@@ -280,6 +285,10 @@ function ChatComponent() {
     decision_base_url: '',
     decision_model_name: '',
     decision_api_key: '',
+    chat_base_url: '',
+    chat_model_name: '',
+    chat_api_key: '',
+    chat_enable_thinking: true,
   });
   const selectedVisionPreset = getSelectedVisionPreset(tempConfig.base_url);
   const selectedDecisionPreset = getSelectedDecisionPreset(
@@ -301,6 +310,10 @@ function ChatComponent() {
           decision_base_url: data.decision_base_url || undefined,
           decision_model_name: data.decision_model_name || undefined,
           decision_api_key: data.decision_api_key || undefined,
+          chat_base_url: data.chat_base_url || undefined,
+          chat_model_name: data.chat_model_name || undefined,
+          chat_api_key: data.chat_api_key || undefined,
+          chat_enable_thinking: data.chat_enable_thinking ?? undefined,
         });
         // 当后端返回空配置时，使用智谱预设作为默认值
         const useDefault = !data.base_url;
@@ -319,6 +332,10 @@ function ChatComponent() {
           decision_base_url: data.decision_base_url || '',
           decision_model_name: data.decision_model_name || 'glm-4.7',
           decision_api_key: data.decision_api_key || '',
+          chat_base_url: data.chat_base_url || '',
+          chat_model_name: data.chat_model_name || '',
+          chat_api_key: data.chat_api_key || '',
+          chat_enable_thinking: data.chat_enable_thinking ?? true,
         });
 
         if (useDefault) {
@@ -495,6 +512,10 @@ function ChatComponent() {
         decision_base_url: tempConfig.decision_base_url || undefined,
         decision_model_name: tempConfig.decision_model_name || undefined,
         decision_api_key: tempConfig.decision_api_key || undefined,
+        chat_base_url: tempConfig.chat_base_url || undefined,
+        chat_model_name: tempConfig.chat_model_name || undefined,
+        chat_api_key: tempConfig.chat_api_key || undefined,
+        chat_enable_thinking: tempConfig.chat_enable_thinking,
       });
 
       setConfig({
@@ -514,6 +535,10 @@ function ChatComponent() {
         decision_base_url: tempConfig.decision_base_url || undefined,
         decision_model_name: tempConfig.decision_model_name || undefined,
         decision_api_key: tempConfig.decision_api_key || undefined,
+        chat_base_url: tempConfig.chat_base_url || undefined,
+        chat_model_name: tempConfig.chat_model_name || undefined,
+        chat_api_key: tempConfig.chat_api_key || undefined,
+        chat_enable_thinking: tempConfig.chat_enable_thinking || undefined,
       });
 
       showToast(t.toasts.configSaved, 'success');
@@ -597,7 +622,7 @@ function ChatComponent() {
           </DialogHeader>
 
           <Tabs defaultValue="vision" className="flex-1 flex flex-col min-h-0">
-            <TabsList className="grid w-full grid-cols-2 flex-shrink-0">
+            <TabsList className="grid w-full grid-cols-3 flex-shrink-0">
               <TabsTrigger value="vision">
                 <Eye className="w-4 h-4 mr-2" />
                 {t.chat.visionModelTab}
@@ -605,6 +630,10 @@ function ChatComponent() {
               <TabsTrigger value="decision">
                 <Brain className="w-4 h-4 mr-2" />
                 {t.chat.decisionModelTab}
+              </TabsTrigger>
+              <TabsTrigger value="chat">
+                <MessageSquare className="w-4 h-4 mr-2" />
+                {t.chat.chatModelTab}
               </TabsTrigger>
             </TabsList>
 
@@ -1091,6 +1120,102 @@ function ChatComponent() {
                 />
               </div>
             </TabsContent>
+
+            {/* 对话模型 Tab */}
+            <TabsContent
+              value="chat"
+              className="space-y-4 mt-4 overflow-y-auto flex-1 min-h-0"
+            >
+              <div className="rounded-lg border border-emerald-200 bg-emerald-50 dark:border-emerald-900 dark:bg-emerald-950/30 p-3 text-sm text-emerald-900 dark:text-emerald-100">
+                <div className="flex items-start gap-2">
+                  <Info className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                  <div>{t.chat.chatModelHint}</div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="chat_base_url">{t.chat.chatBaseUrl}</Label>
+                <Input
+                  id="chat_base_url"
+                  value={tempConfig.chat_base_url}
+                  onChange={e =>
+                    setTempConfig({
+                      ...tempConfig,
+                      chat_base_url: e.target.value,
+                    })
+                  }
+                  placeholder="http://localhost:8080/v1"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="chat_api_key">{t.chat.chatApiKey}</Label>
+                <div className="relative">
+                  <Input
+                    id="chat_api_key"
+                    type={showApiKey ? 'text' : 'password'}
+                    value={tempConfig.chat_api_key}
+                    onChange={e =>
+                      setTempConfig({
+                        ...tempConfig,
+                        chat_api_key: e.target.value,
+                      })
+                    }
+                    placeholder="sk-..."
+                    className="pr-10"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                    className="absolute right-0 top-0 h-full px-3 hover:bg-transparent"
+                  >
+                    {showApiKey ? (
+                      <EyeOff className="w-4 h-4 text-slate-400" />
+                    ) : (
+                      <Eye className="w-4 h-4 text-slate-400" />
+                    )}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="chat_model_name">{t.chat.chatModelName}</Label>
+                <Input
+                  id="chat_model_name"
+                  value={tempConfig.chat_model_name}
+                  onChange={e =>
+                    setTempConfig({
+                      ...tempConfig,
+                      chat_model_name: e.target.value,
+                    })
+                  }
+                  placeholder="Qwen3.6-27B-FP8, deepseek-v4-flash ..."
+                />
+              </div>
+
+              <div className="flex items-center space-x-2">
+                <input
+                  id="chat_enable_thinking"
+                  type="checkbox"
+                  checked={tempConfig.chat_enable_thinking}
+                  onChange={e =>
+                    setTempConfig({
+                      ...tempConfig,
+                      chat_enable_thinking: e.target.checked,
+                    })
+                  }
+                  className="h-4 w-4 rounded border-slate-300 text-emerald-600 focus:ring-emerald-500"
+                />
+                <Label
+                  htmlFor="chat_enable_thinking"
+                  className="text-sm font-medium"
+                >
+                  {t.chat.enableThinking}
+                </Label>
+              </div>
+            </TabsContent>
           </Tabs>
 
           <DialogFooter className="sm:justify-between gap-2 flex-shrink-0">
@@ -1111,6 +1236,10 @@ function ChatComponent() {
                     decision_model_name:
                       config.decision_model_name || 'glm-4.7',
                     decision_api_key: config.decision_api_key || '',
+                    chat_base_url: config.chat_base_url || '',
+                    chat_model_name: config.chat_model_name || '',
+                    chat_api_key: config.chat_api_key || '',
+                    chat_enable_thinking: config.chat_enable_thinking ?? true,
                   });
                 }
               }}
@@ -1196,12 +1325,37 @@ function ChatComponent() {
                 </div>
               </TooltipContent>
             </Tooltip>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <button
+                  onClick={() => setChatMode('chat')}
+                  className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-sm font-medium transition-all ${
+                    chatMode === 'chat'
+                      ? 'bg-emerald-600 text-white shadow-sm'
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
+                  }`}
+                >
+                  <MessageSquare className="w-4 h-4" />
+                  {t.chatkit.chatMode}
+                </button>
+              </TooltipTrigger>
+              <TooltipContent side="bottom" sideOffset={8} className="max-w-xs">
+                <div className="space-y-1">
+                  <p className="font-medium">{t.chatkit.chatMode}</p>
+                  <p className="text-xs opacity-80">{t.chatkit.chatModeDesc}</p>
+                </div>
+              </TooltipContent>
+            </Tooltip>
           </div>
         </div>
 
         {/* Content area */}
         <div className="flex-1 flex items-stretch justify-center min-h-0 px-4 py-4 pt-16">
-          {devices.length === 0 ? (
+          {chatMode === 'chat' ? (
+            <div className="w-full max-w-4xl flex items-stretch justify-center min-h-0">
+              <ChatAgentPanel />
+            </div>
+          ) : devices.length === 0 ? (
             <div className="flex-1 flex items-center justify-center bg-slate-50 dark:bg-slate-950">
               <div className="text-center">
                 <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mx-auto mb-4">
@@ -1256,7 +1410,7 @@ function ChatComponent() {
                         deviceName={device.model}
                         deviceConnectionType={device.connection_type}
                         isConfigured={!!config?.base_url}
-                        isVisible={device.id === currentDeviceId} // ✅ 新增：传递可见性状态
+                        isVisible={device.id === currentDeviceId}
                         unlimitedStepsEnabled={
                           config?.default_max_steps === null
                         }
