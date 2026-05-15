@@ -180,12 +180,6 @@ type ChatSearchParams = {
   mode?: 'classic' | 'chatkit' | 'chat';
 };
 
-type ElectronRelaunchAPI = {
-  app?: {
-    relaunch: () => Promise<{ success: boolean }>;
-  };
-};
-
 function areAgentStatesEqual(
   left: Device['agent'] | null,
   right: Device['agent'] | null
@@ -541,21 +535,13 @@ function ChatComponent() {
         chat_enable_thinking: tempConfig.chat_enable_thinking || undefined,
       });
 
+      // 配置已保存，后端支持热更新，无需重启
       showToast(t.toasts.configSaved, 'success');
 
-      const electronApp = (
-        window as Window & { electronAPI?: ElectronRelaunchAPI }
-      ).electronAPI?.app;
-
-      if (saveResult.restart_required && electronApp?.relaunch) {
-        showToast('配置已保存，应用将立即重启以应用新配置', 'warning');
-        await new Promise(resolve => setTimeout(resolve, 600));
-        await electronApp.relaunch();
-        return;
-      }
-
-      if (saveResult.restart_required) {
-        showToast('配置已保存，请手动重启应用以立即生效', 'warning');
+      // 如果有警告信息（配置冲突），显示警告
+      if (saveResult.warnings && saveResult.warnings.length > 0) {
+        const warningMsg = saveResult.warnings.join('; ');
+        showToast(`配置已保存，但存在冲突: ${warningMsg}`, 'warning');
       }
 
       setShowConfig(false);

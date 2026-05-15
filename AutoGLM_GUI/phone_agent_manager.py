@@ -738,3 +738,32 @@ class PhoneAgentManager:
                 ) and metadata.abort_handler is not None:
                     return True
             return False
+
+    def destroy_all_agents(self) -> int:
+        """销毁所有 Agent 实例，用于配置热更新.
+
+        Returns:
+            int: 销毁的 Agent 数量
+        """
+        with self._manager_lock:
+            agent_keys = list(self._agents.keys())
+            count = len(agent_keys)
+
+            for agent_key in agent_keys:
+                agent = self._agents.pop(agent_key, None)
+                if agent:
+                    try:
+                        agent.reset()  # Clean up agent state
+                    except Exception as e:
+                        logger.warning(
+                            f"Error resetting agent {agent_key} during destroy_all: {e}"
+                        )
+
+                # Remove config and metadata
+                self._agent_configs.pop(agent_key, None)
+                self._metadata.pop(agent_key, None)
+
+            if count > 0:
+                logger.info(f"Destroyed {count} agent(s) for config hot reload")
+
+            return count

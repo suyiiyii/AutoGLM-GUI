@@ -59,6 +59,7 @@ class FakePhoneAgentManager:
         self.unregistered_handlers: list[str] = []
         self.destroy_candidates: list[str] = []
         self.destroy_calls: list[str] = []
+        self.destroy_all_count = 0
 
     def acquire_device(self, device_id: str, **kwargs) -> bool:
         _ = kwargs
@@ -99,6 +100,13 @@ class FakePhoneAgentManager:
         if device_id.endswith("-fail"):
             raise RuntimeError("destroy failed")
 
+    def destroy_all_agents(self) -> int:
+        """销毁所有 Agent，返回销毁数量."""
+        count = len(self.destroy_candidates)
+        self.destroy_all_count = count
+        self.destroy_candidates.clear()
+        return count
+
 
 class FakeConfigManager:
     def __init__(self) -> None:
@@ -123,7 +131,8 @@ class FakeConfigManager:
         self.sync_called = False
         self.save_kwargs: dict[str, Any] | None = None
 
-    def load_file_config(self) -> None:
+    def load_file_config(self, force_reload: bool = False) -> None:
+        _ = force_reload
         return None
 
     def get_effective_config(self) -> SimpleNamespace:
@@ -487,6 +496,9 @@ def test_save_config_success_with_warnings_and_restart_required(
             override_source=SimpleNamespace(value="CLI arguments"),
         )
     ]
+    # 模拟有2个已存在的 Agent
+    env["phone_manager"].destroy_candidates = ["device1", "device2"]
+
     response = env["client"].post(
         "/api/config",
         json={
@@ -501,12 +513,14 @@ def test_save_config_success_with_warnings_and_restart_required(
     assert response.status_code == 200
     payload = response.json()
     assert payload["success"] is True
-    assert payload["restart_required"] is True
+    assert payload["restart_required"] is False  # 热更新，无需重启
     assert "warnings" in payload
     assert env["config_manager"].sync_called is True
     assert env["config_manager"].save_kwargs is not None
     assert env["config_manager"].save_kwargs["merge_mode"] is True
-    assert env["phone_manager"].destroy_calls == []
+    # 验证 destroy_all_agents 被调用
+    assert env["phone_manager"].destroy_all_count == 2
+    assert "Destroyed 2 agent(s)" in payload["message"]
 
 
 def test_save_config_returns_500_when_persist_fails(env: dict[str, Any]) -> None:

@@ -247,9 +247,10 @@ def get_config_endpoint() -> ConfigResponse:
 def save_config_endpoint(request: ConfigSaveRequest) -> dict[str, Any]:
     """保存配置到文件.
 
-    配置保存后需重启应用以立即生效。
+    配置保存后会自动热更新，所有 Agent 将被销毁并在下次使用时用新配置重新创建。
     """
     from AutoGLM_GUI.config_manager import ConfigModel, config_manager
+    from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
     try:
         # Validate incoming configuration
@@ -290,12 +291,20 @@ def save_config_endpoint(request: ConfigSaveRequest) -> dict[str, Any]:
         # 同步到环境变量
         config_manager.sync_to_env()
 
+        # 强制重新加载配置文件，确保立即生效
+        config_manager.load_file_config(force_reload=True)
+
+        # 销毁所有已存在的 Agent，让它们在下次使用时用新配置重新创建
+        agent_manager = PhoneAgentManager.get_instance()
+        destroyed_count = agent_manager.destroy_all_agents()
+
         # 检测冲突并返回警告
         conflicts = config_manager.detect_conflicts()
 
         response_message = (
-            f"Configuration saved to {config_manager.get_config_path()}."
-            " Restart required to apply new configuration immediately."
+            f"Configuration saved to {config_manager.get_config_path()}. "
+            f"Destroyed {destroyed_count} agent(s). "
+            "New agents will be created with updated configuration on next use."
         )
 
         if conflicts:
@@ -307,13 +316,13 @@ def save_config_endpoint(request: ConfigSaveRequest) -> dict[str, Any]:
                 "success": True,
                 "message": response_message,
                 "warnings": warnings,
-                "restart_required": True,
+                "restart_required": False,
             }
 
         return {
             "success": True,
             "message": response_message,
-            "restart_required": True,
+            "restart_required": False,
         }
 
     except ValidationError as e:
