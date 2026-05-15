@@ -29,7 +29,7 @@ def type_text(text: str, device_id: str | None = None) -> None:
             ],
             capture_output=True,
             text=True,
-            check=True,
+            # check=True,
         )
 
 
@@ -41,7 +41,7 @@ def clear_text(device_id: str | None = None) -> None:
             adb_prefix + ["shell", "am", "broadcast", "-a", "ADB_CLEAR_TEXT"],
             capture_output=True,
             text=True,
-            check=True,
+            # check=True,
         )
 
 
