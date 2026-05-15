@@ -1019,13 +1019,15 @@ export function DevicePanel({
                             message.attachments.length > 0 && (
                               <div className="grid grid-cols-2 gap-2">
                                 {message.attachments.map((attachment, idx) => (
-                                  <img
+                                  <ImagePreview
                                     key={`${message.id}-attachment-${idx}`}
                                     src={`data:${attachment.mime_type};base64,${attachment.data}`}
                                     alt={
                                       attachment.name || `Attachment ${idx + 1}`
                                     }
-                                    className="h-24 w-full rounded-lg object-cover border border-white/20"
+                                    className="w-full border-white/20"
+                                    thumbnailClassName="w-full object-cover"
+                                    maxHeight="96px"
                                   />
                                 ))}
                               </div>
@@ -1084,17 +1086,19 @@ export function DevicePanel({
               {attachments.map((attachment, idx) => (
                 <div
                   key={`${attachment.name || 'image'}-${idx}`}
-                  className="relative h-16 w-16 overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800"
+                  className="relative"
                 >
-                  <img
+                  <ImagePreview
                     src={`data:${attachment.mime_type};base64,${attachment.data}`}
                     alt={attachment.name || `Attachment ${idx + 1}`}
-                    className="h-full w-full object-cover"
+                    className="h-16 w-16 border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800"
+                    thumbnailClassName="h-full w-full object-cover"
+                    maxHeight="64px"
                   />
                   <button
                     type="button"
                     onClick={() => removeAttachment(idx)}
-                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-950/70 text-white hover:bg-slate-950"
+                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-950/70 text-white hover:bg-slate-950 z-10"
                     aria-label="移除图片"
                   >
                     <X className="h-3 w-3" />
