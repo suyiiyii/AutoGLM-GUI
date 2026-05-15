@@ -113,8 +113,9 @@ class ChatAgent:
                 images=images,
             )
             self._context.append(user_message)
-
-            logger.debug(f"self.model_config: {self.model_config}")
+            
+            if self.agent_config.verbose:
+                logger.debug(f"[ChatAgent] model_config: {self.model_config}")
 
             # 流式调用 LLM
             stream = await self.openai_client.chat.completions.create(
@@ -162,11 +163,12 @@ class ChatAgent:
                     )
                     content_delta = getattr(delta, "content", None)
 
-                    logger.debug(
-                        f"[ChatAgent] chunk #{chunk_count}: reasoning_delta={reasoning_delta!r} "
-                        f"content_delta={content_delta!r} raw_content_len={len(raw_content)} "
-                        f"reasoning_buf_len={len(reasoning_buffer)} in_reasoning={in_reasoning}"
-                    )
+                    if self.agent_config.verbose:
+                        logger.debug(
+                            f"[ChatAgent] chunk #{chunk_count}: reasoning_delta={reasoning_delta!r} "
+                            f"content_delta={content_delta!r} raw_content_len={len(raw_content)} "
+                            f"reasoning_buf_len={len(reasoning_buffer)} in_reasoning={in_reasoning}"
+                        )
 
                     if reasoning_delta:
                         reasoning_buffer += reasoning_delta
@@ -205,12 +207,13 @@ class ChatAgent:
             # 解析最终内容
             thinking, answer = self._parse_think_tags(raw_content)
 
-            logger.info(
-                f"[ChatAgent] stream finished: chunks={chunk_count} raw_content_len={len(raw_content)} "
-                f"reasoning_buf_len={len(reasoning_buffer)} thinking_len={len(thinking)} "
-                f"answer_len={len(answer)} in_reasoning={in_reasoning} "
-                f"finish_reason={finish_reason}"
-            )
+            if self.agent_config.verbose:
+                logger.debug(
+                    f"[ChatAgent] stream finished: chunks={chunk_count} raw_content_len={len(raw_content)} "
+                    f"reasoning_buf_len={len(reasoning_buffer)} thinking_len={len(thinking)} "
+                    f"answer_len={len(answer)} in_reasoning={in_reasoning} "
+                    f"finish_reason={finish_reason}"
+                )
 
             # 检测 max_tokens 耗尽的情况
             if finish_reason == "length" and not raw_content:
