@@ -10,6 +10,7 @@
   "prConcurrentLimit": 3,
   "branchConcurrentLimit": 3,
   "prHourlyLimit": 3,
+  "minimumReleaseAge": "7 days",
   "rangeStrategy": "bump",
   "rebaseWhen": "conflicted",
   "lockFileMaintenance": {
@@ -19,39 +20,107 @@
   },
   "packageRules": [
     {
-      "description": "Group frontend pnpm dependencies",
+      "description": "Group frontend runtime dependencies",
       "matchManagers": ["npm"],
       "matchFileNames": ["frontend/package.json"],
+      "matchDepTypes": ["dependencies"],
       "matchUpdateTypes": ["minor", "patch"],
-      "groupName": "frontend pnpm dependencies",
+      "groupName": "frontend runtime dependencies",
       "commitMessagePrefix": "chore(deps):",
       "additionalBranchPrefix": "frontend-"
     },
     {
-      "description": "Group Electron pnpm dependencies",
+      "description": "Group frontend tooling dependencies",
+      "matchManagers": ["npm"],
+      "matchFileNames": ["frontend/package.json"],
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "frontend tooling dependencies",
+      "commitMessagePrefix": "chore(deps):",
+      "additionalBranchPrefix": "frontend-tooling-"
+    },
+    {
+      "description": "Group Electron runtime dependencies",
       "matchManagers": ["npm"],
       "matchFileNames": ["electron/package.json"],
+      "matchDepTypes": ["dependencies"],
       "matchUpdateTypes": ["minor", "patch"],
-      "groupName": "electron pnpm dependencies",
+      "groupName": "electron runtime dependencies",
       "commitMessagePrefix": "chore(deps):",
       "additionalBranchPrefix": "electron-"
     },
     {
-      "description": "Group documentation pnpm dependencies",
+      "description": "Group Electron build dependencies",
+      "matchManagers": ["npm"],
+      "matchFileNames": ["electron/package.json"],
+      "matchDepTypes": ["devDependencies"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "electron build dependencies",
+      "commitMessagePrefix": "chore(deps):",
+      "additionalBranchPrefix": "electron-build-"
+    },
+    {
+      "description": "Group documentation runtime dependencies",
       "matchManagers": ["npm"],
       "matchFileNames": ["docs/package.json"],
+      "matchDepTypes": ["dependencies", "engines"],
       "matchUpdateTypes": ["minor", "patch"],
-      "groupName": "docs pnpm dependencies",
+      "groupName": "docs runtime dependencies",
       "commitMessagePrefix": "chore(deps):",
       "additionalBranchPrefix": "docs-"
     },
     {
-      "description": "Group Python uv dependencies",
-      "matchManagers": ["pep621"],
+      "description": "Group documentation tooling dependencies",
+      "matchManagers": ["npm"],
+      "matchFileNames": ["docs/package.json"],
+      "matchDepTypes": ["devDependencies"],
       "matchUpdateTypes": ["minor", "patch"],
-      "groupName": "python uv dependencies",
+      "groupName": "docs tooling dependencies",
       "commitMessagePrefix": "chore(deps):",
-      "additionalBranchPrefix": "python-"
+      "additionalBranchPrefix": "docs-tooling-"
+    },
+    {
+      "description": "Require approval for pnpm package manager updates",
+      "matchManagers": ["npm"],
+      "matchDepTypes": ["packageManager"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "dependencyDashboardApproval": true,
+      "groupName": "pnpm package manager updates",
+      "commitMessagePrefix": "chore(deps):",
+      "labels": ["dependencies", "renovate", "toolchain"]
+    },
+    {
+      "description": "Require approval for Python application dependency updates",
+      "matchManagers": ["pep621"],
+      "matchDepTypes": [
+        "requires-python",
+        "project.dependencies",
+        "project.optional-dependencies"
+      ],
+      "matchUpdateTypes": ["minor", "patch"],
+      "dependencyDashboardApproval": true,
+      "groupName": "python application dependencies",
+      "commitMessagePrefix": "chore(deps):",
+      "labels": ["dependencies", "renovate", "python"]
+    },
+    {
+      "description": "Group Python development tooling dependencies",
+      "matchManagers": ["pep621"],
+      "matchDepTypes": ["dependency-groups"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "python development tooling dependencies",
+      "commitMessagePrefix": "chore(deps):",
+      "additionalBranchPrefix": "python-tooling-"
+    },
+    {
+      "description": "Require approval for Python base image updates",
+      "matchManagers": ["dockerfile"],
+      "matchPackageNames": ["python"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "dependencyDashboardApproval": true,
+      "groupName": "python base image updates",
+      "commitMessagePrefix": "chore(deps):",
+      "labels": ["dependencies", "renovate", "python", "docker"]
     },
     {
       "description": "Group Docker base image updates",
