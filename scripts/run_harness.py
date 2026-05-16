@@ -7,11 +7,16 @@ Phase 1 scope:
   mock LLM + mock device + trace/replay path
 - write a JSON report with artifact paths and a reproduction command
 
+Phase 2 scope:
+- optionally check or update a normalized semantic golden for meituan_message
+- compare stable semantic fields instead of raw timestamps, durations, ids,
+  absolute paths, screenshots, or base64 payloads
+
 Non-goals:
 - dynamic port architecture changes
 - coverage / codecov policy
 - custom structural checks
-- full golden replay platform
+- full raw golden replay platform
 - CI gate changes
 """
 
@@ -553,7 +558,17 @@ def run_meituan_harness(
                 )
                 result["golden_actual_file"] = str(golden_actual_file)
 
-                if write_golden:
+                if write_golden and result["status"] != "passed":
+                    result["golden_status"] = "failed"
+                    result["golden_diff_summary"] = [
+                        "refusing to update golden from a failed harness run"
+                    ]
+                    if result["failure_reason"] is None:
+                        result["failure_reason"] = (
+                            "golden update requires a passed harness run"
+                        )
+
+                if write_golden and result["status"] == "passed":
                     effective_golden_file.parent.mkdir(parents=True, exist_ok=True)
                     effective_golden_file.write_text(
                         json.dumps(normalized_golden, ensure_ascii=False, indent=2)
@@ -711,6 +726,14 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
+
+    if args.check_golden and args.write_golden:
+        print(
+            "--check-golden and --write-golden cannot be used together; "
+            "check the committed baseline or update it in separate runs.",
+            file=sys.stderr,
+        )
+        return 2
 
     if args.list:
         return cmd_list()
