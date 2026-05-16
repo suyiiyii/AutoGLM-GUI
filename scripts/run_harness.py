@@ -584,7 +584,8 @@ def run_meituan_harness(
                             f"golden file missing: {effective_golden_file}"
                         ]
                         result["status"] = "failed"
-                        result["failure_reason"] = "golden check failed"
+                        if result["failure_reason"] is None:
+                            result["failure_reason"] = "golden check failed"
                     else:
                         expected_golden = json.loads(
                             effective_golden_file.read_text(encoding="utf-8")
@@ -598,7 +599,8 @@ def run_meituan_harness(
                         result["golden_diff_summary"] = golden_diffs
                         if not golden_passed:
                             result["status"] = "failed"
-                            result["failure_reason"] = "golden check failed"
+                            if result["failure_reason"] is None:
+                                result["failure_reason"] = "golden check failed"
             finally:
                 test_client.close()
                 llm_client.close()
