@@ -16,7 +16,7 @@ title: Harness Engineering 路线图
 
 ## 当前基线
 
-本轮盘点基于 `origin/main` 的当前代码树。后续阶段开始前，应在对应任务里写明当时的 main commit，避免不同 worktree 看到不同现状。
+本轮盘点基于 `origin/main@6155f55e8effec7e6c87b749ffbf4f6d156c9e72`。后续阶段开始前，也应在对应任务里写明当时的 main commit，避免不同 worktree 看到不同现状。
 
 ### 已有能力
 
