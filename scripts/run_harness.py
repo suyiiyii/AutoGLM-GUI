@@ -170,7 +170,9 @@ def _collect_screenshot_paths(replay_file: Path) -> list[str]:
     return screenshot_paths
 
 
-def _save_task_events(backend_url: str, task_id: str, target: Path) -> tuple[Path, list[dict[str, Any]]]:
+def _save_task_events(
+    backend_url: str, task_id: str, target: Path
+) -> tuple[Path, list[dict[str, Any]]]:
     resp = httpx.get(f"{backend_url}/api/tasks/{task_id}/events", timeout=10)
     resp.raise_for_status()
     payload = resp.json()
@@ -268,7 +270,9 @@ def run_meituan_harness(
                     services.backend_url, task_id, timeout=30.0
                 )
                 result["task_status"] = final_task["status"]
-                result["trace_id"] = str(final_task["trace_id"]) if final_task.get("trace_id") else None
+                result["trace_id"] = (
+                    str(final_task["trace_id"]) if final_task.get("trace_id") else None
+                )
                 result["final_message"] = final_task.get("final_message")
 
                 commands = test_client.get_commands()
@@ -285,7 +289,12 @@ def run_meituan_harness(
 
                 replay_file = None
                 if result["trace_id"]:
-                    replay_file = services.trace_root / "runs" / result["trace_id"] / "replay.jsonl"
+                    replay_file = (
+                        services.trace_root
+                        / "runs"
+                        / result["trace_id"]
+                        / "replay.jsonl"
+                    )
                     result["artifacts"]["replay_file"] = str(replay_file)
                     result["replay_file"] = str(replay_file)
                     screenshot_paths = _collect_screenshot_paths(replay_file)
