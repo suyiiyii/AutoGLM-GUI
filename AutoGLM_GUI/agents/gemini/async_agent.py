@@ -123,8 +123,19 @@ class AsyncGeminiAgent(AsyncAgentBase):
                     "model_name": self.model_config.model_name,
                     "message_count": len(self._context),
                 },
-            ):
-                thinking, tool_name, tool_args = await self._call_llm_with_tools()
+            ) as span:
+                (
+                    thinking,
+                    reasoning_content,
+                    tool_name,
+                    tool_args,
+                ) = await self._call_llm_with_tools()
+                span.set_attributes(
+                    {
+                        "thinking_chars": len(thinking),
+                        "reasoning_content_present": bool(reasoning_content),
+                    }
+                )
         except asyncio.CancelledError:
             raise
         except Exception as e:
@@ -218,6 +229,7 @@ class AsyncGeminiAgent(AsyncAgentBase):
                 self._remove_latest_message_images()
                 self._append_tool_exchange(
                     thinking=thinking,
+                    reasoning_content=reasoning_content,
                     tool_name=tool_name,
                     tool_args=tool_args,
                     tool_result=tool_result,
@@ -283,6 +295,7 @@ class AsyncGeminiAgent(AsyncAgentBase):
             self._remove_latest_message_images()
             self._append_tool_exchange(
                 thinking=thinking,
+                reasoning_content=reasoning_content,
                 tool_name=tool_name,
                 tool_args=tool_args,
                 tool_result={
@@ -307,8 +320,10 @@ class AsyncGeminiAgent(AsyncAgentBase):
             },
         }
 
-    async def _call_llm_with_tools(self) -> tuple[str, str, dict[str, Any]]:
-        """调用 LLM，返回 (thinking, tool_name, tool_args)。"""
+    async def _call_llm_with_tools(
+        self,
+    ) -> tuple[str, str | None, str, dict[str, Any]]:
+        """调用 LLM，返回 (thinking, reasoning_content, tool_name, tool_args)。"""
         if self._cancel_event.is_set():
             raise asyncio.CancelledError()
 
@@ -324,7 +339,7 @@ class AsyncGeminiAgent(AsyncAgentBase):
         choice = response.choices[0]
         message = choice.message
 
-        thinking = message.content or ""
+        thinking, reasoning_content = self._extract_thinking(message)
 
         if message.tool_calls and len(message.tool_calls) > 0:
             tool_call = message.tool_calls[0]
@@ -338,10 +353,15 @@ class AsyncGeminiAgent(AsyncAgentBase):
                     f"Raw: {tool_call.function.arguments!r}"  # type: ignore[union-attr]
                 )
                 tool_args = {}
-            return thinking, tool_name, tool_args
+            return thinking, reasoning_content, tool_name, tool_args
 
         logger.warning("Model did not return a tool call, treating as finish")
-        return thinking, "finish", {"message": thinking or "No action returned"}
+        return (
+            thinking,
+            reasoning_content,
+            "finish",
+            {"message": thinking or "No action returned"},
+        )
 
     def _remove_latest_message_images(self) -> None:
         if len(self._context) > 1:
@@ -353,27 +373,29 @@ class AsyncGeminiAgent(AsyncAgentBase):
         self,
         *,
         thinking: str,
+        reasoning_content: str | None,
         tool_name: str,
         tool_args: dict[str, Any],
         tool_result: dict[str, Any],
     ) -> None:
         tool_call_id = f"call_{self._step_count}"
-        self._context.append(
-            {
-                "role": "assistant",
-                "content": thinking or "",
-                "tool_calls": [
-                    {
-                        "id": tool_call_id,
-                        "type": "function",
-                        "function": {
-                            "name": tool_name,
-                            "arguments": json.dumps(tool_args, ensure_ascii=False),
-                        },
-                    }
-                ],
-            }
-        )
+        assistant_message = {
+            "role": "assistant",
+            "content": thinking or "",
+            "tool_calls": [
+                {
+                    "id": tool_call_id,
+                    "type": "function",
+                    "function": {
+                        "name": tool_name,
+                        "arguments": json.dumps(tool_args, ensure_ascii=False),
+                    },
+                }
+            ],
+        }
+        if reasoning_content:
+            assistant_message["reasoning_content"] = reasoning_content
+        self._context.append(assistant_message)
         self._context.append(
             {
                 "role": "tool",
@@ -388,3 +410,19 @@ class AsyncGeminiAgent(AsyncAgentBase):
             f"Invalid tool call for {exc.tool_name}: {exc.message}. "
             "Return arguments that match the declared tool schema."
         )
+
+    @classmethod
+    def _extract_thinking(cls, message: Any) -> tuple[str, str | None]:
+        content = cls._message_text_field(message, "content")
+        reasoning_content = cls._message_text_field(
+            message, "reasoning_content"
+        ) or cls._message_text_field(message, "reasoning")
+        return content or reasoning_content, reasoning_content or None
+
+    @staticmethod
+    def _message_text_field(message: Any, field_name: str) -> str:
+        if isinstance(message, dict):
+            value = message.get(field_name)
+        else:
+            value = getattr(message, field_name, None)
+        return value if isinstance(value, str) else ""
