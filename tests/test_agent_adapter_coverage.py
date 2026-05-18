@@ -746,7 +746,7 @@ def test_gemini_agent_execute_step_and_llm_paths(
     agent._prepare_initial_context("tap", PNG_1X1_BASE64, "app")
 
     async def tap_tool():
-        return "think", "tap", {"x": 1, "y": 2}
+        return "think", None, "tap", {"x": 1, "y": 2}
 
     monkeypatch.setattr(agent, "_call_llm_with_tools", tap_tool)
     monkeypatch.setattr(
@@ -763,7 +763,7 @@ def test_gemini_agent_execute_step_and_llm_paths(
     action_error_agent._prepare_initial_context("tap", PNG_1X1_BASE64, "app")
 
     async def back_tool():
-        return "", "back", {}
+        return "", None, "back", {}
 
     def raise_action(*args, **kwargs):
         raise RuntimeError("tap failed")
@@ -815,6 +815,7 @@ def test_gemini_call_llm_with_tools_parses_tool_no_tool_bad_json_and_cancel() ->
     )
     assert asyncio.run(agent._call_llm_with_tools()) == (
         "thinking",
+        None,
         "tap",
         {"x": 1, "y": 2},
     )
@@ -827,6 +828,7 @@ def test_gemini_call_llm_with_tools_parses_tool_no_tool_bad_json_and_cancel() ->
     )
     assert asyncio.run(no_tool_agent._call_llm_with_tools()) == (
         "done",
+        None,
         "finish",
         {"message": "done"},
     )
@@ -842,7 +844,7 @@ def test_gemini_call_llm_with_tools_parses_tool_no_tool_bad_json_and_cancel() ->
             )
         )
     )
-    assert asyncio.run(bad_json_agent._call_llm_with_tools()) == ("", "tap", {})
+    assert asyncio.run(bad_json_agent._call_llm_with_tools()) == ("", None, "tap", {})
 
     cancelled_agent = _make_gemini_agent()
     cancelled_agent._cancel_event.set()
