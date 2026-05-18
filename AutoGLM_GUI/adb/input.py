@@ -8,6 +8,10 @@ from AutoGLM_GUI.trace import trace_span
 
 
 def type_text(text: str, device_id: str | None = None) -> None:
+    # Empty --es values fail as missing args on some OEM am broadcast implementations.
+    if text == "":
+        return
+
     adb_prefix = build_adb_command(device_id)
     encoded_text = base64.b64encode(text.encode("utf-8")).decode("utf-8")
 
