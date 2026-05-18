@@ -2,6 +2,7 @@
 
 import asyncio
 import json
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -48,10 +49,13 @@ class _QueuedToolCallGeminiAgent(AsyncGeminiAgent):
         )
         self._tool_calls = tool_calls.copy()
 
-    async def _call_llm_with_tools(self) -> tuple[str, str, dict[str, Any]]:
+    async def _call_llm_with_tools(
+        self,
+    ) -> tuple[str, str | None, str, dict[str, Any]]:
         if not self._tool_calls:
-            return "", "finish", {"message": "No queued tool calls"}
-        return self._tool_calls.pop(0)
+            return "", None, "finish", {"message": "No queued tool calls"}
+        thinking, tool_name, tool_args = self._tool_calls.pop(0)
+        return thinking, None, tool_name, tool_args
 
 
 class TestDeviceTools:
@@ -206,6 +210,85 @@ class TestGeminiImageAttachments:
             "data:image/webp;base64,reference"
         )
         assert "User attached 1 reference image" in user_message["content"][2]["text"]
+
+
+class TestGeminiReasoningContent:
+    def test_call_llm_uses_reasoning_when_content_is_empty(self):
+        tool_call = SimpleNamespace(
+            function=SimpleNamespace(
+                name="swipe",
+                arguments=json.dumps(
+                    {
+                        "start_x": 500,
+                        "start_y": 800,
+                        "end_x": 500,
+                        "end_y": 200,
+                    }
+                ),
+            )
+        )
+        message = SimpleNamespace(
+            content="",
+            reasoning="Need to unlock the screen first.",
+            tool_calls=[tool_call],
+        )
+
+        class _FakeCompletions:
+            async def create(self, **_: Any) -> Any:
+                return SimpleNamespace(
+                    choices=[SimpleNamespace(message=message)],
+                )
+
+        agent = AsyncGeminiAgent(
+            model_config=ModelConfig(),
+            agent_config=AgentConfig(max_steps=10, verbose=False),
+            device=_FakeDevice(),
+        )
+        agent.openai_client = SimpleNamespace(
+            chat=SimpleNamespace(completions=_FakeCompletions())
+        )
+
+        thinking, reasoning_content, tool_name, tool_args = asyncio.run(
+            agent._call_llm_with_tools()
+        )
+
+        assert thinking == "Need to unlock the screen first."
+        assert reasoning_content == "Need to unlock the screen first."
+        assert tool_name == "swipe"
+        assert tool_args == {
+            "start_x": 500,
+            "start_y": 800,
+            "end_x": 500,
+            "end_y": 200,
+        }
+
+    def test_tool_exchange_replays_reasoning_content(self):
+        agent = AsyncGeminiAgent(
+            model_config=ModelConfig(),
+            agent_config=AgentConfig(max_steps=10, verbose=False),
+            device=_FakeDevice(),
+        )
+        agent._step_count = 1
+        agent._append_tool_exchange(
+            thinking="Need to unlock the screen first.",
+            reasoning_content="Need to unlock the screen first.",
+            tool_name="swipe",
+            tool_args={
+                "start_x": 500,
+                "start_y": 800,
+                "end_x": 500,
+                "end_y": 200,
+            },
+            tool_result={"success": True, "message": "OK"},
+        )
+
+        assistant_message = agent.context[-2]
+        assert assistant_message["role"] == "assistant"
+        assert assistant_message["content"] == "Need to unlock the screen first."
+        assert (
+            assistant_message["reasoning_content"] == "Need to unlock the screen first."
+        )
+        assert assistant_message["tool_calls"][0]["function"]["name"] == "swipe"
 
 
 class TestGeminiInvalidToolCalls:
