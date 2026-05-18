@@ -7,9 +7,14 @@ import base64
 import socket
 import subprocess
 from types import SimpleNamespace
+from typing import Any
 
 import pytest
 
+import AutoGLM_GUI.adb.apps as adb_apps
+import AutoGLM_GUI.adb.connection as adb_connection
+import AutoGLM_GUI.adb.device as adb_core_device
+import AutoGLM_GUI.adb.input as adb_input
 import AutoGLM_GUI.adb_plus.device as adb_device
 import AutoGLM_GUI.adb_plus.ip as adb_ip
 import AutoGLM_GUI.adb_plus.keyboard_installer as keyboard
@@ -19,6 +24,8 @@ import AutoGLM_GUI.adb_plus.qr_pair as qr_pair
 import AutoGLM_GUI.adb_plus.screenshot as screenshot
 import AutoGLM_GUI.adb_plus.touch as touch
 import AutoGLM_GUI.adb_plus.version as adb_version
+import AutoGLM_GUI.devices.adb_device as adb_device_impl
+import AutoGLM_GUI.platform_utils as platform_utils
 import AutoGLM_GUI.scrcpy_stream as scrcpy_stream
 from AutoGLM_GUI.exceptions import DeviceNotAvailableError
 from AutoGLM_GUI.scrcpy_protocol import (
@@ -301,6 +308,410 @@ def test_adb_device_availability(monkeypatch: pytest.MonkeyPatch) -> None:
         asyncio.run(adb_device.check_device_available("serial"))
 
 
+def test_adb_connection_command_paths(monkeypatch: pytest.MonkeyPatch) -> None:
+    assert adb_connection.is_adb_tcpip_device_id("192.168.1.2:5555")
+    assert not adb_connection.is_adb_tcpip_device_id("usb-1")
+    assert (
+        adb_connection.infer_connection_type_from_device_id("192.168.1.2:5555")
+        == adb_connection.ConnectionType.REMOTE
+    )
+    assert (
+        adb_connection.infer_connection_type_from_device_id("usb-1")
+        == adb_connection.ConnectionType.USB
+    )
+
+    conn = adb_connection.ADBConnection("adbx")
+    run_calls: list[list[str]] = []
+
+    def fake_connect_run(cmd, **kwargs):
+        run_calls.append(cmd)
+        return subprocess.CompletedProcess(
+            cmd, 0, stdout="connected to device", stderr=""
+        )
+
+    monkeypatch.setattr(adb_connection.subprocess, "run", fake_connect_run)
+    assert conn.connect("1.2.3.4") == (True, "Connected to 1.2.3.4:5555")
+    assert run_calls[-1] == ["adbx", "connect", "1.2.3.4:5555"]
+
+    def fake_already_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(
+            cmd, 0, stdout="already connected", stderr=""
+        )
+
+    monkeypatch.setattr(adb_connection.subprocess, "run", fake_already_run)
+    assert conn.connect("1.2.3.4:7777") == (True, "Connected to 1.2.3.4:7777")
+
+    def fake_failed_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 1, stdout="", stderr="refused")
+
+    monkeypatch.setattr(adb_connection.subprocess, "run", fake_failed_run)
+    assert conn.connect("1.2.3.4:7777") == (False, "refused")
+    assert conn.disconnect("1.2.3.4:7777") == (True, "refused")
+
+    def fake_timeout_run(cmd, **kwargs):
+        raise subprocess.TimeoutExpired(cmd, kwargs.get("timeout", 1))
+
+    monkeypatch.setattr(adb_connection.subprocess, "run", fake_timeout_run)
+    assert conn.connect("1.2.3.4:7777", timeout=2) == (
+        False,
+        "Connection timeout after 2s",
+    )
+
+    def fake_broken_run(cmd, **kwargs):
+        raise RuntimeError("subprocess failed")
+
+    monkeypatch.setattr(adb_connection.subprocess, "run", fake_broken_run)
+    assert conn.connect("1.2.3.4:7777") == (
+        False,
+        "Connection error: subprocess failed",
+    )
+    assert conn.disconnect() == (False, "Disconnect error: subprocess failed")
+
+    devices_output = (
+        "List of devices attached\n"
+        "usb-1 device product:p model:Pixel device:d\n"
+        "192.168.1.2:5555 offline product:p model:Remote device:d\n"
+    )
+
+    def fake_devices_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 0, stdout=devices_output, stderr="")
+
+    monkeypatch.setattr(adb_connection.subprocess, "run", fake_devices_run)
+    listed = conn.list_devices()
+    assert [device.device_id for device in listed] == ["usb-1", "192.168.1.2:5555"]
+    assert listed[0].model == "Pixel"
+    assert listed[1].connection_type == adb_connection.ConnectionType.REMOTE
+    assert conn.get_device_info("usb-1") == listed[0]
+    assert conn.get_device_info("missing") is None
+    assert conn.is_connected("usb-1") is True
+    assert conn.is_connected("192.168.1.2:5555") is False
+    assert conn.is_connected() is True
+
+    monkeypatch.setattr(
+        conn,
+        "list_devices",
+        lambda: [],
+    )
+    assert conn.get_device_info() is None
+    assert conn.is_connected() is False
+
+    monkeypatch.setattr(adb_connection.time, "sleep", lambda delay: None)
+
+    def fake_tcpip_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(
+            cmd, 0, stdout="restarting in TCP mode", stderr=""
+        )
+
+    monkeypatch.setattr(adb_connection.subprocess, "run", fake_tcpip_run)
+    assert conn.enable_tcpip(5556, "usb-1") == (
+        True,
+        "TCP/IP mode enabled on port 5556",
+    )
+
+    monkeypatch.setattr(adb_connection.subprocess, "run", fake_failed_run)
+    assert conn.enable_tcpip()[0] is False
+
+    monkeypatch.setattr(adb_connection.subprocess, "run", fake_broken_run)
+    assert conn.enable_tcpip() == (False, "Error enabling TCP/IP: subprocess failed")
+
+    monkeypatch.setattr(adb_connection, "get_wifi_ip", lambda **kwargs: "192.168.1.9")
+    assert conn.get_device_ip("usb-1") == "192.168.1.9"
+
+    def fake_restart_run(cmd, **kwargs):
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(adb_connection.subprocess, "run", fake_restart_run)
+    assert conn.restart_server() == (True, "ADB server restarted")
+    monkeypatch.setattr(adb_connection.subprocess, "run", fake_broken_run)
+    assert conn.restart_server() == (
+        False,
+        "Error restarting server: subprocess failed",
+    )
+
+
+def test_adb_core_device_command_wrappers(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[list[str]] = []
+    sleeps: list[tuple[str, float]] = []
+    current_stdout = {"value": "mCurrentFocus Window{u0 com.tencent.mm/.Main}"}
+
+    def fake_run(cmd, **kwargs):
+        calls.append(cmd)
+        if "dumpsys" in cmd:
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout=current_stdout["value"], stderr=""
+            )
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(adb_core_device.subprocess, "run", fake_run)
+    monkeypatch.setattr(
+        adb_core_device,
+        "trace_sleep",
+        lambda delay, name, attrs: sleeps.append((name, delay)),
+    )
+
+    assert adb_core_device.get_current_app("serial") == "微信"
+    current_stdout["value"] = "mFocusedApp ActivityRecord{u0 unknown.package/.Main}"
+    assert adb_core_device.get_current_app("serial") == "System Home"
+    current_stdout["value"] = ""
+    with pytest.raises(ValueError, match="No output"):
+        adb_core_device.get_current_app("serial")
+
+    adb_core_device.tap(1, 2, "serial", delay=0.01)
+    adb_core_device.double_tap(3, 4, "serial", delay=0.02)
+    adb_core_device.long_press(5, 6, 700, "serial", delay=0.03)
+    adb_core_device.swipe(1, 2, 3, 4, device_id="serial", delay=0.04)
+    adb_core_device.swipe(1, 2, 3, 4, duration_ms=250, device_id="serial", delay=0.05)
+    adb_core_device.back("serial", delay=0.06)
+    adb_core_device.home("serial", delay=0.07)
+    assert adb_core_device.launch_app("Settings", "serial", delay=0.08) is True
+    assert adb_core_device.launch_app("missing", "serial") is False
+
+    flattened = [" ".join(call) for call in calls]
+    assert any("input tap 1 2" in call for call in flattened)
+    assert any("input swipe 5 6 5 6 700" in call for call in flattened)
+    assert any("input keyevent 4" in call for call in flattened)
+    assert any("input keyevent KEYCODE_HOME" in call for call in flattened)
+    assert any("monkey -p com.android.settings" in call for call in flattened)
+    assert [name for name, _ in sleeps] == [
+        "sleep.device_tap_delay",
+        "sleep.device_double_tap_interval",
+        "sleep.device_double_tap_delay",
+        "sleep.device_long_press_delay",
+        "sleep.device_swipe_delay",
+        "sleep.device_swipe_delay",
+        "sleep.device_back_delay",
+        "sleep.device_home_delay",
+        "sleep.device_launch_delay",
+    ]
+
+
+def test_platform_utils_adb_input_apps_and_version_helpers(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    assert platform_utils.build_adb_command() == ["adb"]
+    assert platform_utils.build_adb_command("serial", adb_path="adbx") == [
+        "adbx",
+        "-s",
+        "serial",
+    ]
+    monkeypatch.setattr(platform_utils.platform, "system", lambda: "Windows")
+    assert platform_utils.is_windows() is True
+    monkeypatch.setattr(platform_utils.platform, "system", lambda: "Darwin")
+    assert platform_utils.is_windows() is False
+
+    run_calls: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        run_calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, stdout="out", stderr="err")
+
+    monkeypatch.setattr(platform_utils.subprocess, "run", fake_run)
+    assert platform_utils.run_cmd_silently_sync(["cmd"]).stdout == "out"
+
+    monkeypatch.setattr(platform_utils, "is_windows", lambda: True)
+    assert asyncio.run(platform_utils.run_cmd_silently(["cmd"])).stderr == "err"
+
+    class FakeAsyncProcess:
+        returncode = 7
+
+        async def communicate(self):
+            return b"async-out", b"async-err"
+
+        def kill(self) -> None:
+            self.killed = True
+
+    async def fake_create(*cmd, stdout=None, stderr=None):
+        run_calls.append(list(cmd))
+        return FakeAsyncProcess()
+
+    monkeypatch.setattr(platform_utils, "is_windows", lambda: False)
+    monkeypatch.setattr(platform_utils.asyncio, "create_subprocess_exec", fake_create)
+    async_result = asyncio.run(platform_utils.run_cmd_silently(["async-cmd"]))
+    assert async_result.returncode == 7
+    assert async_result.stdout == "async-out"
+    assert (
+        asyncio.run(
+            platform_utils.spawn_process(["spawn"], capture_output=True)
+        ).returncode
+        == 7
+    )
+
+    monkeypatch.setattr(platform_utils, "is_windows", lambda: True)
+    monkeypatch.setattr(
+        platform_utils.subprocess,
+        "Popen",
+        lambda cmd, stdout=None, stderr=None: SimpleNamespace(cmd=cmd),
+    )
+    assert platform_utils.spawn_process
+    assert asyncio.run(platform_utils.spawn_process(["spawn-win"])).cmd == ["spawn-win"]
+
+    input_calls: list[list[str]] = []
+
+    def fake_input_run(cmd, **kwargs):
+        input_calls.append(cmd)
+        if "default_input_method" in cmd:
+            return subprocess.CompletedProcess(
+                cmd, 0, stdout="ime.old/.Keyboard", stderr=""
+            )
+        return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
+
+    monkeypatch.setattr(adb_input.subprocess, "run", fake_input_run)
+    adb_input.type_text("")
+    adb_input.type_text("hi", "serial")
+    adb_input.clear_text("serial")
+    assert adb_input.detect_and_set_adb_keyboard("serial") == "ime.old/.Keyboard"
+    adb_input.restore_keyboard("ime.old/.Keyboard", "serial")
+    flattened = [" ".join(call) for call in input_calls]
+    assert any("ADB_INPUT_B64" in call for call in flattened)
+    assert any("ADB_CLEAR_TEXT" in call for call in flattened)
+    assert any("ime set com.android.adbkeyboard/.AdbIME" in call for call in flattened)
+    assert any("ime set ime.old/.Keyboard" in call for call in flattened)
+
+    assert adb_apps.get_package_name("Settings") == "com.android.settings"
+    assert adb_apps.get_package_name("missing") is None
+    assert adb_apps.get_app_name("com.android.settings") is not None
+    assert adb_apps.get_app_name("missing.package") is None
+    assert "Settings" in adb_apps.list_supported_apps()
+
+    monkeypatch.setattr(
+        adb_version,
+        "run_cmd_silently_sync",
+        lambda *a, **k: _completed(stdout="bad", returncode=1),
+    )
+    assert adb_version.get_adb_version() is None
+    monkeypatch.setattr(
+        adb_version,
+        "run_cmd_silently_sync",
+        lambda *a, **k: _completed(stdout="no version"),
+    )
+    assert adb_version.get_adb_version() is None
+    monkeypatch.setattr(
+        adb_version,
+        "run_cmd_silently_sync",
+        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("adb missing")),
+    )
+    assert adb_version.get_adb_version() is None
+    assert adb_version.supports_mdns_services() is False
+
+    monkeypatch.setattr(
+        adb_version,
+        "run_cmd_silently_sync",
+        lambda *a, **k: _completed(stderr="unknown command", returncode=1),
+    )
+    assert adb_version.supports_mdns_services() is False
+
+
+def test_adb_device_and_manager_wrappers(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, tuple[Any, ...]]] = []
+
+    class FakeScreenshot:
+        base64_data = "img"
+        width = 100
+        height = 200
+        is_sensitive = True
+
+    monkeypatch.setattr(
+        adb_device_impl.adb,
+        "get_screenshot",
+        lambda device_id, timeout: FakeScreenshot(),
+    )
+    for name in [
+        "tap",
+        "double_tap",
+        "long_press",
+        "swipe",
+        "type_text",
+        "clear_text",
+        "back",
+        "home",
+        "restore_keyboard",
+    ]:
+        monkeypatch.setattr(
+            adb_device_impl.adb,
+            name,
+            lambda *args, _name=name, **kwargs: calls.append((_name, args)),
+        )
+    monkeypatch.setattr(adb_device_impl.adb, "launch_app", lambda *args: True)
+    monkeypatch.setattr(
+        adb_device_impl.adb, "get_current_app", lambda device_id: "com.example"
+    )
+    monkeypatch.setattr(
+        adb_device_impl.adb,
+        "detect_and_set_adb_keyboard",
+        lambda device_id: "ime",
+    )
+
+    device = adb_device_impl.ADBDevice("serial")
+    assert device.device_id == "serial"
+    assert device.get_screenshot(timeout=3).is_sensitive is True
+    device.tap(1, 2, delay=0)
+    device.double_tap(3, 4)
+    device.long_press(5, 6, duration_ms=700)
+    device.swipe(1, 2, 3, 4, duration_ms=500)
+    device.type_text("hello")
+    device.clear_text()
+    device.back()
+    device.home()
+    assert device.launch_app("Settings") is True
+    assert device.get_current_app() == "com.example"
+    assert device.detect_and_set_adb_keyboard() == "ime"
+    device.restore_keyboard("ime")
+    assert [call[0] for call in calls] == [
+        "tap",
+        "double_tap",
+        "long_press",
+        "swipe",
+        "type_text",
+        "clear_text",
+        "back",
+        "home",
+        "restore_keyboard",
+    ]
+
+    class FakeConnection:
+        def __init__(self, adb_path: str = "adb") -> None:
+            self.adb_path = adb_path
+            self.disconnects: list[str] = []
+
+        def list_devices(self):
+            return [
+                adb_connection.DeviceInfo(
+                    device_id="online",
+                    status="device",
+                    model="Pixel",
+                    connection_type=adb_connection.ConnectionType.USB,
+                ),
+                adb_connection.DeviceInfo(
+                    device_id="offline",
+                    status="offline",
+                    model=None,
+                    connection_type=adb_connection.ConnectionType.REMOTE,
+                ),
+            ]
+
+        def connect(self, address: str, timeout: int = 10):
+            return True, f"connected {address}"
+
+        def disconnect(self, device_id: str):
+            self.disconnects.append(device_id)
+            return True, f"disconnected {device_id}"
+
+    monkeypatch.setattr(adb_device_impl, "ADBConnection", FakeConnection)
+    manager = adb_device_impl.ADBDeviceManager("custom-adb")
+    infos = manager.list_devices()
+    assert infos[0].status == "online"
+    assert infos[0].connection_type == "usb"
+    assert manager.get_device("online") is manager.get_device("online")
+    with pytest.raises(KeyError, match="not found"):
+        manager.get_device("missing")
+    with pytest.raises(KeyError, match="offline"):
+        manager.get_device("offline")
+    assert manager.connect("1.2.3.4") == (True, "connected 1.2.3.4")
+    manager._devices["online"] = adb_device_impl.ADBDevice("online")
+    assert manager.disconnect("online") == (True, "disconnected online")
+    assert "online" not in manager._devices
+
+
 def test_adb_ip_sync_and_async(monkeypatch: pytest.MonkeyPatch) -> None:
     assert adb_ip._extract_ip("inet 192.168.1.5/24") == "192.168.1.5"
     assert adb_ip._extract_ip("inet 0.0.0.0") is None
@@ -484,6 +895,154 @@ def test_mdns_pair_touch_version_and_keyboard(monkeypatch: pytest.MonkeyPatch) -
     assert installer.auto_setup() == (True, "enabled")
     status = installer.get_status()
     assert status["status"] == "installed_but_disabled"
+
+
+def test_adb_keyboard_installer_download_install_enable_and_auto_setup(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+) -> None:
+    import importlib.resources
+
+    cache_apk = tmp_path / "ADBKeyboard.apk"
+    monkeypatch.setattr(keyboard, "USER_CACHE_APK_PATH", cache_apk)
+    monkeypatch.setattr(
+        importlib.resources,
+        "files",
+        lambda package: (_ for _ in ()).throw(RuntimeError("no bundle")),
+    )
+    installer = keyboard.ADBKeyboardInstaller("serial")
+
+    run_results = iter(
+        [
+            _completed(stdout="package:com.android.adbkeyboard"),
+            _completed(stdout=keyboard.ADB_KEYBOARD_IME),
+            _completed(stdout=""),
+        ]
+    )
+
+    async def fake_run(cmd, timeout=30):
+        return next(run_results)
+
+    monkeypatch.setattr(keyboard, "run_cmd_silently", fake_run)
+    assert installer.is_installed() is True
+    assert installer.is_enabled() is True
+    assert installer.is_installed() is False
+
+    async def broken_run(cmd, timeout=30):
+        raise RuntimeError("adb failed")
+
+    monkeypatch.setattr(keyboard, "run_cmd_silently", broken_run)
+    assert installer.is_installed() is False
+    assert installer.is_enabled() is False
+
+    cache_apk.write_bytes(b"cached")
+    assert installer.get_apk_path() == cache_apk
+    assert installer.download_apk() is True
+
+    def fake_urlretrieve(url, path):
+        path.write_bytes(b"downloaded")
+
+    monkeypatch.setattr(keyboard.urllib.request, "urlretrieve", fake_urlretrieve)
+    assert installer.download_apk(force=True) is True
+
+    def empty_urlretrieve(url, path):
+        path.write_bytes(b"")
+
+    monkeypatch.setattr(keyboard.urllib.request, "urlretrieve", empty_urlretrieve)
+    assert installer.download_apk(force=True) is False
+
+    def failing_urlretrieve(url, path):
+        path.write_bytes(b"partial")
+        raise RuntimeError("network failed")
+
+    monkeypatch.setattr(keyboard.urllib.request, "urlretrieve", failing_urlretrieve)
+    assert installer.download_apk(force=True) is False
+    assert not cache_apk.exists()
+
+    monkeypatch.setattr(installer, "get_apk_path", lambda: cache_apk)
+    assert installer.install() == (False, "APK file not found. Please download first.")
+
+    cache_apk.write_bytes(b"apk")
+
+    async def install_ok(cmd, timeout=30):
+        return _completed(stdout="Success", returncode=1)
+
+    monkeypatch.setattr(keyboard, "run_cmd_silently", install_ok)
+    assert installer.install()[0] is True
+
+    async def install_fail(cmd, timeout=30):
+        return _completed(stdout="Failure", stderr="bad", returncode=1)
+
+    monkeypatch.setattr(keyboard, "run_cmd_silently", install_fail)
+    assert installer.install()[0] is False
+
+    async def install_broken(cmd, timeout=30):
+        raise RuntimeError("install crashed")
+
+    monkeypatch.setattr(keyboard, "run_cmd_silently", install_broken)
+    assert installer.install() == (False, "Installation error: install crashed")
+
+    async def enable_ok(cmd, timeout=30):
+        return _completed(returncode=0)
+
+    monkeypatch.setattr(keyboard, "run_cmd_silently", enable_ok)
+    assert installer.enable() == (True, "ADB Keyboard enabled successfully")
+
+    async def enable_nonzero(cmd, timeout=30):
+        return _completed(stdout="no", stderr="permission", returncode=1)
+
+    monkeypatch.setattr(keyboard, "run_cmd_silently", enable_nonzero)
+    monkeypatch.setattr(installer, "is_enabled", lambda: True)
+    assert installer.enable() == (True, "ADB Keyboard enabled (verified)")
+
+    monkeypatch.setattr(installer, "is_enabled", lambda: False)
+    assert installer.enable()[0] is False
+
+    async def enable_broken(cmd, timeout=30):
+        raise RuntimeError("enable crashed")
+
+    monkeypatch.setattr(keyboard, "run_cmd_silently", enable_broken)
+    assert installer.enable() == (False, "Enable error: enable crashed")
+
+    monkeypatch.setattr(installer, "is_installed", lambda: True)
+    monkeypatch.setattr(installer, "is_enabled", lambda: True)
+    assert installer.auto_setup()[0] is True
+
+    monkeypatch.setattr(installer, "is_enabled", lambda: False)
+    monkeypatch.setattr(installer, "enable", lambda: (True, "enabled"))
+    assert installer.auto_setup() == (True, "enabled")
+
+    monkeypatch.setattr(installer, "is_installed", lambda: False)
+    monkeypatch.setattr(installer, "download_apk", lambda: False)
+    assert installer.auto_setup() == (False, "Failed to download APK")
+
+    checks = iter([False, True])
+    enabled_checks = iter([False, True])
+    monkeypatch.setattr(installer, "is_installed", lambda: next(checks))
+    monkeypatch.setattr(installer, "is_enabled", lambda: next(enabled_checks))
+    monkeypatch.setattr(installer, "download_apk", lambda: True)
+    monkeypatch.setattr(installer, "install", lambda: (True, "installed"))
+    monkeypatch.setattr(installer, "enable", lambda: (True, "enabled"))
+    assert installer.auto_setup() == (True, "ADB Keyboard setup completed successfully")
+
+    checks = iter([False, True])
+    enabled_checks = iter([False, False])
+    monkeypatch.setattr(installer, "is_installed", lambda: next(checks))
+    monkeypatch.setattr(installer, "is_enabled", lambda: next(enabled_checks))
+    assert installer.auto_setup() == (False, "Setup completed but verification failed")
+
+    class FakeInstaller:
+        def __init__(self, device_id=None) -> None:
+            self.device_id = device_id
+
+        def auto_setup(self):
+            return True, "ok"
+
+        def is_installed(self) -> bool:
+            return False
+
+    monkeypatch.setattr(keyboard, "ADBKeyboardInstaller", FakeInstaller)
+    assert keyboard.auto_setup_adb_keyboard("serial") == (True, "ok")
+    assert keyboard.check_and_suggest_installation() is True
 
 
 def test_qr_pair_listener_and_manager(monkeypatch: pytest.MonkeyPatch) -> None:

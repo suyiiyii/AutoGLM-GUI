@@ -71,6 +71,59 @@ class FakeAgent:
         }
 
 
+class FakePhoneAgentManager:
+    def __init__(self, agent: Any) -> None:
+        self.agent = agent
+        self.acquired: list[tuple[str, str | None]] = []
+        self.released: list[tuple[str, str | None]] = []
+        self.registered: list[tuple[str, str | None]] = []
+        self.unregistered: list[tuple[str, str | None]] = []
+        self.errors: list[tuple[str, str, str | None]] = []
+
+    async def acquire_device_async(
+        self,
+        device_id: str,
+        *,
+        auto_initialize: bool = False,
+        context: str | None = None,
+    ) -> bool:
+        self.acquired.append((device_id, context))
+        return True
+
+    def get_agent_with_context(self, device_id: str, **kwargs):
+        return self.agent
+
+    def register_abort_handler(self, device_id: str, handler, context=None) -> None:
+        self.registered.append((device_id, context))
+
+    def unregister_abort_handler(self, device_id: str, context=None) -> None:
+        self.unregistered.append((device_id, context))
+
+    def set_error_state(self, device_id: str, message: str, context=None) -> None:
+        self.errors.append((device_id, message, context))
+
+    def release_device(self, device_id: str, context=None) -> None:
+        self.released.append((device_id, context))
+
+
+def _patch_task_tracing(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(trace_module, "create_trace_id", lambda: "trace-test")
+    monkeypatch.setattr(trace_module, "write_replay_task_start", lambda **kwargs: None)
+    monkeypatch.setattr(trace_module, "write_replay_event", lambda **kwargs: None)
+    monkeypatch.setattr(
+        trace_module,
+        "get_step_timing_summary",
+        lambda step, trace_id=None: {"step": step},
+    )
+    monkeypatch.setattr(trace_module, "list_step_timing_summaries", lambda trace_id: [])
+    monkeypatch.setattr(trace_module, "get_trace_timing_summary", lambda **kwargs: None)
+    monkeypatch.setattr(trace_module, "clear_trace_data", lambda trace_id: None)
+    monkeypatch.setattr(
+        "AutoGLM_GUI.task_manager.record_trace_latency_metrics",
+        lambda **kwargs: None,
+    )
+
+
 def test_phone_agent_manager_lifecycle_state_and_abort(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -359,6 +412,195 @@ def test_task_manager_queue_cancel_worker_and_layered(
     asyncio.run(manager._execute_scheduled_layered_workflow(layered_task))
     assert store.get_task(layered_task["id"])["status"] == TaskStatus.SUCCEEDED.value
     assert reset_calls == [layered_task["id"]]
+    store.close()
+
+
+def test_task_manager_classic_chat_execution_paths(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_task_tracing(monkeypatch)
+    store = TaskStore(tmp_path / "classic.db")
+    manager = TaskManager(store)
+    monkeypatch.setattr(manager, "_ensure_worker", lambda device_id: None)
+
+    fake_agent = FakeAgent()
+    fake_phone_manager = FakePhoneAgentManager(fake_agent)
+    monkeypatch.setattr(
+        PhoneAgentManager,
+        "get_instance",
+        classmethod(lambda cls: fake_phone_manager),
+    )
+
+    session = asyncio.run(
+        manager.create_chat_session(
+            device_id="device-1", device_serial="serial-1", mode="classic"
+        )
+    )
+    queued_task = asyncio.run(
+        manager.submit_chat_task(
+            session_id=session["id"],
+            device_id="device-1",
+            device_serial="serial-1",
+            message="classic task",
+            attachments=[
+                {"mime_type": "image/png", "data": "image"},
+                {"mime_type": 123, "data": "ignored"},
+            ],
+        )
+    )
+    task = store.get_task(queued_task["id"])
+    assert task is not None
+
+    asyncio.run(manager._execute_classic_chat(task))
+
+    completed = store.get_task(task["id"])
+    assert completed is not None
+    assert completed["status"] == TaskStatus.SUCCEEDED.value
+    assert completed["final_message"] == "done classic task"
+    assert completed["step_count"] == 1
+    assert fake_agent.attachments == [{"mime_type": "image/png", "data": "image"}]
+    assert fake_phone_manager.released == [("device-1", f"chat:{session['id']}")]
+    assert fake_phone_manager.unregistered == [("device-1", f"chat:{session['id']}")]
+    event_types = [event["event_type"] for event in store.list_task_events(task["id"])]
+    assert "thinking" in event_types
+    assert "step" in event_types
+    assert "done" in event_types
+
+    no_attachment_agent = SimpleNamespace(cancel=lambda: None)
+
+    async def unused_stream(text: str):
+        raise AssertionError("stream should not run")
+        yield {}
+
+    no_attachment_agent.stream = unused_stream
+    fake_phone_manager.agent = no_attachment_agent
+    unsupported = asyncio.run(
+        manager.submit_chat_task(
+            session_id=session["id"],
+            device_id="device-1",
+            device_serial="serial-1",
+            message="with image",
+            attachments=[{"mime_type": "image/png", "data": "image"}],
+        )
+    )
+    unsupported_task = store.get_task(unsupported["id"])
+    assert unsupported_task is not None
+
+    asyncio.run(manager._execute_classic_chat(unsupported_task))
+
+    failed = store.get_task(unsupported["id"])
+    assert failed is not None
+    assert failed["status"] == TaskStatus.FAILED.value
+    assert failed["stop_reason"] == "unsupported_image_attachments"
+    assert fake_phone_manager.errors[-1][1] == (
+        "Current agent does not support user image attachments"
+    )
+    store.close()
+
+
+def test_task_manager_scheduled_workflow_success_cancel_and_errors(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_task_tracing(monkeypatch)
+    store = TaskStore(tmp_path / "scheduled.db")
+    manager = TaskManager(store)
+    monkeypatch.setattr(manager, "_ensure_worker", lambda device_id: None)
+
+    fake_agent = FakeAgent()
+    fake_phone_manager = FakePhoneAgentManager(fake_agent)
+    monkeypatch.setattr(
+        PhoneAgentManager,
+        "get_instance",
+        classmethod(lambda cls: fake_phone_manager),
+    )
+
+    scheduled = asyncio.run(
+        manager.enqueue_scheduled_task(
+            scheduled_task_id="sched-1",
+            workflow_uuid="workflow-1",
+            schedule_fire_id="fire-1",
+            device_id="device-1",
+            device_serial="serial-1",
+            input_text="scheduled task",
+        )
+    )
+    task = store.get_task(scheduled["id"])
+    assert task is not None
+
+    asyncio.run(manager._execute_scheduled_workflow(task))
+
+    completed = store.get_task(task["id"])
+    assert completed is not None
+    assert completed["status"] == TaskStatus.SUCCEEDED.value
+    assert completed["final_message"] == "done scheduled task"
+    assert fake_agent.reset_count == 1
+    assert fake_phone_manager.released == [("device-1", "scheduled")]
+
+    cancel_task = store.create_task_run(
+        source="scheduled",
+        executor_key="scheduled_workflow",
+        device_id="device-1",
+        device_serial="serial-1",
+        input_text="cancel me",
+    )
+    manager._cancel_requested.add(cancel_task["id"])
+    asyncio.run(manager._execute_scheduled_workflow(cancel_task))
+    cancelled = store.get_task(cancel_task["id"])
+    assert cancelled is not None
+    assert cancelled["status"] == TaskStatus.CANCELLED.value
+    assert cancelled["stop_reason"] == "user_stopped"
+
+    class BusyManager(FakePhoneAgentManager):
+        async def acquire_device_async(self, *args, **kwargs) -> bool:
+            raise DeviceBusyError("busy")
+
+    busy_manager = BusyManager(fake_agent)
+    monkeypatch.setattr(
+        PhoneAgentManager,
+        "get_instance",
+        classmethod(lambda cls: busy_manager),
+    )
+    busy_task = store.create_task_run(
+        source="scheduled",
+        executor_key="scheduled_workflow",
+        device_id="device-busy",
+        device_serial="serial-busy",
+        input_text="busy",
+    )
+    asyncio.run(manager._execute_scheduled_workflow(busy_task))
+    busy = store.get_task(busy_task["id"])
+    assert busy is not None
+    assert busy["status"] == TaskStatus.FAILED.value
+    assert busy["stop_reason"] == "device_busy"
+    assert busy_manager.errors[-1] == (
+        "device-busy",
+        "Device device-busy is busy. Please wait.",
+        "scheduled",
+    )
+
+    class InitErrorManager(FakePhoneAgentManager):
+        def get_agent_with_context(self, device_id: str, **kwargs):
+            raise AgentInitializationError("missing config")
+
+    init_manager = InitErrorManager(fake_agent)
+    monkeypatch.setattr(
+        PhoneAgentManager,
+        "get_instance",
+        classmethod(lambda cls: init_manager),
+    )
+    init_task = store.create_task_run(
+        source="scheduled",
+        executor_key="scheduled_workflow",
+        device_id="device-init",
+        device_serial="serial-init",
+        input_text="init",
+    )
+    asyncio.run(manager._execute_scheduled_workflow(init_task))
+    init_failed = store.get_task(init_task["id"])
+    assert init_failed is not None
+    assert init_failed["status"] == TaskStatus.FAILED.value
+    assert init_failed["stop_reason"] == "initialization_failed"
+    assert "missing config" in init_failed["final_message"]
     store.close()
 
 
