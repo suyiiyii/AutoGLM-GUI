@@ -16,6 +16,21 @@ const pidPath = path.resolve(__dirname, '.service_pids.json');
 
 const sleep = ms => new Promise(resolve => globalThis.setTimeout(resolve, ms));
 const execFileAsync = promisify(execFile);
+
+function resolvePnpmCommand() {
+  if (process.env.npm_execpath) {
+    return {
+      command: process.execPath,
+      args: [process.env.npm_execpath],
+    };
+  }
+
+  return {
+    command: process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm',
+    args: [],
+  };
+}
+
 function parseFrontendPort() {
   const portFlagIndex = process.argv.indexOf('--frontend-port');
   if (portFlagIndex >= 0) {
@@ -144,6 +159,8 @@ async function main() {
     void cleanupProcesses().finally(() => process.exit(0));
   };
 
+  const pnpmCommand = resolvePnpmCommand();
+
   try {
     process.once('SIGTERM', handleTermination);
     process.once('SIGINT', handleTermination);
@@ -167,8 +184,16 @@ async function main() {
     const frontendUrl = new URL(urls.frontend_url);
 
     viteProc = spawnDetached(
-      'pnpm',
-      ['exec', 'vite', '--host', '127.0.0.1', '--port', frontendUrl.port],
+      pnpmCommand.command,
+      [
+        ...pnpmCommand.args,
+        'exec',
+        'vite',
+        '--host',
+        '127.0.0.1',
+        '--port',
+        frontendUrl.port,
+      ],
       {
         cwd: frontendRoot,
         env: {
