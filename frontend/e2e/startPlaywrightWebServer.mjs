@@ -65,7 +65,12 @@ function spawnDetached(command, args, options) {
   const child = spawn(command, args, {
     ...options,
     detached,
-    stdio: 'inherit',
+    // On Windows, inheriting Playwright's stdio pipes can keep the E2E step
+    // alive even after the launcher should be gone if descendant processes
+    // outlive the parent briefly. We only need PID-based cleanup there, not
+    // live child logs, so sever those handles.
+    stdio: process.platform === 'win32' ? 'ignore' : 'inherit',
+    windowsHide: true,
   });
   if (detached) {
     child.unref();
