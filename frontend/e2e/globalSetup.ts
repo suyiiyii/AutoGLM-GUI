@@ -1,14 +1,10 @@
 /**
- * Start backend services (mock LLM + mock agent + AutoGLM-GUI) before E2E tests.
- *
- * Uses child_process to manage the Python launcher script.  The PID is written
- * to a file so globalTeardown can kill it.
+ * Wait for the E2E stack launched by Playwright's webServer command.
  */
-import { spawn } from 'child_process';
 import path from 'path';
 import fs from 'fs';
 import { fileURLToPath } from 'url';
-import { sleep, terminateProcessTree } from './processTree';
+import { sleep } from './processTree';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -29,90 +25,28 @@ function readServiceUrls(urlsPath: string): ServiceUrls | null {
 }
 
 async function globalSetup() {
-  const projectRoot = path.resolve(__dirname, '..', '..');
   const urlsPath = path.resolve(__dirname, '.service_urls.json');
-  const pidPath = path.resolve(__dirname, '.services_pid');
 
-  console.log('[globalSetup] Starting E2E services...');
+  console.log('[globalSetup] Waiting for E2E stack...');
 
-  // Stop services from the previous E2E run, if that run did not clean up.
-  try {
-    const previousPid = Number(fs.readFileSync(pidPath, 'utf-8').trim());
-    if (Number.isFinite(previousPid)) {
-      await terminateProcessTree(previousPid);
-    }
-  } catch {
-    /* PID file may not exist */
-  }
-
-  // Cleanup old files
-  try {
-    fs.unlinkSync(urlsPath);
-  } catch {
-    /* file may not exist */
-  }
-  try {
-    fs.unlinkSync(pidPath);
-  } catch {
-    /* file may not exist */
-  }
-
-  // Wait for ports to be fully released by the OS
-  await sleep(3000);
-
-  console.log('[globalSetup] Project root:', projectRoot);
-
-  // Start services with retry on port-in-use
-  let proc: ReturnType<typeof spawn> | null = null;
-  for (let attempt = 0; attempt < 3; attempt++) {
-    proc = spawn(
-      'uv',
-      ['run', 'python', 'scripts/start_e2e_services.py', '--output', urlsPath],
-      {
-        cwd: projectRoot,
-        stdio: 'inherit',
-        detached: true,
-      }
-    );
-
-    // Wait for both backend health and the launcher-written URL file.
-    const deadline = Date.now() + 30000;
-    let started = false;
-    while (Date.now() < deadline) {
+  const deadline = Date.now() + 30000;
+  while (Date.now() < deadline) {
+    const urls = readServiceUrls(urlsPath);
+    if (urls) {
       try {
-        const resp = await fetch('http://127.0.0.1:8000/api/health');
+        const resp = await fetch(`${urls.backend_url}/api/health`);
         if (resp.status === 200) {
-          const urls = readServiceUrls(urlsPath);
-          if (urls) {
-            console.log('[globalSetup] Services ready, URLs:', urls);
-            started = true;
-            break;
-          }
+          console.log('[globalSetup] Services ready, URLs:', urls);
+          return;
         }
       } catch {
-        // Not ready — but check if the process exited with error
-        if (proc && proc.exitCode !== null) {
-          // Process died — port likely in use, retry
-          console.log(
-            `[globalSetup] Attempt ${attempt + 1}: process exited, retrying...`
-          );
-          break;
-        }
+        // Still booting.
       }
-      await sleep(500);
     }
-    if (started && proc?.pid) {
-      fs.writeFileSync(pidPath, String(proc.pid));
-      return;
-    }
-    // Kill the failed process and wait before retry
-    if (proc?.pid) {
-      await terminateProcessTree(proc.pid);
-      await sleep(1000);
-    }
+    await sleep(500);
   }
 
-  throw new Error('E2E services failed to start after 3 attempts');
+  throw new Error('E2E stack failed to become ready within 30s');
 }
 
 export default globalSetup;

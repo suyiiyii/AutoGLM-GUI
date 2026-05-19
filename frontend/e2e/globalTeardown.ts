@@ -7,14 +7,21 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function globalTeardown() {
-  const pidPath = path.resolve(__dirname, '.services_pid');
+  const pidPath = path.resolve(__dirname, '.service_pids.json');
   const urlsPath = path.resolve(__dirname, '.service_urls.json');
 
-  // Kill by saved PID, including child services.
+  // Kill the detached processes we started for the E2E stack.
   try {
-    const pid = Number(fs.readFileSync(pidPath, 'utf-8').trim());
-    console.log(`[globalTeardown] Killing process group ${pid}`);
-    await terminateProcessTree(pid);
+    const payload = JSON.parse(fs.readFileSync(pidPath, 'utf-8')) as {
+      servicePid?: number;
+      vitePid?: number;
+    };
+    for (const pid of [payload.vitePid, payload.servicePid]) {
+      if (Number.isFinite(pid)) {
+        console.log(`[globalTeardown] Killing process group ${pid}`);
+        await terminateProcessTree(pid as number);
+      }
+    }
   } catch {
     // PID file may not exist
   }

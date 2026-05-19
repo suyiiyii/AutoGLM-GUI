@@ -4,6 +4,9 @@ import { tanstackRouter } from '@tanstack/router-plugin/vite';
 import { execSync } from 'node:child_process';
 import path from 'path';
 
+const backendProxyTarget =
+  process.env.VITE_PROXY_TARGET || 'http://localhost:8000';
+
 // Short commit of the working tree at build time, so a deployed build can be
 // traced back to a commit (the package version is the same across branches).
 // Appends "-dirty" when there are uncommitted changes to tracked files.
@@ -43,12 +46,12 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'http://localhost:8000',
+        target: backendProxyTarget,
         changeOrigin: true,
         ws: true,
       },
       '/socket.io': {
-        target: 'http://localhost:8000',
+        target: backendProxyTarget,
         changeOrigin: true,
         ws: true,
       },

@@ -5,7 +5,7 @@ Launches three services and writes their URLs to a JSON file so Playwright
 tests can discover them.  Waits for SIGTERM/SIGINT, then tears everything down.
 
 Usage:
-    python scripts/start_e2e_services.py [--output urls.json]
+    python scripts/start_e2e_services.py [--output urls.json] [--dynamic-ports]
 """
 
 import argparse
@@ -33,6 +33,13 @@ def _port_is_free(port):
             return True
         except OSError:
             return False
+
+
+def _find_free_port(start_port, end_port):
+    for port in range(start_port, end_port + 1):
+        if _port_is_free(port):
+            return port
+    raise RuntimeError(f"No free port found in range {start_port}-{end_port}")
 
 
 def wait_for_server(url, timeout=30.0, endpoint="/test/stats"):
@@ -80,13 +87,28 @@ def main():
         "--output", default=None, help="JSON output file for service URLs"
     )
     parser.add_argument("--scenario", default=None, help="Scenario YAML for mock agent")
+    parser.add_argument(
+        "--dynamic-ports",
+        action="store_true",
+        help="Choose free ports automatically for backend and mock services",
+    )
+    parser.add_argument(
+        "--frontend-port",
+        type=int,
+        default=3000,
+        help="Frontend port reported to Playwright (default: 3000)",
+    )
     args = parser.parse_args()
 
-    # Use fixed ports so vite proxy (localhost:8000) works correctly.
-    # If a port is in use the test will fail — free it up and retry.
-    llm_port = 18003
-    agent_port = 18000
-    backend_port = 8000
+    if args.dynamic_ports:
+        llm_port = _find_free_port(18000, 18999)
+        agent_port = _find_free_port(19000, 19999)
+        backend_port = _find_free_port(8000, 8099)
+    else:
+        # Preserve the historical fixed-port workflow for manual debugging.
+        llm_port = 18003
+        agent_port = 18000
+        backend_port = 8000
 
     for port, name in [
         (llm_port, "mock LLM"),
@@ -134,7 +156,7 @@ def main():
         "llm_url": llm_url,
         "agent_url": agent_url,
         "backend_url": backend_url,
-        "frontend_url": "http://localhost:3000",
+        "frontend_url": f"http://127.0.0.1:{args.frontend_port}",
     }
     output_path = args.output or os.path.join(
         PROJECT_ROOT, "frontend", "e2e", ".service_urls.json"

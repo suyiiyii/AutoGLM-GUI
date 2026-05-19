@@ -11,10 +11,9 @@ export default defineConfig({
     baseURL: 'http://localhost:3000',
   },
   webServer: {
-    // Only Vite dev server — backend services are managed by globalSetup
-    command: 'pnpm dev',
-    url: 'http://localhost:3000',
+    command: 'node e2e/startPlaywrightWebServer.mjs',
+    url: 'http://127.0.0.1:3000',
     timeout: 30000,
-    reuseExistingServer: true,
+    reuseExistingServer: false,
   },
 });
