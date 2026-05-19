@@ -266,6 +266,22 @@ def _collect_replay_event_names(replay_file: Path) -> list[str]:
     )
 
 
+def _wait_for_replay_events(
+    replay_file: Path, required_event_names: list[str], timeout: float = 5.0
+) -> list[str]:
+    deadline = time.monotonic() + timeout
+    required = set(required_event_names)
+    event_names: list[str] = []
+
+    while time.monotonic() <= deadline:
+        event_names = _collect_replay_event_names(replay_file)
+        if required.issubset(event_names):
+            return event_names
+        time.sleep(0.1)
+
+    return event_names
+
+
 def _collect_step_actions(replay_file: Path) -> list[dict[str, Any]]:
     if not replay_file.exists():
         return []
@@ -515,6 +531,10 @@ def run_meituan_harness(
                     )
                     result["artifacts"]["replay_file"] = str(replay_file)
                     result["replay_file"] = str(replay_file)
+                    _wait_for_replay_events(
+                        replay_file,
+                        REQUIRED_REPLAY_EVENT_NAMES,
+                    )
                     screenshot_paths = _collect_screenshot_paths(replay_file)
                     result["artifacts"]["screenshots"] = screenshot_paths
                     result["screenshot_paths"] = screenshot_paths
