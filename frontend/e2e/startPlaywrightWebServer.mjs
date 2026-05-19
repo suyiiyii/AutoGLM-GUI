@@ -137,6 +137,9 @@ async function main() {
   };
 
   try {
+    process.once('SIGTERM', handleTermination);
+    process.once('SIGINT', handleTermination);
+
     serviceProc = spawnDetached(
       'uv',
       [
@@ -194,8 +197,6 @@ async function main() {
       viteProc.once('exit', (code, signal) =>
         onExit('vite dev server', code, signal)
       );
-      process.once('SIGTERM', handleTermination);
-      process.once('SIGINT', handleTermination);
     });
   } finally {
     process.off('SIGTERM', handleTermination);
