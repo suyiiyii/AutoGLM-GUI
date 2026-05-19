@@ -61,12 +61,15 @@ async function waitForBackend(urlsDeadlineMs) {
 }
 
 function spawnDetached(command, args, options) {
+  const detached = process.platform !== 'win32';
   const child = spawn(command, args, {
     ...options,
-    detached: true,
+    detached,
     stdio: 'inherit',
   });
-  child.unref();
+  if (detached) {
+    child.unref();
+  }
   return child;
 }
 
