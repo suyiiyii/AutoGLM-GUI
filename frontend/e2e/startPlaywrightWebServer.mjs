@@ -1,8 +1,10 @@
 import { spawn, execFile } from 'child_process';
+import console from 'console';
 import fs from 'fs';
 import path from 'path';
+import process from 'process';
 import { promisify } from 'util';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, URL } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -12,8 +14,21 @@ const projectRoot = path.resolve(frontendRoot, '..');
 const urlsPath = path.resolve(__dirname, '.service_urls.json');
 const pidPath = path.resolve(__dirname, '.service_pids.json');
 
-const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
+const sleep = ms => new Promise(resolve => globalThis.setTimeout(resolve, ms));
 const execFileAsync = promisify(execFile);
+function parseFrontendPort() {
+  const portFlagIndex = process.argv.indexOf('--frontend-port');
+  if (portFlagIndex >= 0) {
+    const explicitPort = Number(process.argv[portFlagIndex + 1]);
+    if (Number.isFinite(explicitPort)) {
+      return explicitPort;
+    }
+  }
+
+  return Number(process.env.PLAYWRIGHT_FRONTEND_PORT || '3000');
+}
+
+const frontendPort = parseFrontendPort();
 
 function readServiceUrls() {
   try {
@@ -32,7 +47,7 @@ async function waitForBackend(urlsDeadlineMs) {
     }
 
     try {
-      const response = await fetch(`${urls.backend_url}/api/health`);
+      const response = await globalThis.fetch(`${urls.backend_url}/api/health`);
       if (response.ok) {
         return urls;
       }
@@ -104,64 +119,89 @@ async function cleanupPreviousRun() {
 async function main() {
   await cleanupPreviousRun();
 
-  const serviceProc = spawnDetached(
-    'uv',
-    [
-      'run',
-      'python',
-      'scripts/start_e2e_services.py',
-      '--dynamic-ports',
-      '--output',
-      urlsPath,
-    ],
-    { cwd: projectRoot }
-  );
+  let serviceProc = null;
+  let viteProc = null;
+  let shuttingDown = false;
 
-  const urls = await waitForBackend(Date.now() + 30000);
-  const frontendUrl = new URL(urls.frontend_url);
-
-  const viteProc = spawnDetached(
-    'pnpm',
-    ['dev', '--', '--host', '127.0.0.1', '--port', frontendUrl.port],
-    {
-      cwd: frontendRoot,
-      env: {
-        ...process.env,
-        VITE_PROXY_TARGET: urls.backend_url,
-      },
+  const cleanupProcesses = async () => {
+    if (shuttingDown) {
+      return;
     }
-  );
+    shuttingDown = true;
+    await terminateProcessTree(viteProc?.pid);
+    await terminateProcessTree(serviceProc?.pid);
+  };
 
-  fs.writeFileSync(
-    pidPath,
-    JSON.stringify(
+  const handleTermination = () => {
+    void cleanupProcesses().finally(() => process.exit(0));
+  };
+
+  try {
+    serviceProc = spawnDetached(
+      'uv',
+      [
+        'run',
+        'python',
+        'scripts/start_e2e_services.py',
+        '--dynamic-ports',
+        '--frontend-port',
+        String(frontendPort),
+        '--output',
+        urlsPath,
+      ],
+      { cwd: projectRoot }
+    );
+
+    const urls = await waitForBackend(Date.now() + 30000);
+    const frontendUrl = new URL(urls.frontend_url);
+
+    viteProc = spawnDetached(
+      'pnpm',
+      ['exec', 'vite', '--host', '127.0.0.1', '--port', frontendUrl.port],
       {
-        servicePid: serviceProc.pid,
-        vitePid: viteProc.pid,
-      },
-      null,
-      2
-    )
-  );
+        cwd: frontendRoot,
+        env: {
+          ...process.env,
+          VITE_PROXY_TARGET: urls.backend_url,
+        },
+      }
+    );
 
-  await new Promise((resolve, reject) => {
-    const onExit = (name, code, signal) => {
-      reject(
-        new Error(
-          `${name} exited unexpectedly (code=${code ?? 'null'}, signal=${signal ?? 'null'})`
-        )
+    fs.writeFileSync(
+      pidPath,
+      JSON.stringify(
+        {
+          servicePid: serviceProc.pid,
+          vitePid: viteProc.pid,
+        },
+        null,
+        2
+      )
+    );
+
+    await new Promise((resolve, reject) => {
+      const onExit = (name, code, signal) => {
+        reject(
+          new Error(
+            `${name} exited unexpectedly (code=${code ?? 'null'}, signal=${signal ?? 'null'})`
+          )
+        );
+      };
+
+      serviceProc.once('exit', (code, signal) =>
+        onExit('service launcher', code, signal)
       );
-    };
-
-    serviceProc.once('exit', (code, signal) =>
-      onExit('service launcher', code, signal)
-    );
-    viteProc.once('exit', (code, signal) =>
-      onExit('vite dev server', code, signal)
-    );
-    process.once('SIGTERM', resolve);
-    process.once('SIGINT', resolve);
-  });
+      viteProc.once('exit', (code, signal) =>
+        onExit('vite dev server', code, signal)
+      );
+      process.once('SIGTERM', handleTermination);
+      process.once('SIGINT', handleTermination);
+    });
+  } finally {
+    process.off('SIGTERM', handleTermination);
+    process.off('SIGINT', handleTermination);
+    await cleanupProcesses();
+  }
 }
 
 main().catch(error => {
