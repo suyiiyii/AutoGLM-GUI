@@ -232,7 +232,7 @@ test.describe('Trace debug surface', () => {
     await expect(page.getByText('Step 1').first()).toBeVisible({
       timeout: 30000,
     });
-    await expect(page.getByText(/^LLM /).first()).toBeVisible({
+    await expect(page.getByText(/^Model /).first()).toBeVisible({
       timeout: 30000,
     });
     await expect(page.getByText(/^Action /).first()).toBeVisible({
