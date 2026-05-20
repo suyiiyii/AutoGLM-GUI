@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
+import inspect
 import json
 import threading
 from collections.abc import AsyncIterator
@@ -465,6 +466,7 @@ class LayeredTaskRun:
 
         next_task: asyncio.Task[Any] | None = None
         cancel_task: asyncio.Task[bool] | None = None
+        iterator: Any | None = None
 
         try:
             with trace_span(
@@ -679,6 +681,13 @@ class LayeredTaskRun:
                     task.cancel()
                     with contextlib.suppress(asyncio.CancelledError):
                         await task
+            if iterator is not None:
+                aclose = getattr(iterator, "aclose", None)
+                if callable(aclose):
+                    with contextlib.suppress(Exception):
+                        close_result = aclose()
+                        if inspect.isawaitable(close_result):
+                            await close_result
             with _active_runs_lock:
                 _active_runs.pop(self.task_id, None)
             self.finished = True
