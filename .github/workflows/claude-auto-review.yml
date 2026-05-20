@@ -1,0 +1,70 @@
+name: Claude Auto Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches: [main, dev]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+      issues: write
+      id-token: write
+      actions: read
+    env:
+      ANTHROPIC_BASE_URL: ${{ secrets.ANTHROPIC_BASE_URL }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js & pnpm
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: "24"
+
+      - name: Setup Python & uv
+        uses: ./.github/actions/setup-python
+
+      - name: Claude PR review
+        uses: suyiiyii/claude-code-action@latest
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          track_progress: true
+          additional_permissions: |
+            actions: read
+          prompt: |
+            Review this pull request.
+
+            Read CLAUDE.md for the project context, commands, and repository-specific review expectations.
+
+            Hard rules:
+            - Do not modify files.
+            - Do not commit.
+            - Do not push.
+            - Do not create a pull request.
+            - Only post review feedback.
+            - Review the diff and enough surrounding code to avoid false positives.
+            - Do not comment on style, formatting, naming, or minor refactors unless they cause a real bug or maintenance risk.
+            - Do not invent issues. If you are unsure, skip it.
+            - Do not repeat issues already covered by CI or lint unless you can explain the root cause.
+
+            Focus on:
+            - Correctness regressions and likely runtime bugs.
+            - API contract mismatches.
+            - Reliability, lifecycle, concurrency, and state consistency edge cases.
+            - Security issues such as secrets, command injection, path traversal, unsafe subprocess use, and permission mistakes.
+            - Missing or insufficient tests for changed behavior.
+
+            Output:
+            - Start with findings ordered by severity.
+            - For each finding include severity (P0/P1/P2/P3), file and line, what is wrong, why it matters, and the minimal suggested fix or test.
+            - If there are no real issues, post "No blocking issues found." and include a short summary plus residual risk.
+          claude_args: |
+            --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),mcp__github_inline_comment__create_inline_comment"
+            --permission-mode acceptEdits

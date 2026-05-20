@@ -142,7 +142,7 @@ function getTimingChips(
 
   const chips = [
     { label: 'Total', value: formatDuration(timings.total_duration_ms) },
-    { label: 'LLM', value: formatDuration(timings.llm_duration_ms) },
+    { label: 'Model', value: formatDuration(timings.llm_duration_ms) },
   ];
 
   if (timings.screenshot_duration_ms > 0) {

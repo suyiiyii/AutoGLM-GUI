@@ -4,7 +4,7 @@
 # ============================================
 
 # Stage 1: Build Frontend
-FROM node:20-slim AS frontend
+FROM node:20.20.2-slim AS frontend
 
 WORKDIR /app
 
@@ -20,7 +20,7 @@ RUN pnpm install --frozen-lockfile && pnpm build
 
 # ============================================
 # Stage 2: Build Backend
-FROM python:3.11-slim AS backend
+FROM python:3.14-slim AS backend
 
 # Prevent Python from writing pyc files and buffering stdout/stderr
 ENV PYTHONDONTWRITEBYTECODE=1
