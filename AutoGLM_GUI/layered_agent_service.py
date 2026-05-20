@@ -464,7 +464,7 @@ class LayeredTaskRun:
                 return None
 
         next_task: asyncio.Task[Any] | None = None
-        cancel_task: asyncio.Task[None] | None = None
+        cancel_task: asyncio.Task[bool] | None = None
 
         try:
             with trace_span(
@@ -482,6 +482,8 @@ class LayeredTaskRun:
                     next_task = asyncio.create_task(get_next(iterator))
                     cancel_task = asyncio.create_task(self._cancel_event.wait())
 
+                    assert next_task is not None
+                    assert cancel_task is not None
                     done, pending = await asyncio.wait(
                         [next_task, cancel_task], return_when=asyncio.FIRST_COMPLETED
                     )
