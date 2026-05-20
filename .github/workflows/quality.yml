@@ -1,0 +1,58 @@
+name: Quality
+
+on:
+  pull_request:
+    branches: [main, dev]
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend lint, format, and typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python & uv
+        uses: ./.github/actions/setup-python
+        with:
+          frozen: "true"
+
+      - name: Install optional backend dependencies
+        run: uv pip install -e ".[droidrun]"
+
+      - name: Run backend quality checks
+        run: uv run python scripts/lint.py --backend --check-only
+
+  frontend:
+    name: Frontend lint, format, and typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js & pnpm
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: "24"
+
+      - name: Run ESLint
+        run: pnpm lint
+        working-directory: frontend
+
+      - name: Check Prettier formatting
+        run: pnpm format:check
+        working-directory: frontend
+
+      - name: Run TypeScript typecheck
+        run: pnpm type-check
+        working-directory: frontend

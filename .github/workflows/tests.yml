@@ -1,0 +1,128 @@
+name: Tests
+
+on:
+  pull_request:
+    branches: [main, dev]
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  python-unit-contract:
+    name: Python unit/contract (py${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - python-version: "3.11"
+            coverage: true
+          - python-version: "3.12"
+            coverage: false
+          - python-version: "3.13"
+            coverage: false
+          - python-version: "3.14"
+            coverage: false
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python & uv
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: ${{ matrix.python-version }}
+          frozen: "true"
+
+      - name: Run unit and contract tests
+        run: |
+          if [ "${{ matrix.coverage }}" = "true" ]; then
+            uv run pytest -c pytest.ini tests --ignore=tests/integration -m "not integration" -v --cov=AutoGLM_GUI --cov-report=xml:coverage.xml --cov-report=term-missing:skip-covered
+          else
+            uv run pytest -c pytest.ini tests --ignore=tests/integration -m "not integration" -v
+          fi
+
+      - name: Upload Python coverage
+        if: ${{ matrix.coverage && env.CODECOV_TOKEN != '' }}
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ env.CODECOV_TOKEN }}
+          files: coverage.xml
+          flags: backend
+          name: backend-py311-unit-contract
+          fail_ci_if_error: true
+          verbose: true
+
+  python-integration:
+    name: Python integration
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python & uv
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: "3.11"
+          frozen: "true"
+
+      - name: Run integration test package
+        run: uv run pytest -c pytest.ini tests/integration --ignore=tests/integration/test_docker_e2e.py -v
+
+      - name: Run integration-marked root tests
+        run: uv run pytest -c pytest.ini tests --ignore=tests/integration -m integration -v
+
+  frontend-e2e:
+    name: Frontend E2E (Windows)
+    runs-on: windows-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python & uv
+        uses: ./.github/actions/setup-python
+        with:
+          frozen: "true"
+
+      - name: Setup Node.js & pnpm
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: "24"
+
+      - name: Install Playwright Chromium
+        shell: bash
+        run: pnpm exec playwright install chromium
+        working-directory: frontend
+
+      - name: Run frontend E2E tests
+        shell: bash
+        run: pnpm test:e2e
+        working-directory: frontend
+
+  docker-e2e:
+    name: Docker E2E
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python & uv
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: "3.11"
+          frozen: "true"
+
+      - name: Run Docker E2E tests
+        run: uv run pytest -c pytest.ini tests/integration/test_docker_e2e.py -v -s
