@@ -139,14 +139,16 @@ class TestTraceReplayE2E:
 
         replay_records = _wait_for_jsonl(
             replay_file,
-            lambda records: {
-                "autoglm.task.start",
-                "autoglm.step",
-                "autoglm.task.done",
-                "autoglm.trace.summary",
-                "autoglm.task.status",
-            }
-            <= {record.get("event_name") for record in records},
+            lambda records: (
+                {
+                    "autoglm.task.start",
+                    "autoglm.step",
+                    "autoglm.task.done",
+                    "autoglm.trace.summary",
+                    "autoglm.task.status",
+                }
+                <= {record.get("event_name") for record in records}
+            ),
         )
         assert [record["event_seq"] for record in replay_records] == sorted(
             record["event_seq"] for record in replay_records

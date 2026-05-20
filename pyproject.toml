@@ -3,7 +3,7 @@ name = "autoglm-gui"
 version = "1.5.16"
 description = "Web GUI for AutoGLM Phone Agent - AI-powered Android automation"
 readme = "README.md"
-requires-python = ">=3.14.5"
+requires-python = ">=3.11"
 license = "Apache-2.0"
 authors = [{ name = "suyiiyii" }]
 keywords = ["autoglm", "phone-agent", "android", "automation", "ai", "gui"]

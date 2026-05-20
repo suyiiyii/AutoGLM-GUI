@@ -392,21 +392,27 @@ class ElectronBuilder:
             ("Python 依赖", lambda: self.sync_python_deps()),
             (
                 "前端构建",
-                lambda: self.build_frontend()
-                if not self.args.skip_frontend
-                else (print_warning("跳过前端构建"), True)[1],
+                lambda: (
+                    self.build_frontend()
+                    if not self.args.skip_frontend
+                    else (print_warning("跳过前端构建"), True)[1]
+                ),
             ),
             (
                 "ADB 工具",
-                lambda: self.download_adb()
-                if not self.args.skip_adb
-                else (print_warning("跳过 ADB 下载"), True)[1],
+                lambda: (
+                    self.download_adb()
+                    if not self.args.skip_adb
+                    else (print_warning("跳过 ADB 下载"), True)[1]
+                ),
             ),
             (
                 "后端打包",
-                lambda: self.build_backend()
-                if not self.args.skip_backend
-                else (print_warning("跳过后端打包"), True)[1],
+                lambda: (
+                    self.build_backend()
+                    if not self.args.skip_backend
+                    else (print_warning("跳过后端打包"), True)[1]
+                ),
             ),
             ("Electron", lambda: self.build_electron()),
         ]
