@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
 import json
 import threading
 from collections.abc import AsyncIterator
@@ -462,6 +463,9 @@ class LayeredTaskRun:
             except StopAsyncIteration:
                 return None
 
+        next_task: asyncio.Task[Any] | None = None
+        cancel_task: asyncio.Task[None] | None = None
+
         try:
             with trace_span(
                 "layered.planner.stream",
@@ -668,6 +672,11 @@ class LayeredTaskRun:
                     "payload": {"message": str(exc)},
                 }
         finally:
+            for task in (next_task, cancel_task):
+                if task is not None and not task.done():
+                    task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await task
             with _active_runs_lock:
                 _active_runs.pop(self.task_id, None)
             self.finished = True
