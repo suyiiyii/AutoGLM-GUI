@@ -1,15 +1,12 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import * as React from 'react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 import {
   connectWifi,
   disconnectWifi,
-  listDevices,
   getConfig,
   saveConfig,
   modelServiceConnection,
   getErrorMessage,
-  type Device,
   type ConfigSaveRequest,
 } from '../api';
 import { DeviceSidebar } from '../components/DeviceSidebar';
@@ -51,7 +48,7 @@ import {
   Loader2,
 } from 'lucide-react';
 import { useTranslation } from '../lib/i18n-context';
-import { usePageVisibility } from '../hooks/usePageVisibility';
+import { useDevices } from '../lib/device-context';
 
 // 视觉模型预设配置
 const VISION_PRESETS = [
@@ -180,50 +177,6 @@ type ChatSearchParams = {
   mode?: 'classic' | 'chatkit';
 };
 
-function areAgentStatesEqual(
-  left: Device['agent'] | null,
-  right: Device['agent'] | null
-): boolean {
-  if (left === right) {
-    return true;
-  }
-
-  if (!left || !right) {
-    return false;
-  }
-
-  return (
-    left.state === right.state &&
-    left.created_at === right.created_at &&
-    left.last_used === right.last_used &&
-    left.error_message === right.error_message &&
-    left.model_name === right.model_name
-  );
-}
-
-function areDevicesEqual(previous: Device[], next: Device[]): boolean {
-  if (previous.length !== next.length) {
-    return false;
-  }
-
-  return previous.every((device, index) => {
-    const nextDevice = next[index];
-
-    return (
-      device.id === nextDevice.id &&
-      device.serial === nextDevice.serial &&
-      device.model === nextDevice.model &&
-      device.status === nextDevice.status &&
-      device.connection_type === nextDevice.connection_type &&
-      device.state === nextDevice.state &&
-      device.is_available_only === nextDevice.is_available_only &&
-      device.display_name === nextDevice.display_name &&
-      device.group_id === nextDevice.group_id &&
-      areAgentStatesEqual(device.agent, nextDevice.agent)
-    );
-  });
-}
-
 export const Route = createFileRoute('/chat')({
   component: ChatComponent,
   validateSearch: (search: Record<string, unknown>): ChatSearchParams => {
@@ -239,17 +192,21 @@ function ChatComponent() {
   const t = useTranslation();
   const searchParams = Route.useSearch();
   const navigate = useNavigate();
-  const isPageVisible = usePageVisibility();
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [currentDeviceId, setCurrentDeviceId] = useState<string>('');
+  const {
+    devices,
+    currentDevice,
+    currentDeviceId,
+    refreshDevices,
+    selectDeviceById,
+    selectDeviceBySerial,
+    selectedSerial,
+  } = useDevices();
   // Chat mode: 'classic' for DevicePanel (single model), 'chatkit' for ChatKitPanel (layered agent)
   // Initialize from URL search params if available
   const [chatMode, setChatMode] = useState<'classic' | 'chatkit'>(
     searchParams.mode || 'classic'
   );
 
-  // Track if we've done initial device selection from URL
-  const [initialDeviceSet, setInitialDeviceSet] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     type: ToastType;
@@ -275,7 +232,6 @@ function ChatComponent() {
     success: boolean;
     message: string;
   } | null>(null);
-  const isLoadingDevicesRef = React.useRef(false);
   const [tempConfig, setTempConfig] = useState({
     base_url: VISION_PRESETS[0].config.base_url as string,
     model_name: VISION_PRESETS[0].config.model_name as string,
@@ -340,118 +296,15 @@ function ChatComponent() {
     loadConfiguration();
   }, []);
 
-  const loadDevices = useCallback(async () => {
-    if (isLoadingDevicesRef.current) {
-      return;
-    }
-
-    isLoadingDevicesRef.current = true;
-    try {
-      const response = await listDevices();
-
-      // Filter out disconnected devices
-      const connectedDevices = response.devices.filter(
-        device => device.state !== 'disconnected'
-      );
-
-      const deviceMap = new Map<string, Device>();
-      const serialMap = new Map<string, Device[]>();
-
-      for (const device of connectedDevices) {
-        if (device.serial) {
-          const group = serialMap.get(device.serial) || [];
-          group.push(device);
-          serialMap.set(device.serial, group);
-        } else {
-          deviceMap.set(device.id, device);
-        }
-      }
-
-      Array.from(serialMap.values()).forEach(devices => {
-        const wifiDevice = devices.find(
-          (d: Device) => d.connection_type === 'wifi'
-        );
-        const selectedDevice = wifiDevice || devices[0];
-        deviceMap.set(selectedDevice.id, selectedDevice);
-      });
-
-      const filteredDevices = Array.from(deviceMap.values());
-      setDevices(previousDevices =>
-        areDevicesEqual(previousDevices, filteredDevices)
-          ? previousDevices
-          : filteredDevices
-      );
-
-      // On initial load, try to select device from URL serial param
-      if (filteredDevices.length > 0 && !initialDeviceSet) {
-        const urlSerial = searchParams.serial;
-        if (urlSerial) {
-          const deviceFromUrl = filteredDevices.find(
-            d => d.serial === urlSerial
-          );
-          if (deviceFromUrl) {
-            setCurrentDeviceId(deviceFromUrl.id);
-          } else {
-            // URL serial not found, fallback to first device
-            setCurrentDeviceId(filteredDevices[0].id);
-          }
-        } else if (!currentDeviceId) {
-          setCurrentDeviceId(filteredDevices[0].id);
-        }
-        setInitialDeviceSet(true);
-      }
-
-      if (
-        currentDeviceId &&
-        !filteredDevices.find(d => d.id === currentDeviceId)
-      ) {
-        setCurrentDeviceId(filteredDevices[0]?.id || '');
-      }
-    } catch (error) {
-      console.error('Failed to load devices:', error);
-    } finally {
-      isLoadingDevicesRef.current = false;
-    }
-  }, [currentDeviceId, initialDeviceSet, searchParams.serial]);
-
   useEffect(() => {
-    if (!isPageVisible) {
-      return;
+    if (searchParams.serial) {
+      selectDeviceBySerial(searchParams.serial);
     }
-
-    let isCancelled = false;
-    let timeoutId: number | null = null;
-
-    const pollDevices = async () => {
-      await loadDevices();
-
-      if (isCancelled) {
-        return;
-      }
-
-      timeoutId = window.setTimeout(() => {
-        void pollDevices();
-      }, 3000);
-    };
-
-    void pollDevices();
-
-    return () => {
-      isCancelled = true;
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
-      }
-    };
-  }, [isPageVisible, loadDevices]);
+  }, [searchParams.serial, selectDeviceBySerial]);
 
   // Sync state changes to URL search params
   useEffect(() => {
-    // Get current device's serial
-    const currentDevice = devices.find(d => d.id === currentDeviceId);
-    const currentSerial = currentDevice?.serial;
-
-    // Only update URL after initial device selection is done
-    if (!initialDeviceSet) return;
+    const currentSerial = currentDevice?.serial || selectedSerial || undefined;
 
     // Check if URL needs updating
     const needsUpdate =
@@ -468,13 +321,12 @@ function ChatComponent() {
       });
     }
   }, [
-    currentDeviceId,
     chatMode,
-    devices,
-    initialDeviceSet,
+    currentDevice,
     navigate,
     searchParams.serial,
     searchParams.mode,
+    selectedSerial,
   ]);
 
   const handleSaveConfig = async () => {
@@ -576,7 +428,7 @@ function ChatComponent() {
     try {
       const res = await connectWifi({ device_id: deviceId });
       if (res.success && res.device_id) {
-        setCurrentDeviceId(res.device_id);
+        await refreshDevices();
         showToast(t.toasts.wifiConnected, 'success');
       } else if (!res.success) {
         showToast(
@@ -594,6 +446,7 @@ function ChatComponent() {
     try {
       const res = await disconnectWifi(deviceId);
       if (res.success) {
+        await refreshDevices();
         showToast(t.toasts.wifiDisconnected, 'success');
       } else {
         showToast(
@@ -1259,12 +1112,12 @@ function ChatComponent() {
       <DeviceSidebar
         devices={devices}
         currentDeviceId={currentDeviceId}
-        onSelectDevice={setCurrentDeviceId}
+        onSelectDevice={selectDeviceById}
         onOpenConfig={() => setShowConfig(true)}
         onOpenGroupManager={() => setShowGroupManager(true)}
         onConnectWifi={handleConnectWifi}
         onDisconnectWifi={handleDisconnectWifi}
-        onRefreshDevices={loadDevices}
+        onRefreshDevices={refreshDevices}
         showToast={showToast}
       />
 
@@ -1331,7 +1184,7 @@ function ChatComponent() {
 
         {/* Content area */}
         <div className="flex-1 flex items-stretch justify-center min-h-0 px-4 py-4 pt-16">
-          {devices.length === 0 ? (
+          {!currentDevice ? (
             <div className="flex-1 flex items-center justify-center bg-slate-50 dark:bg-slate-950">
               <div className="text-center">
                 <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mx-auto mb-4">
@@ -1358,43 +1211,35 @@ function ChatComponent() {
               </div>
             </div>
           ) : (
-            devices
-              .filter(device => device.id === currentDeviceId)
-              .map(device => (
-                <div
-                  key={device.serial}
-                  className="w-full max-w-7xl flex items-stretch justify-center min-h-0"
-                >
-                  {chatMode === 'chatkit' ? (
-                    <div className="w-full flex items-stretch justify-center">
-                      <ChatKitPanel
-                        deviceId={device.id}
-                        deviceSerial={device.serial}
-                        deviceName={device.model}
-                        deviceConnectionType={device.connection_type}
-                        isVisible={device.id === currentDeviceId}
-                        unlimitedStepsEnabled={
-                          config?.default_max_steps === null
-                        }
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-full flex items-stretch justify-center">
-                      <DevicePanel
-                        deviceId={device.id}
-                        deviceSerial={device.serial}
-                        deviceName={device.model}
-                        deviceConnectionType={device.connection_type}
-                        isConfigured={!!config?.base_url}
-                        isVisible={device.id === currentDeviceId} // ✅ 新增：传递可见性状态
-                        unlimitedStepsEnabled={
-                          config?.default_max_steps === null
-                        }
-                      />
-                    </div>
-                  )}
+            <div
+              key={currentDevice.serial}
+              className="w-full max-w-7xl flex items-stretch justify-center min-h-0"
+            >
+              {chatMode === 'chatkit' ? (
+                <div className="w-full flex items-stretch justify-center">
+                  <ChatKitPanel
+                    deviceId={currentDevice.id}
+                    deviceSerial={currentDevice.serial}
+                    deviceName={currentDevice.model}
+                    deviceConnectionType={currentDevice.connection_type}
+                    isVisible={currentDevice.id === currentDeviceId}
+                    unlimitedStepsEnabled={config?.default_max_steps === null}
+                  />
                 </div>
-              ))
+              ) : (
+                <div className="w-full flex items-stretch justify-center">
+                  <DevicePanel
+                    deviceId={currentDevice.id}
+                    deviceSerial={currentDevice.serial}
+                    deviceName={currentDevice.model}
+                    deviceConnectionType={currentDevice.connection_type}
+                    isConfigured={!!config?.base_url}
+                    isVisible={currentDevice.id === currentDeviceId}
+                    unlimitedStepsEnabled={config?.default_max_steps === null}
+                  />
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -1403,7 +1248,7 @@ function ChatComponent() {
       <GroupManageDialog
         isOpen={showGroupManager}
         onClose={() => setShowGroupManager(false)}
-        onGroupsChanged={loadDevices}
+        onGroupsChanged={refreshDevices}
         showToast={showToast}
       />
     </div>
