@@ -340,6 +340,8 @@ def _normalize_step_payload(
         "finished": _json_safe_value(payload.get("finished")),
         "message": _json_safe_value(payload.get("message")),
     }
+    if isinstance(payload.get("error_details"), dict):
+        result["error_details"] = _json_safe_value(payload.get("error_details"))
     return {
         "index": step_index,
         "agent_type": _json_safe_value(payload.get("agent_type")),

@@ -15,8 +15,10 @@ from agents import Agent, Runner, SQLiteSession, function_tool
 from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 from openai import AsyncOpenAI
 
+from AutoGLM_GUI.config import ModelConfig
 from AutoGLM_GUI.config_manager import config_manager
 from AutoGLM_GUI.logger import logger
+from AutoGLM_GUI.model.error_details import serialize_model_error, trace_error_attrs
 from AutoGLM_GUI.trace import TraceSpan, summarize_text, trace_span
 
 if TYPE_CHECKING:
@@ -202,6 +204,16 @@ def _setup_openai_client() -> AsyncOpenAI:
     return AsyncOpenAI(
         base_url=decision_base_url,
         api_key=decision_api_key or "EMPTY",
+    )
+
+
+def _planner_model_config() -> ModelConfig:
+    config_manager.load_file_config()
+    effective_config = config_manager.get_effective_config()
+    return ModelConfig(
+        base_url=effective_config.decision_base_url or "",
+        api_key=effective_config.decision_api_key or "EMPTY",
+        model_name=effective_config.decision_model_name or "",
     )
 
 
@@ -659,8 +671,8 @@ class LayeredTaskRun:
             self.cancelled = True
             raise
         except Exception as exc:
-            close_model_span()
             if self.cancelled:
+                close_model_span()
                 self.final_output = "Task cancelled by user"
                 self.success = False
                 yield {
@@ -668,12 +680,24 @@ class LayeredTaskRun:
                     "payload": {"message": self.final_output},
                 }
             else:
+                error_details = serialize_model_error(
+                    exc,
+                    model_config=_planner_model_config(),
+                    call_site="AutoGLM_GUI.layered_agent_service.LayeredTaskRun.stream_events",
+                    include_traceback=True,
+                )
+                if model_span is not None:
+                    model_span.set_attributes(trace_error_attrs(error_details))
+                close_model_span()
                 logger.exception(f"[LayeredAgent] Error: {exc}")
                 self.final_output = str(exc)
                 self.success = False
                 yield {
                     "type": "error",
-                    "payload": {"message": str(exc)},
+                    "payload": {
+                        "message": str(exc),
+                        "error_details": error_details,
+                    },
                 }
         finally:
             for task in (next_task, cancel_task):

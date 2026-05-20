@@ -14,6 +14,7 @@ import {
 } from 'lucide-react';
 import { DeviceMonitor } from './DeviceMonitor';
 import type {
+  ModelErrorDetails,
   StepTimingSummary,
   TaskImageAttachment,
   Workflow,
@@ -142,7 +143,7 @@ function getTimingChips(
 
   const chips = [
     { label: 'Total', value: formatDuration(timings.total_duration_ms) },
-    { label: 'Model', value: formatDuration(timings.llm_duration_ms) },
+    { label: 'LLM', value: formatDuration(timings.llm_duration_ms) },
   ];
 
   if (timings.screenshot_duration_ms > 0) {
@@ -174,6 +175,35 @@ function getTimingChips(
   }
 
   return chips;
+}
+
+function formatModelErrorDetails(details: ModelErrorDetails): string {
+  const ordered: Record<string, unknown> = {};
+  [
+    'kind',
+    'exception_type',
+    'message',
+    'status_code',
+    'request_id',
+    'model_name',
+    'base_url',
+    'call_site',
+    'response_headers',
+    'response_body',
+    'traceback',
+  ].forEach(key => {
+    if (details[key] !== undefined && details[key] !== null) {
+      ordered[key] = details[key];
+    }
+  });
+
+  Object.entries(details).forEach(([key, value]) => {
+    if (!(key in ordered) && value !== undefined && value !== null) {
+      ordered[key] = value;
+    }
+  });
+
+  return JSON.stringify(ordered, null, 2);
 }
 
 export function DevicePanel({
@@ -999,6 +1029,18 @@ export function DevicePanel({
                                 <p className="text-xs mt-2 opacity-60 text-slate-500 dark:text-slate-400">
                                   {message.steps} steps completed
                                 </p>
+                              )}
+                              {message.errorDetails && (
+                                <details className="mt-3 text-xs">
+                                  <summary className="cursor-pointer font-medium text-red-700 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200 transition-colors">
+                                    Model error details
+                                  </summary>
+                                  <pre className="mt-2 max-h-80 overflow-auto rounded-lg border border-red-200 bg-white/80 p-3 text-left font-mono text-[11px] leading-relaxed text-slate-800 dark:border-red-900/60 dark:bg-slate-950/70 dark:text-slate-200">
+                                    {formatModelErrorDetails(
+                                      message.errorDetails
+                                    )}
+                                  </pre>
+                                </details>
                               )}
                             </div>
                           </div>

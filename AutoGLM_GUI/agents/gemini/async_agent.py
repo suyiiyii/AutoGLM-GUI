@@ -14,6 +14,11 @@ from AutoGLM_GUI.actions import ActionResult
 from AutoGLM_GUI.agents.base import AsyncAgentBase
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.model import MessageBuilder
+from AutoGLM_GUI.model.error_details import (
+    model_error_message,
+    serialize_model_error,
+    trace_error_attrs,
+)
 from AutoGLM_GUI.trace import summarize_text, trace_span
 
 from .action_mapper import InvalidToolCallError, tool_call_to_action
@@ -124,25 +129,45 @@ class AsyncGeminiAgent(AsyncAgentBase):
                     "message_count": len(self._context),
                 },
             ) as span:
-                (
-                    thinking,
-                    reasoning_content,
-                    tool_name,
-                    tool_args,
-                ) = await self._call_llm_with_tools()
-                span.set_attributes(
-                    {
-                        "thinking_chars": len(thinking),
-                        "reasoning_content_present": bool(reasoning_content),
-                    }
-                )
+                try:
+                    (
+                        thinking,
+                        reasoning_content,
+                        tool_name,
+                        tool_args,
+                    ) = await self._call_llm_with_tools()
+                    span.set_attributes(
+                        {
+                            "thinking_chars": len(thinking),
+                            "reasoning_content_present": bool(reasoning_content),
+                        }
+                    )
+                except Exception as exc:
+                    error_details = serialize_model_error(
+                        exc,
+                        model_config=self.model_config,
+                        call_site="AutoGLM_GUI.agents.gemini.async_agent.AsyncGeminiAgent._call_llm_with_tools",
+                        include_traceback=self.agent_config.verbose,
+                    )
+                    span.set_attributes(trace_error_attrs(error_details))
+                    raise
         except asyncio.CancelledError:
             raise
         except Exception as e:
             logger.error(f"LLM error: {e}")
             if self.agent_config.verbose:
                 logger.debug(traceback.format_exc())
-            yield {"type": "error", "data": {"message": f"Model error: {e}"}}
+            error_details = serialize_model_error(
+                e,
+                model_config=self.model_config,
+                call_site="AutoGLM_GUI.agents.gemini.async_agent.AsyncGeminiAgent._call_llm_with_tools",
+                include_traceback=self.agent_config.verbose,
+            )
+            message = model_error_message(e)
+            yield {
+                "type": "error",
+                "data": {"message": message, "error_details": error_details},
+            }
             yield {
                 "type": "step",
                 "data": {
@@ -151,7 +176,8 @@ class AsyncGeminiAgent(AsyncAgentBase):
                     "action": None,
                     "success": False,
                     "finished": True,
-                    "message": f"Model error: {e}",
+                    "message": message,
+                    "error_details": error_details,
                 },
             }
             return

@@ -7,6 +7,7 @@ import {
   type SetStateAction,
 } from 'react';
 import type {
+  ModelErrorDetails,
   StepTimingSummary,
   TaskEventRecordResponse,
   TaskImageAttachment,
@@ -34,6 +35,7 @@ export interface TaskConversationMessage {
   actions?: Record<string, unknown>[];
   screenshots?: (string | undefined)[];
   stepTimings?: (StepTimingSummary | undefined)[];
+  errorDetails?: ModelErrorDetails;
   isStreaming?: boolean;
   currentThinking?: string;
   attachments?: TaskImageAttachment[];
@@ -131,6 +133,7 @@ function buildAssistantMessage(
   const actions: Record<string, unknown>[] = [];
   const screenshots: (string | undefined)[] = [];
   const stepTimings: (StepTimingSummary | undefined)[] = [];
+  let errorDetails: ModelErrorDetails | undefined;
   let currentThinking = '';
   let content = task.final_message || task.error_message || '';
   let steps = task.step_count;
@@ -168,6 +171,12 @@ function buildAssistantMessage(
         stepTimings.push(
           (payload.timings as StepTimingSummary | undefined) || undefined
         );
+        if (
+          payload.error_details &&
+          typeof payload.error_details === 'object'
+        ) {
+          errorDetails = payload.error_details as ModelErrorDetails;
+        }
         currentThinking = '';
         if (typeof payload.step === 'number') {
           steps = payload.step;
@@ -188,6 +197,12 @@ function buildAssistantMessage(
       case 'error': {
         if (typeof payload.message === 'string') {
           content = payload.message;
+        }
+        if (
+          payload.error_details &&
+          typeof payload.error_details === 'object'
+        ) {
+          errorDetails = payload.error_details as ModelErrorDetails;
         }
         success = false;
         currentThinking = '';
@@ -213,6 +228,7 @@ function buildAssistantMessage(
     actions,
     screenshots,
     stepTimings,
+    errorDetails,
     steps,
     success,
     isStreaming: isTaskActive(task.status),

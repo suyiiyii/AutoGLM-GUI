@@ -108,6 +108,21 @@ export interface StepTimingSummary {
   other_duration_ms: number;
 }
 
+export interface ModelErrorDetails {
+  kind?: string;
+  exception_type?: string;
+  message?: string;
+  model_name?: string;
+  base_url?: string;
+  call_site?: string;
+  status_code?: number;
+  request_id?: string;
+  response_headers?: Record<string, string>;
+  response_body?: string;
+  traceback?: string;
+  [key: string]: unknown;
+}
+
 export interface TraceTimingSummary {
   trace_id: string;
   steps: number;
@@ -133,6 +148,7 @@ export interface StepEvent {
   finished: boolean;
   screenshot?: string;
   timings?: StepTimingSummary;
+  error_details?: ModelErrorDetails;
 }
 
 export interface DoneEvent {
@@ -147,6 +163,7 @@ export interface ErrorEvent {
   type: 'error';
   role: 'assistant';
   message: string;
+  error_details?: ModelErrorDetails;
 }
 
 export interface CancelledEvent {

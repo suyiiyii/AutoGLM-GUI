@@ -13,6 +13,11 @@ from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.device_protocol import DeviceProtocol
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.model import MessageBuilder
+from AutoGLM_GUI.model.error_details import (
+    model_error_message,
+    serialize_model_error,
+    trace_error_attrs,
+)
 from AutoGLM_GUI.prompt_config import get_messages, get_system_prompt
 from AutoGLM_GUI.trace import trace_span
 
@@ -171,22 +176,34 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
                     "model_name": self.model_config.model_name,
                     "message_count": len(self._context),
                 },
-            ):
-                async for chunk_data in self._stream_openai(self._context):
-                    if self._cancel_event.is_set():
-                        raise asyncio.CancelledError()
+            ) as span:
+                try:
+                    async for chunk_data in self._stream_openai(self._context):
+                        if self._cancel_event.is_set():
+                            raise asyncio.CancelledError()
 
-                    if chunk_data["type"] == "thinking":
-                        thinking_parts.append(chunk_data["content"])
-                        yield {
-                            "type": "thinking",
-                            "data": {"chunk": chunk_data["content"]},
-                        }
-                        if self.agent_config.verbose:
-                            logger.debug(chunk_data["content"])
+                        if chunk_data["type"] == "thinking":
+                            thinking_parts.append(chunk_data["content"])
+                            yield {
+                                "type": "thinking",
+                                "data": {"chunk": chunk_data["content"]},
+                            }
+                            if self.agent_config.verbose:
+                                logger.debug(chunk_data["content"])
 
-                    elif chunk_data["type"] == "raw":
-                        raw_content += chunk_data["content"]
+                        elif chunk_data["type"] == "raw":
+                            raw_content += chunk_data["content"]
+                except Exception as exc:
+                    if isinstance(exc, asyncio.CancelledError):
+                        raise
+                    error_details = serialize_model_error(
+                        exc,
+                        model_config=self.model_config,
+                        call_site="AutoGLM_GUI.agents.glm.async_agent.AsyncGLMAgent._stream_openai",
+                        include_traceback=self.agent_config.verbose,
+                    )
+                    span.set_attributes(trace_error_attrs(error_details))
+                    raise
 
             thinking = "".join(thinking_parts)
 
@@ -198,7 +215,17 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
             logger.error(f"LLM error: {e}")
             if self.agent_config.verbose:
                 logger.debug(traceback.format_exc())
-            yield {"type": "error", "data": {"message": f"Model error: {e}"}}
+            error_details = serialize_model_error(
+                e,
+                model_config=self.model_config,
+                call_site="AutoGLM_GUI.agents.glm.async_agent.AsyncGLMAgent._stream_openai",
+                include_traceback=self.agent_config.verbose,
+            )
+            message = model_error_message(e)
+            yield {
+                "type": "error",
+                "data": {"message": message, "error_details": error_details},
+            }
             yield {
                 "type": "step",
                 "data": {
@@ -207,7 +234,8 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
                     "action": None,
                     "success": False,
                     "finished": True,
-                    "message": f"Model error: {e}",
+                    "message": message,
+                    "error_details": error_details,
                 },
             }
             return
