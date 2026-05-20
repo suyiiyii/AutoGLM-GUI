@@ -479,8 +479,7 @@ class LayeredTaskRun:
                     cancel_task = asyncio.create_task(self._cancel_event.wait())
 
                     done, pending = await asyncio.wait(
-                        [next_task, cancel_task],
-                        return_when=asyncio.FIRST_COMPLETED
+                        [next_task, cancel_task], return_when=asyncio.FIRST_COMPLETED
                     )
 
                     if cancel_task in done:
@@ -815,12 +814,12 @@ async def cancel_task(task_id: str) -> bool:
         result = _active_runs.get(task_id)
     if result is None:
         return False
-    
+
     if hasattr(result, "cancel"):
         if asyncio.iscoroutinefunction(result.cancel):
             await result.cancel()
         else:
             result.cancel(mode="immediate")
-            
+
     logger.info(f"[LayeredAgent] Aborted task: {task_id}")
     return True
