@@ -7,6 +7,8 @@ on:
 
 jobs:
   review:
+    # Forked pull_request runs are read-only and cannot access OIDC/secrets.
+    if: github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-latest
     permissions:
       contents: read
