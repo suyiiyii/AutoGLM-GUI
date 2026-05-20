@@ -195,6 +195,7 @@ def test_layered_task_trace_observability_covers_debug_surface(
         task_id: str,
         session_id: str,
         message: str,
+        device_id: str | None = None,
     ) -> layered_service.LayeredTaskRun:
         assert message == "打开微信，搜索张三，发送你好"
         with trace_span(
@@ -202,6 +203,7 @@ def test_layered_task_trace_observability_covers_debug_surface(
             attrs={
                 "task_id": task_id,
                 "session_id": session_id,
+                "device_id": device_id,
                 "max_turns": 100000,
             },
         ):
@@ -209,6 +211,7 @@ def test_layered_task_trace_observability_covers_debug_surface(
                 task_id=task_id,
                 session_id=session_id,
                 result=_FakePlannerStreamingResult("adb-debug-device"),
+                device_id=device_id,
             )
 
     monkeypatch.setattr(layered_service, "start_run", fake_start_run)
