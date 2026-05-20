@@ -235,7 +235,7 @@ export const Route = createFileRoute('/chat')({
   },
 });
 
-function ChatComponent() {
+export function ChatComponent() {
   const t = useTranslation();
   const searchParams = Route.useSearch();
   const navigate = useNavigate();

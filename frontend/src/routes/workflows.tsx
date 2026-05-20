@@ -168,7 +168,7 @@ const buildWorkflowTextFromSteps = (
     .join('\n\n');
 };
 
-function WorkflowsComponent() {
+export function WorkflowsComponent() {
   const t = useTranslation();
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -179,11 +179,6 @@ function WorkflowsComponent() {
     steps: [createStep()],
   });
   const [saving, setSaving] = useState(false);
-
-  // Load workflows on mount
-  useEffect(() => {
-    loadWorkflows();
-  }, []);
 
   const loadWorkflows = async () => {
     try {
@@ -196,6 +191,13 @@ function WorkflowsComponent() {
       setLoading(false);
     }
   };
+
+  // Load workflows on mount
+  useEffect(() => {
+    queueMicrotask(() => {
+      loadWorkflows();
+    });
+  }, []);
 
   const handleCreate = () => {
     setEditingWorkflow(null);

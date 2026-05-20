@@ -35,7 +35,7 @@ function buildTerminalWebSocketUrl(
   return `${protocol}//${window.location.host}/api/terminal/sessions/${sessionId}/stream?${query}`;
 }
 
-function TerminalRouteComponent() {
+export function TerminalRouteComponent() {
   const t = useTranslation();
   const terminalContainerRef = useRef<HTMLDivElement | null>(null);
   const terminalRef = useRef<XTerm | null>(null);
@@ -339,8 +339,10 @@ function TerminalRouteComponent() {
       return undefined;
     }
 
-    void createSession();
-    void loadDevices();
+    queueMicrotask(() => {
+      void createSession();
+      void loadDevices();
+    });
 
     return () => {
       void closeCurrentSession(false);

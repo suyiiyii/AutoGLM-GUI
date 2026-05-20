@@ -81,7 +81,7 @@ const cronPresets = [
   { key: 'weeklyMonday', cron: '0 9 * * 1' },
 ] as const;
 
-function ScheduledTasksComponent() {
+export function ScheduledTasksComponent() {
   const t = useTranslation();
   const [tasks, setTasks] = useState<ScheduledTaskResponse[]>([]);
   const [workflows, setWorkflows] = useState<Workflow[]>([]);
@@ -107,11 +107,6 @@ function ScheduledTasksComponent() {
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [taskToDelete, setTaskToDelete] = useState<string | null>(null);
 
-  // Load data on mount
-  useEffect(() => {
-    loadData();
-  }, []);
-
   const loadData = async () => {
     try {
       setLoading(true);
@@ -132,6 +127,13 @@ function ScheduledTasksComponent() {
       setLoading(false);
     }
   };
+
+  // Load data on mount
+  useEffect(() => {
+    queueMicrotask(() => {
+      loadData();
+    });
+  }, []);
 
   const handleCreate = () => {
     setEditingTask(null);

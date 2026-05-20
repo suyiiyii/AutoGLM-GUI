@@ -96,6 +96,13 @@ export default [
       'react/jsx-no-duplicate-props': 'error',
       'react-hooks/rules-of-hooks': 'error', // Enforce rules of hooks
       'react-hooks/purity': 'off', // Allow Date.now() in event handlers
+      'react-refresh/only-export-components': [
+        'error',
+        {
+          allowConstantExport: true,
+          allowExportNames: ['Route'],
+        },
+      ],
 
       // General rules
       'no-console': 'off', // Allow console logs for debugging in this component

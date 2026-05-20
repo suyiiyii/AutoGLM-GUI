@@ -53,7 +53,7 @@ export const Route = createFileRoute('/history')({
   component: HistoryComponent,
 });
 
-function HistoryComponent() {
+export function HistoryComponent() {
   const t = useTranslation();
   const [devices, setDevices] = useState<Device[]>([]);
   const [selectedSerial, setSelectedSerial] = useState<string>('');
@@ -123,7 +123,9 @@ function HistoryComponent() {
 
   useEffect(() => {
     if (selectedSerial) {
-      loadHistory(selectedSerial, true);
+      queueMicrotask(() => {
+        loadHistory(selectedSerial, true);
+      });
     }
   }, [selectedSerial]); // eslint-disable-line react-hooks/exhaustive-deps
 

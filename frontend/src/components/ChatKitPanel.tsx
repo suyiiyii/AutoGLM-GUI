@@ -319,9 +319,6 @@ export function ChatKitPanel({
         viewport.scrollTop = viewport.scrollHeight;
       }
     }
-    if (messages.length === 0) {
-      setShowScrollToBottom(false);
-    }
   }, [messages]);
 
   React.useEffect(() => {

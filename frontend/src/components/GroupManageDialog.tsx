@@ -82,7 +82,9 @@ export function GroupManageDialog({
 
   useEffect(() => {
     if (isOpen) {
-      fetchGroups();
+      queueMicrotask(() => {
+        fetchGroups();
+      });
     }
   }, [isOpen, fetchGroups]);
 
