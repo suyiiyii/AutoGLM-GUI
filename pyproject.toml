@@ -3,7 +3,7 @@ name = "autoglm-gui"
 version = "1.5.16"
 description = "Web GUI for AutoGLM Phone Agent - AI-powered Android automation"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.14.5"
 license = "Apache-2.0"
 authors = [{ name = "suyiiyii" }]
 keywords = ["autoglm", "phone-agent", "android", "automation", "ai", "gui"]
@@ -22,25 +22,25 @@ classifiers = [
     "Topic :: Software Development :: Libraries :: Python Modules",
 ]
 dependencies = [
-    "apscheduler>=3.10.0,<4.0.0",  # Scheduled task scheduler
-    "fastapi>=0.124.0",
-    "fastmcp>=2.0.0",
+    "apscheduler>=3.11.2,<4.0.0",  # Scheduled task scheduler
+    "fastapi>=0.136.1",
+    "fastmcp>=2.14.7",
     "httpx[socks]>=0.28.1",
-    "jinja2>=3.1.0",  # Required by MAI agent for prompt templating
+    "jinja2>=3.1.6",  # Required by MAI agent for prompt templating
     "loguru>=0.7.3",
-    "numpy>=1.24.0",  # Required by MAI agent
-    "openai>=2.9.0",
-    "openai-agents>=0.6.4",
-    "pillow>=11.3.0",
-    "prometheus-client>=0.21.0",
-    "python-socketio>=5.11.0",
+    "numpy>=1.26.4",  # Required by MAI agent
+    "openai>=2.37.0",
+    "openai-agents>=0.17.3",
+    "pillow>=12.2.0",
+    "prometheus-client>=0.25.0",
+    "python-socketio>=5.16.1",
     "pyyaml>=6.0.3",
-    "uvicorn[standard]>=0.38.0",
-    "zeroconf>=0.148.0",
+    "uvicorn[standard]>=0.47.0",
+    "zeroconf>=0.149.12",
 ]
 
 [project.optional-dependencies]
-droidrun = ["droidrun>=0.4.0"]
+droidrun = ["droidrun>=0.5.9"]
 
 [project.urls]
 Homepage = "https://github.com/suyiiyii/AutoGLM-GUI"
@@ -68,9 +68,9 @@ allow-direct-references = true
 
 [dependency-groups]
 dev = [
-    "pyinstaller>=6.17.0",
-    "pyright>=1.1.407",
-    "pytest>=9.0.2",
+    "pyinstaller>=6.20.0",
+    "pyright>=1.1.409",
+    "pytest>=9.0.3",
     "pytest-cov>=7.1.0",
-    "ruff>=0.14.9",
+    "ruff>=0.15.13",
 ]
