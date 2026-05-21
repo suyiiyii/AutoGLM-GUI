@@ -60,9 +60,13 @@ jobs:
           verbose: true
 
   python-integration:
-    name: Python integration
+    name: Python integration (py${{ matrix.python-version }})
     runs-on: ubuntu-latest
     timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.11", "3.12", "3.13", "3.14"]
 
     steps:
       - name: Checkout code
@@ -71,7 +75,7 @@ jobs:
       - name: Setup Python & uv
         uses: ./.github/actions/setup-python
         with:
-          python-version: "3.11"
+          python-version: ${{ matrix.python-version }}
           frozen: "true"
 
       - name: Run integration test package

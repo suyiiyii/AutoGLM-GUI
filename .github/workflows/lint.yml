@@ -1,4 +1,4 @@
-name: Quality
+name: Lint
 
 on:
   pull_request:
@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   backend:
-    name: Backend lint, format, and typecheck
+    name: Backend lint and format
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -25,14 +25,14 @@ jobs:
         with:
           frozen: "true"
 
-      - name: Install optional backend dependencies
-        run: uv pip install -e ".[droidrun]"
+      - name: Run Ruff lint
+        run: uv run ruff check --output-format=github
 
-      - name: Run backend quality checks
-        run: uv run python scripts/lint.py --backend --check-only
+      - name: Check Ruff formatting
+        run: uv run ruff format --check --diff
 
   frontend:
-    name: Frontend lint, format, and typecheck
+    name: Frontend lint and format
     runs-on: ubuntu-latest
     timeout-minutes: 10
 
@@ -51,8 +51,4 @@ jobs:
 
       - name: Check Prettier formatting
         run: pnpm format:check
-        working-directory: frontend
-
-      - name: Run TypeScript typecheck
-        run: pnpm type-check
         working-directory: frontend

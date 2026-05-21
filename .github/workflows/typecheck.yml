@@ -1,0 +1,50 @@
+name: Typecheck
+
+on:
+  pull_request:
+    branches: [main, dev]
+  push:
+    branches: [main, dev]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  backend:
+    name: Backend typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python & uv
+        uses: ./.github/actions/setup-python
+        with:
+          frozen: "true"
+
+      - name: Install optional backend dependencies
+        run: uv pip install -e ".[droidrun]"
+
+      - name: Run Pyright
+        run: uv run pyright AutoGLM_GUI/
+
+  frontend:
+    name: Frontend typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js & pnpm
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: "24"
+
+      - name: Run TypeScript typecheck
+        run: pnpm type-check
+        working-directory: frontend
