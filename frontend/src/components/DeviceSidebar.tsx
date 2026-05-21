@@ -473,7 +473,11 @@ export function DeviceSidebar({
         setDiscoveredRemoteDevices(result.devices);
         setSelectedRemoteDevice(null);
       } else {
-        setRemoteUrlError(result.message || '发现设备失败');
+        setRemoteUrlError(
+          result.message ||
+            t.deviceSidebar?.discoverFailed ||
+            'Failed to discover devices'
+        );
         setDiscoveredRemoteDevices([]);
       }
     } catch {
@@ -1314,7 +1318,9 @@ export function DeviceSidebar({
                     disabled={isDiscoveringRemote || !remoteBaseUrl}
                     className="w-full"
                   >
-                    {isDiscoveringRemote ? '正在发现...' : '发现设备'}
+                    {isDiscoveringRemote
+                      ? t.deviceSidebar?.discoveringDevices || 'Discovering...'
+                      : t.deviceSidebar?.discoverDevices || 'Discover Devices'}
                   </Button>
                 </div>
 

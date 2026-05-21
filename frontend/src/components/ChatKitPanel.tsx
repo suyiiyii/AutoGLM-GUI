@@ -801,7 +801,7 @@ export function ChatKitPanel({
               size="icon"
               onClick={handleReset}
               className="h-8 w-8 rounded-full"
-              title="重置对话"
+              title={t.devicePanel?.resetChat || 'Reset Chat'}
             >
               <RotateCcw className="h-4 w-4" />
             </Button>
@@ -1028,7 +1028,10 @@ export function ChatKitPanel({
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleInputKeyDown}
-              placeholder="描述你想要完成的任务... (Cmd+Enter 发送)"
+              placeholder={
+                t.devicePanel?.whatToDo ||
+                'What would you like to do? (Cmd+Enter to send)'
+              }
               disabled={loading}
               className="flex-1 min-h-[40px] max-h-[120px] resize-none"
               rows={1}

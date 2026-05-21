@@ -85,14 +85,14 @@ const AGENT_PRESETS = [
   {
     name: 'glm-async',
     displayName: 'GLM Agent',
-    description: '基于 GLM 模型优化，成熟稳定，适合大多数任务',
+    descriptionKey: 'agentGlmDesc',
     icon: Cpu,
     defaultConfig: {},
   },
   {
     name: 'mai',
     displayName: 'MAI Agent',
-    description: '阿里通义团队开发，支持多张历史截图上下文',
+    descriptionKey: 'agentMaiDesc',
     icon: Brain,
     defaultConfig: {
       history_n: 3,
@@ -101,21 +101,21 @@ const AGENT_PRESETS = [
   {
     name: 'gemini',
     displayName: 'General Vision Agent',
-    description: '通用视觉模型，支持 Gemini/GPT-4o 等，使用 Function Calling',
+    descriptionKey: 'agentGeminiDesc',
     icon: Sparkles,
     defaultConfig: {},
   },
   {
     name: 'droidrun',
     displayName: 'DroidRun Agent',
-    description: '基于 DroidRun 框架，需安装 Portal APK',
+    descriptionKey: 'agentDroidrunDesc',
     icon: Smartphone,
     defaultConfig: {},
   },
   {
     name: 'midscene',
     displayName: 'Midscene Agent',
-    description: '基于 Midscene.js 视觉驱动，需要 Node.js 环境',
+    descriptionKey: 'agentMidsceneDesc',
     icon: Eye,
     defaultConfig: {
       model_family: 'doubao-vision',
@@ -124,7 +124,7 @@ const AGENT_PRESETS = [
   {
     name: 'qwen',
     displayName: 'Qwen Agent',
-    description: 'Qwen3.6系列适配',
+    descriptionKey: 'agentQwenDesc',
     icon: Layers,
     defaultConfig: {},
   },
@@ -880,7 +880,9 @@ function ChatComponent() {
                             : 'text-slate-500 dark:text-slate-400'
                         }`}
                       >
-                        {preset.description}
+                        {t.chat?.[
+                          preset.descriptionKey as keyof typeof t.chat
+                        ] || ''}
                       </p>
                     </button>
                   ))}
@@ -977,17 +979,21 @@ function ChatComponent() {
                 />
                 <div className="space-y-1">
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    设为空表示不限制步数，任务将持续运行直到手动停止。
+                    {t.chat?.maxStepsEmptyHint ||
+                      'Leave empty for unlimited steps; the task will run until manually stopped.'}
                   </p>
                   <p className="text-xs text-amber-600 dark:text-amber-400">
-                    高级设置：修改后会影响后续任务默认行为，并可能增加执行时长与模型调用成本。
+                    {t.chat?.advancedConfigWarning ||
+                      'Advanced setting: changes affect default behavior for subsequent tasks and may increase execution time and model API costs.'}
                   </p>
                 </div>
               </div>
 
               {/* 分层代理最大轮次配置 */}
               <div className="space-y-2">
-                <Label htmlFor="layered_max_turns">分层代理最大轮次</Label>
+                <Label htmlFor="layered_max_turns">
+                  {t.chat?.layeredMaxTurns || 'Layered Agent Max Turns'}
+                </Label>
                 <Input
                   id="layered_max_turns"
                   type="number"
@@ -1003,7 +1009,8 @@ function ChatComponent() {
                   className="w-full"
                 />
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  分层代理模式的最大轮次（最小值为1）
+                  {t.chat?.layeredMaxTurnsHint ||
+                    'Maximum turns for layered agent mode (minimum 1)'}
                 </p>
               </div>
             </TabsContent>

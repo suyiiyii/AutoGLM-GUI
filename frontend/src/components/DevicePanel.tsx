@@ -730,7 +730,7 @@ export function DevicePanel({
               size="icon"
               onClick={handleReset}
               className="h-8 w-8 rounded-full text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
-              title="Reset chat"
+              title={t.devicePanel?.resetChat || 'Reset Chat'}
             >
               <RotateCcw className="h-4 w-4" />
             </Button>

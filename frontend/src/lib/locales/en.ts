@@ -60,6 +60,23 @@ export const en = {
     testingConnection: 'Testing...',
     connectionSuccess: 'Connection successful',
     connectionFailed: 'Connection failed',
+    maxStepsEmptyHint:
+      'Leave empty for unlimited steps; the task will run until manually stopped.',
+    advancedConfigWarning:
+      'Advanced setting: changes affect default behavior for subsequent tasks and may increase execution time and model API costs.',
+    layeredMaxTurns: 'Layered Agent Max Turns',
+    layeredMaxTurnsHint: 'Maximum turns for layered agent mode (minimum 1)',
+    agentGlmDesc:
+      'Optimized for GLM models, mature and stable, suitable for most tasks',
+    agentMaiDesc:
+      'Developed by Alibaba Tongyi, supports multiple historical screenshot context',
+    agentGeminiDesc:
+      'General vision model, supports Gemini/GPT-4o etc., uses Function Calling',
+    agentDroidrunDesc:
+      'Based on DroidRun framework, requires Portal APK installation',
+    agentMidsceneDesc:
+      'Midscene.js vision-driven, requires Node.js environment',
+    agentQwenDesc: 'Adapted for Qwen3.6 series',
   },
   deviceSidebar: {
     devices: 'Devices',
@@ -140,6 +157,9 @@ export const en = {
     remoteUrlRequired: 'Remote server URL is required',
     remoteUrlInvalid: 'URL must start with http:// or https://',
     remoteIdRequired: 'Device ID is required',
+    discoverDevices: 'Discover Devices',
+    discoveringDevices: 'Discovering...',
+    discoverFailed: 'Failed to discover devices',
     manageGroups: 'Manage Groups',
   },
   devicePanel: {
@@ -163,6 +183,7 @@ export const en = {
     chatHistory: 'Chat History',
     clearHistory: 'Clear History',
     clearHistoryConfirm: 'Are you sure you want to clear the chat history?',
+    resetChat: 'Reset Chat',
     configureFirst: 'Please configure first',
     initDeviceFirst: 'Initialize device first',
     whatToDo: 'What would you like to do? (Cmd+Enter to send)',
@@ -307,12 +328,13 @@ export const en = {
     scheduledTasks: 'Scheduled Tasks',
     logs: 'Logs',
     terminal: 'Terminal',
+    backToHome: 'Back to Home',
   },
   terminal: {
     title: 'Web Terminal',
     subtitle: 'Run ADB commands directly in the browser',
     newSession: 'New Session',
-    restartSession: 'Restart Session',
+    restartSession: 'Restart',
     closeSession: 'Close Session',
     clearScreen: 'Clear',
     refreshDevices: 'Refresh Devices',

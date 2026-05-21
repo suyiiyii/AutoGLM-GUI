@@ -268,7 +268,9 @@ export function GroupManageDialog({
                     <FolderOpen className="w-4 h-4 text-slate-400 flex-shrink-0" />
                     <div className="flex-1 min-w-0">
                       <span className="text-sm font-medium text-slate-700 dark:text-slate-300 truncate block">
-                        {group.name}
+                        {group.is_default
+                          ? t.deviceGroups?.defaultGroup || 'Default'
+                          : group.name}
                       </span>
                       <span className="text-xs text-slate-400 dark:text-slate-500">
                         {group.device_count}{' '}
