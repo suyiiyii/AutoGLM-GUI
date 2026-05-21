@@ -684,7 +684,6 @@ class LayeredTaskRun:
                     exc,
                     model_config=_planner_model_config(),
                     call_site="AutoGLM_GUI.layered_agent_service.LayeredTaskRun.stream_events",
-                    include_traceback=True,
                 )
                 if model_span is not None:
                     model_span.set_attributes(trace_error_attrs(error_details))

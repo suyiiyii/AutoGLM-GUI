@@ -10,6 +10,7 @@ import httpx
 from openai import BadRequestError
 
 from AutoGLM_GUI.agents.gemini.async_agent import AsyncGeminiAgent
+import AutoGLM_GUI.layered_agent_service as layered_agent_service
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.device_protocol import Screenshot
 from AutoGLM_GUI.model.error_details import serialize_model_error
@@ -45,6 +46,18 @@ class _FailingGeminiAgent(AsyncGeminiAgent):
             response=response,
             body=response.json(),
         )
+
+
+class _FailingPlannerResult:
+    final_output = ""
+
+    async def stream_events(self):
+        if False:
+            yield None
+        raise RuntimeError("planner boom")
+
+    def cancel(self, mode: str = "immediate") -> None:
+        pass
 
 
 def test_serialize_model_error_redacts_sensitive_headers() -> None:
@@ -123,3 +136,32 @@ def test_gemini_model_error_events_include_structured_details(
     assert llm_span["status"] == "error"
     assert llm_span["attrs"]["http.status_code"] == 400
     assert llm_span["attrs"]["http.response_headers"]["authorization"] == "[REDACTED]"
+
+
+def test_layered_planner_error_event_does_not_expose_traceback(monkeypatch) -> None:
+    monkeypatch.setattr(
+        layered_agent_service,
+        "_planner_model_config",
+        lambda: ModelConfig(
+            base_url="https://example.test/v1",
+            api_key="secret",
+            model_name="planner-model",
+        ),
+    )
+    run = layered_agent_service.LayeredTaskRun(
+        task_id="task-1",
+        session_id="session-1",
+        result=_FailingPlannerResult(),
+    )
+
+    async def collect_events() -> list[dict[str, Any]]:
+        return [event async for event in run.stream_events()]
+
+    events = asyncio.run(collect_events())
+    error_event = next(event for event in events if event["type"] == "error")
+    details = error_event["payload"]["error_details"]
+
+    assert details["exception_type"] == "RuntimeError"
+    assert details["message"] == "planner boom"
+    assert details["model_name"] == "planner-model"
+    assert "traceback" not in details
