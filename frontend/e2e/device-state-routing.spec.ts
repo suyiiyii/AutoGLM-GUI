@@ -85,34 +85,40 @@ test.describe('Device state routing', () => {
     );
 
     let delayDeviceRefresh = false;
-    await page.route('**/api/devices', async route => {
+    const handleDevicesRoute = async route => {
       if (delayDeviceRefresh) {
         await new Promise(resolve => setTimeout(resolve, 5000));
       }
       const response = await route.fetch();
       await route.fulfill({ response });
-    });
+    };
+    await page.route('**/api/devices', handleDevicesRoute);
 
-    await page.goto(
-      `/chat?serial=${encodeURIComponent(deviceSerial)}&mode=classic`
-    );
+    try {
+      await page.goto(
+        `/chat?serial=${encodeURIComponent(deviceSerial)}&mode=classic`
+      );
 
-    await expect(page.locator('textarea')).toBeVisible({ timeout: 15000 });
+      await expect(page.locator('textarea')).toBeVisible({ timeout: 15000 });
 
-    delayDeviceRefresh = true;
+      delayDeviceRefresh = true;
 
-    await page.locator('nav a[href="/history"]').click();
-    await expect(page).toHaveURL(/\/history/);
-    await expect(
-      page.getByRole('heading', { name: 'Conversation History' })
-    ).toBeVisible({ timeout: 1500 });
-    await expect(page.getByText(deviceSerial, { exact: true })).toBeVisible({
-      timeout: 500,
-    });
+      await page.locator('nav a[href="/history"]').click();
+      await expect(page).toHaveURL(/\/history/);
+      await expect(
+        page.getByRole('heading', { name: 'Conversation History' })
+      ).toBeVisible({ timeout: 1500 });
+      await expect(page.getByText(deviceSerial, { exact: true })).toBeVisible({
+        timeout: 500,
+      });
 
-    await page.locator('nav a[href="/chat"]:has(svg)').click();
-    await expect(page).toHaveURL(/\/chat/);
+      await page.locator('nav a[href="/chat"]:has(svg)').click();
+      await expect(page).toHaveURL(/\/chat/);
 
-    await expect(page.locator('textarea')).toBeVisible({ timeout: 500 });
+      await expect(page.locator('textarea')).toBeVisible({ timeout: 500 });
+    } finally {
+      delayDeviceRefresh = false;
+      await page.unroute('**/api/devices', handleDevicesRoute);
+    }
   });
 });
