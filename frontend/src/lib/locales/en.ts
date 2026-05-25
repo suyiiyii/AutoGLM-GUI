@@ -69,7 +69,7 @@ export const en = {
     agentGlmDesc:
       'Optimized for GLM models, mature and stable, suitable for most tasks',
     agentMaiDesc:
-      'Developed by Alibaba Tongyi, supports multiple historical screenshot context',
+      'Developed by Alibaba Tongyi, supports context from multiple historical screenshots',
     agentGeminiDesc:
       'General vision model, supports Gemini/GPT-4o etc., uses Function Calling',
     agentDroidrunDesc:
