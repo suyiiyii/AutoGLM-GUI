@@ -269,7 +269,9 @@ def test_execute_layered_chat_counts_inner_steps_and_skips_legacy_history(
                 "payload": {"content": "已完成整理", "success": True},
             }
 
-    def fake_start_run(*, task_id: str, session_id: str, message: str) -> FakeRun:
+    def fake_start_run(
+        *, task_id: str, session_id: str, message: str, device_id: str = ""
+    ) -> FakeRun:
         return FakeRun()
 
     monkeypatch.setattr(layered_service, "start_run", fake_start_run)
@@ -320,6 +322,106 @@ def test_execute_layered_chat_counts_inner_steps_and_skips_legacy_history(
     asyncio.run(scenario())
 
     assert legacy_history_calls == []
+
+
+def test_execute_layered_task_reraises_non_user_cancellation(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    import AutoGLM_GUI.layered_agent_service as layered_service
+
+    class FakeRun:
+        final_output = ""
+
+        async def cancel(self) -> None:
+            pass
+
+        async def stream_events(self):
+            raise asyncio.CancelledError
+            yield
+
+    def fake_start_run(
+        *, task_id: str, session_id: str, message: str, device_id: str = ""
+    ) -> FakeRun:
+        return FakeRun()
+
+    monkeypatch.setattr(layered_service, "start_run", fake_start_run)
+
+    async def scenario() -> None:
+        store = TaskStore(tmp_path / "tasks.db")
+        manager = TaskManager(store)
+        task = store.create_task_run(
+            source="chat",
+            executor_key="layered_chat",
+            device_id="device-a",
+            device_serial="serial-a",
+            input_text="cancelled by shutdown",
+        )
+
+        with pytest.raises(asyncio.CancelledError):
+            await manager._execute_layered_task(
+                task,
+                session_id="session-a",
+                clear_session_after_run=False,
+                metrics_source="layered",
+            )
+
+        store.close()
+
+    asyncio.run(scenario())
+
+
+def test_layered_task_run_closes_stream_iterator_on_cancel() -> None:
+    import AutoGLM_GUI.layered_agent_service as layered_service
+
+    async def scenario() -> None:
+        closed = asyncio.Event()
+        started = asyncio.Event()
+
+        class BlockingIterator:
+            def __aiter__(self):
+                return self
+
+            async def __anext__(self):
+                started.set()
+                await asyncio.Event().wait()
+
+            async def aclose(self) -> None:
+                closed.set()
+
+        class FakeResult:
+            final_output = ""
+
+            def __init__(self) -> None:
+                self.iterator = BlockingIterator()
+
+            def cancel(self, mode: str = "immediate") -> None:
+                pass
+
+            def stream_events(self):
+                return self.iterator
+
+        run = layered_service.LayeredTaskRun(
+            task_id="task-close-stream",
+            session_id="session-a",
+            result=FakeResult(),
+        )
+        events: list[dict[str, object]] = []
+
+        async def consume_events() -> None:
+            async for event in run.stream_events():
+                events.append(event)
+
+        consumer = asyncio.create_task(consume_events())
+        await asyncio.wait_for(started.wait(), timeout=1)
+        await run.cancel()
+        await asyncio.wait_for(consumer, timeout=1)
+
+        assert closed.is_set()
+        assert events == [
+            {"type": "cancelled", "payload": {"message": "Task cancelled by user"}}
+        ]
+
+    asyncio.run(scenario())
 
 
 def test_submit_chat_task_uses_layered_executor_for_layered_sessions(

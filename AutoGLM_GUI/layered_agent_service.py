@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import inspect
 import json
 import threading
 from collections.abc import AsyncIterator
@@ -412,18 +414,39 @@ class LayeredTaskRun:
     task_id: str
     session_id: str
     result: "RunResultStreaming"
+    device_id: str | None = None
     final_output: str = ""
     success: bool = False
     cancelled: bool = False
     finished: bool = False
     _current_tool_call: dict[str, Any] | None = field(default=None, init=False)
+    _cancel_event: asyncio.Event | None = field(default=None, init=False)
 
-    def cancel(self) -> None:
+    async def cancel(self) -> None:
         self.cancelled = True
-        self.result.cancel(mode="immediate")
+        if self._cancel_event is not None:
+            self._cancel_event.set()
+        if hasattr(self.result, "cancel"):
+            self.result.cancel(mode="immediate")
+        if self.device_id:
+            try:
+                from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
+
+                # 尝试中止可能正在运行的下层 Phone Agent
+                await PhoneAgentManager.get_instance().abort_streaming_chat_async(
+                    self.device_id
+                )
+            except Exception as e:
+                logger.warning(
+                    f"[LayeredAgent] Failed to abort phone agent for device {self.device_id}: {e}"
+                )
 
     async def stream_events(self) -> AsyncIterator[dict[str, Any]]:
         from agents.stream_events import RawResponsesStreamEvent, RunItemStreamEvent
+
+        self._cancel_event = asyncio.Event()
+        if self.cancelled:
+            self._cancel_event.set()
 
         model_span: TraceSpan | None = None
         raw_event_count = 0
@@ -435,6 +458,16 @@ class LayeredTaskRun:
                 model_span = None
                 raw_event_count = 0
 
+        async def get_next(aiter: Any) -> Any:
+            try:
+                return await aiter.__anext__()
+            except StopAsyncIteration:
+                return None
+
+        next_task: asyncio.Task[Any] | None = None
+        cancel_task: asyncio.Task[bool] | None = None
+        iterator: Any | None = None
+
         try:
             with trace_span(
                 "layered.planner.stream",
@@ -443,7 +476,29 @@ class LayeredTaskRun:
                     "session_id": self.session_id,
                 },
             ) as stream_span:
-                async for event in self.result.stream_events():
+                iterator = self.result.stream_events().__aiter__()
+                while True:
+                    if self.cancelled:
+                        break
+
+                    next_task = asyncio.create_task(get_next(iterator))
+                    cancel_task = asyncio.create_task(self._cancel_event.wait())
+
+                    assert next_task is not None
+                    assert cancel_task is not None
+                    done, pending = await asyncio.wait(
+                        [next_task, cancel_task], return_when=asyncio.FIRST_COMPLETED
+                    )
+
+                    if cancel_task in done:
+                        next_task.cancel()
+                        break
+
+                    cancel_task.cancel()
+                    event = next_task.result()
+                    if event is None:
+                        break
+
                     if isinstance(event, RawResponsesStreamEvent):
                         if model_span is None:
                             model_span = trace_span(
@@ -568,6 +623,15 @@ class LayeredTaskRun:
                             }
 
                 close_model_span()
+                if self.cancelled:
+                    self.final_output = "Task cancelled by user"
+                    self.success = False
+                    yield {
+                        "type": "cancelled",
+                        "payload": {"message": self.final_output},
+                    }
+                    return
+
                 self.final_output = (
                     self.result.final_output
                     if hasattr(self.result, "final_output")
@@ -612,6 +676,18 @@ class LayeredTaskRun:
                     "payload": {"message": str(exc)},
                 }
         finally:
+            for task in (next_task, cancel_task):
+                if task is not None and not task.done():
+                    task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await task
+            if iterator is not None:
+                aclose = getattr(iterator, "aclose", None)
+                if callable(aclose):
+                    with contextlib.suppress(Exception):
+                        close_result = aclose()
+                        if inspect.isawaitable(close_result):
+                            await close_result
             with _active_runs_lock:
                 _active_runs.pop(self.task_id, None)
             self.finished = True
@@ -718,6 +794,7 @@ def start_run(
     task_id: str,
     session_id: str,
     message: str,
+    device_id: str | None = None,
 ) -> LayeredTaskRun:
     agent = _ensure_agent()
     session = _get_or_create_session(session_id)
@@ -729,6 +806,7 @@ def start_run(
         attrs={
             "task_id": task_id,
             "session_id": session_id,
+            "device_id": device_id,
             "max_turns": resolved_max_turns,
             "message_preview": summarize_text(message, 512),
         },
@@ -747,14 +825,21 @@ def start_run(
         task_id=task_id,
         session_id=session_id,
         result=result,
+        device_id=device_id,
     )
 
 
-def cancel_task(task_id: str) -> bool:
+async def cancel_task(task_id: str) -> bool:
     with _active_runs_lock:
         result = _active_runs.get(task_id)
     if result is None:
         return False
-    result.cancel(mode="immediate")
+
+    if hasattr(result, "cancel"):
+        if asyncio.iscoroutinefunction(result.cancel):
+            await result.cancel()
+        else:
+            result.cancel(mode="immediate")
+
     logger.info(f"[LayeredAgent] Aborted task: {task_id}")
     return True

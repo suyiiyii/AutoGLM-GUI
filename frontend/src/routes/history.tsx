@@ -4,9 +4,7 @@ import {
   listHistory,
   clearHistory,
   deleteHistoryRecord,
-  getDevices,
   type HistoryRecordResponse,
-  type Device,
   type StepTimingSummary,
 } from '../api';
 import { Button } from '@/components/ui/button';
@@ -48,6 +46,7 @@ import {
   Eye,
 } from 'lucide-react';
 import { useTranslation } from '../lib/i18n-context';
+import { useDevices } from '../lib/device-context';
 
 export const Route = createFileRoute('/history')({
   component: HistoryComponent,
@@ -55,8 +54,7 @@ export const Route = createFileRoute('/history')({
 
 function HistoryComponent() {
   const t = useTranslation();
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [selectedSerial, setSelectedSerial] = useState<string>('');
+  const { devices, selectedSerial, selectDeviceBySerial } = useDevices();
   const [records, setRecords] = useState<HistoryRecordResponse[]>([]);
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -70,23 +68,6 @@ function HistoryComponent() {
     useState<HistoryRecordResponse | null>(null);
   const [expandedSteps, setExpandedSteps] = useState<Set<number>>(new Set());
   const limit = 20;
-
-  // Load devices
-  useEffect(() => {
-    const loadDevices = async () => {
-      try {
-        const deviceList = await getDevices();
-        setDevices(deviceList);
-        // Auto-select first device if available
-        if (deviceList.length > 0 && !selectedSerial) {
-          setSelectedSerial(deviceList[0].serial);
-        }
-      } catch (error) {
-        console.error('Failed to load devices:', error);
-      }
-    };
-    loadDevices();
-  }, [selectedSerial]);
 
   // Load history when device changes
   const loadHistory = useCallback(
@@ -124,6 +105,10 @@ function HistoryComponent() {
   useEffect(() => {
     if (selectedSerial) {
       loadHistory(selectedSerial, true);
+    } else {
+      setRecords([]);
+      setTotal(0);
+      setOffset(0);
     }
   }, [selectedSerial]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -290,7 +275,7 @@ function HistoryComponent() {
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-3xl font-bold">{t.historyPage.title}</h1>
         <div className="flex items-center gap-4">
-          <Select value={selectedSerial} onValueChange={setSelectedSerial}>
+          <Select value={selectedSerial} onValueChange={selectDeviceBySerial}>
             <SelectTrigger className="w-[200px]">
               <SelectValue placeholder={t.historyPage.selectDevice} />
             </SelectTrigger>

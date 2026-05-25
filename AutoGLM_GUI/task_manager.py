@@ -698,6 +698,7 @@ class TaskManager:
                     task_id=task_id,
                     session_id=session_id,
                     message=str(task["input_text"]),
+                    device_id=str(task["device_id"]),
                 )
                 self._abort_handlers[task_id] = run.cancel
 
@@ -746,12 +747,25 @@ class TaskManager:
                             event_payload.get("stop_reason", "user_stopped")
                         )
 
-            if not final_message:
+                if task_id in self._cancel_requested:
+                    final_message = "Task cancelled by user"
+                    final_status = TaskStatus.CANCELLED.value
+                    stop_reason = "user_stopped"
+
+            if not final_message and run:
                 final_message = run.final_output
+
             if not final_message:
                 final_message = "Task finished without a final response"
                 final_status = TaskStatus.FAILED.value
                 stop_reason = "error"
+        except asyncio.CancelledError:
+            if task_id in self._cancel_requested:
+                final_message = "Task cancelled by user"
+                final_status = TaskStatus.CANCELLED.value
+                stop_reason = "user_stopped"
+            else:
+                raise
         except Exception as exc:
             if task_id in self._cancel_requested:
                 final_message = "Task cancelled by user"

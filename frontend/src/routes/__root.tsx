@@ -8,6 +8,7 @@ import { useLocale, useTranslation } from '../lib/i18n-context';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { NavigationSidebar } from '../components/NavigationSidebar';
 import { useFooterVersionInfo } from '../hooks/useFooterVersionInfo';
+import { DeviceProvider } from '../lib/device-context';
 
 export const Route = createRootRoute({
   component: RootComponent,
@@ -119,19 +120,21 @@ function Footer() {
 
 function RootComponent() {
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
-      <div className="flex-1 flex overflow-hidden">
-        <NavigationSidebar />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-auto">
-            <Outlet />
+    <DeviceProvider>
+      <div className="h-screen flex flex-col overflow-hidden">
+        <div className="flex-1 flex overflow-hidden">
+          <NavigationSidebar />
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 overflow-auto">
+              <Outlet />
+            </div>
+            <Footer />
           </div>
-          <Footer />
         </div>
+        {__DEVTOOLS_ENABLED__ && (
+          <TanStackRouterDevtools position="bottom-right" />
+        )}
       </div>
-      {__DEVTOOLS_ENABLED__ && (
-        <TanStackRouterDevtools position="bottom-right" />
-      )}
-    </div>
+    </DeviceProvider>
   );
 }

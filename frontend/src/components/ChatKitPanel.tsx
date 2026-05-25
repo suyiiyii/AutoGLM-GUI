@@ -216,6 +216,15 @@ function buildAssistantMessage(
     }
   }
 
+  // Override with task-level message if task is in terminal state to ensure
+  // cancellation/error messages are shown even if overridden by previous events
+  if (
+    (task.status === 'CANCELLED' || task.status === 'FAILED') &&
+    (task.final_message || task.error_message)
+  ) {
+    content = task.final_message || task.error_message || content;
+  }
+
   return {
     id: `${task.id}-agent`,
     role: 'assistant',
@@ -629,7 +638,6 @@ export function ChatKitPanel({
       console.error('Failed to submit layered task:', err);
       const errorMessage = getErrorMessage(err);
       setError(errorMessage);
-    } finally {
       setLoading(false);
       setAborting(false);
     }
@@ -644,6 +652,10 @@ export function ChatKitPanel({
     void (async () => {
       try {
         const response = await cancelTaskRun(taskId);
+        // Even if the backend still says RUNNING, we've sent the abort signal.
+        // To prevent the UI from flickering or showing the stop button again,
+        // we clear the current task ID immediately on successful request.
+        currentTaskIdRef.current = null;
         if (response.task) {
           taskRunsRef.current[taskId] = response.task;
           replaceTaskMessages();
