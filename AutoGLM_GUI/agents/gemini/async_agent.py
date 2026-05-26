@@ -16,7 +16,7 @@ from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.model import MessageBuilder
 from AutoGLM_GUI.model.error_details import (
     model_error_message,
-    serialize_model_error,
+    serialize_model_error_async,
     trace_error_attrs,
 )
 from AutoGLM_GUI.trace import summarize_text, trace_span
@@ -143,7 +143,7 @@ class AsyncGeminiAgent(AsyncAgentBase):
                         }
                     )
                 except Exception as exc:
-                    error_details = serialize_model_error(
+                    error_details = await serialize_model_error_async(
                         exc,
                         model_config=self.model_config,
                         call_site="AutoGLM_GUI.agents.gemini.async_agent.AsyncGeminiAgent._call_llm_with_tools",
@@ -156,7 +156,7 @@ class AsyncGeminiAgent(AsyncAgentBase):
             logger.error(f"LLM error: {e}")
             if self.agent_config.verbose:
                 logger.debug(traceback.format_exc())
-            error_details = serialize_model_error(
+            error_details = await serialize_model_error_async(
                 e,
                 model_config=self.model_config,
                 call_site="AutoGLM_GUI.agents.gemini.async_agent.AsyncGeminiAgent._call_llm_with_tools",

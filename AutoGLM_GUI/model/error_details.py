@@ -87,15 +87,44 @@ def _response_body_text(exc: APIStatusError) -> str | None:
     return summarize_text(str(text), limit=_MAX_BODY_CHARS)
 
 
-def serialize_model_error(
+async def _response_body_text_async(exc: APIStatusError) -> str | None:
+    body = getattr(exc, "body", None)
+    if body is not None:
+        return summarize_text(str(body), limit=_MAX_BODY_CHARS)
+
+    response = getattr(exc, "response", None)
+    if response is None:
+        return None
+    try:
+        text = getattr(response, "text", None)
+    except httpx.ResponseNotRead:
+        try:
+            await response.aread()
+        except RuntimeError:
+            try:
+                response.read()
+            except (httpx.HTTPError, httpx.StreamError, RuntimeError):
+                return None
+        except (httpx.HTTPError, httpx.StreamError):
+            return None
+        try:
+            text = getattr(response, "text", None)
+        except (httpx.HTTPError, httpx.StreamError, RuntimeError):
+            return None
+    except (httpx.HTTPError, httpx.StreamError, RuntimeError):
+        return None
+    if text is None:
+        return None
+    return summarize_text(str(text), limit=_MAX_BODY_CHARS)
+
+
+def _base_model_error_details(
     exc: BaseException,
     *,
     model_config: ModelConfig,
     call_site: str,
-    include_traceback: bool = False,
 ) -> dict[str, Any]:
-    """Return UI/trace-safe structured details for model call failures."""
-    details: dict[str, Any] = {
+    return {
         "kind": "model_error",
         "exception_type": exc.__class__.__name__,
         "message": str(exc),
@@ -104,33 +133,94 @@ def serialize_model_error(
         "call_site": call_site,
     }
 
-    if isinstance(exc, APIStatusError):
-        response = getattr(exc, "response", None)
-        request_id = getattr(exc, "request_id", None)
-        if request_id is None and response is not None:
-            request_id = getattr(response, "headers", {}).get("x-request-id")
-        details.update(
-            {
-                "kind": "model_http_error",
-                "status_code": getattr(response, "status_code", None),
-                "request_id": request_id,
-                "response_headers": _headers_to_dict(
-                    getattr(response, "headers", None)
-                ),
-                "response_body": _response_body_text(exc),
-            }
-        )
-    elif isinstance(exc, APITimeoutError):
-        details["kind"] = "model_timeout"
-    elif isinstance(exc, APIConnectionError):
-        details["kind"] = "model_connection_error"
 
+def _api_status_error_details(
+    exc: APIStatusError,
+    response_body: str | None,
+) -> dict[str, Any]:
+    response = getattr(exc, "response", None)
+    request_id = getattr(exc, "request_id", None)
+    if request_id is None and response is not None:
+        request_id = getattr(response, "headers", {}).get("x-request-id")
+    return {
+        "kind": "model_http_error",
+        "status_code": getattr(response, "status_code", None),
+        "request_id": request_id,
+        "response_headers": _headers_to_dict(getattr(response, "headers", None)),
+        "response_body": response_body,
+    }
+
+
+def _finalize_model_error_details(
+    details: dict[str, Any],
+    exc: BaseException,
+    *,
+    include_traceback: bool,
+) -> dict[str, Any]:
     if include_traceback:
         details["traceback"] = "".join(
             traceback.format_exception(type(exc), exc, exc.__traceback__)
         )
 
     return {key: value for key, value in details.items() if value is not None}
+
+
+def serialize_model_error(
+    exc: BaseException,
+    *,
+    model_config: ModelConfig,
+    call_site: str,
+    include_traceback: bool = False,
+) -> dict[str, Any]:
+    """Return UI/trace-safe structured details for model call failures."""
+    details = _base_model_error_details(
+        exc,
+        model_config=model_config,
+        call_site=call_site,
+    )
+
+    if isinstance(exc, APIStatusError):
+        details.update(_api_status_error_details(exc, _response_body_text(exc)))
+    elif isinstance(exc, APITimeoutError):
+        details["kind"] = "model_timeout"
+    elif isinstance(exc, APIConnectionError):
+        details["kind"] = "model_connection_error"
+
+    return _finalize_model_error_details(
+        details,
+        exc,
+        include_traceback=include_traceback,
+    )
+
+
+async def serialize_model_error_async(
+    exc: BaseException,
+    *,
+    model_config: ModelConfig,
+    call_site: str,
+    include_traceback: bool = False,
+) -> dict[str, Any]:
+    """Return structured model error details, reading async response streams."""
+    details = _base_model_error_details(
+        exc,
+        model_config=model_config,
+        call_site=call_site,
+    )
+
+    if isinstance(exc, APIStatusError):
+        details.update(
+            _api_status_error_details(exc, await _response_body_text_async(exc))
+        )
+    elif isinstance(exc, APITimeoutError):
+        details["kind"] = "model_timeout"
+    elif isinstance(exc, APIConnectionError):
+        details["kind"] = "model_connection_error"
+
+    return _finalize_model_error_details(
+        details,
+        exc,
+        include_traceback=include_traceback,
+    )
 
 
 def model_error_message(exc: BaseException) -> str:

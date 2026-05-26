@@ -13,7 +13,10 @@ from AutoGLM_GUI.agents.gemini.async_agent import AsyncGeminiAgent
 import AutoGLM_GUI.layered_agent_service as layered_agent_service
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.device_protocol import Screenshot
-from AutoGLM_GUI.model.error_details import serialize_model_error
+from AutoGLM_GUI.model.error_details import (
+    serialize_model_error,
+    serialize_model_error_async,
+)
 
 
 class _FakeDevice:
@@ -58,6 +61,14 @@ class _FailingPlannerResult:
 
     def cancel(self, mode: str = "immediate") -> None:
         pass
+
+
+class _AsyncBodyStream(httpx.AsyncByteStream):
+    def __init__(self, body: bytes):
+        self.body = body
+
+    async def __aiter__(self):
+        yield self.body
 
 
 def test_serialize_model_error_redacts_sensitive_headers() -> None:
@@ -118,6 +129,32 @@ def test_serialize_model_error_reads_unread_streaming_response_body() -> None:
 
     assert details["kind"] == "model_http_error"
     assert details["response_body"] == "streamed model failure"
+
+
+def test_serialize_model_error_async_reads_async_streaming_body() -> None:
+    request = httpx.Request("POST", "https://example.test/v1/chat/completions")
+    response = httpx.Response(
+        400,
+        request=request,
+        stream=_AsyncBodyStream(b"async streamed model failure"),
+    )
+    exc = BadRequestError("bad request", response=response, body=None)
+
+    async def run() -> dict[str, Any]:
+        return await serialize_model_error_async(
+            exc,
+            model_config=ModelConfig(
+                base_url="https://example.test/v1",
+                api_key="secret",
+                model_name="demo-model",
+            ),
+            call_site="tests.call_site",
+        )
+
+    details = asyncio.run(run())
+
+    assert details["kind"] == "model_http_error"
+    assert details["response_body"] == "async streamed model failure"
 
 
 def test_gemini_model_error_events_include_structured_details(

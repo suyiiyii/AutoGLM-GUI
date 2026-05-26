@@ -15,7 +15,7 @@ from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.model import MessageBuilder
 from AutoGLM_GUI.model.error_details import (
     model_error_message,
-    serialize_model_error,
+    serialize_model_error_async,
     trace_error_attrs,
 )
 from AutoGLM_GUI.prompt_config import get_messages, get_system_prompt
@@ -196,7 +196,7 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
                 except Exception as exc:
                     if isinstance(exc, asyncio.CancelledError):
                         raise
-                    error_details = serialize_model_error(
+                    error_details = await serialize_model_error_async(
                         exc,
                         model_config=self.model_config,
                         call_site="AutoGLM_GUI.agents.glm.async_agent.AsyncGLMAgent._stream_openai",
@@ -214,7 +214,7 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
             logger.error(f"LLM error: {e}")
             if self.agent_config.verbose:
                 logger.debug(traceback.format_exc())
-            error_details = serialize_model_error(
+            error_details = await serialize_model_error_async(
                 e,
                 model_config=self.model_config,
                 call_site="AutoGLM_GUI.agents.glm.async_agent.AsyncGLMAgent._stream_openai",

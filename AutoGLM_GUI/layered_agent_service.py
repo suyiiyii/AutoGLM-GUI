@@ -18,7 +18,10 @@ from openai import AsyncOpenAI
 from AutoGLM_GUI.config import ModelConfig
 from AutoGLM_GUI.config_manager import config_manager
 from AutoGLM_GUI.logger import logger
-from AutoGLM_GUI.model.error_details import serialize_model_error, trace_error_attrs
+from AutoGLM_GUI.model.error_details import (
+    serialize_model_error_async,
+    trace_error_attrs,
+)
 from AutoGLM_GUI.trace import TraceSpan, summarize_text, trace_span
 
 if TYPE_CHECKING:
@@ -680,7 +683,7 @@ class LayeredTaskRun:
                     "payload": {"message": self.final_output},
                 }
             else:
-                error_details = serialize_model_error(
+                error_details = await serialize_model_error_async(
                     exc,
                     model_config=_planner_model_config(),
                     call_site="AutoGLM_GUI.layered_agent_service.LayeredTaskRun.stream_events",
