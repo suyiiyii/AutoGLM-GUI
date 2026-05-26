@@ -200,7 +200,6 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
                         exc,
                         model_config=self.model_config,
                         call_site="AutoGLM_GUI.agents.glm.async_agent.AsyncGLMAgent._stream_openai",
-                        include_traceback=self.agent_config.verbose,
                     )
                     span.set_attributes(trace_error_attrs(error_details))
                     raise
@@ -219,7 +218,6 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
                 e,
                 model_config=self.model_config,
                 call_site="AutoGLM_GUI.agents.glm.async_agent.AsyncGLMAgent._stream_openai",
-                include_traceback=self.agent_config.verbose,
             )
             message = model_error_message(e)
             yield {

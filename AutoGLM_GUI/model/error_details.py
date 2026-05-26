@@ -5,6 +5,7 @@ from __future__ import annotations
 import traceback
 from collections.abc import Mapping
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from openai import APIConnectionError, APIStatusError, APITimeoutError
 
@@ -20,6 +21,25 @@ _REDACTED_HEADER_NAMES = {
     "set-cookie",
 }
 _MAX_BODY_CHARS = 20000
+
+
+def _sanitize_base_url(base_url: str) -> str:
+    if not base_url:
+        return base_url
+    try:
+        parts = urlsplit(base_url)
+        port = parts.port
+    except ValueError:
+        return "[invalid-url]"
+
+    netloc = parts.netloc
+    if parts.hostname:
+        hostname = parts.hostname
+        if ":" in hostname and not hostname.startswith("["):
+            hostname = f"[{hostname}]"
+        netloc = f"{hostname}:{port}" if port is not None else hostname
+
+    return urlunsplit((parts.scheme, netloc, parts.path, "", ""))
 
 
 def _redact_header_value(name: str, value: str) -> str:
@@ -70,7 +90,7 @@ def serialize_model_error(
         "exception_type": exc.__class__.__name__,
         "message": str(exc),
         "model_name": model_config.model_name,
-        "base_url": model_config.base_url,
+        "base_url": _sanitize_base_url(model_config.base_url),
         "call_site": call_site,
     }
 

@@ -147,7 +147,6 @@ class AsyncGeminiAgent(AsyncAgentBase):
                         exc,
                         model_config=self.model_config,
                         call_site="AutoGLM_GUI.agents.gemini.async_agent.AsyncGeminiAgent._call_llm_with_tools",
-                        include_traceback=self.agent_config.verbose,
                     )
                     span.set_attributes(trace_error_attrs(error_details))
                     raise
@@ -161,7 +160,6 @@ class AsyncGeminiAgent(AsyncAgentBase):
                 e,
                 model_config=self.model_config,
                 call_site="AutoGLM_GUI.agents.gemini.async_agent.AsyncGeminiAgent._call_llm_with_tools",
-                include_traceback=self.agent_config.verbose,
             )
             message = model_error_message(e)
             yield {

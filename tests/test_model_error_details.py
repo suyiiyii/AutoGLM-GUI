@@ -61,7 +61,9 @@ class _FailingPlannerResult:
 
 
 def test_serialize_model_error_redacts_sensitive_headers() -> None:
-    request = httpx.Request("POST", "https://example.test/v1/chat/completions")
+    request = httpx.Request(
+        "POST", "https://user:pass@example.test/v1/chat/completions?token=secret"
+    )
     response = httpx.Response(
         401,
         request=request,
@@ -77,7 +79,7 @@ def test_serialize_model_error_redacts_sensitive_headers() -> None:
     details = serialize_model_error(
         exc,
         model_config=ModelConfig(
-            base_url="https://example.test/v1",
+            base_url="https://user:pass@example.test/v1?token=secret#fragment",
             api_key="secret",
             model_name="demo-model",
         ),
@@ -104,11 +106,11 @@ def test_gemini_model_error_events_include_structured_details(
 
     agent = _FailingGeminiAgent(
         model_config=ModelConfig(
-            base_url="https://example.test/v1",
+            base_url="https://user:pass@example.test/v1?token=secret",
             api_key="secret",
             model_name="demo-model",
         ),
-        agent_config=AgentConfig(max_steps=1, verbose=False),
+        agent_config=AgentConfig(max_steps=1, verbose=True),
         device=_FakeDevice(),
     )
 
@@ -127,6 +129,8 @@ def test_gemini_model_error_events_include_structured_details(
     assert error_details["status_code"] == 400
     assert error_details["request_id"] == "req-123"
     assert error_details["response_headers"]["authorization"] == "[REDACTED]"
+    assert error_details["base_url"] == "https://example.test/v1"
+    assert "traceback" not in error_details
     assert "bad request" in error_details["response_body"]
 
     trace_records = [
