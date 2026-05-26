@@ -97,6 +97,29 @@ def test_serialize_model_error_redacts_sensitive_headers() -> None:
     assert details["call_site"] == "tests.call_site"
 
 
+def test_serialize_model_error_reads_unread_streaming_response_body() -> None:
+    request = httpx.Request("POST", "https://example.test/v1/chat/completions")
+    response = httpx.Response(
+        400,
+        request=request,
+        stream=httpx.ByteStream(b"streamed model failure"),
+    )
+    exc = BadRequestError("bad request", response=response, body=None)
+
+    details = serialize_model_error(
+        exc,
+        model_config=ModelConfig(
+            base_url="https://example.test/v1",
+            api_key="secret",
+            model_name="demo-model",
+        ),
+        call_site="tests.call_site",
+    )
+
+    assert details["kind"] == "model_http_error"
+    assert details["response_body"] == "streamed model failure"
+
+
 def test_gemini_model_error_events_include_structured_details(
     tmp_path,
     monkeypatch,

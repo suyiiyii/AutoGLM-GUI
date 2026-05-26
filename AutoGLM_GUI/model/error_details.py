@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
+import httpx
 from openai import APIConnectionError, APIStatusError, APITimeoutError
 
 from AutoGLM_GUI.config import ModelConfig
@@ -71,7 +72,16 @@ def _response_body_text(exc: APIStatusError) -> str | None:
     response = getattr(exc, "response", None)
     if response is None:
         return None
-    text = getattr(response, "text", None)
+    try:
+        text = getattr(response, "text", None)
+    except httpx.ResponseNotRead:
+        try:
+            response.read()
+            text = getattr(response, "text", None)
+        except (httpx.HTTPError, httpx.StreamError, RuntimeError):
+            return None
+    except (httpx.HTTPError, httpx.StreamError, RuntimeError):
+        return None
     if text is None:
         return None
     return summarize_text(str(text), limit=_MAX_BODY_CHARS)
