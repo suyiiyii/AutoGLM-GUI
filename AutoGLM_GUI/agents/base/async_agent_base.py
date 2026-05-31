@@ -110,11 +110,31 @@ class AsyncAgentBase(ABC):
 
     # ==================== 共享逻辑 ====================
 
-    async def stream(self, task: str) -> AsyncIterator[dict[str, Any]]:
-        """流式执行任务，支持取消。"""
+    async def stream(
+        self, task: str, *, continue_with: str | None = None
+    ) -> AsyncIterator[dict[str, Any]]:
+        """流式执行任务，支持取消和继续执行。
+
+        Args:
+            task: 任务文本或用户输入
+            continue_with: 如果设置，表示在 Take_over/Interact 后继续执行。
+                           不重置 step_count，将用户输入添加到上下文后继续循环。
+        """
+        INTERACTION_ACTIONS = ("Take_over", "Interact")
+
         self._is_running = True
-        self._step_count = 0
+        if continue_with is None:
+            self._step_count = 0
+        else:
+            logger.info(
+                "Continuing agent stream from step %d with user input: %s",
+                self._step_count,
+                summarize_text(continue_with) or "",
+            )
         self._cancel_event.clear()
+
+        if continue_with is not None:
+            self._context.append(MessageBuilder.create_user_message(continue_with))
 
         with trace_span(
             "agent.stream",
@@ -127,44 +147,50 @@ class AsyncAgentBase(ABC):
             },
         ) as stream_span:
             try:
-                try:
-                    with trace_span(
-                        "agent.prepare_initial_state",
-                        attrs={
-                            "agent_type": self.__class__.__name__,
-                            "device_id": self.device.device_id,
-                        },
-                    ):
-                        screenshot = await asyncio.to_thread(self.device.get_screenshot)
-                        current_app = await asyncio.to_thread(
-                            self.device.get_current_app
+                if continue_with is None:
+                    try:
+                        with trace_span(
+                            "agent.prepare_initial_state",
+                            attrs={
+                                "agent_type": self.__class__.__name__,
+                                "device_id": self.device.device_id,
+                            },
+                        ):
+                            screenshot = await asyncio.to_thread(
+                                self.device.get_screenshot
+                            )
+                            current_app = await asyncio.to_thread(
+                                self.device.get_current_app
+                            )
+                    except Exception as e:
+                        logger.error(f"Failed to get device info: {e}")
+                        stream_span.set_attributes(
+                            {"success": False, "error_kind": "initial_device_state"}
                         )
-                except Exception as e:
-                    logger.error(f"Failed to get device info: {e}")
-                    stream_span.set_attributes(
-                        {"success": False, "error_kind": "initial_device_state"}
-                    )
-                    yield {"type": "error", "data": {"message": f"Device error: {e}"}}
-                    yield {
-                        "type": "done",
-                        "data": {
-                            "message": f"Device error: {e}",
-                            "steps": 0,
-                            "success": False,
-                        },
-                    }
-                    return
+                        yield {
+                            "type": "error",
+                            "data": {"message": f"Device error: {e}"},
+                        }
+                        yield {
+                            "type": "done",
+                            "data": {
+                                "message": f"Device error: {e}",
+                                "steps": 0,
+                                "success": False,
+                            },
+                        }
+                        return
 
-                with trace_span(
-                    "agent.prepare_initial_context",
-                    attrs={"agent_type": self.__class__.__name__},
-                ):
-                    self._prepare_initial_context(
-                        task,
-                        screenshot.base64_data,
-                        current_app,
-                        self._user_image_attachments,
-                    )
+                    with trace_span(
+                        "agent.prepare_initial_context",
+                        attrs={"agent_type": self.__class__.__name__},
+                    ):
+                        self._prepare_initial_context(
+                            task,
+                            screenshot.base64_data,
+                            current_app,
+                            self._user_image_attachments,
+                        )
 
                 started_at = time.monotonic()
                 repeated_action_count = 0
@@ -215,6 +241,24 @@ class AsyncAgentBase(ABC):
                                     no_progress_count += 1
 
                             yield event
+
+                            if event["type"] == "step":
+                                step_data = event["data"]
+                                action = step_data.get("action") or {}
+                                if (
+                                    step_data.get("waiting_for_input")
+                                    or action.get("action") in INTERACTION_ACTIONS
+                                ):
+                                    yield {
+                                        "type": "takeover",
+                                        "data": {
+                                            "message": step_data.get("message", ""),
+                                            "steps": self._step_count,
+                                            "success": True,
+                                            "stop_reason": "takeover",
+                                        },
+                                    }
+                                    return
 
                             if event["type"] == "step" and event["data"].get(
                                 "finished"

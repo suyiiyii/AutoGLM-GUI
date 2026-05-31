@@ -20,6 +20,7 @@ import {
   ListChecks,
   Loader2,
   Square,
+  Hand,
 } from 'lucide-react';
 import type { Workflow, HistoryRecordResponse } from '../api';
 import {
@@ -53,6 +54,10 @@ import {
 } from '@/components/ui/tooltip';
 import { HistoryItemCard } from './HistoryItemCard';
 import { MarkdownContent } from './MarkdownContent';
+import {
+  isInteractionRequired,
+  getInteractionPrompt,
+} from '../lib/interaction-config';
 
 interface ChatKitPanelProps {
   deviceId: string;
@@ -127,6 +132,12 @@ function applyTaskEventToTask(
       typeof payload.message === 'string' ? payload.message : null;
     nextTask.error_message =
       typeof payload.message === 'string' ? payload.message : null;
+    nextTask.finished_at = event.created_at;
+  } else if (event.event_type === 'takeover') {
+    nextTask.status = 'SUCCEEDED';
+    nextTask.final_message =
+      typeof payload.message === 'string' ? payload.message : null;
+    nextTask.error_message = null;
     nextTask.finished_at = event.created_at;
   }
 
@@ -213,6 +224,11 @@ function buildAssistantMessage(
       typeof payload.message === 'string'
     ) {
       content = payload.message;
+    } else if (
+      event.event_type === 'takeover' &&
+      typeof payload.message === 'string'
+    ) {
+      content = payload.message;
     }
   }
 
@@ -275,6 +291,11 @@ export function ChatKitPanel({
   const [aborting, setAborting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [sessionId, setSessionId] = React.useState<string | null>(null);
+  const [waitingForUserInteraction, setWaitingForUserInteraction] =
+    React.useState(false);
+  const [interactionPrompt, setInteractionPrompt] = React.useState<
+    string | null
+  >(null);
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
   const scrollAreaRef = React.useRef<HTMLDivElement>(null);
   const isNearBottomRef = React.useRef(true);
@@ -477,17 +498,33 @@ export function ChatKitPanel({
           }
           replaceTaskMessages();
 
+          // Check for interaction required actions
+          if (event.event_type === 'step') {
+            const action = event.payload.action as Record<string, unknown>;
+            if (action && isInteractionRequired(action)) {
+              setWaitingForUserInteraction(true);
+              setInteractionPrompt(getInteractionPrompt(action));
+              setLoading(false);
+              setAborting(false);
+              return;
+            }
+          }
+
           const nextTask = taskRunsRef.current[taskId];
           if (nextTask && !isTaskActive(nextTask.status)) {
             currentTaskIdRef.current = null;
             setLoading(false);
             setAborting(false);
+            setWaitingForUserInteraction(false);
+            setInteractionPrompt(null);
           }
         },
         message => {
           setError(message);
           setLoading(false);
           setAborting(false);
+          setWaitingForUserInteraction(false);
+          setInteractionPrompt(null);
         },
         afterSeq
       );
@@ -613,6 +650,12 @@ export function ChatKitPanel({
     setLoading(true);
     setError(null);
 
+    // Clear interaction state if we were waiting for user interaction
+    if (waitingForUserInteraction) {
+      setWaitingForUserInteraction(false);
+      setInteractionPrompt(null);
+    }
+
     try {
       const task = await submitTaskSessionTask(sessionId, inputValue);
       const initialEvents = (await listTaskEvents(task.id)).events;
@@ -638,7 +681,14 @@ export function ChatKitPanel({
       setLoading(false);
       setAborting(false);
     }
-  }, [attachTaskStream, input, loading, replaceTaskMessages, sessionId]);
+  }, [
+    attachTaskStream,
+    input,
+    loading,
+    replaceTaskMessages,
+    sessionId,
+    waitingForUserInteraction,
+  ]);
 
   const handleAbort = React.useCallback(() => {
     const taskId = currentTaskIdRef.current;
@@ -694,6 +744,8 @@ export function ChatKitPanel({
       setLoading(false);
       setError(null);
       setAborting(false);
+      setWaitingForUserInteraction(false);
+      setInteractionPrompt(null);
     } catch (resetError) {
       console.error('Failed to reset layered task session:', resetError);
       setError(getErrorMessage(resetError));
@@ -822,6 +874,16 @@ export function ChatKitPanel({
           <div className="mx-4 mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-600 dark:text-red-400 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
             {error}
+          </div>
+        )}
+
+        {/* Interaction waiting indicator */}
+        {waitingForUserInteraction && (
+          <div className="mx-4 mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl text-sm text-blue-600 dark:text-blue-400 flex items-center gap-2">
+            <Hand className="w-4 h-4 flex-shrink-0" />
+            <span className="whitespace-pre-line">
+              {interactionPrompt || '等待用户输入...'}
+            </span>
           </div>
         )}
 
@@ -965,30 +1027,45 @@ export function ChatKitPanel({
                         )}
 
                         {/* Final Response */}
-                        {message.content && (
-                          <div className="flex justify-start">
-                            <div
-                              className={`max-w-[85%] rounded-2xl rounded-tl-sm px-4 py-3 ${
-                                message.success === false
-                                  ? 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400'
-                                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                              }`}
-                            >
-                              <div className="flex items-start gap-2">
-                                {message.success !== undefined && (
-                                  <CheckCircle2
-                                    className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
-                                      message.success
-                                        ? 'text-green-500'
-                                        : 'text-red-500'
-                                    }`}
-                                  />
-                                )}
-                                <MarkdownContent content={message.content} />
+                        {message.content &&
+                          (() => {
+                            const isTakeoverMsg =
+                              message.content.startsWith(
+                                'TAKEOVER_REQUIRED:'
+                              ) ||
+                              message.content.startsWith('INTERACT_REQUIRED:');
+                            return (
+                              <div className="flex justify-start">
+                                <div
+                                  className={`max-w-[85%] rounded-2xl rounded-tl-sm px-4 py-3 ${
+                                    message.success === false
+                                      ? 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400'
+                                      : isTakeoverMsg
+                                        ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                                  }`}
+                                >
+                                  <div className="flex items-start gap-2">
+                                    {message.success !== undefined &&
+                                      (isTakeoverMsg ? (
+                                        <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-500" />
+                                      ) : (
+                                        <CheckCircle2
+                                          className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
+                                            message.success
+                                              ? 'text-green-500'
+                                              : 'text-red-500'
+                                          }`}
+                                        />
+                                      ))}
+                                    <MarkdownContent
+                                      content={message.content}
+                                    />
+                                  </div>
+                                </div>
                               </div>
-                            </div>
-                          </div>
-                        )}
+                            );
+                          })()}
 
                         {/* Streaming indicator */}
                         {message.isStreaming && !message.content && (
@@ -1038,10 +1115,12 @@ export function ChatKitPanel({
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleInputKeyDown}
               placeholder={
-                t.devicePanel?.whatToDo ||
-                'What would you like to do? (Cmd+Enter to send)'
+                waitingForUserInteraction
+                  ? interactionPrompt || '请输入您的回复'
+                  : t.devicePanel?.whatToDo ||
+                    'What would you like to do? (Cmd+Enter to send)'
               }
-              disabled={loading}
+              disabled={loading && !waitingForUserInteraction}
               className="flex-1 min-h-[40px] max-h-[120px] resize-none"
               rows={1}
             />

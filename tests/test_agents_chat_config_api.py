@@ -39,8 +39,9 @@ class FakeAsyncAgent:
             raise self.run_error
         return self.run_result
 
-    async def stream(self, message: str):
+    async def stream(self, message: str, *, continue_with: str | None = None):
         _ = message
+        _ = continue_with
         if self.stream_error is not None:
             raise self.stream_error
         for event in self.stream_events:
@@ -371,8 +372,9 @@ def test_chat_stream_emits_sse_events(
 def test_chat_stream_persists_step_timings_from_trace_context(
     env: dict[str, Any],
 ) -> None:
-    async def traced_stream(message: str):
+    async def traced_stream(message: str, *, continue_with: str | None = None):
         _ = message
+        _ = continue_with
         with trace_module.trace_span("agent.step", attrs={"step": 1}):
             with trace_module.trace_span("step.llm", attrs={"step": 1}):
                 pass

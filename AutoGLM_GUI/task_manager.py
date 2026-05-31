@@ -38,6 +38,7 @@ class TaskManager:
         self._cancel_requested: set[str] = set()
         self._executors: dict[str, TaskExecutor] = {}
         self._started = False
+        self._takeover_sessions: dict[str, bool] = {}
         self._shutdown = False
         self.register_executor("classic_chat", self._execute_classic_chat)
         self.register_executor("layered_chat", self._execute_layered_chat)
@@ -535,7 +536,13 @@ class TaskManager:
                         image_attachment_setter(user_image_attachments)
                     event_type = ""
                     event_data: dict[str, Any] = {}
-                    async for event in agent.stream(task["input_text"]):
+
+                    # 检查是否有待继续的 takeover
+                    is_continue = self._takeover_sessions.pop(session_id, False)
+                    async for event in agent.stream(
+                        task["input_text"],
+                        continue_with=task["input_text"] if is_continue else None,
+                    ):
                         event_type = event["type"]
                         event_data = dict(event.get("data", {}))
 
@@ -558,7 +565,13 @@ class TaskManager:
                             task=task,
                         )
 
-                    if event_type == "done":
+                    if event_type == "takeover":
+                        final_message = str(event_data.get("message", ""))
+                        final_status = TaskStatus.SUCCEEDED.value
+                        stop_reason = "takeover"
+                        step_count = int(event_data.get("steps", step_count))
+                        self._takeover_sessions[session_id] = True
+                    elif event_type == "done":
                         final_message = str(event_data.get("message", ""))
                         final_status = (
                             TaskStatus.SUCCEEDED.value

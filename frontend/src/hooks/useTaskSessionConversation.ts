@@ -23,6 +23,10 @@ import {
   streamTaskEvents,
   submitTaskSessionTask,
 } from '../api';
+import {
+  isInteractionRequired,
+  getInteractionPrompt,
+} from '../lib/interaction-config';
 
 export interface TaskConversationMessage {
   id: string;
@@ -30,6 +34,7 @@ export interface TaskConversationMessage {
   content: string;
   timestamp: Date;
   steps?: number;
+  stepNumbers?: number[];
   success?: boolean;
   thinking?: string[];
   actions?: Record<string, unknown>[];
@@ -45,6 +50,7 @@ interface UseTaskSessionConversationOptions {
   deviceId: string;
   deviceSerial: string;
   sessionStorageKey: string;
+  agentType?: string;
 }
 
 interface UseTaskSessionConversationResult {
@@ -53,6 +59,8 @@ interface UseTaskSessionConversationResult {
   loading: boolean;
   aborting: boolean;
   waitingForDevice: boolean;
+  waitingForUserInteraction: boolean;
+  interactionPrompt: string | null;
   error: string | null;
   sessionReady: boolean;
   sendMessage: (
@@ -108,6 +116,15 @@ function applyTaskEventToTask(
     nextTask.error_message =
       typeof payload.message === 'string' ? payload.message : null;
     nextTask.finished_at = event.created_at;
+  } else if (event.event_type === 'takeover') {
+    nextTask.status = 'SUCCEEDED';
+    nextTask.final_message =
+      typeof payload.message === 'string' ? payload.message : null;
+    nextTask.error_message = null;
+    nextTask.finished_at = event.created_at;
+    if (typeof payload.steps === 'number') {
+      nextTask.step_count = payload.steps;
+    }
   } else if (event.event_type === 'step' && typeof payload.step === 'number') {
     nextTask.step_count = Math.max(nextTask.step_count, payload.step);
   }
@@ -133,6 +150,7 @@ function buildAssistantMessage(
   const actions: Record<string, unknown>[] = [];
   const screenshots: (string | undefined)[] = [];
   const stepTimings: (StepTimingSummary | undefined)[] = [];
+  const stepNumbers: number[] = [];
   let errorDetails: ModelErrorDetails | undefined;
   let currentThinking = '';
   let content = task.final_message || task.error_message || '';
@@ -163,6 +181,9 @@ function buildAssistantMessage(
             : currentThinking;
         thinking.push(stepThinking);
         actions.push((payload.action as Record<string, unknown>) || {});
+        stepNumbers.push(
+          typeof payload.step === 'number' ? payload.step : thinking.length
+        );
         screenshots.push(
           typeof payload.screenshot === 'string'
             ? payload.screenshot
@@ -216,6 +237,17 @@ function buildAssistantMessage(
         currentThinking = '';
         break;
       }
+      case 'takeover': {
+        if (typeof payload.message === 'string') {
+          content = payload.message;
+        }
+        if (typeof payload.steps === 'number') {
+          steps = payload.steps;
+        }
+        success = true;
+        currentThinking = '';
+        break;
+      }
     }
   });
 
@@ -228,6 +260,7 @@ function buildAssistantMessage(
     actions,
     screenshots,
     stepTimings,
+    stepNumbers,
     errorDetails,
     steps,
     success,
@@ -270,11 +303,17 @@ export function useTaskSessionConversation({
   deviceId,
   deviceSerial,
   sessionStorageKey,
+  agentType,
 }: UseTaskSessionConversationOptions): UseTaskSessionConversationResult {
   const [messages, setMessages] = useState<TaskConversationMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [aborting, setAborting] = useState(false);
   const [waitingForDevice, setWaitingForDevice] = useState(false);
+  const [waitingForUserInteraction, setWaitingForUserInteraction] =
+    useState(false);
+  const [interactionPrompt, setInteractionPrompt] = useState<string | null>(
+    null
+  );
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const chatStreamRef = useRef<{ close: () => void } | null>(null);
@@ -330,6 +369,24 @@ export function useTaskSessionConversation({
       setWaitingForDevice(isTaskWaitingForDevice(nextTask));
       replaceTaskMessages(taskId);
 
+      // Check for interaction required actions
+      if (event.event_type === 'step') {
+        const action = event.payload.action as Record<string, unknown>;
+        if (action && isInteractionRequired(action, agentType)) {
+          setWaitingForUserInteraction(true);
+          setInteractionPrompt(getInteractionPrompt(action));
+          setLoading(false);
+          setAborting(false);
+          setWaitingForDevice(false);
+          return;
+        }
+      }
+
+      // 如果正在等待用户交互，不清除状态
+      if (waitingForUserInteraction) {
+        return;
+      }
+
       if (
         !isTaskActive(nextTask.status) &&
         currentTaskIdRef.current === taskId
@@ -337,10 +394,12 @@ export function useTaskSessionConversation({
         setLoading(false);
         setAborting(false);
         setWaitingForDevice(false);
+        setWaitingForUserInteraction(false);
+        setInteractionPrompt(null);
         currentTaskIdRef.current = null;
       }
     },
-    [replaceTaskMessages]
+    [replaceTaskMessages, agentType, waitingForUserInteraction]
   );
 
   const attachTaskStream = useCallback(
@@ -481,6 +540,13 @@ export function useTaskSessionConversation({
       try {
         setError(null);
         setLoading(true);
+
+        // Clear interaction state if we were waiting for user interaction
+        if (waitingForUserInteraction) {
+          setWaitingForUserInteraction(false);
+          setInteractionPrompt(null);
+        }
+
         const task = await submitTaskSessionTask(
           sessionId,
           inputValue,
@@ -518,7 +584,13 @@ export function useTaskSessionConversation({
         return false;
       }
     },
-    [attachTaskStream, loading, replaceTaskMessages, sessionId]
+    [
+      attachTaskStream,
+      loading,
+      replaceTaskMessages,
+      sessionId,
+      waitingForUserInteraction,
+    ]
   );
 
   const resetConversation = useCallback(async () => {
@@ -588,6 +660,8 @@ export function useTaskSessionConversation({
     loading,
     aborting,
     waitingForDevice,
+    waitingForUserInteraction,
+    interactionPrompt,
     error,
     sessionReady: sessionId !== null,
     sendMessage,

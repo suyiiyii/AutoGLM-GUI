@@ -11,6 +11,7 @@ import {
   Square,
   ImagePlus,
   X,
+  Hand,
 } from 'lucide-react';
 import { DeviceMonitor } from './DeviceMonitor';
 import type {
@@ -67,6 +68,7 @@ interface DevicePanelProps {
   isConfigured: boolean;
   isVisible?: boolean; // ✅ 新增：控制视频流行为
   unlimitedStepsEnabled?: boolean;
+  agentType?: string;
 }
 
 const IMAGE_ATTACHMENT_TYPES = new Set([
@@ -214,6 +216,7 @@ export function DevicePanel({
   isConfigured,
   isVisible = true, // ✅ 新增：默认 true 向后兼容
   unlimitedStepsEnabled = false,
+  agentType,
 }: DevicePanelProps) {
   const t = useTranslation();
   const [input, setInput] = useState('');
@@ -233,6 +236,8 @@ export function DevicePanel({
     loading,
     aborting,
     waitingForDevice,
+    waitingForUserInteraction,
+    interactionPrompt,
     error,
     sessionReady,
     sendMessage,
@@ -242,6 +247,7 @@ export function DevicePanel({
     deviceId,
     deviceSerial,
     sessionStorageKey: `autoglm:classic-session:${deviceSerial}`,
+    agentType,
   });
   const scrollAreaRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -835,7 +841,7 @@ export function DevicePanel({
                                   <Sparkles className="h-3 w-3 text-[#1d9bf0]" />
                                 </div>
                                 <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                                  Step {idx + 1}
+                                  Step {message.stepNumbers?.[idx] ?? idx + 1}
                                 </span>
                               </div>
                               <p className="text-sm whitespace-pre-wrap text-slate-700 dark:text-slate-300">
@@ -1005,46 +1011,57 @@ export function DevicePanel({
                         )}
 
                         {/* Final result */}
-                        {message.content && (
-                          <div
-                            className={`
-                          rounded-2xl px-4 py-3 flex items-start gap-2
-                          ${
-                            message.success === false
-                              ? 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400'
-                              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                          }
-                        `}
-                          >
-                            <CheckCircle2
-                              className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
-                                message.success === false
-                                  ? 'text-red-500'
-                                  : 'text-green-500'
-                              }`}
-                            />
-                            <div className="min-w-0 flex-1">
-                              <MarkdownContent content={message.content} />
-                              {message.steps !== undefined && (
-                                <p className="text-xs mt-2 opacity-60 text-slate-500 dark:text-slate-400">
-                                  {message.steps} steps completed
-                                </p>
-                              )}
-                              {message.errorDetails && (
-                                <details className="mt-3 text-xs">
-                                  <summary className="cursor-pointer font-medium text-red-700 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200 transition-colors">
-                                    Model error details
-                                  </summary>
-                                  <pre className="mt-2 max-h-80 overflow-auto rounded-lg border border-red-200 bg-white/80 p-3 text-left font-mono text-[11px] leading-relaxed text-slate-800 dark:border-red-900/60 dark:bg-slate-950/70 dark:text-slate-200">
-                                    {formatModelErrorDetails(
-                                      message.errorDetails
-                                    )}
-                                  </pre>
-                                </details>
-                              )}
-                            </div>
-                          </div>
-                        )}
+                        {message.content &&
+                          (() => {
+                            const isTakeoverMsg =
+                              message.content.startsWith(
+                                'TAKEOVER_REQUIRED:'
+                              ) ||
+                              message.content.startsWith('INTERACT_REQUIRED:');
+                            return (
+                              <div
+                                className={`rounded-2xl px-4 py-3 flex items-start gap-2 ${
+                                  message.success === false
+                                    ? 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400'
+                                    : isTakeoverMsg
+                                      ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                                }`}
+                              >
+                                {isTakeoverMsg ? (
+                                  <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-500" />
+                                ) : (
+                                  <CheckCircle2
+                                    className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
+                                      message.success === false
+                                        ? 'text-red-500'
+                                        : 'text-green-500'
+                                    }`}
+                                  />
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <MarkdownContent content={message.content} />
+                                  {message.steps !== undefined && (
+                                    <p className="text-xs mt-2 opacity-60 text-slate-500 dark:text-slate-400">
+                                      {message.steps} steps completed
+                                    </p>
+                                  )}
+                                  {message.errorDetails && (
+                                    <details className="mt-3 text-xs">
+                                      <summary className="cursor-pointer font-medium text-red-700 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200 transition-colors">
+                                        Model error details
+                                      </summary>
+                                      <pre className="mt-2 max-h-80 overflow-auto rounded-lg border border-red-200 bg-white/80 p-3 text-left font-mono text-[11px] leading-relaxed text-slate-800 dark:border-red-900/60 dark:bg-slate-950/70 dark:text-slate-200">
+                                        {formatModelErrorDetails(
+                                          message.errorDetails
+                                        )}
+                                      </pre>
+                                    </details>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
 
                         {/* Streaming indicator */}
                         {message.isStreaming && (
@@ -1130,6 +1147,14 @@ export function DevicePanel({
               <span>Waiting for device...</span>
             </div>
           )}
+          {waitingForUserInteraction && (
+            <div className="mb-3 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300">
+              <Hand className="h-4 w-4" />
+              <span className="whitespace-pre-line">
+                {interactionPrompt || '等待用户输入...'}
+              </span>
+            </div>
+          )}
           {attachments.length > 0 && (
             <div className="mb-3 flex flex-wrap gap-2">
               {attachments.map((attachment, idx) => (
@@ -1163,11 +1188,13 @@ export function DevicePanel({
               onKeyDown={handleInputKeyDown}
               onPaste={handlePaste}
               placeholder={
-                !isConfigured
-                  ? t.devicePanel.configureFirst
-                  : t.devicePanel.whatToDo
+                waitingForUserInteraction
+                  ? interactionPrompt || '请输入您的回复'
+                  : !isConfigured
+                    ? t.devicePanel.configureFirst
+                    : t.devicePanel.whatToDo
               }
-              disabled={loading}
+              disabled={loading && !waitingForUserInteraction}
               className="flex-1 min-h-[40px] max-h-[120px] resize-none"
               rows={1}
             />

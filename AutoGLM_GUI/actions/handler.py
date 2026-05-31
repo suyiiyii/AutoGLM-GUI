@@ -288,7 +288,7 @@ class ActionHandler:
     ) -> ActionResult:
         message = action.get("message", "User intervention required")
         self.takeover_callback(message)
-        return ActionResult(True, False)
+        return ActionResult(True, False, message=f"TAKEOVER_REQUIRED:\n {message}")
 
     def _handle_note(
         self, action: dict[str, Any], width: int, height: int
@@ -307,8 +307,9 @@ class ActionHandler:
         self, action: dict[str, Any], width: int, height: int
     ) -> ActionResult:
         """Handle interaction request (user choice needed)."""
-        # This action signals that user input is needed
-        return ActionResult(True, False, message="User interaction required")
+        return ActionResult(
+            True, False, message="INTERACT_REQUIRED: User interaction required"
+        )
 
     @staticmethod
     def _default_confirmation(message: str) -> bool:

@@ -38,7 +38,9 @@ class AsyncAgent(Protocol):
         """
         ...
 
-    def stream(self, task: str) -> AsyncIterator[dict[str, Any]]:
+    def stream(
+        self, task: str, *, continue_with: str | None = None
+    ) -> AsyncIterator[dict[str, Any]]:
         """流式执行任务，返回异步生成器。
 
         这是核心方法，支持:

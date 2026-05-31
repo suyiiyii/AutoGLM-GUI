@@ -172,7 +172,7 @@ def test_action_handler_covers_supported_and_error_actions(
     assert handler.execute({"_metadata": "do", "action": "Call_API"}, 100, 200).success
     assert (
         handler.execute({"_metadata": "do", "action": "Interact"}, 100, 200).message
-        == "User interaction required"
+        == "INTERACT_REQUIRED: User interaction required"
     )
 
     def boom(*args, **kwargs):

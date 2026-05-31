@@ -15,7 +15,7 @@ export function MarkdownContent({
   prose = true,
 }: MarkdownContentProps) {
   const rootClassName = [
-    'min-w-0 w-full max-w-full',
+    'min-w-0 w-full max-w-full break-words',
     prose
       ? 'prose dark:prose-invert max-w-none prose-pre:text-sm prose-code:text-sm [&_ol:first-child]:mt-0 [&_ol:last-child]:mb-0 [&_p:first-child]:mt-0 [&_p:last-child]:mb-0 [&_pre:first-child]:mt-0 [&_pre:last-child]:mb-0 [&_ul:first-child]:mt-0 [&_ul:last-child]:mb-0'
       : 'whitespace-pre-wrap text-current [&_a]:text-current [&_a]:underline [&_ol]:list-decimal [&_ol]:pl-5 [&_p]:m-0 [&_strong]:text-current [&_ul]:list-disc [&_ul]:pl-5',

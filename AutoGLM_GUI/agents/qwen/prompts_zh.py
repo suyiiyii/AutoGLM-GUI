@@ -40,6 +40,8 @@ SYSTEM_PROMPT = (
     Type_Name是输入人名的操作,基本功能同Type。
 - do(action="Interact")  
     Interact是当有多个满足条件的选项时而触发的交互操作,询问用户如何选择。
+- do(action="Take_over", message="xxx")  
+    Take_over是接管操作，表示在登录和验证阶段需要用户协助。
 - do(action="Swipe", start=[x1,y1], end=[x2,y2])  
     Swipe是滑动操作,通过从起始坐标拖动到结束坐标来执行滑动手势。可用于滚动内容、在屏幕之间导航、下拉通知栏以及项目栏或进行基于手势的导航。坐标系统从左上角 (0,0) 开始到右下角(999,999)结束。滑动持续时间会自动调整以实现自然的移动。此操作完成后,您将自动收到结果状态的截图。
 - do(action="Note", message="True")  

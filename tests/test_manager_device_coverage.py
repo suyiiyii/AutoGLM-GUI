@@ -52,7 +52,7 @@ class FakeAgent:
     def set_user_image_attachments(self, attachments: list[dict[str, Any]]) -> None:
         self.attachments = attachments
 
-    async def stream(self, text: str):
+    async def stream(self, text: str, *, continue_with: str | None = None):
         yield {
             "type": "thinking",
             "data": {"chunk": "thinking"},
@@ -468,7 +468,7 @@ def test_task_manager_classic_chat_execution_paths(
 
     no_attachment_agent = SimpleNamespace(cancel=lambda: None)
 
-    async def unused_stream(text: str):
+    async def unused_stream(text: str, *, continue_with: str | None = None):
         raise AssertionError("stream should not run")
         yield {}
 

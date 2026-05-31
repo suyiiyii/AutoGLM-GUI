@@ -295,6 +295,26 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
                 )
             )
 
+        # 6.5. 检测需要用户交互的 action (Take_over / Interact)
+        interaction_actions = ("Take_over", "Interact")
+        if action.get("action") in interaction_actions:
+            if self.agent_config.verbose:
+                logger.debug(f"Waiting for user input after {action.get('action')}")
+            yield {
+                "type": "step",
+                "data": {
+                    "step": self._step_count,
+                    "thinking": thinking,
+                    "action": action,
+                    "success": result.success,
+                    "finished": False,
+                    "waiting_for_input": True,
+                    "message": result.message or action.get("message"),
+                    "screenshot": screenshot.base64_data if screenshot else None,
+                },
+            }
+            return
+
         # 7. 检查完成
         finished = action.get("_metadata") == "finish" or result.should_finish
         if finished and self.agent_config.verbose:
