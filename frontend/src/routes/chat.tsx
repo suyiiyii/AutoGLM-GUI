@@ -1,5 +1,5 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   connectWifi,
   disconnectWifi,
@@ -244,6 +244,10 @@ export function ChatComponent() {
     decision_model_name: '',
     decision_api_key: '',
   });
+
+  // Used to restore unsaved edits when the config dialog is closed without saving.
+  const lastCommittedTempConfigRef = useRef(structuredClone(tempConfig));
+
   const selectedVisionPreset = getSelectedVisionPreset(tempConfig.base_url);
   const selectedDecisionPreset = getSelectedDecisionPreset(
     tempConfig.decision_base_url
@@ -267,7 +271,7 @@ export function ChatComponent() {
         });
         // 当后端返回空配置时，使用智谱预设作为默认值
         const useDefault = !data.base_url;
-        setTempConfig({
+        const newTempConfig = {
           base_url: useDefault
             ? VISION_PRESETS[0].config.base_url
             : data.base_url,
@@ -277,12 +281,15 @@ export function ChatComponent() {
           api_key: data.api_key || '',
           agent_type: data.agent_type || 'glm-async',
           agent_config_params: data.agent_config_params || {},
-          default_max_steps: data.default_max_steps ?? '',
+          default_max_steps: (data.default_max_steps ?? '') as number | '',
           layered_max_turns: data.layered_max_turns || 50,
           decision_base_url: data.decision_base_url || '',
           decision_model_name: data.decision_model_name || 'glm-4.7',
           decision_api_key: data.decision_api_key || '',
-        });
+        };
+
+        setTempConfig(newTempConfig);
+        lastCommittedTempConfigRef.current = newTempConfig;
 
         if (useDefault) {
           setShowConfig(true);
@@ -384,6 +391,8 @@ export function ChatComponent() {
         showToast(`配置已保存，但存在冲突: ${warningMsg}`, 'warning');
       }
 
+      // Update the committed snapshot after save
+      lastCommittedTempConfigRef.current = structuredClone(tempConfig);
       setShowConfig(false);
     } catch (err) {
       console.error('Failed to save config:', err);
@@ -471,7 +480,17 @@ export function ChatComponent() {
       )}
 
       {/* Config Dialog */}
-      <Dialog open={showConfig} onOpenChange={setShowConfig}>
+      <Dialog
+        open={showConfig}
+        onOpenChange={open => {
+          if (!open) {
+            // Dialog closing without save: restore tempConfig
+            // to the last committed state so unsaved edits are discarded.
+            setTempConfig(structuredClone(lastCommittedTempConfigRef.current));
+          }
+          setShowConfig(open);
+        }}
+      >
         <DialogContent className="sm:max-w-md h-[75vh] flex flex-col">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center gap-2">
