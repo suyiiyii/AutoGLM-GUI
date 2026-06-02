@@ -539,9 +539,16 @@ class TaskManager:
 
                     # 检查是否有待继续的 takeover
                     is_continue = self._takeover_sessions.pop(session_id, False)
+                    stream_kwargs: dict[str, Any] = {}
+                    if is_continue:
+                        # Only pass continue_with when the agent supports it
+                        # (DroidRunAgent and MidsceneAgent don't have this param)
+                        sig = inspect.signature(agent.stream)
+                        if "continue_with" in sig.parameters:
+                            stream_kwargs["continue_with"] = task["input_text"]
                     async for event in agent.stream(
                         task["input_text"],
-                        continue_with=task["input_text"] if is_continue else None,
+                        **stream_kwargs,
                     ):
                         event_type = event["type"]
                         event_data = dict(event.get("data", {}))
