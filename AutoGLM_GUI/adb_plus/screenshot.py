@@ -14,10 +14,16 @@ from io import BytesIO
 
 from PIL import Image
 
+from AutoGLM_GUI.adb_plus.display import (
+    DisplaySelection,
+    clear_display_selection_cache,
+    select_primary_display,
+    select_primary_display_async,
+)
 from AutoGLM_GUI.exceptions import DeviceNotAvailableError
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.platform_utils import is_windows
-from AutoGLM_GUI.trace import trace_span
+from AutoGLM_GUI.trace import TraceSpan, trace_span
 
 
 PNG_SIGNATURE = b"\x89PNG\r\n\x1a\n"
@@ -58,53 +64,85 @@ def capture_screenshot(
         "adb.capture_screenshot",
         attrs={"device_id": device_id, "timeout": timeout, "retries": retries},
     ) as span:
+        selection = select_primary_display(device_id=device_id, adb_path=adb_path)
+        _set_display_trace_attrs(span, selection)
+        display_fallback = False
         attempts = max(1, retries + 1)
         for attempt in range(attempts):
-            data = _try_capture(device_id=device_id, adb_path=adb_path, timeout=timeout)
-            if not data:
-                continue
-
-            if not _is_valid_png(data):
-                continue
-
-            try:
-                img = Image.open(BytesIO(data))
-                width, height = img.size
-                base64_data = base64.b64encode(data).decode("utf-8")
+            data = _try_capture(
+                device_id=device_id,
+                adb_path=adb_path,
+                timeout=timeout,
+                display_id=selection.screencap_id if selection else None,
+            )
+            screenshot = _decode_screenshot(data, device_id)
+            if screenshot:
                 span.set_attributes(
                     {
                         "success": True,
                         "attempt": attempt + 1,
-                        "width": width,
-                        "height": height,
+                        "width": screenshot.width,
+                        "height": screenshot.height,
+                        "display_fallback": display_fallback,
                     }
                 )
-                return Screenshot(base64_data=base64_data, width=width, height=height)
-            except Exception as exc:
-                logger.debug(
-                    "Failed to decode screenshot PNG for %s: %s", device_id, exc
-                )
-                continue
+                return screenshot
 
-        span.set_attributes({"success": False, "fallback": True})
+            if selection:
+                clear_display_selection_cache(device_id=device_id, adb_path=adb_path)
+                display_fallback = True
+                selection = None
+                fallback_data = _try_capture(
+                    device_id=device_id,
+                    adb_path=adb_path,
+                    timeout=timeout,
+                )
+                screenshot = _decode_screenshot(fallback_data, device_id)
+                if screenshot:
+                    span.set_attributes(
+                        {
+                            "success": True,
+                            "attempt": attempt + 1,
+                            "width": screenshot.width,
+                            "height": screenshot.height,
+                            "display_fallback": True,
+                        }
+                    )
+                    return screenshot
+
+        span.set_attributes(
+            {"success": False, "fallback": True, "display_fallback": display_fallback}
+        )
         return _fallback_screenshot()
 
 
-def _try_capture(device_id: str | None, adb_path: str, timeout: int) -> bytes | None:
+def _try_capture(
+    device_id: str | None,
+    adb_path: str,
+    timeout: int,
+    display_id: str | None = None,
+) -> bytes | None:
     """Run exec-out screencap and return raw bytes or None on failure.
 
     Raises:
         DeviceNotAvailableError: When device is not found or offline.
     """
-    cmd: list[str | bytes] = [adb_path]
+    cmd: list[str] = [adb_path]
     if device_id:
         cmd.extend(["-s", device_id])
-    cmd.extend(["exec-out", "screencap", "-p"])
+    cmd.extend(["exec-out", "screencap"])
+    if display_id:
+        cmd.extend(["-d", display_id])
+    cmd.append("-p")
 
     try:
         with trace_span(
             "adb.exec_out_screencap",
-            attrs={"device_id": device_id, "timeout": timeout},
+            attrs={
+                "device_id": device_id,
+                "timeout": timeout,
+                "display_id": display_id,
+            },
         ):
             result = subprocess.run(
                 cmd,
@@ -142,54 +180,84 @@ async def capture_screenshot_async(
         "adb.capture_screenshot_async",
         attrs={"device_id": device_id, "timeout": timeout, "retries": retries},
     ) as span:
+        selection = await select_primary_display_async(
+            device_id=device_id,
+            adb_path=adb_path,
+        )
+        _set_display_trace_attrs(span, selection)
+        display_fallback = False
         attempts = max(1, retries + 1)
         for attempt in range(attempts):
             data = await _try_capture_async(
                 device_id=device_id,
                 adb_path=adb_path,
                 timeout=timeout,
+                display_id=selection.screencap_id if selection else None,
             )
-            if not data or not _is_valid_png(data):
-                continue
-
-            try:
-                image = await asyncio.to_thread(Image.open, BytesIO(data))
-                width, height = image.size
-                base64_data = base64.b64encode(data).decode("utf-8")
+            screenshot = await _decode_screenshot_async(data, device_id)
+            if screenshot:
                 span.set_attributes(
                     {
                         "success": True,
                         "attempt": attempt + 1,
-                        "width": width,
-                        "height": height,
+                        "width": screenshot.width,
+                        "height": screenshot.height,
+                        "display_fallback": display_fallback,
                     }
                 )
-                return Screenshot(base64_data=base64_data, width=width, height=height)
-            except Exception as exc:
-                logger.debug(
-                    "Failed to decode async screenshot PNG for %s: %s",
-                    device_id,
-                    exc,
-                )
-                continue
+                return screenshot
 
-        span.set_attributes({"success": False, "fallback": True})
+            if selection:
+                clear_display_selection_cache(device_id=device_id, adb_path=adb_path)
+                display_fallback = True
+                selection = None
+                fallback_data = await _try_capture_async(
+                    device_id=device_id,
+                    adb_path=adb_path,
+                    timeout=timeout,
+                )
+                screenshot = await _decode_screenshot_async(fallback_data, device_id)
+                if screenshot:
+                    span.set_attributes(
+                        {
+                            "success": True,
+                            "attempt": attempt + 1,
+                            "width": screenshot.width,
+                            "height": screenshot.height,
+                            "display_fallback": True,
+                        }
+                    )
+                    return screenshot
+
+        span.set_attributes(
+            {"success": False, "fallback": True, "display_fallback": display_fallback}
+        )
         return _fallback_screenshot()
 
 
 async def _try_capture_async(
-    device_id: str | None, adb_path: str, timeout: int
+    device_id: str | None,
+    adb_path: str,
+    timeout: int,
+    display_id: str | None = None,
 ) -> bytes | None:
     """Async exec-out screencap helper."""
     cmd: list[str] = [adb_path]
     if device_id:
         cmd.extend(["-s", device_id])
-    cmd.extend(["exec-out", "screencap", "-p"])
+    cmd.extend(["exec-out", "screencap"])
+    if display_id:
+        cmd.extend(["-d", display_id])
+    cmd.append("-p")
 
     try:
         with trace_span(
             "adb.exec_out_screencap_async",
-            attrs={"device_id": device_id, "timeout": timeout},
+            attrs={
+                "device_id": device_id,
+                "timeout": timeout,
+                "display_id": display_id,
+            },
         ):
             if is_windows():
                 result = await asyncio.to_thread(
@@ -242,6 +310,62 @@ def _is_valid_png(data: bytes) -> bool:
     return (
         len(data) > len(PNG_SIGNATURE) + 8  # header + IHDR length
         and data.startswith(PNG_SIGNATURE)
+    )
+
+
+def _decode_screenshot(data: bytes | None, device_id: str | None) -> Screenshot | None:
+    if not data or not _is_valid_png(data):
+        return None
+
+    try:
+        img = Image.open(BytesIO(data))
+        width, height = img.size
+        base64_data = base64.b64encode(data).decode("utf-8")
+        return Screenshot(base64_data=base64_data, width=width, height=height)
+    except Exception as exc:
+        logger.debug("Failed to decode screenshot PNG for %s: %s", device_id, exc)
+        return None
+
+
+async def _decode_screenshot_async(
+    data: bytes | None,
+    device_id: str | None,
+) -> Screenshot | None:
+    if not data or not _is_valid_png(data):
+        return None
+
+    try:
+        image = await asyncio.to_thread(Image.open, BytesIO(data))
+        width, height = image.size
+        base64_data = base64.b64encode(data).decode("utf-8")
+        return Screenshot(base64_data=base64_data, width=width, height=height)
+    except Exception as exc:
+        logger.debug("Failed to decode async screenshot PNG for %s: %s", device_id, exc)
+        return None
+
+
+def _set_display_trace_attrs(
+    span: TraceSpan,
+    selection: DisplaySelection | None,
+) -> None:
+    if not selection:
+        span.set_attributes(
+            {
+                "display_id": None,
+                "display_width": None,
+                "display_height": None,
+                "display_selection_reason": None,
+            }
+        )
+        return
+
+    span.set_attributes(
+        {
+            "display_id": selection.screencap_id,
+            "display_width": selection.width,
+            "display_height": selection.height,
+            "display_selection_reason": selection.reason,
+        }
     )
 
 

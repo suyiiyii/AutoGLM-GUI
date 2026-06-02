@@ -16,6 +16,7 @@ import AutoGLM_GUI.adb.connection as adb_connection
 import AutoGLM_GUI.adb.device as adb_core_device
 import AutoGLM_GUI.adb.input as adb_input
 import AutoGLM_GUI.adb_plus.device as adb_device
+import AutoGLM_GUI.adb_plus.display as adb_display
 import AutoGLM_GUI.adb_plus.ip as adb_ip
 import AutoGLM_GUI.adb_plus.keyboard_installer as keyboard
 import AutoGLM_GUI.adb_plus.mdns as mdns
@@ -28,6 +29,7 @@ import AutoGLM_GUI.devices.adb_device as adb_device_impl
 import AutoGLM_GUI.platform_utils as platform_utils
 import AutoGLM_GUI.scrcpy_stream as scrcpy_stream
 from AutoGLM_GUI.exceptions import DeviceNotAvailableError
+from AutoGLM_GUI.adb_plus.display import DisplaySelection
 from AutoGLM_GUI.scrcpy_protocol import (
     PTS_CONFIG,
     PTS_KEYFRAME,
@@ -95,6 +97,9 @@ def test_scrcpy_start_cleanup_and_server_commands(
     async def fake_check(device_id: str | None) -> None:
         calls.append(["check", str(device_id)])
 
+    async def fake_select_display(device_id: str | None):
+        return DisplaySelection("0", "physical-0", 1200, 2608, "test")
+
     async def fake_wait(port: int, timeout: float, poll_interval: float):
         return True
 
@@ -113,6 +118,9 @@ def test_scrcpy_start_cleanup_and_server_commands(
     monkeypatch.setattr(scrcpy_stream, "wait_for_port_release", fake_wait)
     monkeypatch.setattr(scrcpy_stream, "spawn_process", fake_spawn)
     monkeypatch.setattr(scrcpy_stream, "is_windows", lambda: False)
+    monkeypatch.setattr(
+        scrcpy_stream, "select_primary_display_async", fake_select_display
+    )
     monkeypatch.setattr(asyncio, "sleep", _noop_sleep)
 
     async def fake_connect(self):
@@ -132,7 +140,8 @@ def test_scrcpy_start_cleanup_and_server_commands(
         "/data/local/tmp/scrcpy-server",
     ] in calls
     assert streamer.forward_cleanup_needed is True
-    assert any("app_process" in cmd for cmd in calls)
+    server_cmd = next(cmd for cmd in calls if "app_process" in cmd)
+    assert "display_id=0" in server_cmd
 
 
 def test_scrcpy_start_failure_and_server_port_conflict(
@@ -751,9 +760,81 @@ def test_adb_ip_sync_and_async(monkeypatch: pytest.MonkeyPatch) -> None:
     assert asyncio.run(adb_ip.get_wifi_ip_async("adb", "serial")) == "192.168.1.10"
 
 
+def test_display_selection_parsing_and_cache(monkeypatch: pytest.MonkeyPatch) -> None:
+    adb_display.clear_display_selection_cache()
+
+    dumpsys_display = """
+Logical Displays:
+  Display 1:
+    mDisplayId=1
+    mBaseDisplayInfo=DisplayInfo{"Rear", displayId 1, real 976 x 596, state OFF, uniqueId="local:222"}
+  Display 0:
+    mDisplayId=0
+    mBaseDisplayInfo=DisplayInfo{"Built-in Screen", displayId 0, real 1200 x 2608, state ON, uniqueId "local:111"}
+"""
+    selection = adb_display._select_from_outputs(dumpsys_display, "")
+    assert selection == DisplaySelection(
+        logical_id="0",
+        screencap_id="111",
+        width=1200,
+        height=2608,
+        reason="largest_on_display",
+    )
+
+    equal_area = """
+  Display 2:
+    mDisplayId=2
+    mBaseDisplayInfo=DisplayInfo{"External", displayId 2, 1000 x 1000, state ON}
+  Display 0:
+    mDisplayId=0
+    mBaseDisplayInfo=DisplayInfo{"Main", displayId 0, 1000 x 1000, state ON}
+"""
+    assert adb_display._select_from_outputs(equal_area, "").logical_id == "0"
+
+    multiple_on = """
+  Display 0:
+    mBaseDisplayInfo=DisplayInfo{"Small", displayId 0, 800 x 600, state ON}
+  Display 2:
+    mBaseDisplayInfo=DisplayInfo{"Large", displayId 2, 1600 x 900, state ON}
+"""
+    assert adb_display._select_from_outputs(multiple_on, "").logical_id == "2"
+
+    assert adb_display._select_from_outputs("not display output", "") is None
+
+    now = {"value": 100.0}
+    calls: list[list[str]] = []
+
+    def fake_run(cmd, timeout=None):
+        calls.append(cmd)
+        if "SurfaceFlinger" in cmd:
+            return _completed(stdout="")
+        return _completed(stdout=dumpsys_display)
+
+    monkeypatch.setattr(adb_display.time, "monotonic", lambda: now["value"])
+    monkeypatch.setattr(adb_display, "run_cmd_silently_sync", fake_run)
+
+    first = adb_display.select_primary_display("serial", ttl_seconds=60)
+    second = adb_display.select_primary_display("serial", ttl_seconds=60)
+    assert first == second
+    assert len(calls) == 2
+
+    now["value"] = 161.0
+    adb_display.select_primary_display("serial", ttl_seconds=60)
+    assert len(calls) == 4
+
+    adb_display.clear_display_selection_cache()
+
+
 def test_screenshot_sync_async_and_helpers(monkeypatch: pytest.MonkeyPatch) -> None:
     assert screenshot._is_valid_png(PNG_1X1_BYTES)
     assert not screenshot._is_valid_png(b"nope")
+
+    monkeypatch.setattr(screenshot, "select_primary_display", lambda *a, **k: None)
+
+    async def no_async_display(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(screenshot, "select_primary_display_async", no_async_display)
 
     monkeypatch.setattr(
         screenshot.subprocess,
@@ -799,6 +880,59 @@ def test_screenshot_sync_async_and_helpers(monkeypatch: pytest.MonkeyPatch) -> N
         screenshot.capture_screenshot_async("serial", retries=0)
     )
     assert async_captured.width == 1
+
+
+def test_screenshot_uses_display_id_and_falls_back(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    selection = DisplaySelection("0", "111", 1200, 2608, "test")
+    monkeypatch.setattr(screenshot, "select_primary_display", lambda *a, **k: selection)
+
+    cleared: list[tuple[str | None, str]] = []
+    monkeypatch.setattr(
+        screenshot,
+        "clear_display_selection_cache",
+        lambda device_id=None, adb_path="adb": cleared.append((device_id, adb_path)),
+    )
+
+    commands: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        commands.append(cmd)
+        if "-d" in cmd:
+            return subprocess.CompletedProcess(cmd, 1, b"", b"bad display")
+        return subprocess.CompletedProcess(cmd, 0, PNG_1X1_BYTES, b"")
+
+    monkeypatch.setattr(screenshot.subprocess, "run", fake_run)
+    captured = screenshot.capture_screenshot("serial", retries=0)
+
+    assert captured.width == 1
+    assert commands[0][-4:] == ["screencap", "-d", "111", "-p"]
+    assert commands[1][-2:] == ["screencap", "-p"]
+    assert cleared == [("serial", "adb")]
+
+
+def test_screenshot_async_uses_display_id(monkeypatch: pytest.MonkeyPatch) -> None:
+    selection = DisplaySelection("0", "111", 1200, 2608, "test")
+
+    async def async_display(*args, **kwargs):
+        return selection
+
+    monkeypatch.setattr(screenshot, "select_primary_display_async", async_display)
+    monkeypatch.setattr(screenshot, "is_windows", lambda: True)
+
+    commands: list[list[str]] = []
+
+    def fake_run(cmd, **kwargs):
+        commands.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, PNG_1X1_BYTES, b"")
+
+    monkeypatch.setattr(screenshot.subprocess, "run", fake_run)
+
+    captured = asyncio.run(screenshot.capture_screenshot_async("serial", retries=0))
+
+    assert captured.width == 1
+    assert commands[0][-4:] == ["screencap", "-d", "111", "-p"]
 
 
 def test_mdns_pair_touch_version_and_keyboard(monkeypatch: pytest.MonkeyPatch) -> None:

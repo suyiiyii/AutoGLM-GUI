@@ -9,6 +9,7 @@ from pathlib import Path
 import pytest
 
 import AutoGLM_GUI.scrcpy_stream as scrcpy_stream
+from AutoGLM_GUI.adb_plus.display import DisplaySelection
 from AutoGLM_GUI.scrcpy_protocol import (
     SCRCPY_CODEC_H264,
     ScrcpyMediaStreamPacket,
@@ -132,6 +133,65 @@ async def test_start_server_reports_windows_process_error(
     streamer = ScrcpyStreamer(device_id="serial")
     with pytest.raises(RuntimeError, match="fatal startup"):
         await streamer._start_server()
+
+
+@pytest.mark.anyio
+async def test_start_server_retries_without_display_id(
+    fake_server: None,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    class FailedProcess:
+        returncode = 1
+
+        async def communicate(self):
+            return b"stdout", b"display not found"
+
+        def terminate(self) -> None:
+            return None
+
+        def kill(self) -> None:
+            return None
+
+    class RunningProcess:
+        returncode = None
+
+        async def communicate(self):
+            return b"", b""
+
+        def terminate(self) -> None:
+            return None
+
+        def kill(self) -> None:
+            return None
+
+    commands: list[list[str]] = []
+
+    async def fake_spawn(cmd: list[str], capture_output: bool):
+        commands.append(cmd)
+        if len(commands) == 1:
+            return FailedProcess()
+        return RunningProcess()
+
+    cleared: list[str | None] = []
+    original_sleep = asyncio.sleep
+
+    monkeypatch.setattr(scrcpy_stream, "spawn_process", fake_spawn)
+    monkeypatch.setattr(scrcpy_stream, "is_windows", lambda: False)
+    monkeypatch.setattr(scrcpy_stream.asyncio, "sleep", lambda delay: original_sleep(0))
+    monkeypatch.setattr(
+        scrcpy_stream,
+        "clear_display_selection_cache",
+        lambda device_id=None: cleared.append(device_id),
+    )
+
+    streamer = ScrcpyStreamer(device_id="serial")
+    streamer._display_selection = DisplaySelection("0", "111", 1200, 2608, "test")
+
+    await streamer._start_server()
+
+    assert "display_id=0" in commands[0]
+    assert all("display_id=0" not in arg for arg in commands[1])
+    assert cleared == ["serial"]
 
 
 @pytest.mark.anyio
