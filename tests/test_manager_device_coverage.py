@@ -42,6 +42,7 @@ class FakeAgent:
         self.reset_count = 0
         self.cancel_count = 0
         self.attachments: list[dict[str, Any]] = []
+        self.stream_calls: list[tuple[str, str | None]] = []
 
     def reset(self) -> None:
         self.reset_count += 1
@@ -53,6 +54,7 @@ class FakeAgent:
         self.attachments = attachments
 
     async def stream(self, text: str, *, continue_with: str | None = None):
+        self.stream_calls.append((text, continue_with))
         yield {
             "type": "thinking",
             "data": {"chunk": "thinking"},
@@ -67,6 +69,47 @@ class FakeAgent:
                 "message": f"done {text}",
                 "success": True,
                 "steps": 1,
+            },
+        }
+
+
+class TakeoverResumeAgent(FakeAgent):
+    async def stream(self, text: str, *, continue_with: str | None = None):
+        self.stream_calls.append((text, continue_with))
+        if continue_with is None:
+            yield {
+                "type": "step",
+                "data": {
+                    "step": 1,
+                    "thinking": "need login",
+                    "action": {"action": "Take_over", "message": "登录后继续"},
+                    "waiting_for_input": True,
+                    "success": True,
+                    "finished": False,
+                    "message": "TAKEOVER_REQUIRED:\n 登录后继续",
+                },
+            }
+            yield {
+                "type": "takeover",
+                "data": {
+                    "message": "TAKEOVER_REQUIRED:\n 登录后继续",
+                    "steps": 1,
+                    "success": True,
+                    "stop_reason": "takeover",
+                },
+            }
+            return
+
+        yield {
+            "type": "step",
+            "data": {"step": 2, "thinking": "continued", "action": {"action": "Tap"}},
+        }
+        yield {
+            "type": "done",
+            "data": {
+                "message": f"done {continue_with}",
+                "success": True,
+                "steps": 2,
             },
         }
 
@@ -495,6 +538,79 @@ def test_task_manager_classic_chat_execution_paths(
     assert fake_phone_manager.errors[-1][1] == (
         "Current agent does not support user image attachments"
     )
+    store.close()
+
+
+def test_task_manager_classic_chat_resumes_takeover_session(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    _patch_task_tracing(monkeypatch)
+    store = TaskStore(tmp_path / "takeover.db")
+    manager = TaskManager(store)
+    monkeypatch.setattr(manager, "_ensure_worker", lambda device_id: None)
+
+    fake_agent = TakeoverResumeAgent()
+    fake_phone_manager = FakePhoneAgentManager(fake_agent)
+    monkeypatch.setattr(
+        PhoneAgentManager,
+        "get_instance",
+        classmethod(lambda cls: fake_phone_manager),
+    )
+
+    session = asyncio.run(
+        manager.create_chat_session(
+            device_id="device-1", device_serial="serial-1", mode="classic"
+        )
+    )
+    takeover_task = asyncio.run(
+        manager.submit_chat_task(
+            session_id=session["id"],
+            device_id="device-1",
+            device_serial="serial-1",
+            message="打开飞书",
+        )
+    )
+    takeover_task = store.get_task(takeover_task["id"])
+    assert takeover_task is not None
+
+    asyncio.run(manager._execute_classic_chat(takeover_task))
+
+    completed_takeover = store.get_task(takeover_task["id"])
+    assert completed_takeover is not None
+    assert completed_takeover["status"] == TaskStatus.SUCCEEDED.value
+    assert completed_takeover["stop_reason"] == "takeover"
+    assert completed_takeover["step_count"] == 1
+    assert manager._takeover_sessions == {session["id"]: True}
+    assert fake_agent.stream_calls == [("打开飞书", None)]
+    assert [
+        event["event_type"] for event in store.list_task_events(takeover_task["id"])
+    ].count("takeover") == 1
+
+    continue_task = asyncio.run(
+        manager.submit_chat_task(
+            session_id=session["id"],
+            device_id="device-1",
+            device_serial="serial-1",
+            message="已完成登录",
+        )
+    )
+    continue_task = store.get_task(continue_task["id"])
+    assert continue_task is not None
+
+    asyncio.run(manager._execute_classic_chat(continue_task))
+
+    completed_continue = store.get_task(continue_task["id"])
+    assert completed_continue is not None
+    assert completed_continue["status"] == TaskStatus.SUCCEEDED.value
+    assert completed_continue["final_message"] == "done 已完成登录"
+    assert completed_continue["stop_reason"] == "completed"
+    assert completed_continue["step_count"] == 2
+    assert manager._takeover_sessions == {}
+    assert fake_agent.stream_calls == [
+        ("打开飞书", None),
+        ("已完成登录", "已完成登录"),
+    ]
+    assert fake_phone_manager.errors == []
     store.close()
 
 

@@ -381,6 +381,23 @@ export function useTaskSessionConversation({
           return;
         }
       }
+      if (
+        event.event_type === 'takeover' &&
+        typeof event.payload.message === 'string'
+      ) {
+        setWaitingForUserInteraction(true);
+        setInteractionPrompt(
+          getInteractionPrompt({
+            action: 'Take_over',
+            message: event.payload.message,
+          })
+        );
+        setLoading(false);
+        setAborting(false);
+        setWaitingForDevice(false);
+        currentTaskIdRef.current = null;
+        return;
+      }
 
       // 如果正在等待用户交互，不清除状态
       if (waitingForUserInteraction) {
@@ -533,7 +550,13 @@ export function useTaskSessionConversation({
   const sendMessage = useCallback(
     async (input: string, attachments: TaskImageAttachment[] = []) => {
       const inputValue = input.trim();
-      if ((!inputValue && attachments.length === 0) || loading || !sessionId) {
+      const messageValue =
+        inputValue || (waitingForUserInteraction ? '继续' : '');
+      if (
+        (!messageValue && attachments.length === 0) ||
+        loading ||
+        !sessionId
+      ) {
         return false;
       }
 
@@ -549,7 +572,7 @@ export function useTaskSessionConversation({
 
         const task = await submitTaskSessionTask(
           sessionId,
-          inputValue,
+          messageValue,
           attachments
         );
         const initialEvents = (await listTaskEvents(task.id)).events;

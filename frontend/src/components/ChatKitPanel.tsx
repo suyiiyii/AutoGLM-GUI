@@ -509,6 +509,22 @@ export function ChatKitPanel({
               return;
             }
           }
+          if (
+            event.event_type === 'takeover' &&
+            typeof event.payload.message === 'string'
+          ) {
+            setWaitingForUserInteraction(true);
+            setInteractionPrompt(
+              getInteractionPrompt({
+                action: 'Take_over',
+                message: event.payload.message,
+              })
+            );
+            setLoading(false);
+            setAborting(false);
+            currentTaskIdRef.current = null;
+            return;
+          }
 
           const nextTask = taskRunsRef.current[taskId];
           if (nextTask && !isTaskActive(nextTask.status)) {
@@ -644,7 +660,9 @@ export function ChatKitPanel({
 
   const handleSend = React.useCallback(async () => {
     const inputValue = input.trim();
-    if (!inputValue || loading || !sessionId) return;
+    const messageValue =
+      inputValue || (waitingForUserInteraction ? '继续' : '');
+    if (!messageValue || loading || !sessionId) return;
 
     setInput('');
     setLoading(true);
@@ -657,7 +675,7 @@ export function ChatKitPanel({
     }
 
     try {
-      const task = await submitTaskSessionTask(sessionId, inputValue);
+      const task = await submitTaskSessionTask(sessionId, messageValue);
       const initialEvents = (await listTaskEvents(task.id)).events;
       const reconciledTask = reconcileTaskRun(task, initialEvents);
       taskRunsRef.current[task.id] = reconciledTask;
