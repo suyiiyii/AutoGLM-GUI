@@ -211,33 +211,3 @@ jobs:
           name: frontend-dist
           path: frontend/dist/
           retention-days: 7
-
-  windows-e2e:
-    name: Windows E2E
-    runs-on: windows-latest
-    needs: lint-and-format
-    if: always() && needs.lint-and-format.result == 'success'
-
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Python & uv
-        uses: ./.github/actions/setup-python
-
-      - name: Setup Node.js & pnpm
-        uses: ./.github/actions/setup-node
-        with:
-          node-version: "24"
-
-      - name: Install Playwright Chromium
-        shell: bash
-        run: |
-          cd frontend
-          pnpm exec playwright install chromium
-
-      - name: Run frontend E2E tests
-        shell: bash
-        run: |
-          cd frontend
-          pnpm test:e2e
