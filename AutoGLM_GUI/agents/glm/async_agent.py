@@ -360,7 +360,7 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
                     image_b64: str | None = None
                     for part in content:
                         if isinstance(part, dict):
-                            if part.get("type") == "image_url":
+                            if part.get("type") == "image_url" and image_b64 is None:
                                 image_url = part.get("image_url", {}).get("url", "")
                                 if image_url.startswith("data:"):
                                     # 提取 base64 数据（去掉 data:image/png;base64, 前缀）

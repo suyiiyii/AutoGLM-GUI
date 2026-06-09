@@ -230,3 +230,177 @@ def test_user_reference_images_are_sent_on_first_request_only(monkeypatch):
     assert _count_images(captured[0]) == 2
     assert _count_images(captured[1]) == 1
     assert "User attached 1 reference image" in _text_part(captured[0][-1])
+
+
+# ---------------------------------------------------------------------------
+# Zhipu Cloud API image format conversion
+# ---------------------------------------------------------------------------
+
+
+def test_zhipu_api_converts_image_url_to_extra_body(monkeypatch):
+    """When base_url points to Zhipu Cloud, image_url parts are extracted
+    to extra_body['image'] and messages are rebuilt with plain text content."""
+    agent = AsyncGLMAgent(
+        model_config=ModelConfig(
+            base_url="https://open.bigmodel.cn/api/paas/v4",
+            model_name="autoglm-phone",
+        ),
+        agent_config=AgentConfig(max_steps=10, verbose=False),
+        device=_FakeDevice(),
+    )
+
+    captured_kwargs: dict[str, Any] = {}
+
+    async def fake_create(**kwargs):
+        captured_kwargs.update(kwargs)
+
+        # Return an async iterator that yields one empty chunk
+        class _FakeStream:
+            async def __anext__(self):
+                raise StopAsyncIteration
+
+            def __aiter__(self):
+                return self
+
+            async def close(self):
+                pass
+
+        return _FakeStream()
+
+    monkeypatch.setattr(agent.openai_client.chat.completions, "create", fake_create)
+
+    messages = [
+        {"role": "system", "content": "You are a helpful assistant."},
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/png;base64,screenshot_b64"},
+                },
+                {"type": "text", "text": "Tap the icon."},
+            ],
+        },
+    ]
+
+    async def run() -> None:
+        async for _ in agent._stream_openai(messages):
+            pass
+
+    asyncio.run(run())
+
+    assert captured_kwargs["extra_body"]["image"] == "screenshot_b64"
+    processed = captured_kwargs["messages"]
+    assert processed[0]["content"] == "You are a helpful assistant."
+    assert processed[1]["content"] == "Tap the icon."
+    assert isinstance(processed[1]["content"], str)
+
+
+def test_zhipu_api_uses_first_image_only(monkeypatch):
+    """When multiple images are present, only the first is sent to extra_body."""
+    agent = AsyncGLMAgent(
+        model_config=ModelConfig(
+            base_url="https://open.bigmodel.cn/api/paas/v4",
+            model_name="autoglm-phone",
+        ),
+        agent_config=AgentConfig(max_steps=10, verbose=False),
+        device=_FakeDevice(),
+    )
+
+    captured_kwargs: dict[str, Any] = {}
+
+    async def fake_create(**kwargs):
+        captured_kwargs.update(kwargs)
+
+        class _FakeStream:
+            async def __anext__(self):
+                raise StopAsyncIteration
+
+            def __aiter__(self):
+                return self
+
+            async def close(self):
+                pass
+
+        return _FakeStream()
+
+    monkeypatch.setattr(agent.openai_client.chat.completions, "create", fake_create)
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/png;base64,first_img"},
+                },
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/png;base64,second_img"},
+                },
+                {"type": "text", "text": "Do this."},
+            ],
+        },
+    ]
+
+    async def run() -> None:
+        async for _ in agent._stream_openai(messages):
+            pass
+
+    asyncio.run(run())
+
+    assert captured_kwargs["extra_body"]["image"] == "first_img"
+    assert captured_kwargs["messages"][0]["content"] == "Do this."
+
+
+def test_non_zhipu_api_leaves_messages_untouched(monkeypatch):
+    """Non-Zhipu endpoints keep the standard OpenAI vision format."""
+    agent = AsyncGLMAgent(
+        model_config=ModelConfig(
+            base_url="http://localhost:8000/v1",
+            model_name="autoglm-phone-9b",
+        ),
+        agent_config=AgentConfig(max_steps=10, verbose=False),
+        device=_FakeDevice(),
+    )
+
+    captured_kwargs: dict[str, Any] = {}
+
+    async def fake_create(**kwargs):
+        captured_kwargs.update(kwargs)
+
+        class _FakeStream:
+            async def __anext__(self):
+                raise StopAsyncIteration
+
+            def __aiter__(self):
+                return self
+
+            async def close(self):
+                pass
+
+        return _FakeStream()
+
+    monkeypatch.setattr(agent.openai_client.chat.completions, "create", fake_create)
+
+    messages = [
+        {
+            "role": "user",
+            "content": [
+                {
+                    "type": "image_url",
+                    "image_url": {"url": "data:image/png;base64,img"},
+                },
+                {"type": "text", "text": "Tap."},
+            ],
+        },
+    ]
+
+    async def run() -> None:
+        async for _ in agent._stream_openai(messages):
+            pass
+
+    asyncio.run(run())
+
+    assert "image" not in captured_kwargs["extra_body"]
+    assert captured_kwargs["messages"] == messages
