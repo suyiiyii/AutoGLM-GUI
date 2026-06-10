@@ -293,19 +293,39 @@ class ElectronBuilder:
             path.is_symlink() for path in required_paths
         )
 
+    def _is_windows_electron_dist_valid(self) -> bool:
+        """校验 Windows Electron dist 是否包含 electron-builder 需要重命名的 exe。"""
+        dist_dir = self.electron_dir / "node_modules" / "electron" / "dist"
+        return (dist_dir / "electron.exe").is_file()
+
     def ensure_electron_dist_integrity(self) -> bool:
-        """必要时重置并重新下载 Electron dist，避免 framework symlink 被展开。"""
-        if not self.is_macos:
+        """必要时重置并重新下载 Electron dist，避免平台包不完整。"""
+        if not (self.is_macos or self.is_windows):
             return True
 
         dist_dir = self.electron_dir / "node_modules" / "electron" / "dist"
-        if self._is_macos_electron_dist_valid():
-            print_success("Electron dist 校验通过（framework symlink 结构正常）")
+        if self.is_macos:
+            is_valid = self._is_macos_electron_dist_valid()
+            valid_message = "Electron dist 校验通过（framework symlink 结构正常）"
+            invalid_message = (
+                "Electron dist 异常（缺失或 symlink 结构不正确），正在重新下载..."
+            )
+            retry_error_message = "Electron dist 重新下载后仍异常，请检查网络/缓存环境"
+            success_message = "Electron dist 修复完成（framework symlink 结构正常）"
+        else:
+            is_valid = self._is_windows_electron_dist_valid()
+            valid_message = "Electron dist 校验通过（electron.exe 存在）"
+            invalid_message = "Electron dist 异常（缺失 electron.exe），正在重新下载..."
+            retry_error_message = (
+                "Electron dist 重新下载后仍缺失 electron.exe，请检查网络/缓存环境"
+            )
+            success_message = "Electron dist 修复完成（electron.exe 存在）"
+
+        if is_valid:
+            print_success(valid_message)
             return True
 
-        print_warning(
-            "Electron dist 异常（缺失或 symlink 结构不正确），正在重新下载..."
-        )
+        print_warning(invalid_message)
         if dist_dir.exists():
             shutil.rmtree(dist_dir)
             print_success("已清理异常的 Electron dist")
@@ -317,11 +337,16 @@ class ElectronBuilder:
             print_error("重新下载 Electron dist 失败")
             return False
 
-        if not self._is_macos_electron_dist_valid():
-            print_error("Electron dist 重新下载后仍异常，请检查网络/缓存环境")
+        if self.is_macos:
+            is_valid_after_retry = self._is_macos_electron_dist_valid()
+        else:
+            is_valid_after_retry = self._is_windows_electron_dist_valid()
+
+        if not is_valid_after_retry:
+            print_error(retry_error_message)
             return False
 
-        print_success("Electron dist 修复完成（framework symlink 结构正常）")
+        print_success(success_message)
         return True
 
     def build_electron(self) -> bool:
