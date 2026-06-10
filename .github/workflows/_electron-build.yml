@@ -37,7 +37,7 @@ on:
 jobs:
   build:
     name: Build for ${{ inputs.platform }}
-    runs-on: ${{ inputs.platform == 'windows' && 'windows-latest' || inputs.platform == 'macos-arm64' && 'macos-latest' || inputs.platform == 'macos-x64' && 'macos-15-intel' || inputs.platform == 'linux' && 'ubuntu-22.04' || 'ubuntu-latest' }}
+    runs-on: ${{ inputs.platform == 'windows' && 'windows-2022' || inputs.platform == 'macos-arm64' && 'macos-latest' || inputs.platform == 'macos-x64' && 'macos-15-intel' || inputs.platform == 'linux' && 'ubuntu-22.04' || 'ubuntu-latest' }}
 
     env:
       PYTHONIOENCODING: ${{ inputs.platform == 'windows' && 'utf-8' || '' }}
