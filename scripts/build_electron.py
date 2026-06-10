@@ -298,6 +298,45 @@ class ElectronBuilder:
         dist_dir = self.electron_dir / "node_modules" / "electron" / "dist"
         return (dist_dir / "electron.exe").is_file()
 
+    def _electron_install_env(self) -> dict[str, str]:
+        """为 Electron binary 下载固定当前平台，避免 CI 环境变量或缓存污染。"""
+        env = os.environ.copy()
+        env.pop("ELECTRON_SKIP_BINARY_DOWNLOAD", None)
+        env["force_no_cache"] = "true"
+
+        if self.is_windows:
+            env["npm_config_platform"] = "win32"
+        elif self.is_macos:
+            env["npm_config_platform"] = "darwin"
+        elif self.is_linux:
+            env["npm_config_platform"] = "linux"
+
+        machine = platform.machine().lower()
+        if machine in {"amd64", "x86_64"}:
+            env["npm_config_arch"] = "x64"
+        elif machine in {"aarch64", "arm64"}:
+            env["npm_config_arch"] = "arm64"
+
+        return env
+
+    def _print_electron_dist_debug(self) -> None:
+        """输出 Electron dist 的关键内容，方便 CI 失败时定位平台包。"""
+        electron_package_dir = self.electron_dir / "node_modules" / "electron"
+        dist_dir = electron_package_dir / "dist"
+        path_file = electron_package_dir / "path.txt"
+
+        if path_file.exists():
+            print_warning(f"Electron path.txt: {path_file.read_text().strip()}")
+        else:
+            print_warning("Electron path.txt 不存在")
+
+        if not dist_dir.exists():
+            print_warning("Electron dist 目录不存在")
+            return
+
+        items = sorted(item.name for item in dist_dir.iterdir())
+        print_warning(f"Electron dist 内容: {', '.join(items[:20])}")
+
     def ensure_electron_dist_integrity(self) -> bool:
         """必要时重置并重新下载 Electron dist，避免平台包不完整。"""
         if not (self.is_macos or self.is_windows):
@@ -329,10 +368,15 @@ class ElectronBuilder:
         if dist_dir.exists():
             shutil.rmtree(dist_dir)
             print_success("已清理异常的 Electron dist")
+        for stale_file in ("path.txt", "electron.d.ts"):
+            stale_path = self.electron_dir / "node_modules" / "electron" / stale_file
+            if stale_path.exists():
+                stale_path.unlink()
 
         if not run_command(
             ["node", "node_modules/electron/install.js"],
             cwd=self.electron_dir,
+            env=self._electron_install_env(),
         ):
             print_error("重新下载 Electron dist 失败")
             return False
@@ -343,6 +387,7 @@ class ElectronBuilder:
             is_valid_after_retry = self._is_windows_electron_dist_valid()
 
         if not is_valid_after_retry:
+            self._print_electron_dist_debug()
             print_error(retry_error_message)
             return False
 
@@ -354,7 +399,9 @@ class ElectronBuilder:
         print_step("安装 Electron 依赖", 7, 6)
 
         # 安装 Electron 依赖（使用 pnpm，electron-builder 26.x+ 已支持）
-        if not run_command(["pnpm", "install"], cwd=self.electron_dir):
+        if not run_command(
+            ["pnpm", "install"], cwd=self.electron_dir, env=self._electron_install_env()
+        ):
             return False
 
         if not self.ensure_electron_dist_integrity():
