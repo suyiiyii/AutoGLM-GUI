@@ -12,9 +12,6 @@ publish:
 # 启用更新元数据生成
 electronUpdaterCompatibility: ">=2.16"
 
-# 使用本地 Electron，避免网络下载
-electronDist: node_modules/electron/dist
-
 # 打包后设置可执行权限
 afterPack: ./afterPack.js
 
