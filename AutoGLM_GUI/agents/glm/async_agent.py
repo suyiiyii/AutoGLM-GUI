@@ -342,53 +342,14 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
         self, messages: list[dict[str, Any]]
     ) -> AsyncGenerator[dict[str, str], None]:
         """流式调用 OpenAI，yield thinking chunks。"""
-        # 适配智谱云 API：提取图片到 extra_body，messages 只保留纯文本
-        is_zhipu_api = (
-            "bigmodel.cn" in self.model_config.base_url
-            or "zhipu" in self.model_config.base_url
-        )
-
-        extra_body = dict(self.model_config.extra_body)
-        processed_messages = messages
-
-        if is_zhipu_api:
-            processed_messages = []
-            for msg in messages:
-                content = msg.get("content")
-                if isinstance(content, list):
-                    text_parts: list[str] = []
-                    image_b64: str | None = None
-                    for part in content:
-                        if isinstance(part, dict):
-                            if part.get("type") == "image_url" and image_b64 is None:
-                                image_url = part.get("image_url", {}).get("url", "")
-                                if image_url.startswith("data:"):
-                                    # 提取 base64 数据（去掉 data:image/png;base64, 前缀）
-                                    b64_data = (
-                                        image_url.split(",", 1)[1]
-                                        if "," in image_url
-                                        else image_url
-                                    )
-                                    image_b64 = b64_data
-                            elif part.get("type") == "text":
-                                text_parts.append(part.get("text", ""))
-                    # 重建 message，content 改为纯文本字符串
-                    new_content = "\n".join(text_parts) if text_parts else ""
-                    processed_messages.append({**msg, "content": new_content})
-                    # 将图片放入 extra_body（autoglm-phone 只支持单图，取第一张）
-                    if image_b64:
-                        extra_body["image"] = image_b64
-                else:
-                    processed_messages.append(msg)
-
         stream = await self.openai_client.chat.completions.create(
-            messages=processed_messages,  # type: ignore[arg-type]
+            messages=messages,  # type: ignore[arg-type]
             model=self.model_config.model_name,
             max_tokens=self.model_config.max_tokens,
             temperature=self.model_config.temperature,
             top_p=self.model_config.top_p,
             frequency_penalty=self.model_config.frequency_penalty,
-            extra_body=extra_body,
+            extra_body=self.model_config.extra_body,
             stream=True,
         )
 
