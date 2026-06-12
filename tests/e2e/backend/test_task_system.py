@@ -86,6 +86,7 @@ def _wait_for_task_completion(
 
 
 @pytest.mark.integration
+@pytest.mark.e2e
 class TestTaskSystemE2E:
     """End-to-end tests that exercise the new Task APIs directly."""
 

@@ -66,6 +66,16 @@ artifacts = ["AutoGLM_GUI/static/**/*"]
 [tool.hatch.metadata]
 allow-direct-references = true
 
+[tool.coverage.run]
+source = ["AutoGLM_GUI"]
+parallel = true
+concurrency = ["multiprocessing"]
+patch = ["subprocess"]
+sigterm = true
+
+[tool.coverage.report]
+skip_covered = true
+
 [dependency-groups]
 dev = [
     "pyinstaller>=6.17.0",

@@ -52,12 +52,12 @@ from tests.integration.device_agent.test_client import (  # noqa: E402
     MockAgentTestClient,
 )
 from tests.integration.schema import TestScenarioSchema  # noqa: E402
-from tests.integration.test_task_system_e2e import (  # noqa: E402
+from tests.e2e.backend.test_task_system import (  # noqa: E402
     _configure_mock_llm,
     _register_remote_device,
     _wait_for_task_completion,
 )
-from tests.integration.test_trace_replay_e2e import _read_jsonl  # noqa: E402
+from tests.e2e.backend.test_trace_replay import _read_jsonl  # noqa: E402
 
 
 SCENARIOS_DIR = PROJECT_ROOT / "tests" / "integration" / "fixtures" / "scenarios"

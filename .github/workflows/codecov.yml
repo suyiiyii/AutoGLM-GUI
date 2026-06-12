@@ -38,3 +38,106 @@ jobs:
           name: backend-py311
           fail_ci_if_error: true
           verbose: true
+
+  integration-coverage:
+    name: Integration Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python & uv
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: "3.11"
+          frozen: "true"
+
+      - name: Run integration tests with backend coverage
+        run: |
+          uv run python scripts/run_coverage.py integration --no-report
+
+      - name: Upload integration coverage to Codecov
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.integration.xml
+          flags: backend-integration
+          name: backend-integration-py311
+          fail_ci_if_error: true
+          verbose: true
+
+  backend-e2e-coverage:
+    name: Backend E2E Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python & uv
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: "3.11"
+          frozen: "true"
+
+      - name: Run backend E2E tests with backend coverage
+        run: |
+          uv run python scripts/run_coverage.py backend-e2e --no-report
+
+      - name: Upload backend E2E coverage to Codecov
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.backend-e2e.xml
+          flags: backend-e2e
+          name: backend-e2e-py311
+          fail_ci_if_error: true
+          verbose: true
+
+  frontend-e2e-backend-coverage:
+    name: Frontend E2E Backend Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python & uv
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: "3.11"
+          frozen: "true"
+
+      - name: Setup Node.js & pnpm
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: "24"
+
+      - name: Install Playwright Chromium
+        run: |
+          cd frontend
+          pnpm exec playwright install chromium
+
+      - name: Run frontend E2E tests with backend coverage
+        run: |
+          uv run python scripts/run_coverage.py frontend-e2e --no-report
+
+      - name: Upload frontend E2E backend coverage to Codecov
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage.frontend-e2e-backend.xml
+          flags: frontend-e2e-backend
+          name: frontend-e2e-backend-py311
+          fail_ci_if_error: true
+          verbose: true

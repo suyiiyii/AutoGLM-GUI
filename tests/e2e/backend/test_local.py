@@ -1,8 +1,8 @@
-"""Local end-to-end integration tests (without Docker).
+"""Local backend end-to-end tests (without Docker).
 
 This test module runs AutoGLM-GUI server locally and communicates
 with a Mock Device Agent and Mock LLM server, providing the same
-test coverage as test_docker_e2e.py but without requiring Docker.
+test coverage as test_docker.py but without requiring Docker.
 
 Prerequisites:
     - None (runs entirely in local Python processes)
@@ -15,6 +15,7 @@ import pytest
 
 
 @pytest.mark.integration
+@pytest.mark.e2e
 class TestLocalE2E:
     """End-to-end tests with AutoGLM-GUI running locally (no Docker)."""
 
@@ -29,7 +30,7 @@ class TestLocalE2E:
     ):
         """Test complete flow: Local server -> Mock LLM -> Mock Agent.
 
-        This test provides the same coverage as test_docker_e2e.py::TestDockerE2E::test_meituan_message_scenario
+        This test provides the same coverage as test_docker.py::TestDockerE2E::test_meituan_message_scenario
         but runs the server locally instead of in a Docker container.
         """
         # Update local_server with actual mock_agent_server URL
@@ -181,6 +182,7 @@ class TestLocalE2E:
         mock_llm_client,
         mock_agent_server: str,
         test_client,
+        wechat_test_case: Path,
     ):
         """Test 10-step WeChat scenario.
 
@@ -204,14 +206,7 @@ class TestLocalE2E:
         llm_url = local_server["llm_url"]
 
         # Load WeChat test scenario
-        scenario_path = (
-            Path(__file__).parent
-            / "fixtures"
-            / "scenarios"
-            / "wechat_multi_step"
-            / "scenario.yaml"
-        )
-        test_client.load_scenario(str(scenario_path))
+        test_client.load_scenario(str(wechat_test_case))
 
         print(f"[Local E2E] Registering remote device at {access_url}")
         print(f"[Local E2E] Remote URL: {remote_url}")

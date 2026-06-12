@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 from AutoGLM_GUI.trace_export import export_otlp_jsonl
-from tests.integration.test_task_system_e2e import (
+from tests.e2e.backend.test_task_system import (
     _configure_mock_llm,
     _register_remote_device,
     _wait_for_task_completion,
@@ -88,6 +88,7 @@ def _submit_trace_task(
 
 
 @pytest.mark.integration
+@pytest.mark.e2e
 class TestTraceReplayE2E:
     """Validate replay trace behavior through the real local server stack."""
 
