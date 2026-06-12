@@ -60,7 +60,7 @@ from tests.e2e.test_task_system_e2e import (  # noqa: E402
 from tests.e2e.test_trace_replay_e2e import _read_jsonl  # noqa: E402
 
 
-SCENARIOS_DIR = PROJECT_ROOT / "tests" / "integration" / "fixtures" / "scenarios"
+SCENARIOS_DIR = PROJECT_ROOT / "tests" / "e2e" / "fixtures" / "scenarios"
 DEFAULT_REPORT = PROJECT_ROOT / "test-results" / "harness" / "report.json"
 GOLDEN_SCHEMA = "autoglm.harness.golden.v1"
 REQUIRED_TRACE_SPAN_NAMES = [

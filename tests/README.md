@@ -9,22 +9,24 @@
 ```
 tests/
 ├── *.py                              # 单元测试 / 契约测试 / 模块级集成测试
-├── integration/
-│   ├── conftest.py                   # 集成测试共享 fixture（mock server、本地服务等）
+├── test_agent_integration.py         # Agent 集成测试（根目录）
+├── e2e/
+│   ├── conftest.py                   # E2E 共享 fixture（mock server、本地服务等）
 │   ├── test_local_e2e.py             # 本地端到端测试
 │   ├── test_docker_e2e.py            # Docker 端到端测试
 │   ├── test_task_system_e2e.py       # 任务系统端到端测试
 │   ├── test_trace_replay_e2e.py      # Trace 回放端到端测试
-│   ├── test_agent_integration.py     # Agent 集成测试
 │   ├── test_runner.py                # 测试运行器相关测试
-│   └── device_agent/                 # Mock LLM / Mock Agent / 远程设备测试辅助
-│       ├── mock_llm_server.py
-│       ├── mock_agent_server.py
-│       ├── mock_llm_client.py
-│       ├── test_client.py
-│       ├── test_remote_device.py
-│       ├── test_e2e_with_adapter.py
-│       └── ...
+│   ├── device_agent/                 # Mock LLM / Mock Agent / 远程设备测试辅助
+│   │   ├── mock_llm_server.py
+│   │   ├── mock_agent_server.py
+│   │   ├── mock_llm_client.py
+│   │   ├── test_client.py
+│   │   ├── test_remote_device.py
+│   │   ├── test_e2e_with_adapter.py
+│   │   └── ...
+│   └── fixtures/
+│       └── scenarios/                # Harness 场景数据
 ├── harness/                          # 测试 harness（当前预留）
 └── mock_screenshots/                 # 测试用固定截图
 ```
