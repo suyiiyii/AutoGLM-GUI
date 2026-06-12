@@ -14,7 +14,7 @@ import httpx
 import pytest
 
 
-@pytest.mark.integration
+@pytest.mark.e2e
 class TestLocalE2E:
     """End-to-end tests with AutoGLM-GUI running locally (no Docker)."""
 

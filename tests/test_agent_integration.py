@@ -7,6 +7,9 @@ import pytest
 from tests.e2e.test_runner import TestRunner
 
 
+pytestmark = [pytest.mark.integration]
+
+
 class TestAgentIntegration:
     """Test Agent integration using state machine."""
 

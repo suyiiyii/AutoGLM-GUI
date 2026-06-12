@@ -21,6 +21,14 @@ export async function terminateProcessTree(pid: number) {
   }
 
   try {
+    // SIGINT lets uvicorn subprocesses run atexit handlers, which is needed
+    // for Python coverage data to be flushed.  Fall back to SIGTERM/SIGKILL.
+    process.kill(-pid, 'SIGINT');
+  } catch {
+    return;
+  }
+  await sleep(3000);
+  try {
     process.kill(-pid, 'SIGTERM');
   } catch {
     return;

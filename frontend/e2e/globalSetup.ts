@@ -64,16 +64,23 @@ async function globalSetup() {
 
   // Start services with retry on port-in-use
   let proc: ReturnType<typeof spawn> | null = null;
+  const coverageEnabled = process.env.COVERAGE_E2E_FRONTEND === '1';
   for (let attempt = 0; attempt < 3; attempt++) {
-    proc = spawn(
-      'uv',
-      ['run', 'python', 'scripts/start_e2e_services.py', '--output', urlsPath],
-      {
-        cwd: projectRoot,
-        stdio: 'inherit',
-        detached: true,
-      }
-    );
+    const args = [
+      'run',
+      'python',
+      'scripts/start_e2e_services.py',
+      '--output',
+      urlsPath,
+    ];
+    if (coverageEnabled) {
+      args.push('--coverage');
+    }
+    proc = spawn('uv', args, {
+      cwd: projectRoot,
+      stdio: 'inherit',
+      detached: true,
+    });
 
     // Wait for both backend health and the launcher-written URL file.
     const deadline = Date.now() + 30000;

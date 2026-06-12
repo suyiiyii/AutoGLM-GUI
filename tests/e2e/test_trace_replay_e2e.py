@@ -87,7 +87,7 @@ def _submit_trace_task(
     return final_task, registered_serial
 
 
-@pytest.mark.integration
+@pytest.mark.e2e
 class TestTraceReplayE2E:
     """Validate replay trace behavior through the real local server stack."""
 

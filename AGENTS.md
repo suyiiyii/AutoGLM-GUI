@@ -35,11 +35,14 @@
 - Frontend typecheck: `cd frontend && pnpm type-check`
 
 ### Unit tests
-- TODO: 未找到“仅单元测试”的专用命令（已检查 `README.md`、`CONTRIBUTING.md`、`pyproject.toml`、`tests/`、`.github/workflows/integration-tests.yml`）。
+- Unit + contract tests: `uv run pytest -m "not integration and not e2e" -v`
 
 ### Integration or e2e
-- Integration tests (CI uses this): `uv run pytest -v`
+- All tests (CI uses this): `uv run pytest -v`
+- Integration tests: `uv run pytest -m integration -v`
+- Backend E2E tests: `uv run pytest -m e2e -v`
 - Docker e2e (specific file): `uv run pytest tests/e2e/test_docker_e2e.py -v -s`
+- Frontend E2E: `cd frontend && pnpm test:e2e`
 
 ### Build
 - Build frontend + copy to backend static: `uv run python scripts/build.py`

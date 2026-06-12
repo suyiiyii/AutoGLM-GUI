@@ -42,10 +42,11 @@ def _is_docker_available() -> bool:
 
 # Skip all tests in this module if Docker is not available
 pytestmark = [
+    pytest.mark.e2e,
     pytest.mark.skipif(
         not _is_docker_available(),
         reason="Docker is not installed or not running. Skip Docker E2E tests.",
-    )
+    ),
 ]
 
 

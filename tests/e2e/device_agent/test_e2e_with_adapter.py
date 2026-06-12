@@ -15,6 +15,9 @@ import pytest
 from AutoGLM_GUI.devices.remote_device import RemoteDevice
 
 
+pytestmark = [pytest.mark.e2e]
+
+
 class TestE2EWithAgent:
     """
     End-to-end tests with AsyncGLMAgent using Mock LLM.

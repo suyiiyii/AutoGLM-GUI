@@ -63,6 +63,14 @@ def _run_agent_server(port, scenario_path=None):
 
 
 def _run_autoglm_server(port, llm_url):
+    import os
+
+    # Start coverage in subprocess when COVERAGE_PROCESS_START is set.
+    if os.environ.get("COVERAGE_PROCESS_START"):
+        import coverage
+
+        coverage.process_startup()
+
     import uvicorn
 
     os.environ["AUTOGLM_BASE_URL"] = llm_url + "/v1"
@@ -80,7 +88,15 @@ def main():
         "--output", default=None, help="JSON output file for service URLs"
     )
     parser.add_argument("--scenario", default=None, help="Scenario YAML for mock agent")
+    parser.add_argument(
+        "--coverage",
+        action="store_true",
+        help="Enable Python coverage for the AutoGLM-GUI backend process",
+    )
     args = parser.parse_args()
+
+    if args.coverage:
+        os.environ["COVERAGE_PROCESS_START"] = ".coveragerc"
 
     # Use fixed ports so vite proxy (localhost:8000) works correctly.
     # If a port is in use the test will fail — free it up and retry.
@@ -122,10 +138,12 @@ def main():
     print("[E2E Services] Mock agent server ready")
 
     # Start AutoGLM-GUI backend
+    print(f"[E2E Services] Starting backend process with coverage={args.coverage}")
     backend_proc = multiprocessing.Process(
         target=_run_autoglm_server, args=(backend_port, llm_url)
     )
     backend_proc.start()
+    print(f"[E2E Services] Backend process started pid={backend_proc.pid}")
     wait_for_server(backend_url, timeout=30, endpoint="/api/health")
     print("[E2E Services] AutoGLM-GUI backend ready")
 
@@ -144,14 +162,26 @@ def main():
     print(f"[E2E Services] URLs written to {output_path}")
 
     # Wait for termination
+    _shutting_down = False
+
     def cleanup(signum, frame):
+        nonlocal _shutting_down
+        if _shutting_down:
+            return
+        _shutting_down = True
         print("\n[E2E Services] Shutting down...")
         for proc in [backend_proc, agent_proc, llm_proc]:
             if proc.is_alive():
-                proc.terminate()
-                proc.join(timeout=5)
+                # Use SIGINT so that uvicorn subprocesses run their atexit
+                # handlers (needed for coverage data to be flushed).
+                try:
+                    os.kill(proc.pid, signal.SIGINT)
+                except ProcessLookupError:
+                    pass
+                proc.join(timeout=15)
                 if proc.is_alive():
                     proc.kill()
+                    proc.join(timeout=2)
         if os.path.exists(output_path):
             os.remove(output_path)
         sys.exit(0)

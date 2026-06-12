@@ -8,8 +8,8 @@ on:
   workflow_dispatch:
 
 jobs:
-  coverage:
-    name: Python Coverage
+  unit-coverage:
+    name: Unit + Contract Coverage
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -25,16 +25,90 @@ jobs:
           python-version: "3.11"
           frozen: "true"
 
-      - name: Run tests with coverage
+      - name: Run unit + contract tests with coverage
         run: |
-          uv run pytest -v --cov=AutoGLM_GUI --cov-report=xml:coverage.xml --cov-report=term-missing:skip-covered
+          uv run pytest -m "not integration and not e2e" -v \
+            --cov=AutoGLM_GUI \
+            --cov-report=xml:coverage-unit.xml \
+            --cov-report=term-missing:skip-covered
 
-      - name: Upload coverage to Codecov
+      - name: Upload unit coverage to Codecov
         uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: coverage.xml
-          flags: backend
-          name: backend-py311
+          files: coverage-unit.xml
+          flags: unit
+          name: unit-py311
+          fail_ci_if_error: true
+          verbose: true
+
+  integration-coverage:
+    name: Integration Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python & uv
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: "3.11"
+          frozen: "true"
+
+      - name: Run integration tests with coverage
+        run: |
+          uv run pytest -m integration -v \
+            --cov=AutoGLM_GUI \
+            --cov-report=xml:coverage-integration.xml \
+            --cov-report=term-missing:skip-covered
+
+      - name: Upload integration coverage to Codecov
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage-integration.xml
+          flags: integration
+          name: integration-py311
+          fail_ci_if_error: true
+          verbose: true
+
+  e2e-backend-coverage:
+    name: Backend E2E Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python & uv
+        uses: ./.github/actions/setup-python
+        with:
+          python-version: "3.11"
+          frozen: "true"
+
+      - name: Run backend E2E tests with coverage
+        run: |
+          export COVERAGE_PROCESS_START=.coveragerc
+          uv run pytest -m e2e -v \
+            --cov=AutoGLM_GUI \
+            --cov-report=xml:coverage-e2e-backend.xml \
+            --cov-report=term-missing:skip-covered
+          # Combine any per-process coverage data files created by subprocesses.
+          uv run coverage combine || true
+
+      - name: Upload backend E2E coverage to Codecov
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage-e2e-backend.xml
+          flags: e2e-backend
+          name: e2e-backend-py311
           fail_ci_if_error: true
           verbose: true

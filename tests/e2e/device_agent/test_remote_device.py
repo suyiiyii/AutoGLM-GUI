@@ -11,6 +11,9 @@ import pytest
 from AutoGLM_GUI.devices.remote_device import RemoteDevice
 
 
+pytestmark = [pytest.mark.e2e]
+
+
 class TestRemoteDeviceBasic:
     """Basic RemoteDevice tests."""
 

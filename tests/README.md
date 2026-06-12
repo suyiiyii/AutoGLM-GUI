@@ -70,8 +70,10 @@ tests/
 
 | Marker | 含义 | 使用场景 |
 |--------|------|----------|
+| `unit` | 纯内存单元测试，无外部服务 | 单个函数、类、模块 |
 | `contract` | API 行为契约，重构时不应破坏 | 稳定的 API 响应格式测试 |
-| `integration` | 跨模块或多进程集成测试 | 需要子进程 / mock server |
+| `integration` | 同进程跨模块集成测试 | 需要多个模块协作但不启动真实服务 |
+| `e2e` | 端到端测试，启动真实服务或浏览器 | 后端 E2E / 前端 E2E |
 | `release_gate` | 发布前必须通过的回归门控 | 核心流程的关键测试 |
 | `anyio` | 异步测试（pytest-anyio 提供）| 测试 async/await 代码 |
 
@@ -130,11 +132,14 @@ pnpm test:e2e
 
 ## 覆盖率口径
 
-CI 中通过 `.github/workflows/codecov.yml` 生成并上传覆盖率：
+CI 中按测试模式分别生成并上传后端覆盖率：
 
-```bash
-uv run pytest -v --cov=AutoGLM_GUI --cov-report=xml:coverage.xml --cov-report=term-missing:skip-covered
-```
+| 模式 | CI Job | 命令 |
+|------|--------|------|
+| 单元 + 契约 | `unit-coverage` | `uv run pytest -m "not integration and not e2e" --cov=AutoGLM_GUI --cov-report=xml:coverage-unit.xml` |
+| 集成测试 | `integration-coverage` | `uv run pytest -m integration --cov=AutoGLM_GUI --cov-report=xml:coverage-integration.xml` |
+| 后端 E2E | `e2e-backend-coverage` | `COVERAGE_PROCESS_START=.coveragerc uv run pytest -m e2e --cov=AutoGLM_GUI --cov-report=xml:coverage-e2e-backend.xml` |
+| 前端 E2E | `e2e-frontend-coverage` | `COVERAGE_E2E_FRONTEND=1 pnpm test:e2e`（backend 覆盖率数据由子进程生成） |
 
 ### 覆盖率说明
 
@@ -144,24 +149,40 @@ uv run pytest -v --cov=AutoGLM_GUI --cov-report=xml:coverage.xml --cov-report=te
 | **工具** | pytest-cov（底层 coverage.py） |
 | **统计范围** | 仅 `AutoGLM_GUI/` 目录下的 Python 生产代码 |
 | **不计入** | `tests/`、`frontend/`、`electron/`、`scripts/`、`docs/` 等 |
-| **测试组成** | 由单元测试 + 集成测试 + E2E 测试共同贡献，不是单一测试类型的覆盖率 |
-| **当前数值** | 约 **85.50%**（以 Codecov 最新报告为准） |
+| **测试组成** | 每种模式只统计该模式运行的测试所覆盖到的代码 |
+| **Codecov flags** | `unit`、`integration`、`e2e-backend`、`e2e-frontend` |
 
-### 重要提示
+### 子进程覆盖率
 
-- Codecov 的 85.50% 是**全量 Python 测试**一起跑出来的混合覆盖率。
-- 它不是纯单元测试覆盖率，也不是纯 E2E 覆盖率。
-- 默认是**行覆盖**，不是分支覆盖（Branch Coverage）。
-- 本项目没有额外配置 `.coveragerc` 或 `[tool.coverage]`，使用 pytest-cov 默认行为。
+后端 E2E 和前端 E2E 中的 AutoGLM-GUI server 运行在子进程中。`.coveragerc` 配置为：
 
-如果你想看不同层级的覆盖率，可以手动拆分：
+```ini
+[run]
+source = AutoGLM_GUI
+parallel = True
+concurrency = multiprocessing,thread
+```
+
+子进程入口通过 `coverage.process_startup()` 启动 coverage，退出时自动保存数据。
+
+### 手动跑分模式覆盖率
 
 ```bash
-# 单元 + 契约测试贡献的覆盖率
+# 单元 + 契约
 uv run pytest -m "not integration and not e2e" --cov=AutoGLM_GUI --cov-report=term
 
-# 集成 + E2E 贡献的覆盖率
-uv run pytest -m "integration or e2e" --cov=AutoGLM_GUI --cov-report=term
+# 集成
+uv run pytest -m integration --cov=AutoGLM_GUI --cov-report=term
+
+# 后端 E2E
+COVERAGE_PROCESS_START=.coveragerc uv run pytest -m e2e --cov=AutoGLM_GUI --cov-report=term
+
+# 前端 E2E（需要安装 Playwright 浏览器）
+cd frontend
+COVERAGE_E2E_FRONTEND=1 pnpm test:e2e
+cd ..
+uv run coverage combine
+uv run coverage xml -o coverage-e2e-frontend.xml
 ```
 
 ---
@@ -186,7 +207,8 @@ uv run pytest -m "integration or e2e" --cov=AutoGLM_GUI --cov-report=term
 | Workflow | 触发条件 | 说明 |
 |----------|----------|------|
 | `integration-tests.yml` | PR/push 到 `main/dev` | 多 Python 版本跑 `pytest -v` |
-| `codecov.yml` | PR/push 到 `main/dev` | 跑覆盖率并上传 Codecov |
+| `codecov.yml` | PR/push 到 `main/dev` | 分模式跑后端覆盖率并上传 Codecov |
+| `coverage-e2e-frontend.yml` | PR/push 到 `main/master` | 前端 E2E 同时收集 backend 覆盖率 |
 | `release-gate.yml` | PR/push 到 `main/dev` | 跑 `pytest -m release_gate` |
 | `web-e2e.yml` | PR 到 `main/master` | Windows runner 跑 Playwright E2E |
 | `build.yml` | PR/push 到 `main` | Electron 多平台构建 |

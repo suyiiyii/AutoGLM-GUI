@@ -85,7 +85,7 @@ def _wait_for_task_completion(
     raise AssertionError(f"Task {task_id} did not finish within {timeout}s")
 
 
-@pytest.mark.integration
+@pytest.mark.e2e
 class TestTaskSystemE2E:
     """End-to-end tests that exercise the new Task APIs directly."""
 
