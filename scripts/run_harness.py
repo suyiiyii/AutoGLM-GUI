@@ -2,7 +2,7 @@
 """Minimal local harness runner for stable integration scenarios.
 
 Phase 1 scope:
-- list runnable scenarios from tests/integration/fixtures/scenarios
+- list runnable scenarios from tests/e2e/fixtures/scenarios
 - execute the meituan_message scenario through the existing local server +
   mock LLM + mock device + trace/replay path
 - write a JSON report with artifact paths and a reproduction command
@@ -38,26 +38,26 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from tests.integration.conftest import (  # noqa: E402
+from tests.e2e.conftest import (  # noqa: E402
     _run_agent_server,
     _run_autoglm_server,
     _run_llm_server,
     find_free_port,
     wait_for_server,
 )
-from tests.integration.device_agent.mock_llm_client import (  # noqa: E402
+from tests.e2e.device_agent.mock_llm_client import (  # noqa: E402
     MockLLMTestClient,
 )
-from tests.integration.device_agent.test_client import (  # noqa: E402
+from tests.e2e.device_agent.test_client import (  # noqa: E402
     MockAgentTestClient,
 )
-from tests.integration.schema import TestScenarioSchema  # noqa: E402
-from tests.integration.test_task_system_e2e import (  # noqa: E402
+from tests.e2e.schema import TestScenarioSchema  # noqa: E402
+from tests.e2e.test_task_system_e2e import (  # noqa: E402
     _configure_mock_llm,
     _register_remote_device,
     _wait_for_task_completion,
 )
-from tests.integration.test_trace_replay_e2e import _read_jsonl  # noqa: E402
+from tests.e2e.test_trace_replay_e2e import _read_jsonl  # noqa: E402
 
 
 SCENARIOS_DIR = PROJECT_ROOT / "tests" / "integration" / "fixtures" / "scenarios"
@@ -716,7 +716,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--list",
         action="store_true",
-        help="List runnable scenarios discovered under tests/integration/fixtures/scenarios",
+        help="List runnable scenarios discovered under tests/e2e/fixtures/scenarios",
     )
     parser.add_argument(
         "--scenario",

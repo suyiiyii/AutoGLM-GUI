@@ -6,10 +6,10 @@ for realistic screenshot responses.
 
 Usage:
     # Start the server
-    uvicorn tests.integration.device_agent.mock_agent_server:app --port 8001
+    uvicorn tests.e2e.device_agent.mock_agent_server:app --port 8001
 
     # Or programmatically
-    from tests.integration.device_agent.mock_agent_server import create_app
+    from tests.e2e.device_agent.mock_agent_server import create_app
     app = create_app(scenario_path="scenarios/meituan_message/scenario.yaml")
 """
 
@@ -74,7 +74,7 @@ class MockAgentState:
 
     def load_scenario(self, path: str | Path):
         """Load a test scenario (state machine)."""
-        from tests.integration.state_machine import load_test_case
+        from tests.e2e.state_machine import load_test_case
 
         self.scenario_path = str(path)
         self.state_machine, _, _ = load_test_case(path)

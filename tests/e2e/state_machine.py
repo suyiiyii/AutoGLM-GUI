@@ -261,7 +261,7 @@ def load_test_case(
         ValueError: If YAML validation fails
     """
     import yaml
-    from tests.integration.schema import TestScenarioSchema
+    from tests.e2e.schema import TestScenarioSchema
 
     yaml_path = Path(yaml_path)
     base_dir = Path(base_dir) if base_dir else yaml_path.parent

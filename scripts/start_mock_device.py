@@ -50,7 +50,7 @@ def main():
 示例:
   %(prog)s                          # 默认 18000 端口
   %(prog)s --port 8001              # 自定义端口
-  %(prog)s --scenario tests/integration/fixtures/scenarios/meituan_message/scenario.yaml
+  %(prog)s --scenario tests/e2e/fixtures/scenarios/meituan_message/scenario.yaml
 
 测试 API:
   http://localhost:18000/test/commands       # 获取记录的命令
@@ -74,7 +74,7 @@ def main():
         "--scenario",
         "-s",
         type=str,
-        default="tests/integration/fixtures/scenarios/meituan_message/scenario.yaml",
+        default="tests/e2e/fixtures/scenarios/meituan_message/scenario.yaml",
         help="预加载的测试场景 YAML 文件路径 (默认: meituan_message)",
     )
     parser.add_argument(
@@ -92,7 +92,7 @@ def main():
     args = parser.parse_args()
 
     # 导入并创建 app
-    from tests.integration.device_agent.mock_agent_server import create_app
+    from tests.e2e.device_agent.mock_agent_server import create_app
 
     app = create_app()
 

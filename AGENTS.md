@@ -5,7 +5,7 @@
 - Backend code lives in `AutoGLM_GUI/` (API entrypoint examples: `AutoGLM_GUI/api/__init__.py`, CLI entry: `AutoGLM_GUI/__main__.py`).
 - Web frontend lives in `frontend/` (entry: `frontend/src/main.tsx`), desktop packaging lives in `electron/`.
 - Build/lint orchestration scripts are in `scripts/` (`scripts/lint.py`, `scripts/build.py`, `scripts/build_electron.py`).
-- Tests are in `tests/` and `tests/integration/` (example: `tests/test_metrics.py`, `tests/integration/test_agent_integration.py`).
+- Tests are in `tests/` and `tests/e2e/` (example: `tests/test_metrics.py`, `tests/e2e/test_local_e2e.py`).
 
 ## Setup
 - Required Python: `>=3.11` (from `pyproject.toml`).
@@ -39,7 +39,7 @@
 
 ### Integration or e2e
 - Integration tests (CI uses this): `uv run pytest -v`
-- Docker e2e (specific file): `uv run pytest tests/integration/test_docker_e2e.py -v -s`
+- Docker e2e (specific file): `uv run pytest tests/e2e/test_docker_e2e.py -v -s`
 
 ### Build
 - Build frontend + copy to backend static: `uv run python scripts/build.py`
@@ -74,7 +74,7 @@
 - Prefer minimal, localized changes; follow existing patterns in nearby files.
 - Reuse existing scripts in `scripts/` instead of introducing parallel tooling.
 - Keep backend/frontend boundaries clear (`AutoGLM_GUI/` vs `frontend/`).
-- Add or update tests near changed logic when feasible (examples in `tests/` and `tests/integration/`).
+- Add or update tests near changed logic when feasible (examples in `tests/` and `tests/e2e/`).
 
 ### Don’t
 - Don’t perform broad refactors unrelated to the task.

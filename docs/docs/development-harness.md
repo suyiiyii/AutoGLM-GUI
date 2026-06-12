@@ -22,15 +22,15 @@ title: Harness Engineering 路线图
 
 | 领域 | 当前基础 |
 | --- | --- |
-| 后端测试 | `tests/` 和 `tests/integration/` 已有 pytest 覆盖 |
+| 后端测试 | `tests/` 和 `tests/e2e/` 已有 pytest 覆盖 |
 | 测试分层 | `pytest.ini` 定义了 `contract`、`integration`、`release_gate` markers |
 | Release gate | `.github/workflows/release-gate.yml` 运行后端 lint 和 `pytest -m "release_gate"` |
 | Coverage | `.github/workflows/codecov.yml` 上传后端 coverage |
 | 前端 E2E | `frontend/e2e/trace-events.spec.ts` 已能通过真实 UI + mock 服务验证 trace 事件 |
 | E2E 服务启动 | `scripts/start_e2e_services.py` 启动 mock LLM、mock agent 和 backend |
-| Trace / replay | `tests/test_trace.py` 和 `tests/integration/test_trace_replay_e2e.py` 覆盖 trace / replay 文件 |
+| Trace / replay | `tests/test_trace.py` 和 `tests/e2e/test_trace_replay_e2e.py` 覆盖 trace / replay 文件 |
 | Agent 调试说明 | `AGENTS.md` 已记录 trace 文件、trace_id 和调试流程 |
-| Scenario fixtures | `tests/integration/fixtures/scenarios/` 下已有 `meituan_message`、`wechat_multi_step` 等场景 |
+| Scenario fixtures | `tests/e2e/fixtures/scenarios/` 下已有 `meituan_message`、`wechat_multi_step` 等场景 |
 
 ### 当前缺口
 

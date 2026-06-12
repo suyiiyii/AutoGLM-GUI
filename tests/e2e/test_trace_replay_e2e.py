@@ -11,7 +11,7 @@ import httpx
 import pytest
 
 from AutoGLM_GUI.trace_export import export_otlp_jsonl
-from tests.integration.test_task_system_e2e import (
+from tests.e2e.test_task_system_e2e import (
     _configure_mock_llm,
     _register_remote_device,
     _wait_for_task_completion,

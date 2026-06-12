@@ -10,7 +10,7 @@ from typing import Any
 
 from AutoGLM_GUI.devices.mock_device import MockDevice
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
-from tests.integration.state_machine import (
+from tests.e2e.state_machine import (
     StateMachine,
     TestFailedError,
     load_test_case,
@@ -198,7 +198,7 @@ if __name__ == "__main__":
     import sys
 
     if len(sys.argv) < 2:
-        print("Usage: python -m tests.integration.test_runner <test_case.yaml>")
+        print("Usage: python -m tests.e2e.test_runner <test_case.yaml>")
         sys.exit(1)
 
     result = run_test(sys.argv[1])

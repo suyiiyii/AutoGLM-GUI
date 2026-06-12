@@ -49,14 +49,14 @@ def wait_for_server(url, timeout=30.0, endpoint="/test/stats"):
 
 
 def _run_llm_server(port):
-    from tests.integration.device_agent.mock_llm_server import run_server
+    from tests.e2e.device_agent.mock_llm_server import run_server
 
     run_server(port=port, log_level="warning")
 
 
 def _run_agent_server(port, scenario_path=None):
     import uvicorn
-    from tests.integration.device_agent.mock_agent_server import create_app
+    from tests.e2e.device_agent.mock_agent_server import create_app
 
     app = create_app(scenario_path=scenario_path)
     uvicorn.run(app, host="127.0.0.1", port=port, log_level="warning")
