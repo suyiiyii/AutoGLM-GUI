@@ -35,6 +35,13 @@ def _port_is_free(port):
             return False
 
 
+def _find_free_port(start_port, end_port):
+    for port in range(start_port, end_port + 1):
+        if _port_is_free(port):
+            return port
+    raise RuntimeError(f"No free port found in range {start_port}-{end_port}")
+
+
 def wait_for_server(url, timeout=30.0, endpoint="/test/stats"):
     start = time.time()
     while time.time() - start < timeout:
@@ -93,16 +100,28 @@ def main():
         action="store_true",
         help="Enable Python coverage for the AutoGLM-GUI backend process",
     )
+    parser.add_argument(
+        "--dynamic-ports",
+        action="store_true",
+        help="Choose free ports automatically for backend and mock services",
+    )
     args = parser.parse_args()
 
     if args.coverage:
         os.environ["COVERAGE_PROCESS_START"] = ".coveragerc"
 
-    # Use fixed ports so vite proxy (localhost:8000) works correctly.
-    # If a port is in use the test will fail — free it up and retry.
-    llm_port = 18003
-    agent_port = 18000
-    backend_port = 8000
+    if args.dynamic_ports:
+        # Allocate free ports so multiple worktrees / agents can run E2E in
+        # parallel without colliding on the default fixed ports.
+        llm_port = _find_free_port(18000, 18999)
+        agent_port = _find_free_port(19000, 19999)
+        backend_port = _find_free_port(8000, 8099)
+    else:
+        # Use fixed ports so vite proxy (localhost:8000) works correctly.
+        # If a port is in use the test will fail — free it up and retry.
+        llm_port = 18003
+        agent_port = 18000
+        backend_port = 8000
 
     for port, name in [
         (llm_port, "mock LLM"),

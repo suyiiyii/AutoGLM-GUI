@@ -70,6 +70,7 @@ async function globalSetup() {
       'run',
       'python',
       'scripts/start_e2e_services.py',
+      '--dynamic-ports',
       '--output',
       urlsPath,
     ];
@@ -82,29 +83,31 @@ async function globalSetup() {
       detached: true,
     });
 
-    // Wait for both backend health and the launcher-written URL file.
+    // Wait for the launcher-written URL file and backend health.
+    // With --dynamic-ports the backend may not be on localhost:8000.
     const deadline = Date.now() + 30000;
     let started = false;
     while (Date.now() < deadline) {
-      try {
-        const resp = await fetch('http://127.0.0.1:8000/api/health');
-        if (resp.status === 200) {
-          const urls = readServiceUrls(urlsPath);
-          if (urls) {
+      const urls = readServiceUrls(urlsPath);
+      if (urls) {
+        try {
+          const resp = await fetch(`${urls.backend_url}/api/health`);
+          if (resp.status === 200) {
             console.log('[globalSetup] Services ready, URLs:', urls);
             started = true;
             break;
           }
+        } catch {
+          // Not ready yet.
         }
-      } catch {
-        // Not ready — but check if the process exited with error
-        if (proc && proc.exitCode !== null) {
-          // Process died — port likely in use, retry
-          console.log(
-            `[globalSetup] Attempt ${attempt + 1}: process exited, retrying...`
-          );
-          break;
-        }
+      }
+      // Not ready — but check if the process exited with error
+      if (proc && proc.exitCode !== null) {
+        // Process died — port likely in use, retry
+        console.log(
+          `[globalSetup] Attempt ${attempt + 1}: process exited, retrying...`
+        );
+        break;
       }
       await sleep(500);
     }
