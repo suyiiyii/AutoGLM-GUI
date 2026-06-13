@@ -4,7 +4,7 @@ import asyncio
 
 from fastapi import APIRouter
 
-from AutoGLM_GUI.devices.adb_device import ADBDevice
+from AutoGLM_GUI.device_manager import DeviceManager
 from AutoGLM_GUI.schemas import (
     SwipeRequest,
     SwipeResponse,
@@ -28,7 +28,8 @@ async def control_tap(request: TapRequest) -> TapResponse:
         if not request.device_id:
             return TapResponse(success=False, error="device_id is required")
 
-        device = ADBDevice(request.device_id)
+        device_manager = DeviceManager.get_instance()
+        device = device_manager.get_device_protocol(request.device_id)
         await asyncio.to_thread(
             device.tap,
             x=request.x,
@@ -48,7 +49,8 @@ async def control_swipe(request: SwipeRequest) -> SwipeResponse:
         if not request.device_id:
             return SwipeResponse(success=False, error="device_id is required")
 
-        device = ADBDevice(request.device_id)
+        device_manager = DeviceManager.get_instance()
+        device = device_manager.get_device_protocol(request.device_id)
         await asyncio.to_thread(
             device.swipe,
             start_x=request.start_x,

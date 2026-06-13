@@ -34,6 +34,7 @@ data class ReverseAgentUiState(
 class ReverseAgentClient private constructor(context: Context) {
     private val appContext = context.applicationContext
     private val store = ReverseAgentStore(appContext)
+    private val commandExecutor = CommandExecutor(appContext)
     private val httpClient = OkHttpClient.Builder().readTimeout(0, TimeUnit.MILLISECONDS).build()
     private val scheduler: ScheduledExecutorService = Executors.newSingleThreadScheduledExecutor()
     private val mainHandler = Handler(Looper.getMainLooper())
@@ -425,6 +426,21 @@ class ReverseAgentClient private constructor(context: Context) {
                 }
 
                 "pong" -> Unit
+
+                "command" -> {
+                    val commandId = message.optString("command_id", "")
+                    val commandType = message.optString("command_type", "")
+                    val payload = message.optJSONObject("payload") ?: JSONObject()
+                    val activeSocket = webSocket
+                    scheduler.execute {
+                        try {
+                            val result = commandExecutor.execute(commandId, commandType, payload)
+                            activeSocket.send(result.toString())
+                        } catch (error: Exception) {
+                            Log.e(TAG, "failed to execute command $commandType", error)
+                        }
+                    }
+                }
 
                 "error" -> {
                     updateState(

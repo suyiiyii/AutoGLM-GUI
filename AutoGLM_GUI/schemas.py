@@ -1,7 +1,7 @@
 """Shared Pydantic models for the AutoGLM-GUI API."""
 
 import re
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -1324,3 +1324,22 @@ class ReverseAgentHeartbeatAck(BaseModel):
     agent_id: str
     server_time: float
     connection_status: str
+
+
+class ReverseAgentCommandRequest(BaseModel):
+    """Request to send a command to a reverse Android Agent."""
+
+    command_type: Literal["screenshot", "tap", "swipe", "type_text", "current_app"]
+    payload: dict[str, Any] = Field(default_factory=dict)
+    timeout_seconds: float = Field(default=30.0, ge=1.0, le=120.0)
+
+
+class ReverseAgentCommandResponse(BaseModel):
+    """Response from a reverse Android Agent command execution."""
+
+    command_id: str
+    success: bool
+    payload: dict[str, Any]
+    error: str | None = None
+    started_at: float
+    finished_at: float

@@ -24,7 +24,7 @@ def control_env(monkeypatch: pytest.MonkeyPatch) -> dict:
         "up": False,
     }
 
-    class FakeADBDevice:
+    class FakeDevice:
         def __init__(self, device_id: str) -> None:
             self.device_id = device_id
 
@@ -65,6 +65,25 @@ def control_env(monkeypatch: pytest.MonkeyPatch) -> dict:
                 }
             )
 
+    class FakeDeviceManager:
+        def __init__(self) -> None:
+            self._devices: dict[str, FakeDevice] = {}
+
+        def get_device_protocol(self, device_id: str) -> FakeDevice:
+            if device_id not in self._devices:
+                raise ValueError(f"Device {device_id} not found")
+            return self._devices[device_id]
+
+        def register(self, device_id: str) -> None:
+            self._devices[device_id] = FakeDevice(device_id)
+
+    fake_manager = FakeDeviceManager()
+
+    class FakeDeviceManagerClass:
+        @staticmethod
+        def get_instance() -> FakeDeviceManager:
+            return fake_manager
+
     async def fake_touch_down(
         x: int, y: int, device_id: str | None = None, delay: float = 0.0
     ) -> None:
@@ -92,7 +111,7 @@ def control_env(monkeypatch: pytest.MonkeyPatch) -> dict:
             {"x": x, "y": y, "device_id": device_id, "delay": delay}
         )
 
-    monkeypatch.setattr(control_api, "ADBDevice", FakeADBDevice)
+    monkeypatch.setattr(control_api, "DeviceManager", FakeDeviceManagerClass)
     monkeypatch.setattr(adb_plus, "touch_down_async", fake_touch_down)
     monkeypatch.setattr(adb_plus, "touch_move_async", fake_touch_move)
     monkeypatch.setattr(adb_plus, "touch_up_async", fake_touch_up)
@@ -102,6 +121,7 @@ def control_env(monkeypatch: pytest.MonkeyPatch) -> dict:
 
     return {
         "client": TestClient(app),
+        "manager": fake_manager,
         "device_calls": device_calls,
         "touch_calls": touch_calls,
         "should_fail": should_fail,
@@ -119,6 +139,7 @@ def test_control_tap_requires_device_id(control_env: dict) -> None:
 
 
 def test_control_tap_success(control_env: dict) -> None:
+    control_env["manager"].register("device-1")
     response = control_env["client"].post(
         "/api/control/tap",
         json={"x": 100, "y": 200, "device_id": "device-1", "delay": 0.2},
@@ -139,6 +160,7 @@ def test_control_tap_success(control_env: dict) -> None:
 
 def test_control_tap_propagates_runtime_error(control_env: dict) -> None:
     control_env["should_fail"]["tap"] = True
+    control_env["manager"].register("device-1")
 
     response = control_env["client"].post(
         "/api/control/tap",
@@ -161,6 +183,7 @@ def test_control_swipe_requires_device_id(control_env: dict) -> None:
 
 
 def test_control_swipe_success(control_env: dict) -> None:
+    control_env["manager"].register("device-2")
     response = control_env["client"].post(
         "/api/control/swipe",
         json={
