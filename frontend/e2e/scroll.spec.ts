@@ -96,7 +96,9 @@ test.describe('DevicePanel auto-scroll', () => {
 
     // Use a smaller viewport so chat content overflows the scroll container.
     // If content fits without scrolling, the auto-scroll test is meaningless.
-    await page.setViewportSize({ width: 1280, height: 500 });
+    // 400px is chosen to force overflow on Windows runners too, where the
+    // default font metrics make message bubbles shorter than on macOS.
+    await page.setViewportSize({ width: 1280, height: 400 });
 
     await page.goto(
       `/chat?serial=${encodeURIComponent(deviceSerial)}&mode=classic`
