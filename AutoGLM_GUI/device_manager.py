@@ -512,7 +512,11 @@ class DeviceManager:
                 s
                 for s in removed_serials
                 if s not in self._devices
-                or self._devices[s].connection_type != DeviceConnectionType.REMOTE
+                or self._devices[s].connection_type
+                not in (
+                    DeviceConnectionType.REMOTE,
+                    DeviceConnectionType.REVERSE_AGENT,
+                )
             }
             existing_serials = current_serials & previous_serials
 

@@ -60,6 +60,7 @@ class _PendingCommand:
     agent_id: str
     command_id: str
     event: asyncio.Event = field(default_factory=asyncio.Event)
+    loop: asyncio.AbstractEventLoop | None = None
     result: ReverseAgentCommandResult | None = None
     cancelled: bool = False
 
@@ -173,6 +174,14 @@ class ReverseAgentRegistry:
         with self._lock:
             self._sessions[agent_id] = websocket
 
+    @staticmethod
+    def _set_pending_event(pending: _PendingCommand) -> None:
+        """Signal a pending command event from any thread/loop safely."""
+        if pending.loop is not None:
+            pending.loop.call_soon_threadsafe(pending.event.set)
+        else:
+            pending.event.set()
+
     def unregister_session(self, *, agent_id: str) -> None:
         """Unregister a WebSocket session and fail pending commands."""
         with self._lock:
@@ -187,7 +196,7 @@ class ReverseAgentRegistry:
                 cmd.result = ReverseAgentCommandResult.failure_result(
                     cmd.command_id, "agent_disconnected"
                 )
-                cmd.event.set()
+                self._set_pending_event(cmd)
 
     def mark_session_connected(self, *, agent_id: str) -> ReverseAgentRecord:
         now = self._time_fn()
@@ -247,7 +256,11 @@ class ReverseAgentRegistry:
             TimeoutError: If the command times out.
         """
         timeout = timeout_seconds or self._command_timeout_seconds
-        pending = _PendingCommand(agent_id=agent_id, command_id=command.command_id)
+        pending = _PendingCommand(
+            agent_id=agent_id,
+            command_id=command.command_id,
+            loop=asyncio.get_running_loop(),
+        )
 
         with self._lock:
             websocket = self._sessions.get(agent_id)
@@ -294,7 +307,7 @@ class ReverseAgentRegistry:
                 )
                 return
             pending.result = result
-            pending.event.set()
+            self._set_pending_event(pending)
 
     def is_agent_online(self, agent_id: str) -> bool:
         """Return True if the agent has an active WebSocket session."""

@@ -68,6 +68,7 @@ allow-direct-references = true
 
 [dependency-groups]
 dev = [
+    "playwright>=1.60.0",
     "pyinstaller>=6.17.0",
     "pyright>=1.1.407",
     "pytest>=9.0.2",
