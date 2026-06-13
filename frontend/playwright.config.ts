@@ -14,6 +14,6 @@ export default defineConfig({
     command: 'node e2e/startE2EStack.mjs',
     url: 'http://localhost:3000',
     timeout: 120000,
-    reuseExistingServer: true,
+    reuseExistingServer: !process.env.CI,
   },
 });

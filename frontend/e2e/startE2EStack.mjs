@@ -86,36 +86,84 @@ function signalPids(pids, signal) {
   }
 }
 
-function signalBackendProcess(signal = 'SIGINT') {
+function readSavedPids() {
+  const raw = fs.readFileSync(pidPath, 'utf-8').trim();
+  const legacyPid = Number(raw);
+  if (Number.isFinite(legacyPid)) {
+    return [legacyPid];
+  }
+
+  const pidData = JSON.parse(raw);
+  const pids = [];
+  if (Number.isFinite(pidData.launcher_pid)) {
+    pids.push(pidData.launcher_pid);
+  }
+  if (Array.isArray(pidData.service_pids)) {
+    pids.push(...pidData.service_pids.filter(Number.isFinite));
+  }
+  return [...new Set(pids)];
+}
+
+function writeLauncherPid() {
   if (!serviceProc?.pid) {
+    return;
+  }
+  fs.writeFileSync(
+    pidPath,
+    JSON.stringify({ launcher_pid: serviceProc.pid, service_pids: [] })
+  );
+}
+
+function signalBackendProcess(signal = 'SIGINT') {
+  const pids = [];
+  try {
+    pids.push(...readSavedPids());
+  } catch {
+    // PID file may not exist or may be partially written.
+  }
+  if (serviceProc?.pid) {
+    pids.push(serviceProc.pid);
+  }
+  const uniquePids = [...new Set(pids)];
+  if (uniquePids.length === 0) {
     return;
   }
 
   if (process.platform === 'win32') {
-    try {
-      execFileSync('taskkill', ['/PID', String(serviceProc.pid), '/T', '/F'], {
-        stdio: 'ignore',
-      });
-    } catch {
-      // process tree is already gone
+    for (const pid of uniquePids) {
+      try {
+        execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], {
+          stdio: 'ignore',
+        });
+      } catch {
+        // process tree is already gone
+      }
     }
     return;
   }
 
-  try {
-    process.kill(serviceProc.pid, signal);
-  } catch {
-    // process is already gone
+  for (const pid of uniquePids) {
+    try {
+      process.kill(pid, signal);
+    } catch {
+      // process is already gone
+    }
   }
 }
 
 async function cleanupPreviousRun() {
   try {
-    const pid = Number(fs.readFileSync(pidPath, 'utf-8').trim());
-    console.log(
-      `[startE2EStack] Stopping previous backend process tree ${pid}`
-    );
-    await terminateProcessTree(pid);
+    const pids = readSavedPids();
+    if (pids.length > 0) {
+      console.log(
+        `[startE2EStack] Stopping previous backend process trees ${pids.join(
+          ', '
+        )}`
+      );
+      for (const pid of pids) {
+        await terminateProcessTree(pid);
+      }
+    }
   } catch {
     // PID file may not exist
   }
@@ -202,6 +250,8 @@ async function main() {
     '--dynamic-ports',
     '--output',
     urlsPath,
+    '--pid-output',
+    pidPath,
   ];
   if (process.env.COVERAGE_E2E_FRONTEND === '1') {
     serviceArgs.push('--coverage');
@@ -213,9 +263,7 @@ async function main() {
     cwd: projectRoot,
     stdio: 'inherit',
   });
-  if (serviceProc.pid) {
-    fs.writeFileSync(pidPath, String(serviceProc.pid));
-  }
+  writeLauncherPid();
   serviceProc.on('exit', (code, signal) => {
     if (isShuttingDown) {
       return;

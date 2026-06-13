@@ -78,6 +78,14 @@ def _terminate_processes(processes):
             proc.join(timeout=2)
 
 
+def _write_pid_file(pid_output, processes):
+    if not pid_output:
+        return
+    pids = [proc.pid for proc in processes if proc.pid]
+    with open(pid_output, "w") as f:
+        json.dump({"launcher_pid": os.getpid(), "service_pids": pids}, f)
+
+
 def _run_llm_server(port):
     from tests.e2e.device_agent.mock_llm_server import run_server
 
@@ -116,6 +124,9 @@ def main():
     parser = argparse.ArgumentParser(description="Start E2E test services")
     parser.add_argument(
         "--output", default=None, help="JSON output file for service URLs"
+    )
+    parser.add_argument(
+        "--pid-output", default=None, help="JSON output file for service PIDs"
     )
     parser.add_argument("--scenario", default=None, help="Scenario YAML for mock agent")
     parser.add_argument(
@@ -172,6 +183,7 @@ def main():
         llm_proc = multiprocessing.Process(target=_run_llm_server, args=(llm_port,))
         llm_proc.start()
         started_processes.append(llm_proc)
+        _write_pid_file(args.pid_output, started_processes)
         wait_for_server(llm_url, timeout=10, endpoint="/test/stats")
         print("[E2E Services] Mock LLM server ready")
 
@@ -182,6 +194,7 @@ def main():
         )
         agent_proc.start()
         started_processes.append(agent_proc)
+        _write_pid_file(args.pid_output, started_processes)
         wait_for_server(agent_url, timeout=10, endpoint="/test/commands")
         print("[E2E Services] Mock agent server ready")
 
@@ -192,6 +205,7 @@ def main():
         )
         backend_proc.start()
         started_processes.append(backend_proc)
+        _write_pid_file(args.pid_output, started_processes)
         print(f"[E2E Services] Backend process started pid={backend_proc.pid}")
         wait_for_server(backend_url, timeout=60, endpoint="/api/health")
         print("[E2E Services] AutoGLM-GUI backend ready")
@@ -199,6 +213,8 @@ def main():
         _terminate_processes(started_processes)
         if os.path.exists(output_path):
             os.remove(output_path)
+        if args.pid_output and os.path.exists(args.pid_output):
+            os.remove(args.pid_output)
         raise
 
     # Write URLs file for Playwright
@@ -224,6 +240,8 @@ def main():
         _terminate_processes(started_processes)
         if os.path.exists(output_path):
             os.remove(output_path)
+        if args.pid_output and os.path.exists(args.pid_output):
+            os.remove(args.pid_output)
         sys.exit(0)
 
     signal.signal(signal.SIGTERM, cleanup)
