@@ -12,6 +12,7 @@ import argparse
 import json
 import multiprocessing
 import os
+import random
 import signal
 import socket
 import sys
@@ -28,15 +29,21 @@ sys.path.insert(0, str(PROJECT_ROOT))
 def _port_is_free(port):
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as sock:
         try:
-            sock.bind(("127.0.0.1", port))
             sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+            sock.bind(("127.0.0.1", port))
             return True
         except OSError:
             return False
 
 
 def _find_free_port(start_port, end_port):
-    for port in range(start_port, end_port + 1):
+    # Randomize the scan start so concurrent worktrees / agents are less likely
+    # to race for the same low ports.  Sequential scan from the beginning would
+    # make every instance try 18000, 19000, and 8000 first.
+    range_size = end_port - start_port + 1
+    offset = random.randint(0, range_size - 1)
+    for i in range(range_size):
+        port = start_port + (offset + i) % range_size
         if _port_is_free(port):
             return port
     raise RuntimeError(f"No free port found in range {start_port}-{end_port}")

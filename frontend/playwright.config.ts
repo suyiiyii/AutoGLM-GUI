@@ -5,16 +5,15 @@ export default defineConfig({
   timeout: 60000,
   retries: 0,
   workers: 1,
-  globalSetup: './e2e/globalSetup.ts',
-  globalTeardown: './e2e/globalTeardown.ts',
   use: {
     baseURL: 'http://localhost:3000',
   },
   webServer: {
-    // Only Vite dev server — backend services are managed by globalSetup
-    command: 'pnpm dev',
+    // Start the full E2E stack (backend services + Vite) and proxy the frontend
+    // to the dynamic backend port via VITE_PROXY_TARGET.
+    command: 'node e2e/startE2EStack.mjs',
     url: 'http://localhost:3000',
-    timeout: 30000,
+    timeout: 120000,
     reuseExistingServer: true,
   },
 });
