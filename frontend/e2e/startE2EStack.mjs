@@ -164,7 +164,17 @@ async function main() {
   const backendUrl = await waitForBackendUrl();
   console.log(`[startE2EStack] backend_url=${backendUrl}`);
 
-  viteProc = spawn('pnpm', ['dev'], {
+  // Run Vite directly via Node so the launcher works on Windows runners where
+  // `pnpm` is not on PATH for child processes spawned from the Playwright
+  // webServer.  `pnpm dev` is equivalent to `vite --port 3000`.
+  const viteBin = path.join(
+    frontendRoot,
+    'node_modules',
+    'vite',
+    'bin',
+    'vite.js'
+  );
+  viteProc = spawn('node', [viteBin, '--port', '3000'], {
     cwd: frontendRoot,
     stdio: 'inherit',
     env: {
