@@ -3,7 +3,7 @@
  *
  * Requires the backend services (mock LLM + mock agent + AutoGLM-GUI)
  * to be running.  The Playwright config starts them via
- * scripts/start_e2e_services.py.
+ * frontend/e2e/startE2EStack.mjs.
  *
  * Covers issue #346: in classic mode (DevicePanel) the chat must stay pinned
  * to the latest message while the agent streams its response, as long as the

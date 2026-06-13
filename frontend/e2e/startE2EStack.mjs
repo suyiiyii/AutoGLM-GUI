@@ -110,16 +110,6 @@ function readSavedPids() {
   return [...new Set(pids)];
 }
 
-function writeLauncherPid() {
-  if (!serviceProc?.pid) {
-    return;
-  }
-  fs.writeFileSync(
-    pidPath,
-    JSON.stringify({ launcher_pid: serviceProc.pid, service_pids: [] })
-  );
-}
-
 function signalBackendProcess(signal = 'SIGINT') {
   const pids = [];
   try {
@@ -154,6 +144,20 @@ function signalBackendProcess(signal = 'SIGINT') {
     } catch {
       // process is already gone
     }
+  }
+}
+
+async function terminateSavedBackendProcesses() {
+  let pids;
+  try {
+    pids = readSavedPids();
+  } catch {
+    // PID file may not exist or may be partially written.
+    return;
+  }
+
+  for (const pid of pids) {
+    await terminateProcessTree(pid);
   }
 }
 
@@ -212,6 +216,13 @@ async function waitForBackendUrl(proc, timeoutMs = 90000) {
   }
   throw new Error(
     `Timed out waiting for ${urlsPath} to contain the dynamic backend URL`
+  );
+}
+
+function isRetryableStartupError(error) {
+  return !(
+    error instanceof Error &&
+    error.message.includes('does not contain backend_url')
   );
 }
 
@@ -333,24 +344,26 @@ async function startBackendServices(serviceArgs) {
       cwd: projectRoot,
       stdio: 'inherit',
     });
-    writeLauncherPid();
 
     try {
       return await waitForBackendUrl(serviceProc);
     } catch (error) {
       lastError = error;
+      const retryable = isRetryableStartupError(error);
       console.error(
         `[startE2EStack] Backend services attempt ${attempt} failed`,
         error
       );
+      await terminateSavedBackendProcesses();
       if (serviceProc?.pid) {
         await terminateProcessTree(serviceProc.pid);
       }
       serviceProc = undefined;
       removeGeneratedFiles();
-      if (attempt < maxAttempts) {
-        await sleep(2000);
+      if (!retryable || attempt === maxAttempts) {
+        throw error;
       }
+      await sleep(2000);
     }
   }
 

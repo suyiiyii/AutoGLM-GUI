@@ -146,10 +146,11 @@ def main():
 
     if args.dynamic_ports:
         # Allocate free ports so multiple worktrees / agents can run E2E in
-        # parallel without colliding on the default fixed ports.
-        llm_port = _find_free_port(18000, 18999)
-        agent_port = _find_free_port(19000, 19999)
-        backend_port = _find_free_port(8000, 8099)
+        # parallel. These ranges intentionally do not overlap with the backend
+        # E2E fixture ranges in tests/e2e/conftest.py.
+        llm_port = _find_free_port(21000, 21999)
+        agent_port = _find_free_port(22000, 22999)
+        backend_port = _find_free_port(8100, 8199)
     else:
         # Use fixed ports so vite proxy (localhost:8000) works correctly.
         # If a port is in use the test will fail — free it up and retry.
