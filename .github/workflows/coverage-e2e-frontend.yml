@@ -40,6 +40,24 @@ jobs:
           cd frontend
           COVERAGE_E2E_FRONTEND=1 pnpm test:e2e
 
+      - name: Package Playwright report (videos + traces + screenshots)
+        if: always()
+        shell: bash
+        run: |
+          cd frontend
+          if [ -d playwright-report ]; then
+            tar -czf playwright-report.tar.gz ./playwright-report
+          fi
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-linux
+          path: frontend/playwright-report.tar.gz
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Combine and export backend coverage
         if: always()
         shell: bash

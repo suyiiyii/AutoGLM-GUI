@@ -33,6 +33,10 @@ coverage/
 # nyc test coverage
 .nyc_output
 
+# Playwright artifacts — generated locally and in CI uploads
+/playwright-report/
+/test-results/
+
 # Dependency directories
 jspm_packages/
 

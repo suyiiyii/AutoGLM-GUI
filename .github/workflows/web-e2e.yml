@@ -39,6 +39,26 @@ jobs:
           cd frontend
           pnpm test:e2e
 
+      - name: Package Playwright report (videos + traces + screenshots)
+        if: always()
+        shell: bash
+        run: |
+          cd frontend
+          # Bundle the HTML report (with embedded videos/traces) into a single
+          # zip so it can be downloaded from the Actions run for debugging.
+          if [ -d playwright-report ]; then
+            7z a playwright-report.zip ./playwright-report
+          fi
+
+      - name: Upload Playwright report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report-windows
+          path: frontend/playwright-report.zip
+          if-no-files-found: warn
+          retention-days: 14
+
       - name: Generate test summary
         if: always()
         shell: bash
@@ -50,3 +70,5 @@ jobs:
           else
             echo "❌ Web E2E tests failed. Check the logs above." >> $GITHUB_STEP_SUMMARY
           fi
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "📥 Download the **playwright-report-windows** artifact for the recorded videos, traces, and screenshots." >> $GITHUB_STEP_SUMMARY
