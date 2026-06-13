@@ -124,7 +124,8 @@ pnpm exec playwright install chromium
 pnpm test:e2e
 ```
 
-前端 E2E 的 `globalSetup` 会自动启动：
+前端 E2E 通过 `frontend/playwright.config.ts` 的 `webServer` 启动
+`frontend/e2e/startE2EStack.mjs`，自动拉起：
 - Vite 前端 dev server
 - AutoGLM-GUI 后端服务
 - mock LLM server

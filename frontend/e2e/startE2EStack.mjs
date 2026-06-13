@@ -39,6 +39,12 @@ async function terminateProcessTree(pid) {
 
   if (process.platform === 'win32') {
     try {
+      await execFileAsync('taskkill', ['/PID', String(pid), '/T']);
+    } catch {
+      // process tree is already gone
+    }
+    await sleep(3000);
+    try {
       await execFileAsync('taskkill', ['/PID', String(pid), '/T', '/F']);
     } catch {
       // process tree is already gone
@@ -132,7 +138,7 @@ function signalBackendProcess(signal = 'SIGINT') {
   if (process.platform === 'win32') {
     for (const pid of uniquePids) {
       try {
-        execFileSync('taskkill', ['/PID', String(pid), '/T', '/F'], {
+        execFileSync('taskkill', ['/PID', String(pid), '/T'], {
           stdio: 'ignore',
         });
       } catch {
@@ -177,12 +183,17 @@ async function cleanupPreviousRun() {
   }
 
   // Give the OS a moment to fully release the ports.
-  await sleep(500);
+  await sleep(2000);
 }
 
-async function waitForBackendUrl(timeoutMs = 90000) {
+async function waitForBackendUrl(proc, timeoutMs = 90000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
+    if (proc.exitCode !== null || proc.signalCode !== null) {
+      throw new Error(
+        `Backend services exited before writing ${urlsPath} (exit code ${proc.exitCode}, signal ${proc.signalCode})`
+      );
+    }
     try {
       const urls = JSON.parse(fs.readFileSync(urlsPath, 'utf-8'));
       if (urls.backend_url) {
@@ -202,6 +213,16 @@ async function waitForBackendUrl(timeoutMs = 90000) {
   throw new Error(
     `Timed out waiting for ${urlsPath} to contain the dynamic backend URL`
   );
+}
+
+function removeGeneratedFiles() {
+  for (const filePath of [urlsPath, pidPath]) {
+    try {
+      fs.unlinkSync(filePath);
+    } catch {
+      // file may not exist
+    }
+  }
 }
 
 async function shutdown(exitCode = 0) {
@@ -241,8 +262,6 @@ process.on('exit', () => {
 async function main() {
   await cleanupPreviousRun();
 
-  console.log('[startE2EStack] Starting backend services...');
-
   const serviceArgs = [
     'run',
     'python',
@@ -257,13 +276,7 @@ async function main() {
     serviceArgs.push('--coverage');
   }
 
-  // Keep backend services in Playwright's process group so webServer teardown
-  // can stop them even if this launcher is killed before async cleanup finishes.
-  serviceProc = spawn('uv', serviceArgs, {
-    cwd: projectRoot,
-    stdio: 'inherit',
-  });
-  writeLauncherPid();
+  const backendUrl = await startBackendServices(serviceArgs);
   serviceProc.on('exit', (code, signal) => {
     if (isShuttingDown) {
       return;
@@ -275,7 +288,6 @@ async function main() {
     void shutdown(code ?? (signal ? 1 : 0));
   });
 
-  const backendUrl = await waitForBackendUrl();
   console.log(`[startE2EStack] backend_url=${backendUrl}`);
 
   // Run Vite directly via Node so the launcher works on Windows runners where
@@ -303,6 +315,46 @@ async function main() {
     }
     void shutdown(code ?? (signal ? 1 : 0));
   });
+}
+
+async function startBackendServices(serviceArgs) {
+  const maxAttempts = 3;
+  let lastError;
+
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    removeGeneratedFiles();
+    console.log(
+      `[startE2EStack] Starting backend services (attempt ${attempt}/${maxAttempts})...`
+    );
+
+    // Keep backend services in Playwright's process group so webServer teardown
+    // can stop them even if this launcher is killed before async cleanup finishes.
+    serviceProc = spawn('uv', serviceArgs, {
+      cwd: projectRoot,
+      stdio: 'inherit',
+    });
+    writeLauncherPid();
+
+    try {
+      return await waitForBackendUrl(serviceProc);
+    } catch (error) {
+      lastError = error;
+      console.error(
+        `[startE2EStack] Backend services attempt ${attempt} failed`,
+        error
+      );
+      if (serviceProc?.pid) {
+        await terminateProcessTree(serviceProc.pid);
+      }
+      serviceProc = undefined;
+      removeGeneratedFiles();
+      if (attempt < maxAttempts) {
+        await sleep(2000);
+      }
+    }
+  }
+
+  throw lastError;
 }
 
 main().catch(error => {
