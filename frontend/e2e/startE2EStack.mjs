@@ -26,6 +26,11 @@ const pidPath = path.resolve(__dirname, '.services_pid');
 const execFileAsync = promisify(execFile);
 const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 
+// References to spawned child processes, kept in scope so we can clean them up
+// on errors, timeouts, or signals from Playwright.
+let serviceProc;
+let viteProc;
+
 async function terminateProcessTree(pid) {
   if (!Number.isFinite(pid)) {
     return;
@@ -108,34 +113,58 @@ async function waitForBackendUrl(timeoutMs = 60000) {
   );
 }
 
+function forwardSignal(signal) {
+  if (serviceProc && !serviceProc.killed) {
+    serviceProc.kill(signal);
+  }
+  if (viteProc && !viteProc.killed) {
+    viteProc.kill(signal);
+  }
+}
+
+function killChildren() {
+  if (serviceProc && !serviceProc.killed) {
+    serviceProc.kill('SIGTERM');
+  }
+  if (viteProc && !viteProc.killed) {
+    viteProc.kill('SIGTERM');
+  }
+}
+
+process.on('SIGTERM', () => forwardSignal('SIGTERM'));
+process.on('SIGINT', () => forwardSignal('SIGINT'));
+
 async function main() {
   await cleanupPreviousRun();
 
+  // Persist our PID so a subsequent run can terminate any leaked processes.
+  fs.writeFileSync(pidPath, String(process.pid));
+
   console.log('[startE2EStack] Starting backend services...');
-  // Start backend services.  Keep the child in the same process group as this
-  // launcher so Playwright's teardown of the webServer process kills the whole
-  // stack.  Coverage flushing for the backend is handled by the Python
-  // launcher on SIGINT/SIGTERM.
-  const serviceProc = spawn(
-    'uv',
-    [
-      'run',
-      'python',
-      'scripts/start_e2e_services.py',
-      '--dynamic-ports',
-      '--output',
-      urlsPath,
-    ],
-    {
-      cwd: projectRoot,
-      stdio: 'inherit',
-    }
-  );
+
+  const serviceArgs = [
+    'run',
+    'python',
+    'scripts/start_e2e_services.py',
+    '--dynamic-ports',
+    '--output',
+    urlsPath,
+  ];
+  if (process.env.COVERAGE_E2E_FRONTEND === '1') {
+    serviceArgs.push('--coverage');
+  }
+
+  // Start backend services.  Coverage flushing for the backend is handled by
+  // the Python launcher on SIGINT/SIGTERM.
+  serviceProc = spawn('uv', serviceArgs, {
+    cwd: projectRoot,
+    stdio: 'inherit',
+  });
 
   const backendUrl = await waitForBackendUrl();
   console.log(`[startE2EStack] backend_url=${backendUrl}`);
 
-  const viteProc = spawn('pnpm', ['dev'], {
+  viteProc = spawn('pnpm', ['dev'], {
     cwd: frontendRoot,
     stdio: 'inherit',
     env: {
@@ -144,8 +173,7 @@ async function main() {
     },
   });
 
-  // Exit when either child exits.  Because the children share our process
-  // group, Playwright can stop the whole stack by killing this process.
+  // Exit when either child exits.
   serviceProc.on('exit', (code, signal) => {
     console.log('[startE2EStack] Backend services exited unexpectedly');
     viteProc.kill('SIGTERM');
@@ -159,5 +187,6 @@ async function main() {
 
 main().catch(error => {
   console.error('[startE2EStack]', error);
+  killChildren();
   process.exit(1);
 });

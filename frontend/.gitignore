@@ -80,4 +80,3 @@ jspm_packages/
 # Generated E2E stack artifacts
 e2e/.service_urls.json
 e2e/.services_pid
-e2e/.startE2EStack.log

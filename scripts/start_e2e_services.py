@@ -130,16 +130,6 @@ def main():
         agent_port = 18000
         backend_port = 8000
 
-    for port, name in [
-        (llm_port, "mock LLM"),
-        (agent_port, "mock agent"),
-        (backend_port, "backend"),
-    ]:
-        if not _port_is_free(port):
-            print(f"[E2E Services] ERROR: Port {port} ({name}) is already in use!")
-            print("[E2E Services] Please free the port and retry.")
-            sys.exit(1)
-
     llm_url = f"http://127.0.0.1:{llm_port}"
     agent_url = f"http://127.0.0.1:{agent_port}"
     backend_url = f"http://127.0.0.1:{backend_port}"
