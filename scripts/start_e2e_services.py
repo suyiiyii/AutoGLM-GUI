@@ -62,6 +62,22 @@ def wait_for_server(url, timeout=30.0, endpoint="/test/stats"):
     raise RuntimeError(f"Server at {url} failed to start within {timeout}s")
 
 
+def _terminate_processes(processes):
+    for proc in reversed(processes):
+        if not proc.is_alive():
+            continue
+        # Use SIGINT so uvicorn subprocesses run atexit handlers, which is
+        # needed for coverage data to be flushed.
+        try:
+            os.kill(proc.pid, signal.SIGINT)
+        except ProcessLookupError:
+            pass
+        proc.join(timeout=15)
+        if proc.is_alive():
+            proc.kill()
+            proc.join(timeout=2)
+
+
 def _run_llm_server(port):
     from tests.e2e.device_agent.mock_llm_server import run_server
 
@@ -129,39 +145,61 @@ def main():
         llm_port = 18003
         agent_port = 18000
         backend_port = 8000
+        for port, name in [
+            (llm_port, "mock LLM"),
+            (agent_port, "mock agent"),
+            (backend_port, "backend"),
+        ]:
+            if not _port_is_free(port):
+                print(f"[E2E Services] ERROR: Port {port} ({name}) is already in use!")
+                print("[E2E Services] Please free the port and retry.")
+                sys.exit(1)
 
     llm_url = f"http://127.0.0.1:{llm_port}"
     agent_url = f"http://127.0.0.1:{agent_port}"
     backend_url = f"http://127.0.0.1:{backend_port}"
+    output_path = args.output or os.path.join(
+        PROJECT_ROOT, "frontend", "e2e", ".service_urls.json"
+    )
 
     print(f"[E2E Services] LLM server:     {llm_url}")
     print(f"[E2E Services] Agent server:   {agent_url}")
     print(f"[E2E Services] Backend server: {backend_url}")
 
-    # Start mock LLM
-    llm_proc = multiprocessing.Process(target=_run_llm_server, args=(llm_port,))
-    llm_proc.start()
-    wait_for_server(llm_url, timeout=10, endpoint="/test/stats")
-    print("[E2E Services] Mock LLM server ready")
+    started_processes = []
+    try:
+        # Start mock LLM
+        llm_proc = multiprocessing.Process(target=_run_llm_server, args=(llm_port,))
+        llm_proc.start()
+        started_processes.append(llm_proc)
+        wait_for_server(llm_url, timeout=10, endpoint="/test/stats")
+        print("[E2E Services] Mock LLM server ready")
 
-    # Start mock agent
-    scenario = args.scenario
-    agent_proc = multiprocessing.Process(
-        target=_run_agent_server, args=(agent_port, scenario)
-    )
-    agent_proc.start()
-    wait_for_server(agent_url, timeout=10, endpoint="/test/commands")
-    print("[E2E Services] Mock agent server ready")
+        # Start mock agent
+        scenario = args.scenario
+        agent_proc = multiprocessing.Process(
+            target=_run_agent_server, args=(agent_port, scenario)
+        )
+        agent_proc.start()
+        started_processes.append(agent_proc)
+        wait_for_server(agent_url, timeout=10, endpoint="/test/commands")
+        print("[E2E Services] Mock agent server ready")
 
-    # Start AutoGLM-GUI backend
-    print(f"[E2E Services] Starting backend process with coverage={args.coverage}")
-    backend_proc = multiprocessing.Process(
-        target=_run_autoglm_server, args=(backend_port, llm_url)
-    )
-    backend_proc.start()
-    print(f"[E2E Services] Backend process started pid={backend_proc.pid}")
-    wait_for_server(backend_url, timeout=30, endpoint="/api/health")
-    print("[E2E Services] AutoGLM-GUI backend ready")
+        # Start AutoGLM-GUI backend
+        print(f"[E2E Services] Starting backend process with coverage={args.coverage}")
+        backend_proc = multiprocessing.Process(
+            target=_run_autoglm_server, args=(backend_port, llm_url)
+        )
+        backend_proc.start()
+        started_processes.append(backend_proc)
+        print(f"[E2E Services] Backend process started pid={backend_proc.pid}")
+        wait_for_server(backend_url, timeout=60, endpoint="/api/health")
+        print("[E2E Services] AutoGLM-GUI backend ready")
+    except Exception:
+        _terminate_processes(started_processes)
+        if os.path.exists(output_path):
+            os.remove(output_path)
+        raise
 
     # Write URLs file for Playwright
     urls = {
@@ -170,9 +208,6 @@ def main():
         "backend_url": backend_url,
         "frontend_url": "http://localhost:3000",
     }
-    output_path = args.output or os.path.join(
-        PROJECT_ROOT, "frontend", "e2e", ".service_urls.json"
-    )
     with open(output_path, "w") as f:
         json.dump(urls, f)
     print(f"[E2E Services] URLs written to {output_path}")
@@ -186,18 +221,7 @@ def main():
             return
         _shutting_down = True
         print("\n[E2E Services] Shutting down...")
-        for proc in [backend_proc, agent_proc, llm_proc]:
-            if proc.is_alive():
-                # Use SIGINT so that uvicorn subprocesses run their atexit
-                # handlers (needed for coverage data to be flushed).
-                try:
-                    os.kill(proc.pid, signal.SIGINT)
-                except ProcessLookupError:
-                    pass
-                proc.join(timeout=15)
-                if proc.is_alive():
-                    proc.kill()
-                    proc.join(timeout=2)
+        _terminate_processes(started_processes)
         if os.path.exists(output_path):
             os.remove(output_path)
         sys.exit(0)
@@ -206,7 +230,7 @@ def main():
     signal.signal(signal.SIGINT, cleanup)
 
     # Block until any child dies (which would be unexpected)
-    while all(p.is_alive() for p in [llm_proc, agent_proc, backend_proc]):
+    while all(p.is_alive() for p in started_processes):
         time.sleep(1)
 
     # If we get here, a child died unexpectedly

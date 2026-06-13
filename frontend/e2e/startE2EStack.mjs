@@ -10,7 +10,7 @@
  * ordering between `globalSetup` and the webServer, which are started in
  * parallel by Playwright.
  */
-import { execFile, spawn } from 'child_process';
+import { execFile, execFileSync, spawn } from 'child_process';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -30,6 +30,7 @@ const sleep = ms => new Promise(resolve => setTimeout(resolve, ms));
 // on errors, timeouts, or signals from Playwright.
 let serviceProc;
 let viteProc;
+let isShuttingDown = false;
 
 async function terminateProcessTree(pid) {
   if (!Number.isFinite(pid)) {
@@ -45,24 +46,66 @@ async function terminateProcessTree(pid) {
     return;
   }
 
+  const pids = [pid, ...(await collectChildPids(pid))];
+
   // SIGINT lets uvicorn subprocesses run atexit handlers, which is needed for
   // Python coverage data to be flushed.  Fall back to SIGTERM/SIGKILL.
-  try {
-    process.kill(-pid, 'SIGINT');
-  } catch {
-    return;
-  }
+  signalPids(pids, 'SIGINT');
   await sleep(3000);
+  signalPids(pids, 'SIGTERM');
+  await sleep(1000);
+  signalPids(pids, 'SIGKILL');
+}
+
+async function collectChildPids(pid) {
+  let stdout;
   try {
-    process.kill(-pid, 'SIGTERM');
+    ({ stdout } = await execFileAsync('pgrep', ['-P', String(pid)]));
   } catch {
+    return [];
+  }
+
+  const childPids = stdout
+    .split('\n')
+    .map(line => Number(line.trim()))
+    .filter(Number.isFinite);
+  const descendants = [];
+  for (const childPid of childPids) {
+    descendants.push(childPid, ...(await collectChildPids(childPid)));
+  }
+  return descendants;
+}
+
+function signalPids(pids, signal) {
+  for (const pid of pids) {
+    try {
+      process.kill(pid, signal);
+    } catch {
+      // process is already gone
+    }
+  }
+}
+
+function signalBackendProcess(signal = 'SIGINT') {
+  if (!serviceProc?.pid) {
     return;
   }
-  await sleep(1000);
+
+  if (process.platform === 'win32') {
+    try {
+      execFileSync('taskkill', ['/PID', String(serviceProc.pid), '/T', '/F'], {
+        stdio: 'ignore',
+      });
+    } catch {
+      // process tree is already gone
+    }
+    return;
+  }
+
   try {
-    process.kill(-pid, 'SIGKILL');
+    process.kill(serviceProc.pid, signal);
   } catch {
-    // process group is already gone
+    // process is already gone
   }
 }
 
@@ -70,7 +113,7 @@ async function cleanupPreviousRun() {
   try {
     const pid = Number(fs.readFileSync(pidPath, 'utf-8').trim());
     console.log(
-      `[startE2EStack] Stopping previous backend process group ${pid}`
+      `[startE2EStack] Stopping previous backend process tree ${pid}`
     );
     await terminateProcessTree(pid);
   } catch {
@@ -89,7 +132,7 @@ async function cleanupPreviousRun() {
   await sleep(500);
 }
 
-async function waitForBackendUrl(timeoutMs = 60000) {
+async function waitForBackendUrl(timeoutMs = 90000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     try {
@@ -113,32 +156,42 @@ async function waitForBackendUrl(timeoutMs = 60000) {
   );
 }
 
-function forwardSignal(signal) {
-  if (serviceProc && !serviceProc.killed) {
-    serviceProc.kill(signal);
+async function shutdown(exitCode = 0) {
+  if (isShuttingDown) {
+    return;
   }
-  if (viteProc && !viteProc.killed) {
-    viteProc.kill(signal);
-  }
-}
+  isShuttingDown = true;
 
-function killChildren() {
-  if (serviceProc && !serviceProc.killed) {
-    serviceProc.kill('SIGTERM');
-  }
   if (viteProc && !viteProc.killed) {
     viteProc.kill('SIGTERM');
   }
+  if (serviceProc?.pid) {
+    await terminateProcessTree(serviceProc.pid);
+  } else if (serviceProc && !serviceProc.killed) {
+    serviceProc.kill('SIGTERM');
+  }
+
+  try {
+    fs.unlinkSync(pidPath);
+  } catch {
+    // file may not exist
+  }
+
+  process.exit(exitCode);
 }
 
-process.on('SIGTERM', () => forwardSignal('SIGTERM'));
-process.on('SIGINT', () => forwardSignal('SIGINT'));
+process.on('SIGTERM', () => {
+  void shutdown(0);
+});
+process.on('SIGINT', () => {
+  void shutdown(0);
+});
+process.on('exit', () => {
+  signalBackendProcess();
+});
 
 async function main() {
   await cleanupPreviousRun();
-
-  // Persist our PID so a subsequent run can terminate any leaked processes.
-  fs.writeFileSync(pidPath, String(process.pid));
 
   console.log('[startE2EStack] Starting backend services...');
 
@@ -154,11 +207,24 @@ async function main() {
     serviceArgs.push('--coverage');
   }
 
-  // Start backend services.  Coverage flushing for the backend is handled by
-  // the Python launcher on SIGINT/SIGTERM.
+  // Keep backend services in Playwright's process group so webServer teardown
+  // can stop them even if this launcher is killed before async cleanup finishes.
   serviceProc = spawn('uv', serviceArgs, {
     cwd: projectRoot,
     stdio: 'inherit',
+  });
+  if (serviceProc.pid) {
+    fs.writeFileSync(pidPath, String(serviceProc.pid));
+  }
+  serviceProc.on('exit', (code, signal) => {
+    if (isShuttingDown) {
+      return;
+    }
+    console.log('[startE2EStack] Backend services exited unexpectedly');
+    if (viteProc && !viteProc.killed) {
+      viteProc.kill('SIGTERM');
+    }
+    void shutdown(code ?? (signal ? 1 : 0));
   });
 
   const backendUrl = await waitForBackendUrl();
@@ -183,20 +249,15 @@ async function main() {
     },
   });
 
-  // Exit when either child exits.
-  serviceProc.on('exit', (code, signal) => {
-    console.log('[startE2EStack] Backend services exited unexpectedly');
-    viteProc.kill('SIGTERM');
-    process.exit(code ?? (signal ? 1 : 0));
-  });
   viteProc.on('exit', (code, signal) => {
-    serviceProc.kill('SIGTERM');
-    process.exit(code ?? (signal ? 1 : 0));
+    if (isShuttingDown) {
+      return;
+    }
+    void shutdown(code ?? (signal ? 1 : 0));
   });
 }
 
 main().catch(error => {
   console.error('[startE2EStack]', error);
-  killChildren();
-  process.exit(1);
+  void shutdown(1);
 });
