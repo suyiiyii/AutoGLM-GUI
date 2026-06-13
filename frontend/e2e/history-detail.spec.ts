@@ -200,17 +200,16 @@ test.describe('History detail', () => {
 
     // The finished run must appear in the list.
     const card = page
-      .locator('.text-sm.font-medium', { hasText: INSTRUCTION })
+      .locator('[data-testid="history-record-card"]', { hasText: INSTRUCTION })
       .first();
     await expect(card).toBeVisible({ timeout: 10000 });
 
     // ── 3. Open the detail dialog ──────────────────────────────────────
-    // The Eye button is the per-record "view detail" affordance. Scope it to
-    // the record card so we don't pick up a button from an unrelated row.
-    const recordCard = page
-      .locator('[class*="hover:shadow-md"]', { hasText: INSTRUCTION })
-      .first();
-    const detailButton = recordCard.getByRole('button').first();
+    // The Eye button is the per-record "view detail" affordance, scoped to
+    // this record's card via a stable data-testid (not Tailwind classes).
+    const detailButton = card.getByRole('button', {
+      name: 'Conversation Detail',
+    });
     await detailButton.click();
 
     await expect(
