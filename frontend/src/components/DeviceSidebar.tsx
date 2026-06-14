@@ -626,7 +626,9 @@ export function DeviceSidebar({
 
   useEffect(() => {
     if (showManualConnect && activeTab === 'agent') {
-      void loadReverseRegistry();
+      queueMicrotask(() => {
+        void loadReverseRegistry();
+      });
     }
   }, [showManualConnect, activeTab, loadReverseRegistry]);
 
