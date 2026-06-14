@@ -111,7 +111,9 @@ test.describe('Task abort', () => {
     request,
   }) => {
     const { backend_url, agent_url, llm_url } = readServiceUrls();
-    const testDeviceId = 'mock_device_abort';
+    // Unique per run so a reused backend (reuseExistingServer in local reruns)
+    // never rejects add_remote as "already exists".
+    const testDeviceId = `mock_device_abort_${Date.now()}`;
 
     // Lock the UI to English so button titles / message text are stable.
     await page.addInitScript(() => {

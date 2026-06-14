@@ -102,7 +102,9 @@ test.describe('History detail', () => {
     request,
   }) => {
     const { backend_url, agent_url, llm_url } = readServiceUrls();
-    const testDeviceId = 'mock_device_history';
+    // Unique per run so a reused backend (reuseExistingServer in local reruns)
+    // never rejects add_remote as "already exists".
+    const testDeviceId = `mock_device_history_${Date.now()}`;
 
     // Lock the UI to English for stable assertions.
     await page.addInitScript(() => {

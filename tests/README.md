@@ -143,7 +143,7 @@ pnpm test:e2e
 Playwright 配置（`frontend/playwright.config.ts`）对每个用例录制视频，并生成 HTML 报告：
 
 - `video: 'on'` — 每个用例都录制视频
-- `trace: 'retain-on-failure'` — 失败用例保留完整 trace（可逐步回放）
+- `trace: 'on'` — 每个用例都保留完整 trace（带真实时间轴，可逐步回放每个 action / 网络请求 / DOM 快照）
 - `screenshot: 'only-on-failure'` — 失败用例保留截图
 - `reporter: html` — 视频和 trace 内嵌进 HTML 报告
 
