@@ -43,12 +43,14 @@ class ReverseAgentDevice(DeviceProtocol):
             attrs={"agent_id": self._agent_id, "command_type": command_type},
         ):
             # send_command is async, but DeviceProtocol methods are sync.
-            # Run the coroutine on the current event loop if one exists,
-            # otherwise create a new one.
+            # If we are already in a thread with a running event loop, we cannot
+            # safely block it (run_coroutine_threadsafe + future.result would
+            # deadlock when the loop is on the same thread). Callers must use
+            # asyncio.to_thread() instead. Otherwise create a temporary event loop.
             import asyncio
 
             try:
-                loop = asyncio.get_running_loop()
+                asyncio.get_running_loop()
             except RuntimeError:
                 return asyncio.run(
                     self._registry.send_command(
@@ -58,15 +60,10 @@ class ReverseAgentDevice(DeviceProtocol):
                     )
                 ).payload
 
-            future = asyncio.run_coroutine_threadsafe(
-                self._registry.send_command(
-                    agent_id=self._agent_id,
-                    command=command,
-                    timeout_seconds=self._timeout_seconds,
-                ),
-                loop,
+            raise RuntimeError(
+                "ReverseAgentDevice cannot be called from a thread with a running "
+                "event loop; use asyncio.to_thread() to invoke DeviceProtocol methods"
             )
-            return future.result(timeout=self._timeout_seconds + 5).payload
 
     def get_screenshot(self, timeout: int = 10) -> Screenshot:
         data = self._send("screenshot", {"timeout": timeout})

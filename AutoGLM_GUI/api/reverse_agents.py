@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, HTTPException, Request, WebSocket, WebSocketDisconnect
 
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.reverse_agent_protocol import (
@@ -53,8 +53,10 @@ def create_pairing(
 )
 def claim_pairing(
     request: ReverseAgentPairingClaimRequest,
+    http_request: Request,
 ) -> ReverseAgentPairingClaimResponse:
     registry = get_reverse_agent_registry()
+    source_id = http_request.client.host if http_request.client else "unknown"
     try:
         agent, agent_token = registry.claim_pairing(
             pairing_code=request.pairing_code,
@@ -63,11 +65,14 @@ def claim_pairing(
             platform=request.platform,
             capabilities=request.capabilities,
             metadata=request.metadata,
+            source_id=source_id,
         )
     except ValueError as exc:
         detail = str(exc)
         if detail == "pairing_code_not_found":
             raise HTTPException(status_code=404, detail=detail) from exc
+        if detail == "rate_limited":
+            raise HTTPException(status_code=429, detail=detail) from exc
         raise HTTPException(status_code=409, detail=detail) from exc
 
     return ReverseAgentPairingClaimResponse(
@@ -100,6 +105,15 @@ def get_registry_agent(agent_id: str) -> ReverseAgentInfo:
     return ReverseAgentInfo.model_validate(agent)
 
 
+@router.delete("/api/reverse_agents/registry/{agent_id}")
+def delete_registry_agent(agent_id: str) -> dict[str, bool]:
+    registry = get_reverse_agent_registry()
+    removed = registry.remove_agent(agent_id=agent_id)
+    if not removed:
+        raise HTTPException(status_code=404, detail="reverse_agent_not_found")
+    return {"success": True}
+
+
 @router.post(
     "/api/reverse_agents/agents/{agent_id}/commands",
     response_model=ReverseAgentCommandResponse,
@@ -130,6 +144,10 @@ async def send_command_to_agent(
         error_message = str(exc)
         if "reverse_agent_not_connected" in error_message:
             raise HTTPException(status_code=503, detail=error_message) from exc
+        if "reverse_agent_stale" in error_message:
+            raise HTTPException(status_code=503, detail=error_message) from exc
+        if "rate_limited" in error_message:
+            raise HTTPException(status_code=429, detail=error_message) from exc
         raise HTTPException(status_code=400, detail=error_message) from exc
     except TimeoutError as exc:
         raise HTTPException(

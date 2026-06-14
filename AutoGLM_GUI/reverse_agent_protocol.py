@@ -20,6 +20,10 @@ ReverseAgentCommandType = Literal[
     "current_app",
 ]
 
+_REVERSE_AGENT_COMMAND_TYPES = frozenset(
+    ReverseAgentCommandType.__args__  # type: ignore[attr-defined]
+)
+
 
 @dataclass
 class ReverseAgentCommand:
@@ -39,9 +43,15 @@ class ReverseAgentCommand:
 
     @classmethod
     def from_message(cls, message: dict[str, Any]) -> ReverseAgentCommand:
+        command_type = message.get("command_type")
+        if command_type not in _REVERSE_AGENT_COMMAND_TYPES:
+            raise ValueError(
+                f"unsupported_command_type: {command_type!r}; "
+                f"expected one of {sorted(_REVERSE_AGENT_COMMAND_TYPES)}"
+            )
         return cls(
             command_id=str(message.get("command_id") or uuid.uuid4().hex),
-            type=message.get("command_type", "unknown"),  # type: ignore[arg-type]
+            type=command_type,  # type: ignore[arg-type]
             payload=dict(message.get("payload") or {}),
         )
 

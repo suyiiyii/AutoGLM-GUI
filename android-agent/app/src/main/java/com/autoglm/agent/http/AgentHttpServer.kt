@@ -13,7 +13,7 @@ class AgentHttpServer(
     private val context: Context,
     port: Int,
     private val deviceId: String = DEFAULT_DEVICE_ID,
-) : NanoHTTPD(port) {
+) : NanoHTTPD("127.0.0.1", port) {
     override fun serve(session: IHTTPSession): Response {
         return try {
             route(session)

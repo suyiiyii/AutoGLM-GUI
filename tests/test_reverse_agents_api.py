@@ -283,3 +283,87 @@ def test_registry_marks_stale_after_heartbeat_timeout(reverse_agents_env: dict) 
         stale_snapshot = client.get(f"/api/reverse_agents/registry/{claim['agent_id']}")
         assert stale_snapshot.status_code == 200
         assert stale_snapshot.json()["connection_status"] == "stale"
+
+
+def test_registry_marks_stale_without_heartbeat(reverse_agents_env: dict) -> None:
+    """A connected agent that never heartbeats should become stale based on connected_at."""
+    client = reverse_agents_env["client"]
+    clock: FakeClock = reverse_agents_env["clock"]
+    pairing = _create_pairing(client)
+    claim = _claim_pairing(client, pairing["pairing_code"])
+
+    with client.websocket_connect(
+        f"/api/reverse_agents/agents/{claim['agent_id']}/ws?token={claim['agent_token']}"
+    ) as websocket:
+        websocket.receive_json()
+        # Never send a heartbeat.
+        clock.advance(31)
+
+        stale_snapshot = client.get(f"/api/reverse_agents/registry/{claim['agent_id']}")
+        assert stale_snapshot.status_code == 200
+        assert stale_snapshot.json()["connection_status"] == "stale"
+
+
+def test_command_endpoint_rejects_stale_agent(reverse_agents_env: dict) -> None:
+    client = reverse_agents_env["client"]
+    clock: FakeClock = reverse_agents_env["clock"]
+    registry: ReverseAgentRegistry = reverse_agents_env["registry"]
+    pairing = _create_pairing(client)
+    claim = _claim_pairing(client, pairing["pairing_code"])
+    agent_id = claim["agent_id"]
+
+    class FakeWebSocket:
+        async def send_json(self, data: dict[str, Any]) -> None:
+            pass
+
+    registry.mark_session_connected(agent_id=agent_id)
+    registry.register_session(agent_id=agent_id, websocket=FakeWebSocket())
+    clock.advance(31)
+
+    response = client.post(
+        f"/api/reverse_agents/agents/{agent_id}/commands",
+        json={"command_type": "current_app"},
+    )
+    assert response.status_code == 503
+    assert "reverse_agent_stale" in response.json()["detail"]
+
+
+def test_pairing_claim_rate_limit(reverse_agents_env: dict) -> None:
+    client = reverse_agents_env["client"]
+    for i in range(12):
+        # Use valid-format codes (6 uppercase letters from the allowed alphabet).
+        code = f"BAD{chr(65 + (i % 26))}{chr(65 + ((i + 1) % 26))}{chr(65 + ((i + 2) % 26))}"
+        response = client.post(
+            "/api/reverse_agents/pairings/claim",
+            json={"pairing_code": code},
+        )
+        if i < 10:
+            assert response.status_code == 404
+        else:
+            assert response.status_code == 429
+            assert response.json()["detail"] == "rate_limited"
+            break
+
+
+def test_delete_registry_agent(reverse_agents_env: dict) -> None:
+    client = reverse_agents_env["client"]
+    pairing = _create_pairing(client)
+    claim = _claim_pairing(client, pairing["pairing_code"])
+    agent_id = claim["agent_id"]
+
+    delete_response = client.delete(f"/api/reverse_agents/registry/{agent_id}")
+    assert delete_response.status_code == 200
+    assert delete_response.json() == {"success": True}
+
+    get_response = client.get(f"/api/reverse_agents/registry/{agent_id}")
+    assert get_response.status_code == 404
+
+    delete_again = client.delete(f"/api/reverse_agents/registry/{agent_id}")
+    assert delete_again.status_code == 404
+
+
+def test_command_from_message_rejects_unknown_type() -> None:
+    with pytest.raises(ValueError, match="unsupported_command_type"):
+        ReverseAgentCommand.from_message(
+            {"command_id": "cmd_123", "command_type": "unknown"}
+        )

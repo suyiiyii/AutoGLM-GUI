@@ -117,7 +117,7 @@ def list_devices() -> list[DeviceResponse]:
         - serial: Hardware serial number
         - model: Device model name
         - status: Connection status
-        - connection_type: "usb" | "wifi" | "remote"
+        - connection_type: "usb" | "wifi" | "remote" | "reverse_agent"
         - state: "online" | "offline" | "disconnected"
         - agent: Agent status (if initialized)
     """

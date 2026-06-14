@@ -8,6 +8,7 @@ import secrets
 import threading
 import time
 import uuid
+from collections import deque
 from dataclasses import dataclass, field
 from typing import Any, Callable
 
@@ -74,11 +75,17 @@ class ReverseAgentRegistry:
         pairing_ttl_seconds: int = 600,
         heartbeat_timeout_seconds: int = 45,
         command_timeout_seconds: float = 30.0,
+        claim_rate_limit_max_attempts: int = 10,
+        claim_rate_limit_window_seconds: int = 60,
+        stale_agent_ttl_seconds: int = 86400,
         time_fn: Callable[[], float] | None = None,
     ) -> None:
         self._pairing_ttl_seconds = pairing_ttl_seconds
         self._heartbeat_timeout_seconds = heartbeat_timeout_seconds
         self._command_timeout_seconds = command_timeout_seconds
+        self._claim_rate_limit_max_attempts = claim_rate_limit_max_attempts
+        self._claim_rate_limit_window_seconds = claim_rate_limit_window_seconds
+        self._stale_agent_ttl_seconds = stale_agent_ttl_seconds
         self._time_fn = time_fn or _default_time
         self._lock = threading.RLock()
         self._pairings_by_id: dict[str, PairingRecord] = {}
@@ -91,6 +98,9 @@ class ReverseAgentRegistry:
 
         # Pending commands keyed by command_id. Access must be under _lock.
         self._pending_commands: dict[str, _PendingCommand] = {}
+
+        # Rate-limit state for pairing claim attempts (source_id -> deque of timestamps).
+        self._claim_attempts: dict[str, deque[float]] = {}
 
     def create_pairing(self, *, display_name: str | None = None) -> PairingRecord:
         now = self._time_fn()
@@ -118,11 +128,14 @@ class ReverseAgentRegistry:
         platform: str | None = None,
         capabilities: list[str] | None = None,
         metadata: dict[str, Any] | None = None,
+        source_id: str | None = None,
     ) -> tuple[ReverseAgentRecord, str]:
         normalized_code = pairing_code.strip().upper()
         now = self._time_fn()
+        source_id = source_id or "unknown"
         with self._lock:
             self._cleanup_expired_pairings_locked(now)
+            self._enforce_claim_rate_limit_locked(source_id, now)
             pairing_id = self._pairing_ids_by_code.get(normalized_code)
             if pairing_id is None:
                 raise ValueError("pairing_code_not_found")
@@ -264,8 +277,11 @@ class ReverseAgentRegistry:
 
         with self._lock:
             websocket = self._sessions.get(agent_id)
-            if websocket is None:
+            record = self._agents.get(agent_id)
+            if websocket is None or record is None:
                 raise ValueError(f"reverse_agent_not_connected: {agent_id}")
+            if self._connection_status_locked(record) == "stale":
+                raise ValueError(f"reverse_agent_stale: {agent_id}")
             self._pending_commands[command.command_id] = pending
 
         try:
@@ -315,7 +331,9 @@ class ReverseAgentRegistry:
             return agent_id in self._sessions
 
     def list_agents(self) -> list[dict[str, Any]]:
+        now = self._time_fn()
         with self._lock:
+            self._cleanup_stale_agents_locked(now)
             return [
                 self._snapshot_agent_locked(record) for record in self._agents.values()
             ]
@@ -362,12 +380,47 @@ class ReverseAgentRegistry:
             if record.connected_at is not None:
                 return "offline"
             return "paired"
-        if (
-            record.last_heartbeat_at is not None
-            and now - record.last_heartbeat_at > self._heartbeat_timeout_seconds
-        ):
+        # Use the most recent heartbeat, connection, or seen timestamp to detect staleness.
+        last_alive_at = (
+            record.last_heartbeat_at or record.connected_at or record.last_seen_at
+        )
+        if now - last_alive_at > self._heartbeat_timeout_seconds:
             return "stale"
         return "connected"
+
+    def remove_agent(self, *, agent_id: str) -> bool:
+        """Remove an agent from the registry and disconnect its session."""
+        with self._lock:
+            record = self._agents.get(agent_id)
+            if record is None:
+                return False
+            self._agents.pop(agent_id, None)
+            # Keep the pairing mapping but mark it unclaimed so the code can be reused.
+            if record.pairing_id:
+                pairing = self._pairings_by_id.get(record.pairing_id)
+                if pairing is not None:
+                    pairing.claimed_at = None
+                    pairing.claimed_agent_id = None
+            websocket = self._sessions.pop(agent_id, None)
+            pending = [
+                cmd
+                for cmd in self._pending_commands.values()
+                if cmd.agent_id == agent_id
+            ]
+            for cmd in pending:
+                cmd.cancelled = True
+                cmd.result = ReverseAgentCommandResult.failure_result(
+                    cmd.command_id, "agent_removed"
+                )
+                self._set_pending_event(cmd)
+        if websocket is not None:
+            try:
+                asyncio.create_task(websocket.close(code=1000, reason="removed"))
+            except Exception:
+                logger.exception(
+                    "Failed to close websocket for removed agent %s", agent_id
+                )
+        return True
 
     def _cleanup_expired_pairings_locked(self, now: float) -> None:
         expired_pairing_ids = [
@@ -379,6 +432,27 @@ class ReverseAgentRegistry:
             code = self._pairings_by_id[pairing_id].pairing_code
             self._pairings_by_id.pop(pairing_id, None)
             self._pairing_ids_by_code.pop(code, None)
+
+    def _enforce_claim_rate_limit_locked(self, source_id: str, now: float) -> None:
+        attempts = self._claim_attempts.setdefault(source_id, deque())
+        cutoff = now - self._claim_rate_limit_window_seconds
+        while attempts and attempts[0] <= cutoff:
+            attempts.popleft()
+        if len(attempts) >= self._claim_rate_limit_max_attempts:
+            raise ValueError("rate_limited")
+        attempts.append(now)
+
+    def _cleanup_stale_agents_locked(self, now: float) -> None:
+        """Remove agents that have been offline longer than the stale TTL."""
+        stale_agent_ids = [
+            agent_id
+            for agent_id, record in self._agents.items()
+            if self._connection_status_locked(record) == "offline"
+            and record.disconnected_at is not None
+            and now - record.disconnected_at > self._stale_agent_ttl_seconds
+        ]
+        for agent_id in stale_agent_ids:
+            self._agents.pop(agent_id, None)
 
     def _generate_pairing_code_locked(self) -> str:
         alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
