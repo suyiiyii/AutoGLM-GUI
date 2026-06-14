@@ -7,7 +7,6 @@ from typing import Any
 
 from fastapi import APIRouter
 
-from AutoGLM_GUI.adb_plus import capture_screenshot_async
 from AutoGLM_GUI.exceptions import DeviceNotAvailableError
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.schemas import ScreenshotRequest, ScreenshotResponse
@@ -49,46 +48,8 @@ async def take_screenshot(request: ScreenshotRequest) -> ScreenshotResponse:
             )
 
         device_manager = DeviceManager.get_instance()
-        serial = device_manager.get_serial_by_device_id(device_id)
-
-        if not serial:
-            return ScreenshotResponse(
-                success=False,
-                image="",
-                width=0,
-                height=0,
-                is_sensitive=False,
-                error=f"Device {device_id} not found",
-            )
-
-        if serial:
-            managed = device_manager.get_device_by_serial(serial)
-            if managed and managed.connection_type.value == "remote":
-                remote_device = device_manager.get_remote_device_instance(serial)
-
-                if not remote_device:
-                    return ScreenshotResponse(
-                        success=False,
-                        image="",
-                        width=0,
-                        height=0,
-                        is_sensitive=False,
-                        error=f"Remote device {serial} not found",
-                    )
-
-                screenshot = await asyncio.to_thread(
-                    remote_device.get_screenshot,
-                    timeout=10,
-                )
-                return ScreenshotResponse(
-                    success=True,
-                    image=screenshot.base64_data,
-                    width=screenshot.width,
-                    height=screenshot.height,
-                    is_sensitive=screenshot.is_sensitive,
-                )
-
-        screenshot = await capture_screenshot_async(device_id=device_id)
+        device = device_manager.get_device_protocol(device_id)
+        screenshot = await asyncio.to_thread(device.get_screenshot, timeout=10)
         return ScreenshotResponse(
             success=True,
             image=screenshot.base64_data,

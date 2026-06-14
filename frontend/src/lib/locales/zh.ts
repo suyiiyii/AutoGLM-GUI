@@ -251,6 +251,7 @@ export const zh = {
     agentError: '错误',
     agentInitializing: '初始化中',
     remote: '远程',
+    reverseAgent: '安卓Agent',
     wifi: 'WiFi',
     removeRemote: '移除远程设备',
     connectWifiTitle: '连接 WiFi',

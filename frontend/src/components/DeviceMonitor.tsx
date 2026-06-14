@@ -47,7 +47,8 @@ export function DeviceMonitor({
 }: DeviceMonitorProps) {
   const t = useTranslation();
 
-  const isRemoteDevice = connectionType === 'remote';
+  const isRemoteDevice =
+    connectionType === 'remote' || connectionType === 'reverse_agent';
   const [useVideoStream, setUseVideoStream] = useState(!isRemoteDevice);
   const [videoStreamFailed, setVideoStreamFailed] = useState(false);
   const [displayMode, setDisplayMode] = useState<

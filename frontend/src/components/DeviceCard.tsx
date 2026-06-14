@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import {
+  Bot,
   Edit,
   Loader2,
   Server,
@@ -67,6 +68,7 @@ export function DeviceCard({
   const isUsb = connectionType === 'usb';
   const isWifi = connectionType === 'wifi';
   const isRemote = connectionType === 'remote';
+  const isReverseAgent = connectionType === 'reverse_agent';
   const [loading, setLoading] = useState(false);
   const [showWifiConfirm, setShowWifiConfirm] = useState(false);
   const [showDisconnectConfirm, setShowDisconnectConfirm] = useState(false);
@@ -285,7 +287,17 @@ export function DeviceCard({
           <div className="flex-shrink-0 flex flex-col items-end gap-1">
             {/* Connection type badge */}
             {(() => {
-              if (isRemote) {
+              if (isReverseAgent) {
+                return (
+                  <Badge
+                    variant="outline"
+                    className="text-xs border-slate-200 text-slate-600 dark:border-slate-700 dark:text-slate-400"
+                  >
+                    <Bot className="w-2.5 h-2.5 mr-1" />
+                    {t.deviceCard.reverseAgent || 'Android Agent'}
+                  </Badge>
+                );
+              } else if (isRemote) {
                 return (
                   <Badge
                     variant="outline"

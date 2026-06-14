@@ -1,4 +1,4 @@
-"""Reverse Android Agent pairing, registry, and websocket session routes."""
+"""Reverse Android Agent pairing, registry, websocket session, and command routes."""
 
 from __future__ import annotations
 
@@ -8,8 +8,14 @@ from typing import Any
 from fastapi import APIRouter, HTTPException, WebSocket, WebSocketDisconnect
 
 from AutoGLM_GUI.logger import logger
+from AutoGLM_GUI.reverse_agent_protocol import (
+    ReverseAgentCommand,
+    ReverseAgentCommandResult,
+)
 from AutoGLM_GUI.reverse_agent_registry import get_reverse_agent_registry
 from AutoGLM_GUI.schemas import (
+    ReverseAgentCommandRequest,
+    ReverseAgentCommandResponse,
     ReverseAgentHeartbeatAck,
     ReverseAgentInfo,
     ReverseAgentPairingClaimRequest,
@@ -94,6 +100,53 @@ def get_registry_agent(agent_id: str) -> ReverseAgentInfo:
     return ReverseAgentInfo.model_validate(agent)
 
 
+@router.post(
+    "/api/reverse_agents/agents/{agent_id}/commands",
+    response_model=ReverseAgentCommandResponse,
+)
+async def send_command_to_agent(
+    agent_id: str,
+    request: ReverseAgentCommandRequest,
+) -> ReverseAgentCommandResponse:
+    """Send a command to a reverse Android Agent and return its execution result."""
+    registry = get_reverse_agent_registry()
+
+    agent = registry.get_agent(agent_id)
+    if agent is None:
+        raise HTTPException(status_code=404, detail="reverse_agent_not_found")
+
+    command = ReverseAgentCommand.new(
+        command_type=request.command_type,
+        payload=request.payload,
+    )
+
+    try:
+        result = await registry.send_command(
+            agent_id=agent_id,
+            command=command,
+            timeout_seconds=request.timeout_seconds,
+        )
+    except ValueError as exc:
+        error_message = str(exc)
+        if "reverse_agent_not_connected" in error_message:
+            raise HTTPException(status_code=503, detail=error_message) from exc
+        raise HTTPException(status_code=400, detail=error_message) from exc
+    except TimeoutError as exc:
+        raise HTTPException(
+            status_code=504,
+            detail=f"reverse_agent_command_timeout: {command.command_id}",
+        ) from exc
+
+    return ReverseAgentCommandResponse(
+        command_id=result.command_id,
+        success=result.success,
+        payload=result.payload,
+        error=result.error,
+        started_at=result.started_at,
+        finished_at=result.finished_at,
+    )
+
+
 @router.websocket("/api/reverse_agents/agents/{agent_id}/ws")
 async def reverse_agent_session(websocket: WebSocket, agent_id: str) -> None:
     registry = get_reverse_agent_registry()
@@ -107,6 +160,19 @@ async def reverse_agent_session(websocket: WebSocket, agent_id: str) -> None:
 
     await websocket.accept()
     registry.mark_session_connected(agent_id=agent_id)
+    registry.register_session(agent_id=agent_id, websocket=websocket)
+
+    try:
+        from AutoGLM_GUI.device_manager import DeviceManager
+
+        device_manager = DeviceManager.get_instance()
+        device_manager.register_reverse_agent(
+            agent_id=agent_id,
+            display_name=agent.display_name,
+            model=agent.metadata.get("model") if agent.metadata else None,
+        )
+    except Exception:
+        logger.exception("Failed to register reverse agent in DeviceManager")
 
     try:
         await websocket.send_json(
@@ -132,14 +198,28 @@ async def reverse_agent_session(websocket: WebSocket, agent_id: str) -> None:
                     app_version=_parse_optional_str(message.get("app_version")),
                     display_name=_parse_optional_str(message.get("display_name")),
                 )
+                connection_status = registry.get_agent(agent_id)
+                status_value = (
+                    connection_status.get("connection_status", "connected")
+                    if connection_status
+                    else "connected"
+                )
                 await websocket.send_json(
                     ReverseAgentHeartbeatAck(
                         type="heartbeat_ack",
                         agent_id=agent_id,
                         server_time=updated.last_seen_at,
-                        connection_status="connected",
+                        connection_status=status_value,
                     ).model_dump()
                 )
+            elif message_type == "command_result":
+                try:
+                    result = ReverseAgentCommandResult.from_message(message)
+                    registry.handle_command_result(agent_id=agent_id, result=result)
+                except Exception:
+                    logger.exception(
+                        "Failed to process command_result from agent %s", agent_id
+                    )
             elif message_type == "ping":
                 await websocket.send_json({"type": "pong"})
             else:
@@ -155,7 +235,15 @@ async def reverse_agent_session(websocket: WebSocket, agent_id: str) -> None:
         logger.exception("Reverse agent websocket session failed")
         await websocket.close(code=1011, reason="Reverse agent session failed")
     finally:
+        registry.unregister_session(agent_id=agent_id)
         registry.mark_session_disconnected(agent_id=agent_id)
+        try:
+            from AutoGLM_GUI.device_manager import DeviceManager
+
+            device_manager = DeviceManager.get_instance()
+            device_manager.unregister_reverse_agent(agent_id=agent_id)
+        except Exception:
+            logger.exception("Failed to unregister reverse agent from DeviceManager")
 
 
 def _parse_capabilities(value: Any) -> list[str] | None:
