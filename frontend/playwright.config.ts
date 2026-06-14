@@ -15,9 +15,12 @@ export default defineConfig({
     baseURL: 'http://localhost:3000',
     // Record a video for every test so any run can be reviewed after the fact.
     video: 'on',
-    // Keep a full Playwright trace only for failures — enough to step through
-    // the exact failing interaction without paying the cost on every pass.
-    trace: 'retain-on-failure',
+    // Keep a full Playwright trace for every run (not just failures). A trace
+    // has a real timeline — you can scrub through each action, network request,
+    // and DOM snapshot with its wall-clock duration. The video alone drops
+    // idle/network-wait frames, so it plays back much faster than real time;
+    // the trace is what shows the actual timing and the operations in between.
+    trace: 'on',
     screenshot: 'only-on-failure',
   },
   webServer: {
