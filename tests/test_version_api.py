@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+import json
+import urllib.error
+
 import pytest
 from fastapi import FastAPI
 from fastapi.testclient import TestClient
@@ -29,6 +32,8 @@ def test_parse_version_handles_common_formats() -> None:
     assert version_api.parse_version("1.2.3") == (1, 2, 3)
     assert version_api.parse_version("v2.0.1") == (2, 0, 1)
     assert version_api.parse_version("3.4.5-beta") == (3, 4, 5)
+    assert version_api.parse_version("4.5.6+build") == (4, 5, 6)
+    assert version_api.parse_version("not-a-version") is None
     assert version_api.parse_version("dev") is None
 
 
@@ -36,6 +41,81 @@ def test_compare_versions() -> None:
     assert version_api.compare_versions("1.0.0", "1.0.1") is True
     assert version_api.compare_versions("1.0.0", "1.0.0") is False
     assert version_api.compare_versions("dev", "9.9.9") is False
+
+
+def test_fetch_latest_release_success(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeResponse:
+        def __enter__(self) -> "FakeResponse":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return json.dumps({"tag_name": "v1.2.3"}).encode("utf-8")
+
+    captured: dict[str, object] = {}
+
+    def fake_urlopen(request, timeout: int) -> FakeResponse:
+        captured["request"] = request
+        captured["timeout"] = timeout
+        return FakeResponse()
+
+    monkeypatch.setattr(version_api.urllib.request, "urlopen", fake_urlopen)
+
+    assert version_api.fetch_latest_release() == {"tag_name": "v1.2.3"}
+    assert captured["timeout"] == 10
+    assert captured["request"].headers["User-agent"].startswith("AutoGLM-GUI/")
+
+
+@pytest.mark.parametrize(
+    "error",
+    [
+        urllib.error.HTTPError(
+            version_api.GITHUB_API_URL,
+            403,
+            "rate limited",
+            hdrs=None,
+            fp=None,
+        ),
+        urllib.error.HTTPError(
+            version_api.GITHUB_API_URL,
+            500,
+            "server error",
+            hdrs=None,
+            fp=None,
+        ),
+        urllib.error.URLError("offline"),
+        RuntimeError("unexpected"),
+    ],
+)
+def test_fetch_latest_release_error_paths(
+    monkeypatch: pytest.MonkeyPatch, error: Exception
+) -> None:
+    def fake_urlopen(request, timeout: int):
+        raise error
+
+    monkeypatch.setattr(version_api.urllib.request, "urlopen", fake_urlopen)
+
+    assert version_api.fetch_latest_release() is None
+
+
+def test_fetch_latest_release_invalid_json(monkeypatch: pytest.MonkeyPatch) -> None:
+    class FakeResponse:
+        def __enter__(self) -> "FakeResponse":
+            return self
+
+        def __exit__(self, exc_type, exc, tb) -> None:
+            return None
+
+        def read(self) -> bytes:
+            return b"{bad-json"
+
+    monkeypatch.setattr(
+        version_api.urllib.request, "urlopen", lambda request, timeout: FakeResponse()
+    )
+
+    assert version_api.fetch_latest_release() is None
 
 
 def test_version_endpoint_success(

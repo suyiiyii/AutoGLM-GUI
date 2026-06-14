@@ -7,8 +7,10 @@ import {
   type SetStateAction,
 } from 'react';
 import type {
+  ModelErrorDetails,
   StepTimingSummary,
   TaskEventRecordResponse,
+  TaskImageAttachment,
   TaskRunResponse,
   TaskStatus,
 } from '../api';
@@ -21,6 +23,10 @@ import {
   streamTaskEvents,
   submitTaskSessionTask,
 } from '../api';
+import {
+  isInteractionRequired,
+  getInteractionPrompt,
+} from '../lib/interaction-config';
 
 export interface TaskConversationMessage {
   id: string;
@@ -28,19 +34,23 @@ export interface TaskConversationMessage {
   content: string;
   timestamp: Date;
   steps?: number;
+  stepNumbers?: number[];
   success?: boolean;
   thinking?: string[];
   actions?: Record<string, unknown>[];
   screenshots?: (string | undefined)[];
   stepTimings?: (StepTimingSummary | undefined)[];
+  errorDetails?: ModelErrorDetails;
   isStreaming?: boolean;
   currentThinking?: string;
+  attachments?: TaskImageAttachment[];
 }
 
 interface UseTaskSessionConversationOptions {
   deviceId: string;
   deviceSerial: string;
   sessionStorageKey: string;
+  agentType?: string;
 }
 
 interface UseTaskSessionConversationResult {
@@ -48,15 +58,25 @@ interface UseTaskSessionConversationResult {
   setMessages: Dispatch<SetStateAction<TaskConversationMessage[]>>;
   loading: boolean;
   aborting: boolean;
+  waitingForDevice: boolean;
+  waitingForUserInteraction: boolean;
+  interactionPrompt: string | null;
   error: string | null;
   sessionReady: boolean;
-  sendMessage: (input: string) => Promise<boolean>;
+  sendMessage: (
+    input: string,
+    attachments?: TaskImageAttachment[]
+  ) => Promise<boolean>;
   resetConversation: () => Promise<void>;
   abortConversation: () => Promise<void>;
 }
 
 function isTaskActive(status: TaskStatus): boolean {
   return status === 'QUEUED' || status === 'RUNNING';
+}
+
+function isTaskWaitingForDevice(task: TaskRunResponse): boolean {
+  return task.status === 'QUEUED';
 }
 
 function applyTaskEventToTask(
@@ -96,6 +116,15 @@ function applyTaskEventToTask(
     nextTask.error_message =
       typeof payload.message === 'string' ? payload.message : null;
     nextTask.finished_at = event.created_at;
+  } else if (event.event_type === 'takeover') {
+    nextTask.status = 'SUCCEEDED';
+    nextTask.final_message =
+      typeof payload.message === 'string' ? payload.message : null;
+    nextTask.error_message = null;
+    nextTask.finished_at = event.created_at;
+    if (typeof payload.steps === 'number') {
+      nextTask.step_count = payload.steps;
+    }
   } else if (event.event_type === 'step' && typeof payload.step === 'number') {
     nextTask.step_count = Math.max(nextTask.step_count, payload.step);
   }
@@ -121,6 +150,8 @@ function buildAssistantMessage(
   const actions: Record<string, unknown>[] = [];
   const screenshots: (string | undefined)[] = [];
   const stepTimings: (StepTimingSummary | undefined)[] = [];
+  const stepNumbers: number[] = [];
+  let errorDetails: ModelErrorDetails | undefined;
   let currentThinking = '';
   let content = task.final_message || task.error_message || '';
   let steps = task.step_count;
@@ -150,6 +181,9 @@ function buildAssistantMessage(
             : currentThinking;
         thinking.push(stepThinking);
         actions.push((payload.action as Record<string, unknown>) || {});
+        stepNumbers.push(
+          typeof payload.step === 'number' ? payload.step : thinking.length
+        );
         screenshots.push(
           typeof payload.screenshot === 'string'
             ? payload.screenshot
@@ -158,6 +192,12 @@ function buildAssistantMessage(
         stepTimings.push(
           (payload.timings as StepTimingSummary | undefined) || undefined
         );
+        if (
+          payload.error_details &&
+          typeof payload.error_details === 'object'
+        ) {
+          errorDetails = payload.error_details as ModelErrorDetails;
+        }
         currentThinking = '';
         if (typeof payload.step === 'number') {
           steps = payload.step;
@@ -179,6 +219,12 @@ function buildAssistantMessage(
         if (typeof payload.message === 'string') {
           content = payload.message;
         }
+        if (
+          payload.error_details &&
+          typeof payload.error_details === 'object'
+        ) {
+          errorDetails = payload.error_details as ModelErrorDetails;
+        }
         success = false;
         currentThinking = '';
         break;
@@ -191,23 +237,19 @@ function buildAssistantMessage(
         currentThinking = '';
         break;
       }
-      case 'status': {
-        if (
-          payload.status === 'QUEUED' &&
-          !currentThinking &&
-          !content &&
-          thinking.length === 0
-        ) {
-          currentThinking = 'Waiting for device...';
+      case 'takeover': {
+        if (typeof payload.message === 'string') {
+          content = payload.message;
         }
+        if (typeof payload.steps === 'number') {
+          steps = payload.steps;
+        }
+        success = true;
+        currentThinking = '';
         break;
       }
     }
   });
-
-  if (task.status === 'QUEUED' && !currentThinking && !content) {
-    currentThinking = 'Waiting for device...';
-  }
 
   return {
     id: `${task.id}-agent`,
@@ -218,6 +260,8 @@ function buildAssistantMessage(
     actions,
     screenshots,
     stepTimings,
+    stepNumbers,
+    errorDetails,
     steps,
     success,
     isStreaming: isTaskActive(task.status),
@@ -229,12 +273,27 @@ function buildMessagePair(
   task: TaskRunResponse,
   events: TaskEventRecordResponse[]
 ): TaskConversationMessage[] {
+  const userEvent = events.find(event => event.event_type === 'user_message');
+  const userPayload = userEvent?.payload || {};
+  const eventAttachments = Array.isArray(userPayload.attachments)
+    ? (userPayload.attachments.filter(
+        attachment =>
+          attachment &&
+          typeof attachment === 'object' &&
+          typeof (attachment as TaskImageAttachment).mime_type === 'string' &&
+          typeof (attachment as TaskImageAttachment).data === 'string'
+      ) as TaskImageAttachment[])
+    : [];
+  const eventMessage =
+    typeof userPayload.message === 'string' ? userPayload.message : null;
+
   return [
     {
       id: `${task.id}-user`,
       role: 'user',
-      content: task.input_text,
+      content: eventMessage ?? task.input_text,
       timestamp: new Date(task.created_at),
+      attachments: eventAttachments,
     },
     buildAssistantMessage(task, events),
   ];
@@ -244,10 +303,17 @@ export function useTaskSessionConversation({
   deviceId,
   deviceSerial,
   sessionStorageKey,
+  agentType,
 }: UseTaskSessionConversationOptions): UseTaskSessionConversationResult {
   const [messages, setMessages] = useState<TaskConversationMessage[]>([]);
   const [loading, setLoading] = useState(false);
   const [aborting, setAborting] = useState(false);
+  const [waitingForDevice, setWaitingForDevice] = useState(false);
+  const [waitingForUserInteraction, setWaitingForUserInteraction] =
+    useState(false);
+  const [interactionPrompt, setInteractionPrompt] = useState<string | null>(
+    null
+  );
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const chatStreamRef = useRef<{ close: () => void } | null>(null);
@@ -300,7 +366,43 @@ export function useTaskSessionConversation({
 
       const nextTask = applyTaskEventToTask(currentTask, event);
       taskRunsRef.current[taskId] = nextTask;
+      setWaitingForDevice(isTaskWaitingForDevice(nextTask));
       replaceTaskMessages(taskId);
+
+      // Check for interaction required actions
+      if (event.event_type === 'step') {
+        const action = event.payload.action as Record<string, unknown>;
+        if (action && isInteractionRequired(action, agentType)) {
+          setWaitingForUserInteraction(true);
+          setInteractionPrompt(getInteractionPrompt(action));
+          setLoading(false);
+          setAborting(false);
+          setWaitingForDevice(false);
+          return;
+        }
+      }
+      if (
+        event.event_type === 'takeover' &&
+        typeof event.payload.message === 'string'
+      ) {
+        setWaitingForUserInteraction(true);
+        setInteractionPrompt(
+          getInteractionPrompt({
+            action: 'Take_over',
+            message: event.payload.message,
+          })
+        );
+        setLoading(false);
+        setAborting(false);
+        setWaitingForDevice(false);
+        currentTaskIdRef.current = null;
+        return;
+      }
+
+      // 如果正在等待用户交互，不清除状态
+      if (waitingForUserInteraction) {
+        return;
+      }
 
       if (
         !isTaskActive(nextTask.status) &&
@@ -308,10 +410,13 @@ export function useTaskSessionConversation({
       ) {
         setLoading(false);
         setAborting(false);
+        setWaitingForDevice(false);
+        setWaitingForUserInteraction(false);
+        setInteractionPrompt(null);
         currentTaskIdRef.current = null;
       }
     },
-    [replaceTaskMessages]
+    [replaceTaskMessages, agentType, waitingForUserInteraction]
   );
 
   const attachTaskStream = useCallback(
@@ -329,6 +434,7 @@ export function useTaskSessionConversation({
           setError(message);
           setLoading(false);
           setAborting(false);
+          setWaitingForDevice(false);
           chatStreamRef.current = null;
         },
         afterSeq
@@ -370,6 +476,7 @@ export function useTaskSessionConversation({
       if (activeTask) {
         currentTaskIdRef.current = activeTask.id;
         setLoading(true);
+        setWaitingForDevice(isTaskWaitingForDevice(activeTask));
         const lastSeq =
           taskEventsRef.current[activeTask.id]?.[
             taskEventsRef.current[activeTask.id].length - 1
@@ -378,6 +485,7 @@ export function useTaskSessionConversation({
       } else {
         currentTaskIdRef.current = null;
         setLoading(false);
+        setWaitingForDevice(false);
       }
     },
     [attachTaskStream]
@@ -423,6 +531,7 @@ export function useTaskSessionConversation({
           console.error('Failed to initialize task session:', sessionError);
           setError('Failed to restore chat session');
           setLoading(false);
+          setWaitingForDevice(false);
         }
       }
     };
@@ -439,16 +548,33 @@ export function useTaskSessionConversation({
   }, [deviceId, deviceSerial, restoreSessionConversation, sessionStorageKey]);
 
   const sendMessage = useCallback(
-    async (input: string) => {
+    async (input: string, attachments: TaskImageAttachment[] = []) => {
       const inputValue = input.trim();
-      if (!inputValue || loading || !sessionId) {
+      const messageValue =
+        inputValue || (waitingForUserInteraction ? '继续' : '');
+      if (
+        (!messageValue && attachments.length === 0) ||
+        loading ||
+        !sessionId
+      ) {
         return false;
       }
 
       try {
         setError(null);
         setLoading(true);
-        const task = await submitTaskSessionTask(sessionId, inputValue);
+
+        // Clear interaction state if we were waiting for user interaction
+        if (waitingForUserInteraction) {
+          setWaitingForUserInteraction(false);
+          setInteractionPrompt(null);
+        }
+
+        const task = await submitTaskSessionTask(
+          sessionId,
+          messageValue,
+          attachments
+        );
         const initialEvents = (await listTaskEvents(task.id)).events;
         const reconciledTask = reconcileTaskRun(task, initialEvents);
 
@@ -457,6 +583,7 @@ export function useTaskSessionConversation({
         currentTaskIdRef.current = isTaskActive(reconciledTask.status)
           ? task.id
           : null;
+        setWaitingForDevice(isTaskWaitingForDevice(reconciledTask));
         replaceTaskMessages(task.id);
 
         if (isTaskActive(reconciledTask.status)) {
@@ -465,6 +592,7 @@ export function useTaskSessionConversation({
         } else {
           setLoading(false);
           setAborting(false);
+          setWaitingForDevice(false);
         }
 
         return true;
@@ -479,7 +607,13 @@ export function useTaskSessionConversation({
         return false;
       }
     },
-    [attachTaskStream, loading, replaceTaskMessages, sessionId]
+    [
+      attachTaskStream,
+      loading,
+      replaceTaskMessages,
+      sessionId,
+      waitingForUserInteraction,
+    ]
   );
 
   const resetConversation = useCallback(async () => {
@@ -497,6 +631,7 @@ export function useTaskSessionConversation({
       currentTaskIdRef.current = null;
       setMessages([]);
       setLoading(false);
+      setWaitingForDevice(false);
       setError(null);
       setAborting(false);
     } catch (resetError) {
@@ -520,6 +655,7 @@ export function useTaskSessionConversation({
       const response = await cancelTaskRun(taskId);
       if (response.task) {
         taskRunsRef.current[taskId] = response.task;
+        setWaitingForDevice(isTaskWaitingForDevice(response.task));
         replaceTaskMessages(taskId);
       }
     } catch (abortError) {
@@ -546,6 +682,9 @@ export function useTaskSessionConversation({
     setMessages,
     loading,
     aborting,
+    waitingForDevice,
+    waitingForUserInteraction,
+    interactionPrompt,
     error,
     sessionReady: sessionId !== null,
     sendMessage,

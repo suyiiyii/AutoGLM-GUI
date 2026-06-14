@@ -2,7 +2,15 @@
 
 from typing import Any
 
-from AutoGLM_GUI.logger import logger
+
+class InvalidToolCallError(ValueError):
+    """Raised when a model tool call cannot be mapped to a device action."""
+
+    def __init__(self, tool_name: str, arguments: dict[str, Any], message: str):
+        super().__init__(message)
+        self.tool_name = tool_name
+        self.arguments = arguments
+        self.message = message
 
 
 def _require_int(args: dict[str, Any], key: str) -> int:
@@ -48,8 +56,7 @@ def tool_call_to_action(tool_name: str, arguments: dict[str, Any]) -> dict[str, 
     try:
         return _build_action(tool_name, arguments)
     except (ValueError, KeyError) as e:
-        logger.warning(f"Invalid tool arguments for {tool_name}: {e}")
-        return {"_metadata": "finish", "message": f"Invalid tool call: {e}"}
+        raise InvalidToolCallError(tool_name, arguments, str(e)) from e
 
 
 def _build_action(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
@@ -106,4 +113,4 @@ def _build_action(tool_name: str, args: dict[str, Any]) -> dict[str, Any]:
             "duration": args.get("duration", "1 seconds"),
         }
 
-    return {"_metadata": "finish", "message": f"Unknown tool: {tool_name}"}
+    raise InvalidToolCallError(tool_name, args, f"Unknown tool: {tool_name}")

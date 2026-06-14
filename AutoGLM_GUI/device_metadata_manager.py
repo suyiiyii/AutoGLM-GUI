@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 import threading
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -37,7 +37,7 @@ class DeviceMetadata:
         last_updated = (
             datetime.fromisoformat(last_updated_str)
             if last_updated_str
-            else datetime.now()
+            else datetime.now(tz=timezone.utc)
         )
         return cls(
             serial=data.get("serial", ""),
@@ -157,7 +157,7 @@ class DeviceMetadataManager:
                 return
 
             self._metadata[serial].display_name = normalized_name
-            self._metadata[serial].last_updated = datetime.now()
+            self._metadata[serial].last_updated = datetime.now(tz=timezone.utc)
 
             self._save_metadata()
 

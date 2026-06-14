@@ -495,7 +495,11 @@ export function DeviceSidebar({
         setDiscoveredRemoteDevices(result.devices);
         setSelectedRemoteDevice(null);
       } else {
-        setRemoteUrlError(result.message || '发现设备失败');
+        setRemoteUrlError(
+          result.message ||
+            t.deviceSidebar?.discoverFailed ||
+            'Failed to discover devices'
+        );
         setDiscoveredRemoteDevices([]);
       }
     } catch {
@@ -605,10 +609,12 @@ export function DeviceSidebar({
   // Cleanup QR session when dialog closes or tab changes
   useEffect(() => {
     if (!showManualConnect || activeTab !== 'pair') {
-      if (qrSession && qrSession.status === 'listening') {
-        handleCancelQRPairing();
-      }
-      stopQRStatusPolling();
+      queueMicrotask(() => {
+        if (qrSession && qrSession.status === 'listening') {
+          handleCancelQRPairing();
+        }
+        stopQRStatusPolling();
+      });
     }
   }, [
     showManualConnect,
@@ -639,7 +645,9 @@ export function DeviceSidebar({
       !qrSession &&
       !isGeneratingQR
     ) {
-      handleGenerateQRCode();
+      queueMicrotask(() => {
+        handleGenerateQRCode();
+      });
     }
   }, [
     showManualConnect,
@@ -718,7 +726,9 @@ export function DeviceSidebar({
   useEffect(() => {
     if (showManualConnect) {
       // Initial scan
-      handleDiscover();
+      queueMicrotask(() => {
+        handleDiscover();
+      });
 
       // Poll every 5 seconds for device updates
       const pollInterval = setInterval(() => {
@@ -1416,7 +1426,9 @@ export function DeviceSidebar({
                     disabled={isDiscoveringRemote || !remoteBaseUrl}
                     className="w-full"
                   >
-                    {isDiscoveringRemote ? '正在发现...' : '发现设备'}
+                    {isDiscoveringRemote
+                      ? t.deviceSidebar?.discoveringDevices || 'Discovering...'
+                      : t.deviceSidebar?.discoverDevices || 'Discover Devices'}
                   </Button>
                 </div>
 

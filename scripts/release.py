@@ -140,26 +140,26 @@ def update_readme_download_links(new_version: str) -> bool:
         content = README_PATH.read_text(encoding="utf-8")
 
         # Update macOS download link
-        # Pattern: /releases/download/v{VERSION}/AutoGLM.GUI-{VERSION}-arm64.dmg
+        # Pattern: /releases/download/v{VERSION}/AutoGLM-GUI-{VERSION}-arm64.dmg
         content = re.sub(
-            r"/releases/download/v[\d.]+/AutoGLM\.GUI-[\d.]+-arm64\.dmg",
-            f"/releases/download/v{new_version}/AutoGLM.GUI-{new_version}-arm64.dmg",
+            r"/releases/download/v[\d.]+/AutoGLM-GUI-[\d.]+-arm64\.dmg",
+            f"/releases/download/v{new_version}/AutoGLM-GUI-{new_version}-arm64.dmg",
             content,
         )
 
         # Update Windows download link
-        # Pattern: /releases/download/v{VERSION}/AutoGLM.GUI.{VERSION}.exe
+        # Pattern: /releases/download/v{VERSION}/AutoGLM-GUI-{VERSION}.exe
         content = re.sub(
-            r"/releases/download/v[\d.]+/AutoGLM\.GUI\.[\d.]+\.exe",
-            f"/releases/download/v{new_version}/AutoGLM.GUI.{new_version}.exe",
+            r"/releases/download/v[\d.]+/AutoGLM-GUI-[\d.]+\.exe",
+            f"/releases/download/v{new_version}/AutoGLM-GUI-{new_version}.exe",
             content,
         )
 
         # Update Linux AppImage download link
-        # Pattern: /releases/download/v{VERSION}/AutoGLM.GUI-{VERSION}.AppImage
+        # Pattern: /releases/download/v{VERSION}/AutoGLM-GUI-{VERSION}.AppImage
         content = re.sub(
-            r"/releases/download/v[\d.]+/AutoGLM\.GUI-[\d.]+\.AppImage",
-            f"/releases/download/v{new_version}/AutoGLM.GUI-{new_version}.AppImage",
+            r"/releases/download/v[\d.]+/AutoGLM-GUI-[\d.]+\.AppImage",
+            f"/releases/download/v{new_version}/AutoGLM-GUI-{new_version}.AppImage",
             content,
         )
 

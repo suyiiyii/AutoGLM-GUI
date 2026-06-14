@@ -11,6 +11,7 @@ Modern Web GUI for AutoGLM Phone Agent - AI-Powered Android Device Automation Ma
 ![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)
 [![PyPI](https://img.shields.io/pypi/v/autoglm-gui)](https://pypi.org/project/autoglm-gui/)
+[![Codecov](https://codecov.io/gh/suyiiyii/AutoGLM-GUI/branch/main/graph/badge.svg)](https://codecov.io/gh/suyiiyii/AutoGLM-GUI)
 <br/>
   <a href="https://qm.qq.com/q/J5eAs9tn0W" target="__blank">
     <strong>Join our Discussion Group</strong>

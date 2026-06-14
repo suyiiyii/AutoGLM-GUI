@@ -76,3 +76,7 @@ jspm_packages/
 .yarn/build-state.yml
 .yarn/install-state.gz
 .pnp.*
+
+# Generated E2E stack artifacts
+e2e/.service_urls.json
+e2e/.services_pid

@@ -1,0 +1,80 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "timezone": "Asia/Shanghai",
+  "schedule": ["before 8am on monday"],
+  "automerge": false,
+  "dependencyDashboard": true,
+  "dependencyDashboardTitle": "Renovate Dependency Dashboard",
+  "labels": ["dependencies", "renovate"],
+  "prConcurrentLimit": 3,
+  "branchConcurrentLimit": 3,
+  "prHourlyLimit": 3,
+  "rangeStrategy": "bump",
+  "rebaseWhen": "conflicted",
+  "lockFileMaintenance": {
+    "enabled": true,
+    "schedule": ["before 8am on the first day of the month"],
+    "automerge": false
+  },
+  "packageRules": [
+    {
+      "description": "Group frontend pnpm dependencies",
+      "matchManagers": ["npm"],
+      "matchFileNames": ["frontend/package.json"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "frontend pnpm dependencies",
+      "commitMessagePrefix": "chore(deps):",
+      "additionalBranchPrefix": "frontend-"
+    },
+    {
+      "description": "Group Electron pnpm dependencies",
+      "matchManagers": ["npm"],
+      "matchFileNames": ["electron/package.json"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "electron pnpm dependencies",
+      "commitMessagePrefix": "chore(deps):",
+      "additionalBranchPrefix": "electron-"
+    },
+    {
+      "description": "Group documentation pnpm dependencies",
+      "matchManagers": ["npm"],
+      "matchFileNames": ["docs/package.json"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "docs pnpm dependencies",
+      "commitMessagePrefix": "chore(deps):",
+      "additionalBranchPrefix": "docs-"
+    },
+    {
+      "description": "Group Python uv dependencies",
+      "matchManagers": ["pep621"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "python uv dependencies",
+      "commitMessagePrefix": "chore(deps):",
+      "additionalBranchPrefix": "python-"
+    },
+    {
+      "description": "Group Docker base image updates",
+      "matchManagers": ["dockerfile", "docker-compose"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "docker dependencies",
+      "commitMessagePrefix": "chore(deps):",
+      "additionalBranchPrefix": "docker-"
+    },
+    {
+      "description": "Group GitHub Actions updates",
+      "matchManagers": ["github-actions"],
+      "matchUpdateTypes": ["minor", "patch"],
+      "groupName": "github actions dependencies",
+      "commitMessagePrefix": "chore(deps):",
+      "additionalBranchPrefix": "github-actions-"
+    },
+    {
+      "description": "Keep major updates isolated for manual review",
+      "matchUpdateTypes": ["major"],
+      "dependencyDashboardApproval": true,
+      "commitMessagePrefix": "chore(deps-major):",
+      "labels": ["dependencies", "renovate", "major"]
+    }
+  ]
+}

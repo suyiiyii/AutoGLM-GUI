@@ -12,6 +12,7 @@
 ![Python](https://img.shields.io/badge/python-3.11+-blue.svg)
 ![License](https://img.shields.io/badge/license-Apache%202.0-green.svg)
 [![PyPI](https://img.shields.io/pypi/v/autoglm-gui)](https://pypi.org/project/autoglm-gui/)
+[![Codecov](https://codecov.io/gh/suyiiyii/AutoGLM-GUI/branch/main/graph/badge.svg)](https://codecov.io/gh/suyiiyii/AutoGLM-GUI)
 
 ---
 
@@ -82,9 +83,9 @@
 
 | 操作系统 | 下载链接 | 说明 |
 |---------|---------|------|
-| 🪟 **Windows** (x64) | [📦 下载便携版 EXE](https://github.com/suyiiyii/AutoGLM-GUI/releases/download/v1.5.16/AutoGLM.GUI.1.5.16.exe) | 适用于 Windows 10/11，免安装 |
-| 🍎 **macOS** (Apple Silicon) | [📦 下载 DMG](https://github.com/suyiiyii/AutoGLM-GUI/releases/download/v1.5.16/AutoGLM.GUI-1.5.16-arm64.dmg) | 适用于 M 芯片 Mac |
-| 🐧 **Linux** (x64) | [📦 下载 AppImage](https://github.com/suyiiyii/AutoGLM-GUI/releases/download/v1.5.16/AutoGLM.GUI-1.5.16.AppImage) \| [deb](https://github.com/suyiiyii/AutoGLM-GUI/releases/download/v1.5.16/autoglm-gui_1.5.16_amd64.deb) \| [tar.gz](https://github.com/suyiiyii/AutoGLM-GUI/releases/download/v1.5.16/autoglm-gui-1.5.16.tar.gz) | 通用格式，支持主流发行版 |
+| 🪟 **Windows** (x64) | [📦 下载便携版 EXE](https://github.com/suyiiyii/AutoGLM-GUI/releases/download/v1.5.19/AutoGLM-GUI-1.5.19.exe) | 适用于 Windows 10/11，免安装 |
+| 🍎 **macOS** (Apple Silicon) | [📦 下载 DMG](https://github.com/suyiiyii/AutoGLM-GUI/releases/download/v1.5.19/AutoGLM-GUI-1.5.19-arm64.dmg) | 适用于 M 芯片 Mac |
+| 🐧 **Linux** (x64) | [📦 下载 AppImage](https://github.com/suyiiyii/AutoGLM-GUI/releases/download/v1.5.19/AutoGLM-GUI-1.5.19.AppImage) \| [deb](https://github.com/suyiiyii/AutoGLM-GUI/releases/download/v1.5.19/autoglm-gui_1.5.19_amd64.deb) \| [tar.gz](https://github.com/suyiiyii/AutoGLM-GUI/releases/download/v1.5.19/autoglm-gui-1.5.19.tar.gz) | 通用格式，支持主流发行版 |
 
 </div>
 
@@ -366,6 +367,7 @@ AutoGLM-GUI 支持同时控制多个 Android 设备：
 在初始化设备时，可以选择不同的 Agent 类型（默认：GLM Agent）：
 
 - **GLM Agent**：基于 GLM 模型优化，成熟稳定，适合大多数任务
+- **QWEN Agent**：基于 Qwen3.6 模型优化，适合高精度困难任务
 - **MAI Agent**：**内部实现**的 Mobile Agent，支持多张历史截图上下文，适合复杂任务
   - 🆕 **现已完全内部化**：移除 ~1200 行第三方依赖，性能优化，中文适配
   - 🔄 **向后兼容**：需要使用旧版本可选择 `mai_legacy` 类型

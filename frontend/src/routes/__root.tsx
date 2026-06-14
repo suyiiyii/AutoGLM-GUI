@@ -8,12 +8,13 @@ import { useLocale, useTranslation } from '../lib/i18n-context';
 import { ThemeToggle } from '../components/ThemeToggle';
 import { NavigationSidebar } from '../components/NavigationSidebar';
 import { useFooterVersionInfo } from '../hooks/useFooterVersionInfo';
+import { DeviceProvider } from '../lib/device-context';
 
 export const Route = createRootRoute({
   component: RootComponent,
 });
 
-function Footer() {
+export function Footer() {
   const buildBackendVersion = __BACKEND_VERSION__ || 'unknown';
   const { locale, setLocale, localeName } = useLocale();
   const t = useTranslation();
@@ -45,6 +46,11 @@ function Footer() {
         <div className="flex items-center gap-2 text-slate-500 dark:text-slate-400">
           <span className="flex items-center gap-1.5" title={versionTitle}>
             v{displayedVersion}
+            {__GIT_HASH__ !== 'unknown' && (
+              <span className="font-mono text-xs text-slate-400 dark:text-slate-500">
+                ·{__GIT_HASH__}
+              </span>
+            )}
             {showUpdateBadge && updateInfo?.latest_version && (
               <Badge
                 variant="warning"
@@ -112,21 +118,23 @@ function Footer() {
   );
 }
 
-function RootComponent() {
+export function RootComponent() {
   return (
-    <div className="h-screen flex flex-col overflow-hidden">
-      <div className="flex-1 flex overflow-hidden">
-        <NavigationSidebar />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <div className="flex-1 overflow-auto">
-            <Outlet />
+    <DeviceProvider>
+      <div className="h-screen flex flex-col overflow-hidden">
+        <div className="flex-1 flex overflow-hidden">
+          <NavigationSidebar />
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <div className="flex-1 overflow-auto">
+              <Outlet />
+            </div>
+            <Footer />
           </div>
-          <Footer />
         </div>
+        {__DEVTOOLS_ENABLED__ && (
+          <TanStackRouterDevtools position="bottom-right" />
+        )}
       </div>
-      {__DEVTOOLS_ENABLED__ && (
-        <TanStackRouterDevtools position="bottom-right" />
-      )}
-    </div>
+    </DeviceProvider>
   );
 }

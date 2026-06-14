@@ -1,0 +1,61 @@
+name: Frontend E2E Coverage
+
+on:
+  pull_request:
+    branches: [main, master]
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  e2e-frontend-coverage:
+    name: Frontend E2E Backend Coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Python & uv
+        uses: ./.github/actions/setup-python
+
+      - name: Setup Node.js & pnpm
+        uses: ./.github/actions/setup-node
+        with:
+          node-version: "24"
+
+      - name: Install Playwright Chromium
+        shell: bash
+        run: |
+          cd frontend
+          pnpm exec playwright install chromium
+
+      - name: Run frontend E2E tests with backend coverage
+        shell: bash
+        run: |
+          cd frontend
+          COVERAGE_E2E_FRONTEND=1 pnpm test:e2e
+
+      - name: Combine and export backend coverage
+        if: always()
+        shell: bash
+        run: |
+          # Coverage data files are written to the repository root by the
+          # backend subprocess started in scripts/start_e2e_services.py.
+          uv run coverage combine || true
+          uv run coverage xml -o coverage-e2e-frontend.xml || true
+
+      - name: Upload frontend E2E backend coverage to Codecov
+        if: always()
+        uses: codecov/codecov-action@v6
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: coverage-e2e-frontend.xml
+          flags: e2e-frontend
+          name: e2e-frontend-py311
+          fail_ci_if_error: false
+          verbose: true

@@ -9,17 +9,22 @@ import {
   ListChecks,
   Loader2,
   Square,
+  ImagePlus,
+  X,
+  Hand,
 } from 'lucide-react';
-import { throttle } from 'lodash';
 import { DeviceMonitor } from './DeviceMonitor';
 import type {
+  ModelErrorDetails,
   StepTimingSummary,
+  TaskImageAttachment,
   Workflow,
   HistoryRecordResponse,
 } from '../api';
 import {
   listWorkflows,
   listHistory,
+  getHistoryRecord,
   clearHistory as clearHistoryApi,
   deleteHistoryRecord,
 } from '../api';
@@ -45,6 +50,7 @@ import {
   useTaskSessionConversation,
   type TaskConversationMessage,
 } from '../hooks/useTaskSessionConversation';
+import { MarkdownContent } from './MarkdownContent';
 
 interface ActionPayload {
   action?: string;
@@ -62,6 +68,36 @@ interface DevicePanelProps {
   isConfigured: boolean;
   isVisible?: boolean; // ✅ 新增：控制视频流行为
   unlimitedStepsEnabled?: boolean;
+  agentType?: string;
+}
+
+const IMAGE_ATTACHMENT_TYPES = new Set([
+  'image/png',
+  'image/jpeg',
+  'image/webp',
+]);
+const MAX_IMAGE_ATTACHMENTS = 3;
+const MAX_IMAGE_ATTACHMENT_BYTES = 5 * 1024 * 1024;
+
+function readImageAttachment(file: File): Promise<TaskImageAttachment> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onerror = () => reject(new Error('读取图片失败'));
+    reader.onload = () => {
+      const result = typeof reader.result === 'string' ? reader.result : '';
+      const commaIndex = result.indexOf(',');
+      if (commaIndex === -1) {
+        reject(new Error('图片格式无效'));
+        return;
+      }
+      resolve({
+        mime_type: file.type,
+        data: result.slice(commaIndex + 1),
+        name: file.name || null,
+      });
+    };
+    reader.readAsDataURL(file);
+  });
 }
 
 function getStepSummary(thinking: string | undefined, action: unknown): string {
@@ -109,7 +145,7 @@ function getTimingChips(
 
   const chips = [
     { label: 'Total', value: formatDuration(timings.total_duration_ms) },
-    { label: 'LLM', value: formatDuration(timings.llm_duration_ms) },
+    { label: 'Model', value: formatDuration(timings.llm_duration_ms) },
   ];
 
   if (timings.screenshot_duration_ms > 0) {
@@ -143,6 +179,35 @@ function getTimingChips(
   return chips;
 }
 
+function formatModelErrorDetails(details: ModelErrorDetails): string {
+  const ordered: Record<string, unknown> = {};
+  [
+    'kind',
+    'exception_type',
+    'message',
+    'status_code',
+    'request_id',
+    'model_name',
+    'base_url',
+    'call_site',
+    'response_headers',
+    'response_body',
+    'traceback',
+  ].forEach(key => {
+    if (details[key] !== undefined && details[key] !== null) {
+      ordered[key] = details[key];
+    }
+  });
+
+  Object.entries(details).forEach(([key, value]) => {
+    if (!(key in ordered) && value !== undefined && value !== null) {
+      ordered[key] = value;
+    }
+  });
+
+  return JSON.stringify(ordered, null, 2);
+}
+
 export function DevicePanel({
   deviceId,
   deviceSerial,
@@ -151,9 +216,14 @@ export function DevicePanel({
   isConfigured,
   isVisible = true, // ✅ 新增：默认 true 向后兼容
   unlimitedStepsEnabled = false,
+  agentType,
 }: DevicePanelProps) {
   const t = useTranslation();
   const [input, setInput] = useState('');
+  const [attachments, setAttachments] = useState<TaskImageAttachment[]>([]);
+  const [attachmentError, setAttachmentError] = useState<string | null>(null);
+  const [isDraggingAttachment, setIsDraggingAttachment] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // ✅ 移除 initialized 状态，依赖后端自动初始化
   // const [initialized, setInitialized] = useState(false);
   const [showHistoryPopover, setShowHistoryPopover] = useState(false);
@@ -165,6 +235,9 @@ export function DevicePanel({
     setMessages,
     loading,
     aborting,
+    waitingForDevice,
+    waitingForUserInteraction,
+    interactionPrompt,
     error,
     sessionReady,
     sendMessage,
@@ -174,44 +247,61 @@ export function DevicePanel({
     deviceId,
     deviceSerial,
     sessionStorageKey: `autoglm:classic-session:${deviceSerial}`,
+    agentType,
   });
-  const messagesEndRef = useRef<HTMLDivElement>(null);
-  const messagesContainerRef = useRef<HTMLDivElement>(null);
-  // ✅ 移除 hasAutoInited，不再需要自动初始化逻辑
-  // const hasAutoInited = useRef(false);
+  const scrollAreaRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
   const prevMessageCountRef = useRef(0);
   const prevMessageSigRef = useRef<string | null>(null);
-  const [isAtBottom, setIsAtBottom] = useState(true);
+  // The chat follows the latest message by default. Only a deliberate upward
+  // scroll by the user turns this off — programmatic re-pins and content that
+  // grows underneath (e.g. screenshots finishing decode) must never flip it,
+  // otherwise the stale scroll events they emit would strand the view.
+  const isAtBottomRef = useRef(true);
+  // Timestamp of the last programmatic scroll-to-bottom. Scroll events that
+  // land within this window are the echo of our own pinning (or of the layout
+  // settling afterwards) and are ignored, not treated as the user leaving.
+  const lastPinTimeRef = useRef(0);
+  // Last observed scrollTop. Used to tell a real upward scroll (scrollTop
+  // decreases) apart from content growing underneath (scrollTop stays put).
+  const lastScrollTopRef = useRef(0);
   const [showNewMessageNotice, setShowNewMessageNotice] = useState(false);
-  const throttledUpdateScrollStateRef = useRef<ReturnType<
-    typeof throttle
-  > | null>(null);
 
-  // Cleanup throttled function on unmount
+  // The actual scrollable element lives inside the Radix ScrollArea.
+  const getScrollViewport = useCallback(
+    () =>
+      (scrollAreaRef.current?.querySelector(
+        '[data-slot="scroll-area-viewport"]'
+      ) as HTMLDivElement | null) ?? null,
+    []
+  );
+
+  const pinToBottom = useCallback(
+    (behavior: 'auto' | 'smooth' = 'auto') => {
+      const viewport = getScrollViewport();
+      if (!viewport) return;
+      lastPinTimeRef.current = performance.now();
+      viewport.scrollTo({ top: viewport.scrollHeight, behavior });
+    },
+    [getScrollViewport]
+  );
+
+  // Step screenshots load asynchronously and grow the content after the
+  // streaming effect already scrolled, which would otherwise leave the chat
+  // parked a few hundred pixels above the latest message. A ResizeObserver
+  // re-pins the view to the bottom whenever the content height changes while
+  // the user is still following along.
   useEffect(() => {
-    const throttledFn = throttle(() => {
-      const container = messagesContainerRef.current;
-      if (!container) return;
-      const threshold = 80;
-      const distanceFromBottom =
-        container.scrollHeight - container.scrollTop - container.clientHeight;
-      // Consider the user "at bottom" only when they are effectively at the end
-      // of the scroll area, to avoid unwanted auto-scrolling when they have
-      // intentionally scrolled slightly up.
-      const atBottom = distanceFromBottom <= 1;
-      setIsAtBottom(atBottom);
-      // Still hide the new message notice when the user is near the bottom,
-      // using the more generous threshold.
-      if (distanceFromBottom <= threshold) {
-        setShowNewMessageNotice(false);
+    const content = contentRef.current;
+    if (!content) return;
+    const observer = new ResizeObserver(() => {
+      if (isAtBottomRef.current) {
+        pinToBottom();
       }
-    }, 100);
-    throttledUpdateScrollStateRef.current = throttledFn;
-    return () => {
-      throttledFn.cancel();
-      throttledUpdateScrollStateRef.current = null;
-    };
-  }, []);
+    });
+    observer.observe(content);
+    return () => observer.disconnect();
+  }, [pinToBottom]);
 
   // ✅ 移除 handleInit 函数，不再需要显式初始化
   // Agent 会在首次发送消息时自动初始化
@@ -223,7 +313,7 @@ export function DevicePanel({
     if (showHistoryPopover) {
       const loadItems = async () => {
         try {
-          const data = await listHistory(deviceSerial, 20, 0);
+          const data = await listHistory(deviceSerial, 20, 0, 'classic');
           setHistoryItems(data.records);
         } catch (error) {
           console.error('Failed to load history:', error);
@@ -235,76 +325,88 @@ export function DevicePanel({
   }, [showHistoryPopover, deviceSerial]);
 
   const handleSelectHistory = (record: HistoryRecordResponse) => {
-    // Convert backend messages to frontend Message format
-    const newMessages: TaskConversationMessage[] = [];
+    void (async () => {
+      let selectedRecord = record;
+      try {
+        selectedRecord = await getHistoryRecord(deviceSerial, record.id);
+      } catch (error) {
+        console.error('Failed to load history record detail:', error);
+      }
 
-    // Find user message from record
-    const userMsg = record.messages.find(m => m.role === 'user');
-    if (userMsg) {
-      newMessages.push({
-        id: `${record.id}-user`,
-        role: 'user',
-        content: userMsg.content || record.task_text,
-        timestamp: new Date(userMsg.timestamp),
-      });
-    } else {
-      // Fallback to task_text if no user message
-      newMessages.push({
-        id: `${record.id}-user`,
-        role: 'user',
-        content: record.task_text,
-        timestamp: new Date(record.start_time),
-      });
-    }
+      // Convert backend messages to frontend Message format
+      const newMessages: TaskConversationMessage[] = [];
 
-    // Collect thinking and actions from assistant messages
-    const thinkingList: string[] = [];
-    const actionsList: Record<string, unknown>[] = [];
-    const screenshotsList: (string | undefined)[] = [];
-    record.messages
-      .filter(m => m.role === 'assistant')
-      .forEach(m => {
-        if (m.thinking) thinkingList.push(m.thinking);
-        if (m.action) actionsList.push(m.action);
-        // Extract screenshot directly or from loosely typed object
-        const recordData = m as unknown as { screenshot?: string };
-        screenshotsList.push(recordData.screenshot);
-      });
+      // Find user message from record
+      const userMsg = selectedRecord.messages.find(m => m.role === 'user');
+      if (userMsg) {
+        newMessages.push({
+          id: `${selectedRecord.id}-user`,
+          role: 'user',
+          content: userMsg.content || selectedRecord.task_text,
+          timestamp: new Date(userMsg.timestamp),
+          attachments: userMsg.attachments || [],
+        });
+      } else {
+        // Fallback to task_text if no user message
+        newMessages.push({
+          id: `${selectedRecord.id}-user`,
+          role: 'user',
+          content: selectedRecord.task_text,
+          timestamp: new Date(selectedRecord.start_time),
+        });
+      }
 
-    // Create agent message
-    const agentMessage: TaskConversationMessage = {
-      id: `${record.id}-agent`,
-      role: 'assistant',
-      content: record.final_message,
-      timestamp: record.end_time
-        ? new Date(record.end_time)
-        : new Date(record.start_time),
-      steps: record.steps,
-      success: record.success,
-      thinking: thinkingList,
-      actions: actionsList,
-      screenshots: screenshotsList,
-      stepTimings: record.step_timings,
-      isStreaming: false,
-    };
-    newMessages.push(agentMessage);
+      // Collect thinking and actions from assistant messages
+      const thinkingList: string[] = [];
+      const actionsList: Record<string, unknown>[] = [];
+      const screenshotsList: (string | undefined)[] = [];
+      selectedRecord.messages
+        .filter(m => m.role === 'assistant')
+        .forEach(m => {
+          if (m.thinking) thinkingList.push(m.thinking);
+          if (m.action) actionsList.push(m.action);
+          // Extract screenshot directly or from loosely typed object
+          const recordData = m as unknown as { screenshot?: string };
+          screenshotsList.push(recordData.screenshot);
+        });
 
-    setMessages(newMessages);
+      // Create agent message
+      const agentMessage: TaskConversationMessage = {
+        id: `${selectedRecord.id}-agent`,
+        role: 'assistant',
+        content: selectedRecord.final_message,
+        timestamp: selectedRecord.end_time
+          ? new Date(selectedRecord.end_time)
+          : new Date(selectedRecord.start_time),
+        steps: selectedRecord.steps,
+        success: selectedRecord.success,
+        thinking: thinkingList,
+        actions: actionsList,
+        screenshots: screenshotsList,
+        stepTimings: selectedRecord.step_timings,
+        isStreaming: false,
+      };
+      newMessages.push(agentMessage);
 
-    // Reset previous message tracking refs to match the loaded history
-    prevMessageCountRef.current = newMessages.length;
-    prevMessageSigRef.current = [
-      agentMessage.id,
-      agentMessage.content?.length ?? 0,
-      agentMessage.currentThinking?.length ?? 0,
-      agentMessage.thinking ? JSON.stringify(agentMessage.thinking).length : 0,
-      agentMessage.steps ?? '',
-      agentMessage.isStreaming ? 1 : 0,
-    ].join('|');
+      setMessages(newMessages);
 
-    setShowNewMessageNotice(false);
-    setIsAtBottom(true);
-    setShowHistoryPopover(false);
+      // Reset previous message tracking refs to match the loaded history
+      prevMessageCountRef.current = newMessages.length;
+      prevMessageSigRef.current = [
+        agentMessage.id,
+        agentMessage.content?.length ?? 0,
+        agentMessage.currentThinking?.length ?? 0,
+        agentMessage.thinking
+          ? JSON.stringify(agentMessage.thinking).length
+          : 0,
+        agentMessage.steps ?? '',
+        agentMessage.isStreaming ? 1 : 0,
+      ].join('|');
+
+      setShowNewMessageNotice(false);
+      isAtBottomRef.current = true;
+      setShowHistoryPopover(false);
+    })();
   };
 
   const handleClearHistory = async () => {
@@ -331,28 +433,127 @@ export function DevicePanel({
   // Note: Configuration is now managed entirely by backend ConfigManager.
   // If user updates config via Settings, they need to manually re-initialize agents.
 
+  const addImageFiles = useCallback(
+    async (files: File[]) => {
+      const imageFiles = files.filter(file =>
+        IMAGE_ATTACHMENT_TYPES.has(file.type)
+      );
+      if (imageFiles.length === 0) {
+        return;
+      }
+
+      if (attachments.length + imageFiles.length > MAX_IMAGE_ATTACHMENTS) {
+        setAttachmentError('最多只能附加 3 张图片');
+        return;
+      }
+
+      const tooLargeFile = imageFiles.find(
+        file => file.size > MAX_IMAGE_ATTACHMENT_BYTES
+      );
+      if (tooLargeFile) {
+        setAttachmentError('单张图片不能超过 5 MiB');
+        return;
+      }
+
+      try {
+        const nextAttachments = await Promise.all(
+          imageFiles.map(file => readImageAttachment(file))
+        );
+        setAttachments(current => [...current, ...nextAttachments]);
+        setAttachmentError(null);
+      } catch (readError) {
+        setAttachmentError(
+          readError instanceof Error ? readError.message : '读取图片失败'
+        );
+      }
+    },
+    [attachments.length]
+  );
+
+  const handleFileInputChange = useCallback(
+    (event: React.ChangeEvent<HTMLInputElement>) => {
+      const files = Array.from(event.target.files || []);
+      void addImageFiles(files);
+      event.target.value = '';
+    },
+    [addImageFiles]
+  );
+
+  const handlePaste = useCallback(
+    (event: React.ClipboardEvent<HTMLTextAreaElement>) => {
+      const files = Array.from(event.clipboardData.files || []);
+      const hasImages = files.some(file =>
+        IMAGE_ATTACHMENT_TYPES.has(file.type)
+      );
+      if (!hasImages) {
+        return;
+      }
+      event.preventDefault();
+      void addImageFiles(files);
+    },
+    [addImageFiles]
+  );
+
+  const handleDragOver = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      if (
+        Array.from(event.dataTransfer.items || []).some(item =>
+          IMAGE_ATTACHMENT_TYPES.has(item.type)
+        )
+      ) {
+        event.preventDefault();
+        setIsDraggingAttachment(true);
+      }
+    },
+    []
+  );
+
+  const handleDragLeave = useCallback(() => {
+    setIsDraggingAttachment(false);
+  }, []);
+
+  const handleDrop = useCallback(
+    (event: React.DragEvent<HTMLDivElement>) => {
+      const files = Array.from(event.dataTransfer.files || []);
+      const hasImages = files.some(file =>
+        IMAGE_ATTACHMENT_TYPES.has(file.type)
+      );
+      if (!hasImages) {
+        return;
+      }
+      event.preventDefault();
+      setIsDraggingAttachment(false);
+      void addImageFiles(files);
+    },
+    [addImageFiles]
+  );
+
+  const removeAttachment = useCallback((index: number) => {
+    setAttachments(current => current.filter((_, idx) => idx !== index));
+  }, []);
+
   const handleSend = useCallback(async () => {
-    const didSend = await sendMessage(input);
+    const didSend = await sendMessage(input, attachments);
     if (didSend) {
       setInput('');
+      setAttachments([]);
+      setAttachmentError(null);
     }
-  }, [input, sendMessage]);
+  }, [attachments, input, sendMessage]);
 
   const handleReset = useCallback(async () => {
     await resetConversation();
     setShowNewMessageNotice(false);
-    setIsAtBottom(true);
+    isAtBottomRef.current = true;
     prevMessageCountRef.current = 0;
     prevMessageSigRef.current = null;
+    setAttachments([]);
+    setAttachmentError(null);
   }, [resetConversation]);
 
   const handleAbortChat = useCallback(async () => {
     await abortConversation();
   }, [abortConversation]);
-
-  const scrollToBottom = useCallback(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, []);
 
   useEffect(() => {
     const latest = messages[messages.length - 1];
@@ -377,8 +578,8 @@ export function DevicePanel({
     prevMessageCountRef.current = messages.length;
     prevMessageSigRef.current = latestSignature;
 
-    if (isAtBottom) {
-      scrollToBottom();
+    if (isAtBottomRef.current) {
+      pinToBottom();
       const frameId = requestAnimationFrame(() => {
         setShowNewMessageNotice(false);
       });
@@ -398,7 +599,7 @@ export function DevicePanel({
       });
       return () => cancelAnimationFrame(frameId);
     }
-  }, [messages, isAtBottom, scrollToBottom]);
+  }, [messages, pinToBottom]);
 
   // Load workflows
   useEffect(() => {
@@ -418,16 +619,37 @@ export function DevicePanel({
     setShowWorkflowPopover(false);
   };
 
-  // Throttle scroll event handler to reduce the frequency of state updates
-  // and improve performance, especially on lower-end devices
-  const handleMessagesScroll = () => {
-    throttledUpdateScrollStateRef.current?.();
+  const handleMessagesScroll = (event: React.UIEvent<HTMLDivElement>) => {
+    const target = event.currentTarget;
+    const scrollTop = target.scrollTop;
+    const prevScrollTop = lastScrollTopRef.current;
+    lastScrollTopRef.current = scrollTop;
+
+    // Ignore the scroll events caused by our own re-pinning and by the
+    // re-layout that late-loading content (screenshots) triggers right after.
+    if (performance.now() - lastPinTimeRef.current < 150) return;
+
+    const distanceFromBottom =
+      target.scrollHeight - scrollTop - target.clientHeight;
+    // A generous band so a few hundred pixels of late-loading content between
+    // streaming updates doesn't break following.
+    if (distanceFromBottom < 150) {
+      isAtBottomRef.current = true;
+      setShowNewMessageNotice(false);
+      return;
+    }
+    // Far from the bottom: only treat it as the user opting out if they
+    // actually scrolled upward. Content growing or a programmatic re-pin keeps
+    // (or raises) scrollTop, so the stale events they emit can't trip this.
+    if (scrollTop < prevScrollTop - 4) {
+      isAtBottomRef.current = false;
+    }
   };
 
   const handleScrollToLatest = () => {
-    scrollToBottom();
+    isAtBottomRef.current = true;
+    pinToBottom();
     setShowNewMessageNotice(false);
-    setIsAtBottom(true);
   };
 
   const handleInputKeyDown = (
@@ -442,7 +664,7 @@ export function DevicePanel({
   return (
     <div className="flex-1 flex gap-4 p-4 items-stretch justify-center min-h-0">
       {/* Chat area - takes remaining space */}
-      <Card className="flex-1 flex flex-col min-h-0 max-w-2xl">
+      <Card className="flex-1 flex flex-col min-h-0 max-w-2xl overflow-hidden">
         {/* Header */}
         <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800">
           <div className="flex items-center gap-3">
@@ -544,7 +766,7 @@ export function DevicePanel({
               size="icon"
               onClick={handleReset}
               className="h-8 w-8 rounded-full text-slate-400 hover:text-slate-600 dark:text-slate-500 dark:hover:text-slate-300"
-              title="Reset chat"
+              title={t.devicePanel?.resetChat || 'Reset Chat'}
             >
               <RotateCcw className="h-4 w-4" />
             </Button>
@@ -552,295 +774,340 @@ export function DevicePanel({
         </div>
 
         {/* Error message */}
-        {error && (
+        {(error || attachmentError) && (
           <div className="mx-4 mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl text-sm text-red-600 dark:text-red-400 flex items-center gap-2">
             <AlertCircle className="w-4 h-4 flex-shrink-0" />
-            {error}
+            {error || attachmentError}
           </div>
         )}
 
         {/* Messages */}
         <div className="flex-1 min-h-0 relative">
-          <div
-            className="h-full overflow-y-auto p-4"
-            ref={messagesContainerRef}
+          <ScrollArea
+            ref={scrollAreaRef}
+            className="h-full"
+            data-testid="chat-scroll-container"
             onScroll={handleMessagesScroll}
           >
-            {messages.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center min-h-[calc(100%-1rem)]">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
-                  <Sparkles className="h-8 w-8 text-slate-400" />
+            <div className="p-4" ref={contentRef}>
+              {messages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center min-h-[calc(100%-1rem)]">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mb-4">
+                    <Sparkles className="h-8 w-8 text-slate-400" />
+                  </div>
+                  <p className="font-medium text-slate-900 dark:text-slate-100">
+                    {t.devicePanel.readyToHelp}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                    {t.devicePanel.describeTask}
+                  </p>
                 </div>
-                <p className="font-medium text-slate-900 dark:text-slate-100">
-                  {t.devicePanel.readyToHelp}
-                </p>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
-                  {t.devicePanel.describeTask}
-                </p>
-              </div>
-            ) : (
-              messages.map(message => (
-                <div
-                  key={message.id}
-                  className={`flex ${
-                    message.role === 'user' ? 'justify-end' : 'justify-start'
-                  }`}
-                >
-                  {message.role === 'assistant' ? (
-                    <div className="max-w-[85%] space-y-3">
-                      {/* Step process */}
-                      {Array.from(
-                        {
-                          length: Math.max(
-                            message.thinking?.length || 0,
-                            message.actions?.length || 0
-                          ),
-                        },
-                        (_, idx) => idx
-                      ).map(idx => {
-                        const stepThinking = message.thinking?.[idx];
-                        const stepAction = message.actions?.[idx];
-                        const stepScreenshot = message.screenshots?.[idx];
-                        const stepTimings = message.stepTimings?.[idx];
-                        const stepSummary = getStepSummary(
-                          stepThinking,
-                          stepAction
-                        );
+              ) : (
+                messages.map(message => (
+                  <div
+                    key={message.id}
+                    className={`flex ${
+                      message.role === 'user' ? 'justify-end' : 'justify-start'
+                    }`}
+                  >
+                    {message.role === 'assistant' ? (
+                      <div className="max-w-[85%] space-y-3">
+                        {/* Step process */}
+                        {Array.from(
+                          {
+                            length: Math.max(
+                              message.thinking?.length || 0,
+                              message.actions?.length || 0
+                            ),
+                          },
+                          (_, idx) => idx
+                        ).map(idx => {
+                          const stepThinking = message.thinking?.[idx];
+                          const stepAction = message.actions?.[idx];
+                          const stepScreenshot = message.screenshots?.[idx];
+                          const stepTimings = message.stepTimings?.[idx];
+                          const stepSummary = getStepSummary(
+                            stepThinking,
+                            stepAction
+                          );
 
-                        return (
-                          <div
-                            key={idx}
-                            className="bg-slate-100 dark:bg-slate-800 rounded-2xl rounded-tl-sm px-4 py-3"
-                          >
+                          return (
+                            <div
+                              key={idx}
+                              className="bg-slate-100 dark:bg-slate-800 rounded-2xl rounded-tl-sm px-4 py-3"
+                            >
+                              <div className="flex items-center gap-2 mb-2">
+                                <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#1d9bf0]/10">
+                                  <Sparkles className="h-3 w-3 text-[#1d9bf0]" />
+                                </div>
+                                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                                  Step {message.stepNumbers?.[idx] ?? idx + 1}
+                                </span>
+                              </div>
+                              <p className="text-sm whitespace-pre-wrap text-slate-700 dark:text-slate-300">
+                                {stepSummary}
+                              </p>
+
+                              {stepTimings && (
+                                <div className="mt-3 flex flex-wrap gap-2">
+                                  {getTimingChips(stepTimings).map(chip => (
+                                    <Badge
+                                      key={`${idx}-${chip.label}`}
+                                      variant="secondary"
+                                      className="font-mono text-[11px]"
+                                    >
+                                      {chip.label} {chip.value}
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
+
+                              {stepScreenshot && (
+                                <div className="mt-3">
+                                  <ImagePreview
+                                    src={`data:image/png;base64,${stepScreenshot}`}
+                                    alt={`Step ${idx + 1}`}
+                                    maxHeight="350px"
+                                  >
+                                    {stepAction &&
+                                      (() => {
+                                        const parsedAction =
+                                          stepAction as ActionPayload;
+                                        const actionName = parsedAction.action;
+
+                                        if (
+                                          actionName &&
+                                          [
+                                            'Tap',
+                                            'Double Tap',
+                                            'Long Press',
+                                          ].includes(actionName)
+                                        ) {
+                                          const element = parsedAction.element;
+                                          if (
+                                            Array.isArray(element) &&
+                                            element.length === 2
+                                          ) {
+                                            const left = `${(Math.max(0, Math.min(element[0], 1000)) / 1000) * 100}%`;
+                                            const top = `${(Math.max(0, Math.min(element[1], 1000)) / 1000) * 100}%`;
+                                            return (
+                                              <div
+                                                className="absolute w-8 h-8 rounded-full border-[3px] border-red-500 bg-red-500/20 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]"
+                                                style={{ left, top }}
+                                              />
+                                            );
+                                          }
+                                        }
+                                        if (actionName === 'Swipe') {
+                                          const start = parsedAction.start;
+                                          const end = parsedAction.end;
+                                          if (
+                                            Array.isArray(start) &&
+                                            start.length === 2 &&
+                                            Array.isArray(end) &&
+                                            end.length === 2
+                                          ) {
+                                            const x1 =
+                                              (Math.max(
+                                                0,
+                                                Math.min(start[0], 1000)
+                                              ) /
+                                                1000) *
+                                              100;
+                                            const y1 =
+                                              (Math.max(
+                                                0,
+                                                Math.min(start[1], 1000)
+                                              ) /
+                                                1000) *
+                                              100;
+                                            const x2 =
+                                              (Math.max(
+                                                0,
+                                                Math.min(end[0], 1000)
+                                              ) /
+                                                1000) *
+                                              100;
+                                            const y2 =
+                                              (Math.max(
+                                                0,
+                                                Math.min(end[1], 1000)
+                                              ) /
+                                                1000) *
+                                              100;
+                                            return (
+                                              <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
+                                                <defs>
+                                                  <marker
+                                                    id={`arrowhead-${idx}`}
+                                                    markerWidth="6"
+                                                    markerHeight="6"
+                                                    refX="5"
+                                                    refY="3"
+                                                    orient="auto"
+                                                  >
+                                                    <polygon
+                                                      points="0,0 6,3 0,6"
+                                                      fill="rgba(239,68,68,0.9)"
+                                                    />
+                                                  </marker>
+                                                </defs>
+                                                <circle
+                                                  cx={`${x1}%`}
+                                                  cy={`${y1}%`}
+                                                  r="4"
+                                                  fill="rgba(239,68,68,0.9)"
+                                                />
+                                                <line
+                                                  x1={`${x1}%`}
+                                                  y1={`${y1}%`}
+                                                  x2={`${x2}%`}
+                                                  y2={`${y2}%`}
+                                                  stroke="rgba(239,68,68,0.9)"
+                                                  strokeWidth="3"
+                                                  markerEnd={`url(#arrowhead-${idx})`}
+                                                  strokeDasharray="5 3"
+                                                />
+                                              </svg>
+                                            );
+                                          }
+                                        }
+                                        return null;
+                                      })()}
+                                  </ImagePreview>
+                                </div>
+                              )}
+
+                              {stepAction && (
+                                <details className="mt-2 text-xs">
+                                  <summary className="cursor-pointer text-[#1d9bf0] hover:text-[#1a8cd8] transition-colors">
+                                    View action
+                                  </summary>
+                                  <pre className="mt-2 p-2 bg-slate-900 text-slate-200 rounded-lg overflow-x-auto text-xs border border-slate-800">
+                                    {JSON.stringify(stepAction, null, 2)}
+                                  </pre>
+                                </details>
+                              )}
+                            </div>
+                          );
+                        })}
+
+                        {/* Current thinking being streamed */}
+                        {message.currentThinking && (
+                          <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl rounded-tl-sm px-4 py-3">
                             <div className="flex items-center gap-2 mb-2">
                               <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#1d9bf0]/10">
-                                <Sparkles className="h-3 w-3 text-[#1d9bf0]" />
+                                <Sparkles className="h-3 w-3 text-[#1d9bf0] animate-pulse" />
                               </div>
                               <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                                Step {idx + 1}
+                                Thinking...
                               </span>
                             </div>
                             <p className="text-sm whitespace-pre-wrap text-slate-700 dark:text-slate-300">
-                              {stepSummary}
+                              {message.currentThinking}
+                              <span className="inline-block w-1 h-4 ml-0.5 bg-[#1d9bf0] animate-pulse" />
                             </p>
+                          </div>
+                        )}
 
-                            {stepTimings && (
-                              <div className="mt-3 flex flex-wrap gap-2">
-                                {getTimingChips(stepTimings).map(chip => (
-                                  <Badge
-                                    key={`${idx}-${chip.label}`}
-                                    variant="secondary"
-                                    className="font-mono text-[11px]"
-                                  >
-                                    {chip.label} {chip.value}
-                                  </Badge>
+                        {/* Final result */}
+                        {message.content &&
+                          (() => {
+                            const isTakeoverMsg =
+                              message.content.startsWith(
+                                'TAKEOVER_REQUIRED:'
+                              ) ||
+                              message.content.startsWith('INTERACT_REQUIRED:');
+                            return (
+                              <div
+                                className={`rounded-2xl px-4 py-3 flex items-start gap-2 ${
+                                  message.success === false
+                                    ? 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400'
+                                    : isTakeoverMsg
+                                      ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                                      : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                                }`}
+                              >
+                                {isTakeoverMsg ? (
+                                  <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-500" />
+                                ) : (
+                                  <CheckCircle2
+                                    className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
+                                      message.success === false
+                                        ? 'text-red-500'
+                                        : 'text-green-500'
+                                    }`}
+                                  />
+                                )}
+                                <div className="min-w-0 flex-1">
+                                  <MarkdownContent content={message.content} />
+                                  {message.steps !== undefined && (
+                                    <p className="text-xs mt-2 opacity-60 text-slate-500 dark:text-slate-400">
+                                      {message.steps} steps completed
+                                    </p>
+                                  )}
+                                  {message.errorDetails && (
+                                    <details className="mt-3 text-xs">
+                                      <summary className="cursor-pointer font-medium text-red-700 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200 transition-colors">
+                                        Model error details
+                                      </summary>
+                                      <pre className="mt-2 max-h-80 overflow-auto rounded-lg border border-red-200 bg-white/80 p-3 text-left font-mono text-[11px] leading-relaxed text-slate-800 dark:border-red-900/60 dark:bg-slate-950/70 dark:text-slate-200">
+                                        {formatModelErrorDetails(
+                                          message.errorDetails
+                                        )}
+                                      </pre>
+                                    </details>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                        {/* Streaming indicator */}
+                        {message.isStreaming && (
+                          <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Processing...
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="max-w-[75%]">
+                        <div className="chat-bubble-user px-4 py-3 space-y-2">
+                          {message.attachments &&
+                            message.attachments.length > 0 && (
+                              <div className="grid grid-cols-2 gap-2">
+                                {message.attachments.map((attachment, idx) => (
+                                  <ImagePreview
+                                    key={`${message.id}-attachment-${idx}`}
+                                    src={`data:${attachment.mime_type};base64,${attachment.data}`}
+                                    alt={
+                                      attachment.name || `Attachment ${idx + 1}`
+                                    }
+                                    className="w-full border-white/20"
+                                    thumbnailClassName="w-full object-cover"
+                                    maxHeight="96px"
+                                  />
                                 ))}
                               </div>
                             )}
-
-                            {stepScreenshot && (
-                              <div className="mt-3">
-                                <ImagePreview
-                                  src={`data:image/png;base64,${stepScreenshot}`}
-                                  alt={`Step ${idx + 1}`}
-                                  maxHeight="350px"
-                                >
-                                  {stepAction &&
-                                    (() => {
-                                      const parsedAction =
-                                        stepAction as ActionPayload;
-                                      const actionName = parsedAction.action;
-
-                                      if (
-                                        actionName &&
-                                        [
-                                          'Tap',
-                                          'Double Tap',
-                                          'Long Press',
-                                        ].includes(actionName)
-                                      ) {
-                                        const element = parsedAction.element;
-                                        if (
-                                          Array.isArray(element) &&
-                                          element.length === 2
-                                        ) {
-                                          const left = `${(Math.max(0, Math.min(element[0], 1000)) / 1000) * 100}%`;
-                                          const top = `${(Math.max(0, Math.min(element[1], 1000)) / 1000) * 100}%`;
-                                          return (
-                                            <div
-                                              className="absolute w-8 h-8 rounded-full border-[3px] border-red-500 bg-red-500/20 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none animate-pulse shadow-[0_0_8px_rgba(239,68,68,0.6)]"
-                                              style={{ left, top }}
-                                            />
-                                          );
-                                        }
-                                      }
-                                      if (actionName === 'Swipe') {
-                                        const start = parsedAction.start;
-                                        const end = parsedAction.end;
-                                        if (
-                                          Array.isArray(start) &&
-                                          start.length === 2 &&
-                                          Array.isArray(end) &&
-                                          end.length === 2
-                                        ) {
-                                          const x1 =
-                                            (Math.max(
-                                              0,
-                                              Math.min(start[0], 1000)
-                                            ) /
-                                              1000) *
-                                            100;
-                                          const y1 =
-                                            (Math.max(
-                                              0,
-                                              Math.min(start[1], 1000)
-                                            ) /
-                                              1000) *
-                                            100;
-                                          const x2 =
-                                            (Math.max(
-                                              0,
-                                              Math.min(end[0], 1000)
-                                            ) /
-                                              1000) *
-                                            100;
-                                          const y2 =
-                                            (Math.max(
-                                              0,
-                                              Math.min(end[1], 1000)
-                                            ) /
-                                              1000) *
-                                            100;
-                                          return (
-                                            <svg className="absolute inset-0 w-full h-full pointer-events-none overflow-visible">
-                                              <defs>
-                                                <marker
-                                                  id={`arrowhead-${idx}`}
-                                                  markerWidth="6"
-                                                  markerHeight="6"
-                                                  refX="5"
-                                                  refY="3"
-                                                  orient="auto"
-                                                >
-                                                  <polygon
-                                                    points="0,0 6,3 0,6"
-                                                    fill="rgba(239,68,68,0.9)"
-                                                  />
-                                                </marker>
-                                              </defs>
-                                              <circle
-                                                cx={`${x1}%`}
-                                                cy={`${y1}%`}
-                                                r="4"
-                                                fill="rgba(239,68,68,0.9)"
-                                              />
-                                              <line
-                                                x1={`${x1}%`}
-                                                y1={`${y1}%`}
-                                                x2={`${x2}%`}
-                                                y2={`${y2}%`}
-                                                stroke="rgba(239,68,68,0.9)"
-                                                strokeWidth="3"
-                                                markerEnd={`url(#arrowhead-${idx})`}
-                                                strokeDasharray="5 3"
-                                              />
-                                            </svg>
-                                          );
-                                        }
-                                      }
-                                      return null;
-                                    })()}
-                                </ImagePreview>
-                              </div>
-                            )}
-
-                            {stepAction && (
-                              <details className="mt-2 text-xs">
-                                <summary className="cursor-pointer text-[#1d9bf0] hover:text-[#1a8cd8] transition-colors">
-                                  View action
-                                </summary>
-                                <pre className="mt-2 p-2 bg-slate-900 text-slate-200 rounded-lg overflow-x-auto text-xs border border-slate-800">
-                                  {JSON.stringify(stepAction, null, 2)}
-                                </pre>
-                              </details>
-                            )}
-                          </div>
-                        );
-                      })}
-
-                      {/* Current thinking being streamed */}
-                      {message.currentThinking && (
-                        <div className="bg-slate-100 dark:bg-slate-800 rounded-2xl rounded-tl-sm px-4 py-3">
-                          <div className="flex items-center gap-2 mb-2">
-                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-[#1d9bf0]/10">
-                              <Sparkles className="h-3 w-3 text-[#1d9bf0] animate-pulse" />
-                            </div>
-                            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                              Thinking...
-                            </span>
-                          </div>
-                          <p className="text-sm whitespace-pre-wrap text-slate-700 dark:text-slate-300">
-                            {message.currentThinking}
-                            <span className="inline-block w-1 h-4 ml-0.5 bg-[#1d9bf0] animate-pulse" />
-                          </p>
+                          {message.content && (
+                            <MarkdownContent
+                              content={message.content}
+                              prose={false}
+                            />
+                          )}
                         </div>
-                      )}
-
-                      {/* Final result */}
-                      {message.content && (
-                        <div
-                          className={`
-                          rounded-2xl px-4 py-3 flex items-start gap-2
-                          ${
-                            message.success === false
-                              ? 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400'
-                              : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                          }
-                        `}
-                        >
-                          <CheckCircle2
-                            className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
-                              message.success === false
-                                ? 'text-red-500'
-                                : 'text-green-500'
-                            }`}
-                          />
-                          <div>
-                            <p className="whitespace-pre-wrap">
-                              {message.content}
-                            </p>
-                            {message.steps !== undefined && (
-                              <p className="text-xs mt-2 opacity-60 text-slate-500 dark:text-slate-400">
-                                {message.steps} steps completed
-                              </p>
-                            )}
-                          </div>
-                        </div>
-                      )}
-
-                      {/* Streaming indicator */}
-                      {message.isStreaming && (
-                        <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Processing...
-                        </div>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="max-w-[75%]">
-                      <div className="chat-bubble-user px-4 py-3">
-                        <p className="whitespace-pre-wrap">{message.content}</p>
+                        <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 text-right">
+                          {message.timestamp.toLocaleTimeString()}
+                        </p>
                       </div>
-                      <p className="text-xs text-slate-400 dark:text-slate-500 mt-1 text-right">
-                        {message.timestamp.toLocaleTimeString()}
-                      </p>
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-            <div ref={messagesEndRef} />
-          </div>
+                    )}
+                  </div>
+                ))
+              )}
+            </div>
+          </ScrollArea>
           {showNewMessageNotice && (
             <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center">
               <Button
@@ -856,21 +1123,100 @@ export function DevicePanel({
         </div>
 
         {/* Input area */}
-        <div className="p-4 border-t border-slate-200 dark:border-slate-800">
+        <div
+          className={`p-4 border-t border-slate-200 dark:border-slate-800 ${
+            isDraggingAttachment
+              ? 'bg-sky-50 dark:bg-sky-950/20'
+              : 'bg-transparent'
+          }`}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDrop={handleDrop}
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/webp"
+            multiple
+            className="hidden"
+            onChange={handleFileInputChange}
+          />
+          {waitingForDevice && (
+            <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-700 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-300">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              <span>Waiting for device...</span>
+            </div>
+          )}
+          {waitingForUserInteraction && (
+            <div className="mb-3 flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700 dark:border-blue-900/50 dark:bg-blue-950/30 dark:text-blue-300">
+              <Hand className="h-4 w-4" />
+              <span className="whitespace-pre-line">
+                {interactionPrompt || '等待用户输入...'}
+              </span>
+            </div>
+          )}
+          {attachments.length > 0 && (
+            <div className="mb-3 flex flex-wrap gap-2">
+              {attachments.map((attachment, idx) => (
+                <div
+                  key={`${attachment.name || 'image'}-${idx}`}
+                  className="relative"
+                >
+                  <ImagePreview
+                    src={`data:${attachment.mime_type};base64,${attachment.data}`}
+                    alt={attachment.name || `Attachment ${idx + 1}`}
+                    className="h-16 w-16 border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800"
+                    thumbnailClassName="h-full w-full object-cover"
+                    maxHeight="64px"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => removeAttachment(idx)}
+                    className="absolute right-1 top-1 flex h-5 w-5 items-center justify-center rounded-full bg-slate-950/70 text-white hover:bg-slate-950 z-10"
+                    aria-label="移除图片"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="flex items-end gap-3">
             <Textarea
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleInputKeyDown}
+              onPaste={handlePaste}
               placeholder={
-                !isConfigured
-                  ? t.devicePanel.configureFirst
-                  : t.devicePanel.whatToDo
+                waitingForUserInteraction
+                  ? interactionPrompt || '请输入您的回复'
+                  : !isConfigured
+                    ? t.devicePanel.configureFirst
+                    : t.devicePanel.whatToDo
               }
-              disabled={loading}
+              disabled={loading && !waitingForUserInteraction}
               className="flex-1 min-h-[40px] max-h-[120px] resize-none"
               rows={1}
             />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  disabled={
+                    loading || attachments.length >= MAX_IMAGE_ATTACHMENTS
+                  }
+                  className="h-10 w-10 flex-shrink-0"
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <ImagePlus className="w-4 h-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent side="top" sideOffset={8}>
+                添加图片
+              </TooltipContent>
+            </Tooltip>
             {/* Workflow Quick Run Button */}
             <Tooltip>
               <TooltipTrigger asChild>
@@ -962,7 +1308,9 @@ export function DevicePanel({
             {!loading && (
               <Button
                 onClick={handleSend}
-                disabled={!input.trim() || !sessionReady}
+                disabled={
+                  (!input.trim() && attachments.length === 0) || !sessionReady
+                }
                 size="icon"
                 variant="twitter"
                 className="h-10 w-10 rounded-full flex-shrink-0"

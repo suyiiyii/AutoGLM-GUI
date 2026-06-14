@@ -6,7 +6,7 @@ export const Route = createFileRoute('/')({
   component: HomeComponent,
 });
 
-function HomeComponent() {
+export function HomeComponent() {
   const navigate = useNavigate();
 
   useEffect(() => {

@@ -1,6 +1,7 @@
 /// <reference types="vite/client" />
 
 declare const __BACKEND_VERSION__: string;
+declare const __GIT_HASH__: string;
 declare const __DEVTOOLS_ENABLED__: boolean;
 
 declare module '*.png' {

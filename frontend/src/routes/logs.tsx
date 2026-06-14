@@ -25,7 +25,7 @@ export const Route = createFileRoute('/logs')({
   component: LogsComponent,
 });
 
-function LogsComponent() {
+export function LogsComponent() {
   const t = useTranslation();
   const [logFiles, setLogFiles] = useState<LogFile[]>([]);
   const [selectedLog, setSelectedLog] = useState<string | null>(null);
@@ -56,8 +56,10 @@ function LogsComponent() {
     const electronAPI = (window as Window & { electronAPI?: ElectronAPI })
       .electronAPI;
     if (electronAPI?.logs) {
-      setIsElectron(true);
-      loadLogFiles();
+      queueMicrotask(() => {
+        setIsElectron(true);
+        loadLogFiles();
+      });
     }
   }, [loadLogFiles]);
 

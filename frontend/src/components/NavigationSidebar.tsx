@@ -89,7 +89,7 @@ export function NavigationSidebar({ className }: NavigationSidebarProps) {
               </Link>
             </TooltipTrigger>
             <TooltipContent side="right" sideOffset={8}>
-              返回首页
+              {t.navigation?.backToHome || 'Back to Home'}
             </TooltipContent>
           </Tooltip>
         </div>

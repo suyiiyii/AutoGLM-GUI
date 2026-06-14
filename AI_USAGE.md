@@ -267,6 +267,7 @@ Once configured, you can use the tools directly in conversation:
 | `/api/reset` | POST | Reset agent state |
 | `/api/config` | GET | Get current configuration |
 | `/api/config` | POST | Update configuration |
+| `/api/config/model-connection-check` | POST | Test model service connectivity |
 
 ### Execute a Task (Synchronous)
 
@@ -349,6 +350,57 @@ curl -X POST http://127.0.0.1:8000/api/config \
   }'
 ```
 
+### Test Model Service Connectivity
+
+Before starting tasks, verify that the model API endpoint is reachable and the configured model exists:
+
+```bash
+curl -X POST http://127.0.0.1:8000/api/config/model-connection-check \
+  -H "Content-Type: application/json" \
+  -d '{
+    "base_url": "https://open.bigmodel.cn/api/paas/v4",
+    "model_name": "autoglm-phone",
+    "api_key": "sk-xxxxxxxx"
+  }'
+```
+
+**Parameters:**
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `base_url` | string | Yes | Model API base URL (e.g. `http://localhost:8080/v1`) |
+| `model_name` | string | Yes | Model name to verify |
+| `api_key` | string | No | API key (sent as `Authorization: Bearer` header) |
+
+**Success response (model found):**
+```json
+{
+  "success": true,
+  "message": "连接成功 (在线)\nhttps://open.bigmodel.cn/api/paas/v4\nautoglm-phone"
+}
+```
+
+**Failure response (model not found):**
+```json
+{
+  "success": false,
+  "message": "连接成功，但未找到模型: autoglm-phone\n可用模型: glm-4v, glm-4v-flash"
+}
+```
+
+**Failure response (connection error):**
+```json
+{
+  "success": false,
+  "message": "无法连接 http://localhost:8080/v1"
+}
+```
+
+The endpoint performs three checks:
+1. **Reachability** — can the `base_url` be connected to within 10 seconds?
+2. **Authentication** — does the API accept the provided `api_key`? (HTTP 200 required)
+3. **Model existence** — is `model_name` present in the `/models` list?
+
 ---
 
 ## Layered Agent API (Advanced)
@@ -427,6 +479,8 @@ curl -X POST http://127.0.0.1:8000/api/chat \
 | `"devices": []` empty list | No Android device connected | Connect device via USB; enable USB debugging in Developer Options |
 | `Device {id} is busy` (HTTP 409) | Another task is running on this device | Wait for the current task to finish, or call `/api/chat/abort` |
 | `初始化失败` (HTTP 500) | Model API misconfigured | Verify `base_url`, `model_name`, and `api_key` via `GET /api/config` |
+| `无法连接 {url}` | Model API server is down or URL wrong | Check if the model server is running; verify `base_url` with `/api/config/model-connection-check` |
+| `连接成功，但未找到模型` | Model name does not match | The model name must exactly match an entry in the `/models` list; check available models in the response message |
 | `WARNING: base_url is not configured!` | Missing `--base-url` flag | Restart with `--base-url` or set via `POST /api/config` |
 | `Max steps reached` with `success: false` | Task too complex for step limit | Break the task into smaller subtasks |
 | `SCRCPY_SERVER_PATH` error | scrcpy-server binary not found | This is bundled in the pip package; reinstall with `pip install --force-reinstall autoglm-gui` |
@@ -472,6 +526,9 @@ curl -X POST http://127.0.0.1:8000/api/chat/abort -H "Content-Type: application/
 
 # Get config
 curl -s http://127.0.0.1:8000/api/config
+
+# Test model connectivity
+curl -X POST http://127.0.0.1:8000/api/config/model-connection-check -H "Content-Type: application/json" -d '{"base_url":"http://localhost:8080/v1","model_name":"autoglm-phone"}'
 
 # MCP endpoint (for Claude/Cursor)
 # http://127.0.0.1:8000/mcp

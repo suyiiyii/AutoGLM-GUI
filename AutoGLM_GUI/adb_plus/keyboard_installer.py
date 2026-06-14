@@ -69,6 +69,9 @@ class ADBKeyboardInstaller:
         Check if ADB Keyboard is enabled (usable).
 
         Determined by checking the list of enabled input methods.
+        Uses ``settings get secure enabled_input_methods`` first because
+        ``ime list -s`` raises SecurityException on some OEM ROMs (e.g.
+        ColorOS) where the shell user lacks WRITE_SECURE_SETTINGS.
 
         Returns:
             bool: True if enabled, False otherwise.
@@ -77,13 +80,38 @@ class ADBKeyboardInstaller:
             logger.debug(
                 f"Checking if ADB Keyboard is enabled on device {self.device_id or 'default'}"
             )
-            # Use ime list -s to check only enabled input methods
+
+            # Primary: read enabled_input_methods from secure settings directly.
+            # This avoids SecurityException that `ime list -s` raises on some
+            # OEM devices (e.g. ColorOS) that restrict the `ime` shell command
+            # to privileged callers.
+            result = asyncio.run(
+                run_cmd_silently(
+                    self.adb_prefix
+                    + [
+                        "shell",
+                        "settings",
+                        "get",
+                        "secure",
+                        "enabled_input_methods",
+                    ]
+                )
+            )
+            enabled_imes = result.stdout.strip()
+            if enabled_imes and enabled_imes != "null" and result.returncode == 0:
+                enabled = ADB_KEYBOARD_PACKAGE in enabled_imes
+                logger.debug(f"ADB Keyboard enabled (via settings): {enabled}")
+                return enabled
+
+            # Fallback: use `ime list -s` for devices where settings returns
+            # empty or null (older Android versions, custom ROMs).
+            logger.debug("settings returned empty, falling back to ime list -s")
             result = asyncio.run(
                 run_cmd_silently(self.adb_prefix + ["shell", "ime", "list", "-s"])
             )
             ime_list_enabled = result.stdout.strip()
             enabled = ADB_KEYBOARD_IME in ime_list_enabled
-            logger.debug(f"ADB Keyboard enabled: {enabled}")
+            logger.debug(f"ADB Keyboard enabled (via ime list): {enabled}")
             return enabled
         except Exception as e:
             logger.error(f"Error checking keyboard enable status: {e}")

@@ -78,6 +78,9 @@ def _task_run_response(record: TaskRecord) -> TaskRunResponse:
         stop_reason=str(record.get("stop_reason"))
         if record.get("stop_reason") is not None
         else None,
+        trace_id=str(record.get("trace_id"))
+        if record.get("trace_id") is not None
+        else None,
         step_count=int(record["step_count"]),
         created_at=str(record["created_at"]),
         started_at=str(record["started_at"])
@@ -207,6 +210,7 @@ async def submit_task_session_task(
         device_id=str(session["device_id"]),
         device_serial=str(session["device_serial"]),
         message=request.message,
+        attachments=[attachment.model_dump() for attachment in request.attachments],
     )
     return _task_run_response(task)
 

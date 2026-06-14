@@ -16,3 +16,7 @@ coverage
 # Cache
 .eslintcache
 .tsbuildinfo
+
+# Playwright
+test-results/
+playwright-report/

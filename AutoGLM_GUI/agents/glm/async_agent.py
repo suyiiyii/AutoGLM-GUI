@@ -13,10 +13,28 @@ from AutoGLM_GUI.config import AgentConfig, ModelConfig
 from AutoGLM_GUI.device_protocol import DeviceProtocol
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.model import MessageBuilder
+from AutoGLM_GUI.model.error_details import (
+    model_error_message,
+    serialize_model_error_async,
+    trace_error_attrs,
+)
 from AutoGLM_GUI.prompt_config import get_messages, get_system_prompt
 from AutoGLM_GUI.trace import trace_span
 
 from .parser import GLMParser
+
+
+def _count_image_parts(messages: list[dict[str, Any]]) -> int:
+    count = 0
+    for message in messages:
+        content = message.get("content")
+        if isinstance(content, list):
+            count += sum(
+                1
+                for part in content
+                if isinstance(part, dict) and part.get("type") == "image_url"
+            )
+    return count
 
 
 class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
@@ -38,20 +56,27 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
             confirmation_callback=confirmation_callback,
             takeover_callback=takeover_callback,
         )
+        # Task text is stashed here and merged into the first per-step user
+        # message (together with that step's screenshot), matching the
+        # official Open-AutoGLM layout.
+        self._pending_task: str | None = None
+        self._pending_reference_images: list[dict[str, str]] = []
 
     def _get_default_system_prompt(self, lang: str) -> str:
         return get_system_prompt(lang)
 
     def _prepare_initial_context(
-        self, task: str, screenshot_base64: str, current_app: str
+        self,
+        task: str,
+        screenshot_base64: str,
+        current_app: str,
+        reference_images: list[dict[str, str]] | None = None,
     ) -> None:
-        screen_info = MessageBuilder.build_screen_info(current_app)
-        initial_message = f"{task}\n\n** Screen Info **\n\n{screen_info}"
-        self._context.append(
-            MessageBuilder.create_user_message(
-                text=initial_message, image_base64=screenshot_base64
-            )
-        )
+        # Do not add a screenshot here: the first per-step screenshot is the
+        # current one and it is attached in _execute_step(). This keeps the
+        # invariant that every LLM request carries the current screen first.
+        self._pending_task = task
+        self._pending_reference_images = (reference_images or []).copy()
 
     async def _execute_step(self) -> AsyncGenerator[dict[str, Any], None]:
         """执行单步：获取截图 → 流式调用 LLM → 解析文本 → 执行动作。"""
@@ -90,15 +115,51 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
             "step.build_message",
             attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
         ):
+            # 清除历史消息中残留的截图，保证本次请求只包含当前屏幕这一张图。
+            self._context = [
+                MessageBuilder.remove_images_from_message(message)
+                for message in self._context
+            ]
+
             screen_info = MessageBuilder.build_screen_info(current_app)
-            text_content = f"** Screen Info **\n\n{screen_info}"
+            if self._step_count == 1 and self._pending_task is not None:
+                reference_notice = MessageBuilder.build_user_reference_images_notice(
+                    len(self._pending_reference_images)
+                )
+                reference_section = (
+                    f"\n\n** User Reference Images **\n\n{reference_notice}"
+                    if reference_notice
+                    else ""
+                )
+                text_content = (
+                    f"{self._pending_task}{reference_section}"
+                    f"\n\n** Screen Info **\n\n{screen_info}"
+                )
+                self._pending_task = None
+                images = [
+                    {"mime_type": "image/png", "data": screenshot.base64_data},
+                    *self._pending_reference_images,
+                ]
+                self._pending_reference_images = []
+            else:
+                text_content = f"** Screen Info **\n\n{screen_info}"
+                images = [{"mime_type": "image/png", "data": screenshot.base64_data}]
             self._context.append(
-                MessageBuilder.create_user_message(
-                    text=text_content, image_base64=screenshot.base64_data
+                MessageBuilder.create_user_message_with_images(
+                    text=text_content,
+                    images=images,
                 )
             )
 
         # 3. 流式调用 OpenAI
+        image_count = _count_image_parts(self._context)
+        if image_count < 1:
+            logger.warning(
+                "GLM request should carry at least one screenshot, got %d (step %d)",
+                image_count,
+                self._step_count,
+            )
+
         try:
             if self.agent_config.verbose:
                 msgs = get_messages(self.agent_config.lang)
@@ -115,22 +176,33 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
                     "model_name": self.model_config.model_name,
                     "message_count": len(self._context),
                 },
-            ):
-                async for chunk_data in self._stream_openai(self._context):
-                    if self._cancel_event.is_set():
-                        raise asyncio.CancelledError()
+            ) as span:
+                try:
+                    async for chunk_data in self._stream_openai(self._context):
+                        if self._cancel_event.is_set():
+                            raise asyncio.CancelledError()
 
-                    if chunk_data["type"] == "thinking":
-                        thinking_parts.append(chunk_data["content"])
-                        yield {
-                            "type": "thinking",
-                            "data": {"chunk": chunk_data["content"]},
-                        }
-                        if self.agent_config.verbose:
-                            logger.debug(chunk_data["content"])
+                        if chunk_data["type"] == "thinking":
+                            thinking_parts.append(chunk_data["content"])
+                            yield {
+                                "type": "thinking",
+                                "data": {"chunk": chunk_data["content"]},
+                            }
+                            if self.agent_config.verbose:
+                                logger.debug(chunk_data["content"])
 
-                    elif chunk_data["type"] == "raw":
-                        raw_content += chunk_data["content"]
+                        elif chunk_data["type"] == "raw":
+                            raw_content += chunk_data["content"]
+                except Exception as exc:
+                    if isinstance(exc, asyncio.CancelledError):
+                        raise
+                    error_details = await serialize_model_error_async(
+                        exc,
+                        model_config=self.model_config,
+                        call_site="AutoGLM_GUI.agents.glm.async_agent.AsyncGLMAgent._stream_openai",
+                    )
+                    span.set_attributes(trace_error_attrs(error_details))
+                    raise
 
             thinking = "".join(thinking_parts)
 
@@ -142,7 +214,16 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
             logger.error(f"LLM error: {e}")
             if self.agent_config.verbose:
                 logger.debug(traceback.format_exc())
-            yield {"type": "error", "data": {"message": f"Model error: {e}"}}
+            error_details = await serialize_model_error_async(
+                e,
+                model_config=self.model_config,
+                call_site="AutoGLM_GUI.agents.glm.async_agent.AsyncGLMAgent._stream_openai",
+            )
+            message = model_error_message(e)
+            yield {
+                "type": "error",
+                "data": {"message": message, "error_details": error_details},
+            }
             yield {
                 "type": "step",
                 "data": {
@@ -151,7 +232,8 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
                     "action": None,
                     "success": False,
                     "finished": True,
-                    "message": f"Model error: {e}",
+                    "message": message,
+                    "error_details": error_details,
                 },
             }
             return
@@ -212,6 +294,26 @@ class AsyncGLMAgent(AsyncAgentBase, AsyncAgent):
                     f"<think>{thinking}</think><answer>{action_str}</answer>"
                 )
             )
+
+        # 6.5. 检测需要用户交互的 action (Take_over / Interact)
+        interaction_actions = ("Take_over", "Interact")
+        if action.get("action") in interaction_actions:
+            if self.agent_config.verbose:
+                logger.debug(f"Waiting for user input after {action.get('action')}")
+            yield {
+                "type": "step",
+                "data": {
+                    "step": self._step_count,
+                    "thinking": thinking,
+                    "action": action,
+                    "success": result.success,
+                    "finished": False,
+                    "waiting_for_input": True,
+                    "message": result.message or action.get("message"),
+                    "screenshot": screenshot.base64_data if screenshot else None,
+                },
+            }
+            return
 
         # 7. 检查完成
         finished = action.get("_metadata") == "finish" or result.should_finish

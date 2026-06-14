@@ -4,10 +4,18 @@
     "esModuleInterop": true,
     "jsx": "react-jsx",
     "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "types": ["vite/client"],
     "skipLibCheck": true,
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
     }
-  }
+  },
+  "exclude": [
+    "e2e",
+    "test-results",
+    "node_modules",
+    "playwright.config.ts",
+    "vitest.config.ts"
+  ]
 }

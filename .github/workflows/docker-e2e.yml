@@ -6,7 +6,7 @@ on:
     paths:
       - 'Dockerfile'
       - 'AutoGLM_GUI/**'
-      - 'tests/integration/**'
+      - 'tests/e2e/**'
       - 'pyproject.toml'
       - '.github/workflows/docker-e2e.yml'
   push:
@@ -14,7 +14,7 @@ on:
     paths:
       - 'Dockerfile'
       - 'AutoGLM_GUI/**'
-      - 'tests/integration/**'
+      - 'tests/e2e/**'
   workflow_dispatch:
 
 jobs:
@@ -34,7 +34,7 @@ jobs:
 
       - name: Run Docker E2E tests
         run: |
-          uv run pytest tests/integration/test_docker_e2e.py -v -s
+          uv run pytest tests/e2e/test_docker_e2e.py -v -s
 
       - name: Generate test summary
         if: always()

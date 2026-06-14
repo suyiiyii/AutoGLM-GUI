@@ -1,6 +1,17 @@
 """Unit tests for mDNS serial extraction."""
 
+import subprocess
+
+import pytest
+
+import AutoGLM_GUI.adb_plus.serial as serial_module
 from AutoGLM_GUI.adb_plus.serial import extract_serial_from_mdns, get_device_serial
+
+
+def _completed(stdout: str, returncode: int = 0) -> subprocess.CompletedProcess[str]:
+    return subprocess.CompletedProcess(
+        args=["adb"], returncode=returncode, stdout=stdout
+    )
 
 
 class TestMdnsSerialExtraction:
@@ -138,3 +149,108 @@ class TestGetDeviceSerialIntegration:
         serial = get_device_serial(device_id)
         # Extraction fails, getprop attempted (fails in test env), uses fallback
         assert serial == device_id
+
+    def test_getprop_returns_first_valid_serial(self, monkeypatch: pytest.MonkeyPatch):
+        """Test getprop fallback skips empty/error values and returns a valid serial."""
+        results = iter(
+            [
+                _completed(""),
+                _completed("unknown"),
+                _completed("SERIAL123"),
+            ]
+        )
+        calls: list[list[str]] = []
+
+        def fake_run(cmd: list[str], timeout: int) -> subprocess.CompletedProcess[str]:
+            calls.append(cmd)
+            return next(results)
+
+        monkeypatch.setattr(serial_module, "run_cmd_silently_sync", fake_run)
+
+        assert get_device_serial("usb-device", adb_path="adbx") == "SERIAL123"
+        assert [call[-1] for call in calls] == [
+            "ro.serialno",
+            "ro.boot.serialno",
+            "ro.product.serial",
+        ]
+
+    def test_getprop_exceptions_fall_through_to_next_prop(
+        self, monkeypatch: pytest.MonkeyPatch
+    ):
+        """Test getprop exceptions are ignored before trying the next property."""
+        calls = 0
+
+        def fake_run(cmd: list[str], timeout: int) -> subprocess.CompletedProcess[str]:
+            nonlocal calls
+            calls += 1
+            if calls == 1:
+                raise RuntimeError("adb failed")
+            return _completed("SERIAL456")
+
+        monkeypatch.setattr(serial_module, "run_cmd_silently_sync", fake_run)
+
+        assert get_device_serial("usb-device", adb_path="adbx") == "SERIAL456"
+        assert calls == 2
+
+
+@pytest.mark.anyio
+async def test_get_device_serial_async_uses_mdns_fast_path(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def fail_if_called(
+        cmd: list[str], timeout: int
+    ) -> subprocess.CompletedProcess[str]:
+        raise AssertionError("ADB should not be called for valid mDNS names")
+
+    monkeypatch.setattr(serial_module, "run_cmd_silently", fail_if_called)
+
+    assert (
+        await serial_module.get_device_serial_async("adb-ASYNC1._adb-tls-connect._tcp")
+        == "ASYNC1"
+    )
+
+
+@pytest.mark.anyio
+async def test_get_device_serial_async_returns_first_valid_getprop(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    results = iter(
+        [
+            _completed("error: device offline"),
+            _completed("unknown"),
+            _completed("ASYNC123"),
+        ]
+    )
+    calls: list[list[str]] = []
+
+    async def fake_run(
+        cmd: list[str], timeout: int
+    ) -> subprocess.CompletedProcess[str]:
+        calls.append(cmd)
+        return next(results)
+
+    monkeypatch.setattr(serial_module, "run_cmd_silently", fake_run)
+
+    assert (
+        await serial_module.get_device_serial_async("wifi-device", adb_path="adbx")
+        == "ASYNC123"
+    )
+    assert [call[-1] for call in calls] == [
+        "ro.serialno",
+        "ro.boot.serialno",
+        "ro.product.serial",
+    ]
+
+
+@pytest.mark.anyio
+async def test_get_device_serial_async_exceptions_and_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def broken_run(
+        cmd: list[str], timeout: int
+    ) -> subprocess.CompletedProcess[str]:
+        raise RuntimeError("adb failed")
+
+    monkeypatch.setattr(serial_module, "run_cmd_silently", broken_run)
+
+    assert await serial_module.get_device_serial_async("wifi-device") == "wifi-device"

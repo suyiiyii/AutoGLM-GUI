@@ -45,6 +45,11 @@ const sidebars: SidebarsConfig = {
     },
     {
       type: 'category',
+      label: '开发',
+      items: ['development', 'development-harness'],
+    },
+    {
+      type: 'category',
       label: '部署',
       items: [
         'deployment/docker',

@@ -1,0 +1,67 @@
+{
+  "schema": "autoglm.harness.golden.v1",
+  "scenario": "meituan_message",
+  "task_status": "SUCCEEDED",
+  "completion": {
+    "done_event_success": true,
+    "step_count": 2
+  },
+  "device_action_sequence": [
+    "tap"
+  ],
+  "step_actions": [
+    {
+      "index": 1,
+      "action": "Tap"
+    },
+    {
+      "index": 2,
+      "action": "finish"
+    }
+  ],
+  "required_replay_event_names": [
+    "autoglm.task.start",
+    "autoglm.step",
+    "autoglm.task.done",
+    "autoglm.task.status",
+    "autoglm.trace.summary"
+  ],
+  "required_trace_span_names": [
+    "agent.step",
+    "step.capture_screenshot",
+    "step.llm",
+    "step.execute_action",
+    "task_store.event.append",
+    "task_store.task.finish"
+  ],
+  "actual_replay_event_names": [
+    "autoglm.step",
+    "autoglm.task.done",
+    "autoglm.task.start",
+    "autoglm.task.status",
+    "autoglm.thinking",
+    "autoglm.trace.summary"
+  ],
+  "actual_trace_span_names": [
+    "action.execute",
+    "agent.prepare_initial_context",
+    "agent.prepare_initial_state",
+    "agent.step",
+    "agent.stream",
+    "agent_manager.create_agent",
+    "agent_manager.get_device_protocol",
+    "agent_manager.initialize_agent",
+    "remote_device.get",
+    "remote_device.post",
+    "step.build_message",
+    "step.capture_screenshot",
+    "step.execute_action",
+    "step.get_current_app",
+    "step.llm",
+    "step.parse_action",
+    "step.update_context",
+    "task_store.event.append",
+    "task_store.task.finish",
+    "task_store.task.set_trace_id"
+  ]
+}

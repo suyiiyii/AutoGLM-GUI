@@ -113,7 +113,7 @@ def main():
     args = parser.parse_args()
 
     # 导入并创建 app
-    from tests.integration.device_agent.mock_llm_server import create_app
+    from tests.e2e.device_agent.mock_llm_server import create_app
 
     app = create_app()
 

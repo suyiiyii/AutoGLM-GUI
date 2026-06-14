@@ -20,6 +20,7 @@ import {
   ListChecks,
   Loader2,
   Square,
+  Hand,
 } from 'lucide-react';
 import type { Workflow, HistoryRecordResponse } from '../api';
 import {
@@ -28,6 +29,7 @@ import {
   getTaskSession,
   listWorkflows,
   getErrorMessage,
+  getTask,
   listHistory,
   clearHistory as clearHistoryApi,
   deleteHistoryRecord,
@@ -51,6 +53,11 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { HistoryItemCard } from './HistoryItemCard';
+import { MarkdownContent } from './MarkdownContent';
+import {
+  isInteractionRequired,
+  getInteractionPrompt,
+} from '../lib/interaction-config';
 
 interface ChatKitPanelProps {
   deviceId: string;
@@ -125,6 +132,12 @@ function applyTaskEventToTask(
       typeof payload.message === 'string' ? payload.message : null;
     nextTask.error_message =
       typeof payload.message === 'string' ? payload.message : null;
+    nextTask.finished_at = event.created_at;
+  } else if (event.event_type === 'takeover') {
+    nextTask.status = 'SUCCEEDED';
+    nextTask.final_message =
+      typeof payload.message === 'string' ? payload.message : null;
+    nextTask.error_message = null;
     nextTask.finished_at = event.created_at;
   }
 
@@ -211,7 +224,21 @@ function buildAssistantMessage(
       typeof payload.message === 'string'
     ) {
       content = payload.message;
+    } else if (
+      event.event_type === 'takeover' &&
+      typeof payload.message === 'string'
+    ) {
+      content = payload.message;
     }
+  }
+
+  // Override with task-level message if task is in terminal state to ensure
+  // cancellation/error messages are shown even if overridden by previous events
+  if (
+    (task.status === 'CANCELLED' || task.status === 'FAILED') &&
+    (task.final_message || task.error_message)
+  ) {
+    content = task.final_message || task.error_message || content;
   }
 
   return {
@@ -264,9 +291,15 @@ export function ChatKitPanel({
   const [aborting, setAborting] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [sessionId, setSessionId] = React.useState<string | null>(null);
+  const [waitingForUserInteraction, setWaitingForUserInteraction] =
+    React.useState(false);
+  const [interactionPrompt, setInteractionPrompt] = React.useState<
+    string | null
+  >(null);
   const messagesEndRef = React.useRef<HTMLDivElement>(null);
   const scrollAreaRef = React.useRef<HTMLDivElement>(null);
-  const [isNearBottom, setIsNearBottom] = React.useState(true);
+  const isNearBottomRef = React.useRef(true);
+  const [showScrollToBottom, setShowScrollToBottom] = React.useState(false);
   const taskStreamRef = React.useRef<{ close: () => void } | null>(null);
   const currentTaskIdRef = React.useRef<string | null>(null);
   const taskRunsRef = React.useRef<Record<string, TaskRunResponse>>({});
@@ -297,18 +330,26 @@ export function ChatKitPanel({
       const clientHeight = target.clientHeight;
       const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
 
-      // Consider "near bottom" if within 200px
-      setIsNearBottom(distanceFromBottom < 200);
+      const nearBottom = distanceFromBottom < 200;
+      isNearBottomRef.current = nearBottom;
+      setShowScrollToBottom(!nearBottom);
     },
     []
   );
 
-  // Auto-scroll to bottom only if user is near bottom
+  // Auto-scroll to bottom only if user was near bottom before the update.
+  // Uses a ref (not state) to avoid the race condition where smooth-scroll
+  // onScroll events flip the state mid-animation and suppress the next scroll.
   React.useEffect(() => {
-    if (isNearBottom) {
-      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (isNearBottomRef.current) {
+      const viewport = scrollAreaRef.current?.querySelector(
+        '[data-slot="scroll-area-viewport"]'
+      ) as HTMLDivElement | null;
+      if (viewport) {
+        viewport.scrollTop = viewport.scrollHeight;
+      }
     }
-  }, [messages, isNearBottom]);
+  }, [messages]);
 
   React.useEffect(() => {
     return () => {
@@ -336,7 +377,7 @@ export function ChatKitPanel({
     if (showHistoryPopover) {
       const loadItems = async () => {
         try {
-          const data = await listHistory(deviceSerial, 20, 0);
+          const data = await listHistory(deviceSerial, 20, 0, 'layered');
           setHistoryItems(data.records);
         } catch (error) {
           console.error('Failed to load history:', error);
@@ -352,14 +393,14 @@ export function ChatKitPanel({
     setShowWorkflowPopover(false);
   };
 
-  const handleSelectHistory = (record: HistoryRecordResponse) => {
+  const handleSelectHistory = async (record: HistoryRecordResponse) => {
     const userMessage: Message = {
       id: `${record.id}-user`,
       role: 'user',
       content: record.task_text,
       timestamp: new Date(record.start_time),
     };
-    const agentMessage: Message = {
+    const fallbackAgentMessage: Message = {
       id: `${record.id}-agent`,
       role: 'assistant',
       content: record.final_message,
@@ -370,8 +411,23 @@ export function ChatKitPanel({
       success: record.success,
       isStreaming: false,
     };
-    setMessages([userMessage, agentMessage]);
+
     setShowHistoryPopover(false);
+    setShowScrollToBottom(false);
+    isNearBottomRef.current = true;
+
+    // Task-backed records carry their full event trail, so rebuild the
+    // conversation (with the tool-call steps) exactly like the live view.
+    // Older legacy records aren't task-backed, so fall back to a flat render.
+    try {
+      const [task, { events }] = await Promise.all([
+        getTask(record.id),
+        listTaskEvents(record.id),
+      ]);
+      setMessages(buildMessagePair(reconcileTaskRun(task, events), events));
+    } catch {
+      setMessages([userMessage, fallbackAgentMessage]);
+    }
   };
 
   const handleClearHistory = async () => {
@@ -442,17 +498,49 @@ export function ChatKitPanel({
           }
           replaceTaskMessages();
 
+          // Check for interaction required actions
+          if (event.event_type === 'step') {
+            const action = event.payload.action as Record<string, unknown>;
+            if (action && isInteractionRequired(action)) {
+              setWaitingForUserInteraction(true);
+              setInteractionPrompt(getInteractionPrompt(action));
+              setLoading(false);
+              setAborting(false);
+              return;
+            }
+          }
+          if (
+            event.event_type === 'takeover' &&
+            typeof event.payload.message === 'string'
+          ) {
+            setWaitingForUserInteraction(true);
+            setInteractionPrompt(
+              getInteractionPrompt({
+                action: 'Take_over',
+                message: event.payload.message,
+              })
+            );
+            setLoading(false);
+            setAborting(false);
+            currentTaskIdRef.current = null;
+            return;
+          }
+
           const nextTask = taskRunsRef.current[taskId];
           if (nextTask && !isTaskActive(nextTask.status)) {
             currentTaskIdRef.current = null;
             setLoading(false);
             setAborting(false);
+            setWaitingForUserInteraction(false);
+            setInteractionPrompt(null);
           }
         },
         message => {
           setError(message);
           setLoading(false);
           setAborting(false);
+          setWaitingForUserInteraction(false);
+          setInteractionPrompt(null);
         },
         afterSeq
       );
@@ -572,14 +660,22 @@ export function ChatKitPanel({
 
   const handleSend = React.useCallback(async () => {
     const inputValue = input.trim();
-    if (!inputValue || loading || !sessionId) return;
+    const messageValue =
+      inputValue || (waitingForUserInteraction ? '继续' : '');
+    if (!messageValue || loading || !sessionId) return;
 
     setInput('');
     setLoading(true);
     setError(null);
 
+    // Clear interaction state if we were waiting for user interaction
+    if (waitingForUserInteraction) {
+      setWaitingForUserInteraction(false);
+      setInteractionPrompt(null);
+    }
+
     try {
-      const task = await submitTaskSessionTask(sessionId, inputValue);
+      const task = await submitTaskSessionTask(sessionId, messageValue);
       const initialEvents = (await listTaskEvents(task.id)).events;
       const reconciledTask = reconcileTaskRun(task, initialEvents);
       taskRunsRef.current[task.id] = reconciledTask;
@@ -600,11 +696,17 @@ export function ChatKitPanel({
       console.error('Failed to submit layered task:', err);
       const errorMessage = getErrorMessage(err);
       setError(errorMessage);
-    } finally {
       setLoading(false);
       setAborting(false);
     }
-  }, [attachTaskStream, input, loading, replaceTaskMessages, sessionId]);
+  }, [
+    attachTaskStream,
+    input,
+    loading,
+    replaceTaskMessages,
+    sessionId,
+    waitingForUserInteraction,
+  ]);
 
   const handleAbort = React.useCallback(() => {
     const taskId = currentTaskIdRef.current;
@@ -615,6 +717,10 @@ export function ChatKitPanel({
     void (async () => {
       try {
         const response = await cancelTaskRun(taskId);
+        // Even if the backend still says RUNNING, we've sent the abort signal.
+        // To prevent the UI from flickering or showing the stop button again,
+        // we clear the current task ID immediately on successful request.
+        currentTaskIdRef.current = null;
         if (response.task) {
           taskRunsRef.current[taskId] = response.task;
           replaceTaskMessages();
@@ -651,9 +757,13 @@ export function ChatKitPanel({
       taskEventsRef.current = {};
       currentTaskIdRef.current = null;
       setMessages([]);
+      setShowScrollToBottom(false);
+      isNearBottomRef.current = true;
       setLoading(false);
       setError(null);
       setAborting(false);
+      setWaitingForUserInteraction(false);
+      setInteractionPrompt(null);
     } catch (resetError) {
       console.error('Failed to reset layered task session:', resetError);
       setError(getErrorMessage(resetError));
@@ -770,7 +880,7 @@ export function ChatKitPanel({
               size="icon"
               onClick={handleReset}
               className="h-8 w-8 rounded-full"
-              title="重置对话"
+              title={t.devicePanel?.resetChat || 'Reset Chat'}
             >
               <RotateCcw className="h-4 w-4" />
             </Button>
@@ -785,186 +895,235 @@ export function ChatKitPanel({
           </div>
         )}
 
+        {/* Interaction waiting indicator */}
+        {waitingForUserInteraction && (
+          <div className="mx-4 mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-xl text-sm text-blue-600 dark:text-blue-400 flex items-center gap-2">
+            <Hand className="w-4 h-4 flex-shrink-0" />
+            <span className="whitespace-pre-line">
+              {interactionPrompt || '等待用户输入...'}
+            </span>
+          </div>
+        )}
+
         {/* Messages with Execution Steps */}
-        <ScrollArea
-          ref={scrollAreaRef}
-          className="flex-1 min-h-0"
-          onScroll={handleScroll}
-        >
-          <div className="p-4 space-y-4">
-            {messages.length === 0 ? (
-              <div className="h-full flex flex-col items-center justify-center text-center py-12">
-                <div className="flex h-16 w-16 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/30 mb-4">
-                  <Layers className="h-8 w-8 text-purple-500" />
+        <div className="flex-1 min-h-0 relative">
+          <ScrollArea
+            ref={scrollAreaRef}
+            className="h-full"
+            onScroll={handleScroll}
+          >
+            <div className="p-4 space-y-4">
+              {messages.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-center py-12">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-full bg-purple-100 dark:bg-purple-900/30 mb-4">
+                    <Layers className="h-8 w-8 text-purple-500" />
+                  </div>
+                  <p className="font-medium text-slate-900 dark:text-slate-100">
+                    {t.chatkit?.title || '分层代理模式'}
+                  </p>
+                  <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 max-w-xs">
+                    {t.chatkit?.layeredAgentDesc ||
+                      '决策模型负责规划任务，视觉模型负责执行。你可以看到每一步的执行过程。'}
+                  </p>
                 </div>
-                <p className="font-medium text-slate-900 dark:text-slate-100">
-                  {t.chatkit?.title || '分层代理模式'}
-                </p>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400 max-w-xs">
-                  {t.chatkit?.layeredAgentDesc ||
-                    '决策模型负责规划任务，视觉模型负责执行。你可以看到每一步的执行过程。'}
-                </p>
-              </div>
-            ) : (
-              messages.map(message => (
-                <div key={message.id} className="space-y-2">
-                  {message.role === 'user' ? (
-                    <div className="flex justify-end">
-                      <div className="max-w-[80%]">
-                        <div className="bg-purple-600 text-white px-4 py-2 rounded-2xl rounded-br-sm">
-                          <p className="whitespace-pre-wrap">
-                            {message.content}
+              ) : (
+                messages.map(message => (
+                  <div key={message.id} className="space-y-2">
+                    {message.role === 'user' ? (
+                      <div className="flex justify-end">
+                        <div className="max-w-[80%]">
+                          <div className="bg-purple-600 text-white px-4 py-2 rounded-2xl rounded-br-sm">
+                            <MarkdownContent
+                              content={message.content}
+                              prose={false}
+                            />
+                          </div>
+                          <p className="text-xs text-slate-400 mt-1 text-right">
+                            {message.timestamp.toLocaleTimeString()}
                           </p>
                         </div>
-                        <p className="text-xs text-slate-400 mt-1 text-right">
-                          {message.timestamp.toLocaleTimeString()}
-                        </p>
                       </div>
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      {/* Execution Steps */}
-                      {message.steps && message.steps.length > 0 && (
-                        <div className="space-y-2">
-                          {message.steps.map((step, idx) => (
-                            <div
-                              key={step.id}
-                              className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden"
-                            >
-                              {/* Step Header */}
-                              <button
-                                onClick={() =>
-                                  toggleStepExpansion(message.id, step.id)
-                                }
-                                className="w-full flex items-center justify-between p-3 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                    ) : (
+                      <div className="space-y-3">
+                        {/* Execution Steps */}
+                        {message.steps && message.steps.length > 0 && (
+                          <div className="space-y-2">
+                            {message.steps.map((step, idx) => (
+                              <div
+                                key={step.id}
+                                className="bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-700 overflow-hidden"
                               >
-                                <div className="flex items-center gap-2">
-                                  <div
-                                    className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${
-                                      step.type === 'tool_call'
-                                        ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
-                                        : 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400'
-                                    }`}
-                                  >
-                                    {step.type === 'tool_call' ? (
-                                      <Wrench className="w-3 h-3" />
-                                    ) : (
-                                      <MessageSquare className="w-3 h-3" />
-                                    )}
+                                {/* Step Header */}
+                                <button
+                                  onClick={() =>
+                                    toggleStepExpansion(message.id, step.id)
+                                  }
+                                  className="w-full flex items-center justify-between p-3 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <div
+                                      className={`flex h-6 w-6 items-center justify-center rounded-full text-xs font-medium ${
+                                        step.type === 'tool_call'
+                                          ? 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400'
+                                          : 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400'
+                                      }`}
+                                    >
+                                      {step.type === 'tool_call' ? (
+                                        <Wrench className="w-3 h-3" />
+                                      ) : (
+                                        <MessageSquare className="w-3 h-3" />
+                                      )}
+                                    </div>
+                                    <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                                      Step {idx + 1}: {step.content}
+                                    </span>
                                   </div>
-                                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                                    Step {idx + 1}: {step.content}
-                                  </span>
-                                </div>
-                                {step.isExpanded ? (
-                                  <ChevronUp className="w-4 h-4 text-slate-400" />
-                                ) : (
-                                  <ChevronDown className="w-4 h-4 text-slate-400" />
-                                )}
-                              </button>
+                                  {step.isExpanded ? (
+                                    <ChevronUp className="w-4 h-4 text-slate-400" />
+                                  ) : (
+                                    <ChevronDown className="w-4 h-4 text-slate-400" />
+                                  )}
+                                </button>
 
-                              {/* Step Content */}
-                              {step.isExpanded && (
-                                <div className="px-3 pb-3 space-y-2">
-                                  {step.type === 'tool_call' &&
-                                    step.toolArgs && (
-                                      <div className="bg-white dark:bg-slate-900 rounded-lg p-3 text-sm">
-                                        <p className="text-xs text-slate-500 mb-1 font-medium">
-                                          {step.toolName === 'chat'
-                                            ? '发送给 Phone Agent 的指令:'
-                                            : '工具参数:'}
-                                        </p>
-                                        {step.toolName === 'chat' ? (
-                                          <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
-                                            {(
-                                              step.toolArgs as {
-                                                message?: string;
-                                              }
-                                            ).message ||
-                                              JSON.stringify(
+                                {/* Step Content */}
+                                {step.isExpanded && (
+                                  <div className="px-3 pb-3 space-y-2">
+                                    {step.type === 'tool_call' &&
+                                      step.toolArgs && (
+                                        <div className="bg-white dark:bg-slate-900 rounded-lg p-3 text-sm">
+                                          <p className="text-xs text-slate-500 mb-1 font-medium">
+                                            {step.toolName === 'chat'
+                                              ? '发送给 Phone Agent 的指令:'
+                                              : '工具参数:'}
+                                          </p>
+                                          {step.toolName === 'chat' ? (
+                                            <p className="text-slate-700 dark:text-slate-300 whitespace-pre-wrap">
+                                              {(
+                                                step.toolArgs as {
+                                                  message?: string;
+                                                }
+                                              ).message ||
+                                                JSON.stringify(
+                                                  step.toolArgs,
+                                                  null,
+                                                  2
+                                                )}
+                                            </p>
+                                          ) : (
+                                            <pre className="text-xs text-slate-600 dark:text-slate-400 overflow-x-auto">
+                                              {JSON.stringify(
                                                 step.toolArgs,
                                                 null,
                                                 2
                                               )}
+                                            </pre>
+                                          )}
+                                        </div>
+                                      )}
+                                    {step.type === 'tool_result' &&
+                                      step.toolResult && (
+                                        <div className="bg-white dark:bg-slate-900 rounded-lg p-3 text-sm">
+                                          <p className="text-xs text-slate-500 mb-1 font-medium">
+                                            执行结果:
                                           </p>
-                                        ) : (
-                                          <pre className="text-xs text-slate-600 dark:text-slate-400 overflow-x-auto">
-                                            {JSON.stringify(
-                                              step.toolArgs,
-                                              null,
-                                              2
-                                            )}
+                                          <pre className="text-xs text-slate-600 dark:text-slate-400 overflow-x-auto whitespace-pre-wrap">
+                                            {typeof step.toolResult === 'string'
+                                              ? step.toolResult
+                                              : JSON.stringify(
+                                                  step.toolResult,
+                                                  null,
+                                                  2
+                                                )}
                                           </pre>
-                                        )}
-                                      </div>
-                                    )}
-                                  {step.type === 'tool_result' &&
-                                    step.toolResult && (
-                                      <div className="bg-white dark:bg-slate-900 rounded-lg p-3 text-sm">
-                                        <p className="text-xs text-slate-500 mb-1 font-medium">
-                                          执行结果:
-                                        </p>
-                                        <pre className="text-xs text-slate-600 dark:text-slate-400 overflow-x-auto whitespace-pre-wrap">
-                                          {typeof step.toolResult === 'string'
-                                            ? step.toolResult
-                                            : JSON.stringify(
-                                                step.toolResult,
-                                                null,
-                                                2
-                                              )}
-                                        </pre>
-                                      </div>
-                                    )}
-                                </div>
-                              )}
-                            </div>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Final Response */}
-                      {message.content && (
-                        <div className="flex justify-start">
-                          <div
-                            className={`max-w-[85%] rounded-2xl rounded-tl-sm px-4 py-3 ${
-                              message.success === false
-                                ? 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400'
-                                : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                            }`}
-                          >
-                            <div className="flex items-start gap-2">
-                              {message.success !== undefined && (
-                                <CheckCircle2
-                                  className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
-                                    message.success
-                                      ? 'text-green-500'
-                                      : 'text-red-500'
-                                  }`}
-                                />
-                              )}
-                              <p className="whitespace-pre-wrap">
-                                {message.content}
-                              </p>
-                            </div>
+                                        </div>
+                                      )}
+                                  </div>
+                                )}
+                              </div>
+                            ))}
                           </div>
-                        </div>
-                      )}
+                        )}
 
-                      {/* Streaming indicator */}
-                      {message.isStreaming && !message.content && (
-                        <div className="flex items-center gap-2 text-sm text-slate-500">
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          正在思考和执行...
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
-              ))
-            )}
-            <div ref={messagesEndRef} />
-          </div>
-        </ScrollArea>
+                        {/* Final Response */}
+                        {message.content &&
+                          (() => {
+                            const isTakeoverMsg =
+                              message.content.startsWith(
+                                'TAKEOVER_REQUIRED:'
+                              ) ||
+                              message.content.startsWith('INTERACT_REQUIRED:');
+                            return (
+                              <div className="flex justify-start">
+                                <div
+                                  className={`max-w-[85%] rounded-2xl rounded-tl-sm px-4 py-3 ${
+                                    message.success === false
+                                      ? 'bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400'
+                                      : isTakeoverMsg
+                                        ? 'bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300 border border-blue-200 dark:border-blue-800'
+                                        : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                                  }`}
+                                >
+                                  <div className="flex items-start gap-2">
+                                    {message.success !== undefined &&
+                                      (isTakeoverMsg ? (
+                                        <AlertCircle className="w-5 h-5 flex-shrink-0 mt-0.5 text-amber-500" />
+                                      ) : (
+                                        <CheckCircle2
+                                          className={`w-5 h-5 flex-shrink-0 mt-0.5 ${
+                                            message.success
+                                              ? 'text-green-500'
+                                              : 'text-red-500'
+                                          }`}
+                                        />
+                                      ))}
+                                    <MarkdownContent
+                                      content={message.content}
+                                    />
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })()}
+
+                        {/* Streaming indicator */}
+                        {message.isStreaming && !message.content && (
+                          <div className="flex items-center gap-2 text-sm text-slate-500">
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            正在思考和执行...
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                ))
+              )}
+              <div ref={messagesEndRef} />
+            </div>
+          </ScrollArea>
+          {showScrollToBottom && messages.length > 0 && (
+            <div className="pointer-events-none absolute inset-x-0 bottom-4 flex justify-center z-10">
+              <Button
+                onClick={() => {
+                  const viewport = scrollAreaRef.current?.querySelector(
+                    '[data-slot="scroll-area-viewport"]'
+                  ) as HTMLDivElement | null;
+                  if (viewport) {
+                    viewport.scrollTo({
+                      top: viewport.scrollHeight,
+                      behavior: 'smooth',
+                    });
+                  }
+                  setShowScrollToBottom(false);
+                  isNearBottomRef.current = true;
+                }}
+                size="sm"
+                className="pointer-events-auto shadow-lg bg-[#1d9bf0] text-white hover:bg-[#1a8cd8]"
+              >
+                查看最新消息
+              </Button>
+            </div>
+          )}
+        </div>
 
         {/* Input area */}
         <div className="p-4 border-t border-slate-200 dark:border-slate-800">
@@ -973,8 +1132,13 @@ export function ChatKitPanel({
               value={input}
               onChange={e => setInput(e.target.value)}
               onKeyDown={handleInputKeyDown}
-              placeholder="描述你想要完成的任务... (Cmd+Enter 发送)"
-              disabled={loading}
+              placeholder={
+                waitingForUserInteraction
+                  ? interactionPrompt || '请输入您的回复'
+                  : t.devicePanel?.whatToDo ||
+                    'What would you like to do? (Cmd+Enter to send)'
+              }
+              disabled={loading && !waitingForUserInteraction}
               className="flex-1 min-h-[40px] max-h-[120px] resize-none"
               rows={1}
             />

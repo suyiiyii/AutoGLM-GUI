@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import asyncio
+import contextlib
+import inspect
 import json
 import threading
 from collections.abc import AsyncIterator
@@ -13,9 +15,14 @@ from agents import Agent, Runner, SQLiteSession, function_tool
 from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 from openai import AsyncOpenAI
 
+from AutoGLM_GUI.config import ModelConfig
 from AutoGLM_GUI.config_manager import config_manager
 from AutoGLM_GUI.logger import logger
-from AutoGLM_GUI.trace import summarize_text, trace_span
+from AutoGLM_GUI.model.error_details import (
+    serialize_model_error_async,
+    trace_error_attrs,
+)
+from AutoGLM_GUI.trace import TraceSpan, summarize_text, trace_span
 
 if TYPE_CHECKING:
     from agents.result import RunResultStreaming
@@ -73,7 +80,58 @@ PLANNER_INSTRUCTIONS = """## 核心目标
 """
 
 
-_sessions: dict[str, SQLiteSession] = {}
+class TracedSQLiteSession(SQLiteSession):
+    """SQLiteSession wrapper that exposes planner memory operations as spans."""
+
+    async def get_items(self, limit: int | None = None) -> list[Any]:
+        with trace_span(
+            "memory.read",
+            attrs={
+                "memory_type": "layered_session",
+                "session_id": self.session_id,
+                "limit": limit,
+            },
+        ) as span:
+            items = await super().get_items(limit)
+            span.set_attribute("item_count", len(items))
+            return items
+
+    async def add_items(self, items: list[Any]) -> None:
+        with trace_span(
+            "memory.write",
+            attrs={
+                "memory_type": "layered_session",
+                "session_id": self.session_id,
+                "item_count": len(items),
+            },
+        ):
+            await super().add_items(items)
+
+    async def pop_item(self) -> Any | None:
+        with trace_span(
+            "memory.delete",
+            attrs={
+                "memory_type": "layered_session",
+                "session_id": self.session_id,
+                "operation": "pop_item",
+            },
+        ) as span:
+            item = await super().pop_item()
+            span.set_attribute("deleted", item is not None)
+            return item
+
+    async def clear_session(self) -> None:
+        with trace_span(
+            "memory.clear",
+            attrs={
+                "memory_type": "layered_session",
+                "session_id": self.session_id,
+            },
+        ):
+            await super().clear_session()
+
+
+_sessions: dict[str, TracedSQLiteSession] = {}
 _active_runs: dict[str, "RunResultStreaming"] = {}
 _active_runs_lock = threading.Lock()
 
@@ -84,15 +142,29 @@ _cached_config_hash: str | None = None
 
 def _get_or_create_session(session_id: str) -> SQLiteSession:
     if session_id not in _sessions:
-        _sessions[session_id] = SQLiteSession(session_id)
-        logger.info(f"[LayeredAgent] Created new session: {session_id}")
+        with trace_span(
+            "memory.session.create",
+            attrs={
+                "memory_type": "layered_session",
+                "session_id": session_id,
+            },
+        ):
+            _sessions[session_id] = TracedSQLiteSession(session_id)
+            logger.info(f"[LayeredAgent] Created new session: {session_id}")
     return _sessions[session_id]
 
 
 def reset_session(session_id: str) -> bool:
     if session_id in _sessions:
-        del _sessions[session_id]
-        logger.info(f"[LayeredAgent] Cleared session: {session_id}")
+        with trace_span(
+            "memory.session.drop",
+            attrs={
+                "memory_type": "layered_session",
+                "session_id": session_id,
+            },
+        ):
+            del _sessions[session_id]
+            logger.info(f"[LayeredAgent] Cleared session: {session_id}")
         return True
     return False
 
@@ -135,6 +207,16 @@ def _setup_openai_client() -> AsyncOpenAI:
     return AsyncOpenAI(
         base_url=decision_base_url,
         api_key=decision_api_key or "EMPTY",
+    )
+
+
+def _planner_model_config() -> ModelConfig:
+    config_manager.load_file_config()
+    effective_config = config_manager.get_effective_config()
+    return ModelConfig(
+        base_url=effective_config.decision_base_url or "",
+        api_key=effective_config.decision_api_key or "EMPTY",
+        model_name=effective_config.decision_model_name or "",
     )
 
 
@@ -347,78 +429,253 @@ class LayeredTaskRun:
     task_id: str
     session_id: str
     result: "RunResultStreaming"
+    device_id: str | None = None
     final_output: str = ""
     success: bool = False
     cancelled: bool = False
     finished: bool = False
     _current_tool_call: dict[str, Any] | None = field(default=None, init=False)
+    _cancel_event: asyncio.Event | None = field(default=None, init=False)
 
-    def cancel(self) -> None:
+    async def cancel(self) -> None:
         self.cancelled = True
-        self.result.cancel(mode="immediate")
+        if self._cancel_event is not None:
+            self._cancel_event.set()
+        if hasattr(self.result, "cancel"):
+            self.result.cancel(mode="immediate")
+        if self.device_id:
+            try:
+                from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
+
+                # 尝试中止可能正在运行的下层 Phone Agent
+                await PhoneAgentManager.get_instance().abort_streaming_chat_async(
+                    self.device_id
+                )
+            except Exception as e:
+                logger.warning(
+                    f"[LayeredAgent] Failed to abort phone agent for device {self.device_id}: {e}"
+                )
 
     async def stream_events(self) -> AsyncIterator[dict[str, Any]]:
         from agents.stream_events import RawResponsesStreamEvent, RunItemStreamEvent
 
+        self._cancel_event = asyncio.Event()
+        if self.cancelled:
+            self._cancel_event.set()
+
+        model_span: TraceSpan | None = None
+        raw_event_count = 0
+
+        def close_model_span() -> None:
+            nonlocal model_span, raw_event_count
+            if model_span is not None:
+                model_span.__exit__(None, None, None)
+                model_span = None
+                raw_event_count = 0
+
+        async def get_next(aiter: Any) -> Any:
+            try:
+                return await aiter.__anext__()
+            except StopAsyncIteration:
+                return None
+
+        next_task: asyncio.Task[Any] | None = None
+        cancel_task: asyncio.Task[bool] | None = None
+        iterator: Any | None = None
+
         try:
-            async for event in self.result.stream_events():
-                if isinstance(event, RawResponsesStreamEvent):
-                    continue
-                if not isinstance(event, RunItemStreamEvent):
-                    continue
-
-                item = event.item
-                item_type = getattr(item, "type", None)
-
-                if item_type == "tool_call_item":
-                    event_payload = self._parse_tool_call(item)
-                    self._current_tool_call = {
-                        "name": event_payload["tool_name"],
-                        "args": event_payload["tool_args"],
-                    }
-                    yield {
-                        "type": "tool_call",
-                        "payload": event_payload,
-                    }
-                elif item_type == "tool_call_output_item":
-                    output = getattr(item, "output", "")
-                    tool_name = (
-                        self._current_tool_call["name"]
-                        if self._current_tool_call
-                        else "unknown"
-                    )
-                    yield {
-                        "type": "tool_result",
-                        "payload": {
-                            "tool_name": tool_name,
-                            "result": output,
-                        },
-                    }
-                    self._current_tool_call = None
-                elif item_type == "message_output_item":
-                    content = self._extract_message_content(item)
-                    if content:
-                        yield {
-                            "type": "message",
-                            "payload": {"content": content},
-                        }
-
-            self.final_output = (
-                self.result.final_output if hasattr(self.result, "final_output") else ""
-            )
-            self.success = True
-            yield {
-                "type": "done",
-                "payload": {
-                    "content": self.final_output,
-                    "success": True,
+            with trace_span(
+                "layered.planner.stream",
+                attrs={
+                    "task_id": self.task_id,
+                    "session_id": self.session_id,
                 },
-            }
+            ) as stream_span:
+                iterator = self.result.stream_events().__aiter__()
+                while True:
+                    if self.cancelled:
+                        break
+
+                    next_task = asyncio.create_task(get_next(iterator))
+                    cancel_task = asyncio.create_task(self._cancel_event.wait())
+
+                    assert next_task is not None
+                    assert cancel_task is not None
+                    done, pending = await asyncio.wait(
+                        [next_task, cancel_task], return_when=asyncio.FIRST_COMPLETED
+                    )
+
+                    if cancel_task in done:
+                        next_task.cancel()
+                        break
+
+                    cancel_task.cancel()
+                    event = next_task.result()
+                    if event is None:
+                        break
+
+                    if isinstance(event, RawResponsesStreamEvent):
+                        if model_span is None:
+                            model_span = trace_span(
+                                "model.call",
+                                attrs={
+                                    "model_role": "layered_planner",
+                                    "task_id": self.task_id,
+                                    "session_id": self.session_id,
+                                },
+                            )
+                            model_span.__enter__()
+                        raw_event_count += 1
+                        raw_data = getattr(event, "data", None)
+                        raw_event_type = getattr(raw_data, "type", None)
+                        model_span.set_attributes(
+                            {
+                                "raw_event_count": raw_event_count,
+                                "last_raw_event_type": raw_event_type
+                                or type(raw_data).__name__,
+                            }
+                        )
+                        continue
+
+                    close_model_span()
+                    if not isinstance(event, RunItemStreamEvent):
+                        continue
+
+                    item = event.item
+                    item_type = getattr(item, "type", None)
+
+                    if item_type == "tool_call_item":
+                        with trace_span(
+                            "tool.call",
+                            attrs={
+                                "task_id": self.task_id,
+                                "session_id": self.session_id,
+                                "caller": "layered_planner",
+                            },
+                        ) as span:
+                            event_payload = self._parse_tool_call(item)
+                            tool_args = event_payload["tool_args"]
+                            span.set_attributes(
+                                {
+                                    "tool_name": event_payload["tool_name"],
+                                    "tool_arg_keys": sorted(tool_args.keys())
+                                    if isinstance(tool_args, dict)
+                                    else [],
+                                    "tool_args_preview": summarize_text(
+                                        json.dumps(
+                                            tool_args,
+                                            ensure_ascii=False,
+                                            default=str,
+                                        ),
+                                        limit=512,
+                                    ),
+                                }
+                            )
+                            self._current_tool_call = {
+                                "name": event_payload["tool_name"],
+                                "args": event_payload["tool_args"],
+                            }
+                        yield {
+                            "type": "tool_call",
+                            "payload": event_payload,
+                        }
+                    elif item_type == "tool_call_output_item":
+                        output = getattr(item, "output", "")
+                        tool_name = (
+                            self._current_tool_call["name"]
+                            if self._current_tool_call
+                            else "unknown"
+                        )
+                        with trace_span(
+                            "tool.result",
+                            attrs={
+                                "task_id": self.task_id,
+                                "session_id": self.session_id,
+                                "caller": "layered_planner",
+                                "tool_name": tool_name,
+                            },
+                        ) as span:
+                            result_text, steps, sub_success = self._parse_tool_output(
+                                output
+                            )
+                            span.set_attributes(
+                                {
+                                    "steps": steps,
+                                    "success": sub_success,
+                                    "result_preview": summarize_text(result_text, 512),
+                                }
+                            )
+                            tool_result_payload: dict[str, Any] = {
+                                "tool_name": tool_name,
+                                "result": result_text,
+                            }
+                            if steps:
+                                tool_result_payload["steps"] = steps
+                            if sub_success is not None:
+                                tool_result_payload["success"] = sub_success
+                            self._current_tool_call = None
+                        yield {
+                            "type": "tool_result",
+                            "payload": tool_result_payload,
+                        }
+                    elif item_type == "message_output_item":
+                        with trace_span(
+                            "layered.planner.message",
+                            attrs={
+                                "task_id": self.task_id,
+                                "session_id": self.session_id,
+                            },
+                        ) as span:
+                            content = self._extract_message_content(item)
+                            span.set_attribute(
+                                "content_preview",
+                                summarize_text(content, 512),
+                            )
+                        if content:
+                            yield {
+                                "type": "message",
+                                "payload": {"content": content},
+                            }
+
+                close_model_span()
+                if self.cancelled:
+                    self.final_output = "Task cancelled by user"
+                    self.success = False
+                    yield {
+                        "type": "cancelled",
+                        "payload": {"message": self.final_output},
+                    }
+                    return
+
+                self.final_output = (
+                    self.result.final_output
+                    if hasattr(self.result, "final_output")
+                    else ""
+                )
+                self.success = True
+                stream_span.set_attributes(
+                    {
+                        "success": True,
+                        "final_output_preview": summarize_text(
+                            self.final_output,
+                            512,
+                        ),
+                    }
+                )
+                yield {
+                    "type": "done",
+                    "payload": {
+                        "content": self.final_output,
+                        "success": True,
+                    },
+                }
         except asyncio.CancelledError:
+            close_model_span()
             self.cancelled = True
             raise
         except Exception as exc:
             if self.cancelled:
+                close_model_span()
                 self.final_output = "Task cancelled by user"
                 self.success = False
                 yield {
@@ -426,17 +683,61 @@ class LayeredTaskRun:
                     "payload": {"message": self.final_output},
                 }
             else:
+                error_details = await serialize_model_error_async(
+                    exc,
+                    model_config=_planner_model_config(),
+                    call_site="AutoGLM_GUI.layered_agent_service.LayeredTaskRun.stream_events",
+                )
+                if model_span is not None:
+                    model_span.set_attributes(trace_error_attrs(error_details))
+                close_model_span()
                 logger.exception(f"[LayeredAgent] Error: {exc}")
                 self.final_output = str(exc)
                 self.success = False
                 yield {
                     "type": "error",
-                    "payload": {"message": str(exc)},
+                    "payload": {
+                        "message": str(exc),
+                        "error_details": error_details,
+                    },
                 }
         finally:
+            for task in (next_task, cancel_task):
+                if task is not None and not task.done():
+                    task.cancel()
+                    with contextlib.suppress(asyncio.CancelledError):
+                        await task
+            if iterator is not None:
+                aclose = getattr(iterator, "aclose", None)
+                if callable(aclose):
+                    with contextlib.suppress(Exception):
+                        close_result = aclose()
+                        if inspect.isawaitable(close_result):
+                            await close_result
             with _active_runs_lock:
                 _active_runs.pop(self.task_id, None)
             self.finished = True
+
+    @staticmethod
+    def _parse_tool_output(output: Any) -> tuple[str, int, bool | None]:
+        """Unpack a tool output into ``(text, steps, sub_success)``.
+
+        The ``chat`` tool returns a JSON envelope ``{"result", "steps", "success"}``
+        describing the inner phone-agent run.  Other tools (e.g. ``list_devices``)
+        return plain strings, in which case ``steps`` is ``0`` and ``sub_success``
+        is ``None``.
+        """
+        text = output if isinstance(output, str) else str(output)
+        try:
+            parsed = json.loads(text)
+        except (ValueError, TypeError):
+            return text, 0, None
+        if isinstance(parsed, dict) and "steps" in parsed:
+            raw_steps = parsed.get("steps", 0)
+            steps = int(raw_steps) if isinstance(raw_steps, (int, float)) else 0
+            success = parsed.get("success")
+            return text, steps, success if isinstance(success, bool) else None
+        return text, 0, None
 
     def _parse_tool_call(self, item: Any) -> dict[str, Any]:
         tool_name = "unknown"
@@ -493,7 +794,10 @@ class LayeredTaskRun:
     @staticmethod
     def _parse_json_args(args_val: Any) -> dict[str, Any]:
         try:
-            return json.loads(args_val) if isinstance(args_val, str) else args_val
+            parsed = json.loads(args_val) if isinstance(args_val, str) else args_val
+            if isinstance(parsed, dict):
+                return parsed
+            return {"value": parsed}
         except Exception:
             return {"raw": str(args_val)}
 
@@ -516,17 +820,29 @@ def start_run(
     task_id: str,
     session_id: str,
     message: str,
+    device_id: str | None = None,
 ) -> LayeredTaskRun:
     agent = _ensure_agent()
     session = _get_or_create_session(session_id)
     effective_config = config_manager.get_effective_config()
     max_turns = effective_config.layered_max_turns
-    result = Runner.run_streamed(
-        agent,
-        message,
-        max_turns=max_turns if max_turns is not None else 100000,
-        session=session,
-    )
+    resolved_max_turns = max_turns if max_turns is not None else 100000
+    with trace_span(
+        "layered.planner.run_streamed",
+        attrs={
+            "task_id": task_id,
+            "session_id": session_id,
+            "device_id": device_id,
+            "max_turns": resolved_max_turns,
+            "message_preview": summarize_text(message, 512),
+        },
+    ):
+        result = Runner.run_streamed(
+            agent,
+            message,
+            max_turns=resolved_max_turns,
+            session=session,
+        )
 
     with _active_runs_lock:
         _active_runs[task_id] = result
@@ -535,14 +851,21 @@ def start_run(
         task_id=task_id,
         session_id=session_id,
         result=result,
+        device_id=device_id,
     )
 
 
-def cancel_task(task_id: str) -> bool:
+async def cancel_task(task_id: str) -> bool:
     with _active_runs_lock:
         result = _active_runs.get(task_id)
     if result is None:
         return False
-    result.cancel(mode="immediate")
+
+    if hasattr(result, "cancel"):
+        if asyncio.iscoroutinefunction(result.cancel):
+            await result.cancel()
+        else:
+            result.cancel(mode="immediate")
+
     logger.info(f"[LayeredAgent] Aborted task: {task_id}")
     return True

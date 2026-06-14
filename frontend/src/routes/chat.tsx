@@ -1,14 +1,12 @@
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import * as React from 'react';
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   connectWifi,
   disconnectWifi,
-  listDevices,
   getConfig,
   saveConfig,
+  modelServiceConnection,
   getErrorMessage,
-  type Device,
   type ConfigSaveRequest,
 } from '../api';
 import { DeviceSidebar } from '../components/DeviceSidebar';
@@ -47,9 +45,10 @@ import {
   Cpu,
   Info,
   Smartphone,
+  Loader2,
 } from 'lucide-react';
 import { useTranslation } from '../lib/i18n-context';
-import { usePageVisibility } from '../hooks/usePageVisibility';
+import { useDevices } from '../lib/device-context';
 
 // 视觉模型预设配置
 const VISION_PRESETS = [
@@ -83,14 +82,14 @@ const AGENT_PRESETS = [
   {
     name: 'glm-async',
     displayName: 'GLM Agent',
-    description: '基于 GLM 模型优化，成熟稳定，适合大多数任务',
+    descriptionKey: 'agentGlmDesc',
     icon: Cpu,
     defaultConfig: {},
   },
   {
     name: 'mai',
     displayName: 'MAI Agent',
-    description: '阿里通义团队开发，支持多张历史截图上下文',
+    descriptionKey: 'agentMaiDesc',
     icon: Brain,
     defaultConfig: {
       history_n: 3,
@@ -99,25 +98,32 @@ const AGENT_PRESETS = [
   {
     name: 'gemini',
     displayName: 'General Vision Agent',
-    description: '通用视觉模型，支持 Gemini/GPT-4o 等，使用 Function Calling',
+    descriptionKey: 'agentGeminiDesc',
     icon: Sparkles,
     defaultConfig: {},
   },
   {
     name: 'droidrun',
     displayName: 'DroidRun Agent',
-    description: '基于 DroidRun 框架，需安装 Portal APK',
+    descriptionKey: 'agentDroidrunDesc',
     icon: Smartphone,
     defaultConfig: {},
   },
   {
     name: 'midscene',
     displayName: 'Midscene Agent',
-    description: '基于 Midscene.js 视觉驱动，需要 Node.js 环境',
+    descriptionKey: 'agentMidsceneDesc',
     icon: Eye,
     defaultConfig: {
       model_family: 'doubao-vision',
     },
+  },
+  {
+    name: 'qwen',
+    displayName: 'Qwen Agent',
+    descriptionKey: 'agentQwenDesc',
+    icon: Layers,
+    defaultConfig: {},
   },
 ] as const;
 
@@ -148,61 +154,28 @@ const DECISION_PRESETS = [
   },
 ] as const;
 
+function getSelectedVisionPreset(baseUrl: string) {
+  return (
+    VISION_PRESETS.find(
+      preset => preset.name !== 'custom' && preset.config.base_url === baseUrl
+    )?.name ?? 'custom'
+  );
+}
+
+function getSelectedDecisionPreset(baseUrl: string) {
+  return (
+    DECISION_PRESETS.find(
+      preset =>
+        preset.name !== 'custom' && preset.config.decision_base_url === baseUrl
+    )?.name ?? 'custom'
+  );
+}
+
 // Search params type for URL persistence
 type ChatSearchParams = {
   serial?: string;
   mode?: 'classic' | 'chatkit';
 };
-
-type ElectronRelaunchAPI = {
-  app?: {
-    relaunch: () => Promise<{ success: boolean }>;
-  };
-};
-
-function areAgentStatesEqual(
-  left: Device['agent'] | null,
-  right: Device['agent'] | null
-): boolean {
-  if (left === right) {
-    return true;
-  }
-
-  if (!left || !right) {
-    return false;
-  }
-
-  return (
-    left.state === right.state &&
-    left.created_at === right.created_at &&
-    left.last_used === right.last_used &&
-    left.error_message === right.error_message &&
-    left.model_name === right.model_name
-  );
-}
-
-function areDevicesEqual(previous: Device[], next: Device[]): boolean {
-  if (previous.length !== next.length) {
-    return false;
-  }
-
-  return previous.every((device, index) => {
-    const nextDevice = next[index];
-
-    return (
-      device.id === nextDevice.id &&
-      device.serial === nextDevice.serial &&
-      device.model === nextDevice.model &&
-      device.status === nextDevice.status &&
-      device.connection_type === nextDevice.connection_type &&
-      device.state === nextDevice.state &&
-      device.is_available_only === nextDevice.is_available_only &&
-      device.display_name === nextDevice.display_name &&
-      device.group_id === nextDevice.group_id &&
-      areAgentStatesEqual(device.agent, nextDevice.agent)
-    );
-  });
-}
 
 export const Route = createFileRoute('/chat')({
   component: ChatComponent,
@@ -215,21 +188,25 @@ export const Route = createFileRoute('/chat')({
   },
 });
 
-function ChatComponent() {
+export function ChatComponent() {
   const t = useTranslation();
   const searchParams = Route.useSearch();
   const navigate = useNavigate();
-  const isPageVisible = usePageVisibility();
-  const [devices, setDevices] = useState<Device[]>([]);
-  const [currentDeviceId, setCurrentDeviceId] = useState<string>('');
+  const {
+    devices,
+    currentDevice,
+    currentDeviceId,
+    refreshDevices,
+    selectDeviceById,
+    selectDeviceBySerial,
+    selectedSerial,
+  } = useDevices();
   // Chat mode: 'classic' for DevicePanel (single model), 'chatkit' for ChatKitPanel (layered agent)
   // Initialize from URL search params if available
   const [chatMode, setChatMode] = useState<'classic' | 'chatkit'>(
     searchParams.mode || 'classic'
   );
 
-  // Track if we've done initial device selection from URL
-  const [initialDeviceSet, setInitialDeviceSet] = useState(false);
   const [toast, setToast] = useState<{
     message: string;
     type: ToastType;
@@ -244,7 +221,17 @@ function ChatComponent() {
   const [showConfig, setShowConfig] = useState(false);
   const [showGroupManager, setShowGroupManager] = useState(false);
   const [showApiKey, setShowApiKey] = useState(false);
-  const isLoadingDevicesRef = React.useRef(false);
+  const [visionConnectionTesting, setVisionConnectionTesting] = useState(false);
+  const [visionConnectionResult, setVisionConnectionResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+  const [decisionConnectionTesting, setDecisionConnectionTesting] =
+    useState(false);
+  const [decisionConnectionResult, setDecisionConnectionResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
   const [tempConfig, setTempConfig] = useState({
     base_url: VISION_PRESETS[0].config.base_url as string,
     model_name: VISION_PRESETS[0].config.model_name as string,
@@ -257,6 +244,14 @@ function ChatComponent() {
     decision_model_name: '',
     decision_api_key: '',
   });
+
+  // Used to restore unsaved edits when the config dialog is closed without saving.
+  const lastCommittedTempConfigRef = useRef(structuredClone(tempConfig));
+
+  const selectedVisionPreset = getSelectedVisionPreset(tempConfig.base_url);
+  const selectedDecisionPreset = getSelectedDecisionPreset(
+    tempConfig.decision_base_url
+  );
 
   useEffect(() => {
     const loadConfiguration = async () => {
@@ -276,7 +271,7 @@ function ChatComponent() {
         });
         // 当后端返回空配置时，使用智谱预设作为默认值
         const useDefault = !data.base_url;
-        setTempConfig({
+        const newTempConfig = {
           base_url: useDefault
             ? VISION_PRESETS[0].config.base_url
             : data.base_url,
@@ -286,12 +281,15 @@ function ChatComponent() {
           api_key: data.api_key || '',
           agent_type: data.agent_type || 'glm-async',
           agent_config_params: data.agent_config_params || {},
-          default_max_steps: data.default_max_steps ?? '',
+          default_max_steps: (data.default_max_steps ?? '') as number | '',
           layered_max_turns: data.layered_max_turns || 50,
           decision_base_url: data.decision_base_url || '',
           decision_model_name: data.decision_model_name || 'glm-4.7',
           decision_api_key: data.decision_api_key || '',
-        });
+        };
+
+        setTempConfig(newTempConfig);
+        lastCommittedTempConfigRef.current = newTempConfig;
 
         if (useDefault) {
           setShowConfig(true);
@@ -305,118 +303,15 @@ function ChatComponent() {
     loadConfiguration();
   }, []);
 
-  const loadDevices = useCallback(async () => {
-    if (isLoadingDevicesRef.current) {
-      return;
-    }
-
-    isLoadingDevicesRef.current = true;
-    try {
-      const response = await listDevices();
-
-      // Filter out disconnected devices
-      const connectedDevices = response.devices.filter(
-        device => device.state !== 'disconnected'
-      );
-
-      const deviceMap = new Map<string, Device>();
-      const serialMap = new Map<string, Device[]>();
-
-      for (const device of connectedDevices) {
-        if (device.serial) {
-          const group = serialMap.get(device.serial) || [];
-          group.push(device);
-          serialMap.set(device.serial, group);
-        } else {
-          deviceMap.set(device.id, device);
-        }
-      }
-
-      Array.from(serialMap.values()).forEach(devices => {
-        const wifiDevice = devices.find(
-          (d: Device) => d.connection_type === 'wifi'
-        );
-        const selectedDevice = wifiDevice || devices[0];
-        deviceMap.set(selectedDevice.id, selectedDevice);
-      });
-
-      const filteredDevices = Array.from(deviceMap.values());
-      setDevices(previousDevices =>
-        areDevicesEqual(previousDevices, filteredDevices)
-          ? previousDevices
-          : filteredDevices
-      );
-
-      // On initial load, try to select device from URL serial param
-      if (filteredDevices.length > 0 && !initialDeviceSet) {
-        const urlSerial = searchParams.serial;
-        if (urlSerial) {
-          const deviceFromUrl = filteredDevices.find(
-            d => d.serial === urlSerial
-          );
-          if (deviceFromUrl) {
-            setCurrentDeviceId(deviceFromUrl.id);
-          } else {
-            // URL serial not found, fallback to first device
-            setCurrentDeviceId(filteredDevices[0].id);
-          }
-        } else if (!currentDeviceId) {
-          setCurrentDeviceId(filteredDevices[0].id);
-        }
-        setInitialDeviceSet(true);
-      }
-
-      if (
-        currentDeviceId &&
-        !filteredDevices.find(d => d.id === currentDeviceId)
-      ) {
-        setCurrentDeviceId(filteredDevices[0]?.id || '');
-      }
-    } catch (error) {
-      console.error('Failed to load devices:', error);
-    } finally {
-      isLoadingDevicesRef.current = false;
-    }
-  }, [currentDeviceId, initialDeviceSet, searchParams.serial]);
-
   useEffect(() => {
-    if (!isPageVisible) {
-      return;
+    if (searchParams.serial) {
+      selectDeviceBySerial(searchParams.serial);
     }
-
-    let isCancelled = false;
-    let timeoutId: number | null = null;
-
-    const pollDevices = async () => {
-      await loadDevices();
-
-      if (isCancelled) {
-        return;
-      }
-
-      timeoutId = window.setTimeout(() => {
-        void pollDevices();
-      }, 3000);
-    };
-
-    void pollDevices();
-
-    return () => {
-      isCancelled = true;
-      if (timeoutId !== null) {
-        window.clearTimeout(timeoutId);
-      }
-    };
-  }, [isPageVisible, loadDevices]);
+  }, [searchParams.serial, selectDeviceBySerial]);
 
   // Sync state changes to URL search params
   useEffect(() => {
-    // Get current device's serial
-    const currentDevice = devices.find(d => d.id === currentDeviceId);
-    const currentSerial = currentDevice?.serial;
-
-    // Only update URL after initial device selection is done
-    if (!initialDeviceSet) return;
+    const currentSerial = currentDevice?.serial || selectedSerial || undefined;
 
     // Check if URL needs updating
     const needsUpdate =
@@ -433,13 +328,12 @@ function ChatComponent() {
       });
     }
   }, [
-    currentDeviceId,
     chatMode,
-    devices,
-    initialDeviceSet,
+    currentDevice,
     navigate,
     searchParams.serial,
     searchParams.mode,
+    selectedSerial,
   ]);
 
   const handleSaveConfig = async () => {
@@ -488,23 +382,17 @@ function ChatComponent() {
         decision_api_key: tempConfig.decision_api_key || undefined,
       });
 
+      // 配置已保存，后端支持热更新，无需重启
       showToast(t.toasts.configSaved, 'success');
 
-      const electronApp = (
-        window as Window & { electronAPI?: ElectronRelaunchAPI }
-      ).electronAPI?.app;
-
-      if (saveResult.restart_required && electronApp?.relaunch) {
-        showToast('配置已保存，应用将立即重启以应用新配置', 'warning');
-        await new Promise(resolve => setTimeout(resolve, 600));
-        await electronApp.relaunch();
-        return;
+      // 如果有警告信息（配置冲突），显示警告
+      if (saveResult.warnings && saveResult.warnings.length > 0) {
+        const warningMsg = saveResult.warnings.join('; ');
+        showToast(`配置已保存，但存在冲突: ${warningMsg}`, 'warning');
       }
 
-      if (saveResult.restart_required) {
-        showToast('配置已保存，请手动重启应用以立即生效', 'warning');
-      }
-
+      // Update the committed snapshot after save
+      lastCommittedTempConfigRef.current = structuredClone(tempConfig);
       setShowConfig(false);
     } catch (err) {
       console.error('Failed to save config:', err);
@@ -512,11 +400,44 @@ function ChatComponent() {
     }
   };
 
+  const handleModelConnectionCheck = async (
+    baseUrl: string,
+    modelName: string,
+    apiKey: string,
+    tab: 'vision' | 'decision'
+  ) => {
+    const setTesting =
+      tab === 'vision'
+        ? setVisionConnectionTesting
+        : setDecisionConnectionTesting;
+    const setResult =
+      tab === 'vision'
+        ? setVisionConnectionResult
+        : setDecisionConnectionResult;
+    setTesting(true);
+    setResult(null);
+    try {
+      const result = await modelServiceConnection({
+        base_url: baseUrl,
+        model_name: modelName,
+        api_key: apiKey || undefined,
+      });
+      setResult(result);
+    } catch (err) {
+      setResult({
+        success: false,
+        message: getErrorMessage(err),
+      });
+    } finally {
+      setTesting(false);
+    }
+  };
+
   const handleConnectWifi = async (deviceId: string) => {
     try {
       const res = await connectWifi({ device_id: deviceId });
       if (res.success && res.device_id) {
-        setCurrentDeviceId(res.device_id);
+        await refreshDevices();
         showToast(t.toasts.wifiConnected, 'success');
       } else if (!res.success) {
         showToast(
@@ -534,6 +455,7 @@ function ChatComponent() {
     try {
       const res = await disconnectWifi(deviceId);
       if (res.success) {
+        await refreshDevices();
         showToast(t.toasts.wifiDisconnected, 'success');
       } else {
         showToast(
@@ -558,7 +480,17 @@ function ChatComponent() {
       )}
 
       {/* Config Dialog */}
-      <Dialog open={showConfig} onOpenChange={setShowConfig}>
+      <Dialog
+        open={showConfig}
+        onOpenChange={open => {
+          if (!open) {
+            // Dialog closing without save: restore tempConfig
+            // to the last committed state so unsaved edits are discarded.
+            setTempConfig(structuredClone(lastCommittedTempConfigRef.current));
+          }
+          setShowConfig(open);
+        }}
+      >
         <DialogContent className="sm:max-w-md h-[75vh] flex flex-col">
           <DialogHeader className="flex-shrink-0">
             <DialogTitle className="flex items-center gap-2">
@@ -598,15 +530,22 @@ function ChatComponent() {
                         onClick={() =>
                           setTempConfig(prev => ({
                             ...prev,
-                            base_url: preset.config.base_url,
-                            model_name: preset.config.model_name,
+                            ...(preset.name === 'custom'
+                              ? getSelectedVisionPreset(prev.base_url) ===
+                                'custom'
+                                ? {}
+                                : {
+                                    base_url: preset.config.base_url,
+                                    model_name: preset.config.model_name,
+                                  }
+                              : {
+                                  base_url: preset.config.base_url,
+                                  model_name: preset.config.model_name,
+                                }),
                           }))
                         }
                         className={`w-full text-left p-3 rounded-lg border transition-all ${
-                          tempConfig.base_url === preset.config.base_url &&
-                          (preset.name !== 'custom' ||
-                            (preset.name === 'custom' &&
-                              tempConfig.base_url === ''))
+                          selectedVisionPreset === preset.name
                             ? 'border-[#1d9bf0] bg-[#1d9bf0]/5'
                             : 'border-slate-200 dark:border-slate-700 hover:border-[#1d9bf0]/50 hover:bg-slate-50 dark:hover:bg-slate-800/50'
                         }`}
@@ -614,10 +553,7 @@ function ChatComponent() {
                         <div className="flex items-center gap-2">
                           <Server
                             className={`w-4 h-4 ${
-                              tempConfig.base_url === preset.config.base_url &&
-                              (preset.name !== 'custom' ||
-                                (preset.name === 'custom' &&
-                                  tempConfig.base_url === ''))
+                              selectedVisionPreset === preset.name
                                 ? 'text-[#1d9bf0]'
                                 : 'text-slate-400 dark:text-slate-500'
                             }`}
@@ -720,6 +656,54 @@ function ChatComponent() {
                 />
               </div>
 
+              {/* 服务连通性测试 */}
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={
+                    visionConnectionTesting ||
+                    !tempConfig.base_url ||
+                    !tempConfig.model_name
+                  }
+                  onClick={() =>
+                    handleModelConnectionCheck(
+                      tempConfig.base_url,
+                      tempConfig.model_name,
+                      tempConfig.api_key,
+                      'vision'
+                    )
+                  }
+                  className="w-full"
+                >
+                  {visionConnectionTesting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      {t.chat.testingConnection}
+                    </>
+                  ) : (
+                    t.chat.testConnection
+                  )}
+                </Button>
+                {visionConnectionResult && (
+                  <p
+                    className={`text-xs flex items-center gap-1 ${
+                      visionConnectionResult.success
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-red-500 dark:text-red-400'
+                    }`}
+                  >
+                    {visionConnectionResult.success ? (
+                      <CheckCircle2 className="w-3 h-3" />
+                    ) : (
+                      <AlertCircle className="w-3 h-3" />
+                    )}
+                    {visionConnectionResult.message}
+                  </p>
+                )}
+              </div>
+
               {/* Agent 类型选择 */}
               <div className="space-y-2">
                 <Label className="text-sm font-medium">
@@ -768,7 +752,9 @@ function ChatComponent() {
                             : 'text-slate-500 dark:text-slate-400'
                         }`}
                       >
-                        {preset.description}
+                        {t.chat?.[
+                          preset.descriptionKey as keyof typeof t.chat
+                        ] || ''}
                       </p>
                     </button>
                   ))}
@@ -865,17 +851,21 @@ function ChatComponent() {
                 />
                 <div className="space-y-1">
                   <p className="text-xs text-slate-500 dark:text-slate-400">
-                    设为空表示不限制步数，任务将持续运行直到手动停止。
+                    {t.chat?.maxStepsEmptyHint ||
+                      'Leave empty for unlimited steps; the task will run until manually stopped.'}
                   </p>
                   <p className="text-xs text-amber-600 dark:text-amber-400">
-                    高级设置：修改后会影响后续任务默认行为，并可能增加执行时长与模型调用成本。
+                    {t.chat?.advancedConfigWarning ||
+                      'Advanced setting: changes affect default behavior for subsequent tasks and may increase execution time and model API costs.'}
                   </p>
                 </div>
               </div>
 
               {/* 分层代理最大轮次配置 */}
               <div className="space-y-2">
-                <Label htmlFor="layered_max_turns">分层代理最大轮次</Label>
+                <Label htmlFor="layered_max_turns">
+                  {t.chat?.layeredMaxTurns || 'Layered Agent Max Turns'}
+                </Label>
                 <Input
                   id="layered_max_turns"
                   type="number"
@@ -891,7 +881,8 @@ function ChatComponent() {
                   className="w-full"
                 />
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  分层代理模式的最大轮次（最小值为1）
+                  {t.chat?.layeredMaxTurnsHint ||
+                    'Maximum turns for layered agent mode (minimum 1)'}
                 </p>
               </div>
             </TabsContent>
@@ -922,17 +913,27 @@ function ChatComponent() {
                         onClick={() =>
                           setTempConfig(prev => ({
                             ...prev,
-                            decision_base_url: preset.config.decision_base_url,
-                            decision_model_name:
-                              preset.config.decision_model_name,
+                            ...(preset.name === 'custom'
+                              ? getSelectedDecisionPreset(
+                                  prev.decision_base_url
+                                ) === 'custom'
+                                ? {}
+                                : {
+                                    decision_base_url:
+                                      preset.config.decision_base_url,
+                                    decision_model_name:
+                                      preset.config.decision_model_name,
+                                  }
+                              : {
+                                  decision_base_url:
+                                    preset.config.decision_base_url,
+                                  decision_model_name:
+                                    preset.config.decision_model_name,
+                                }),
                           }))
                         }
                         className={`w-full text-left p-3 rounded-lg border transition-all ${
-                          tempConfig.decision_base_url ===
-                            preset.config.decision_base_url &&
-                          (preset.name !== 'custom' ||
-                            (preset.name === 'custom' &&
-                              tempConfig.decision_base_url === ''))
+                          selectedDecisionPreset === preset.name
                             ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/50'
                             : 'border-slate-200 dark:border-slate-700 hover:border-indigo-500/50 hover:bg-indigo-50 dark:hover:bg-indigo-950/30'
                         }`}
@@ -940,11 +941,7 @@ function ChatComponent() {
                         <div className="flex items-center gap-2">
                           <Server
                             className={`w-4 h-4 ${
-                              tempConfig.decision_base_url ===
-                                preset.config.decision_base_url &&
-                              (preset.name !== 'custom' ||
-                                (preset.name === 'custom' &&
-                                  tempConfig.decision_base_url === ''))
+                              selectedDecisionPreset === preset.name
                                 ? 'text-indigo-600 dark:text-indigo-400'
                                 : 'text-slate-400 dark:text-slate-500'
                             }`}
@@ -1052,6 +1049,54 @@ function ChatComponent() {
                   placeholder=""
                 />
               </div>
+
+              {/* Decision Model 连通性测试 */}
+              <div className="space-y-2">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={
+                    decisionConnectionTesting ||
+                    !tempConfig.decision_base_url ||
+                    !tempConfig.decision_model_name
+                  }
+                  onClick={() =>
+                    handleModelConnectionCheck(
+                      tempConfig.decision_base_url,
+                      tempConfig.decision_model_name,
+                      tempConfig.decision_api_key,
+                      'decision'
+                    )
+                  }
+                  className="w-full"
+                >
+                  {decisionConnectionTesting ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      {t.chat.testingConnection}
+                    </>
+                  ) : (
+                    t.chat.testConnection
+                  )}
+                </Button>
+                {decisionConnectionResult && (
+                  <p
+                    className={`text-xs flex items-center gap-1 ${
+                      decisionConnectionResult.success
+                        ? 'text-green-600 dark:text-green-400'
+                        : 'text-red-500 dark:text-red-400'
+                    }`}
+                  >
+                    {decisionConnectionResult.success ? (
+                      <CheckCircle2 className="w-3 h-3" />
+                    ) : (
+                      <AlertCircle className="w-3 h-3" />
+                    )}
+                    {decisionConnectionResult.message}
+                  </p>
+                )}
+              </div>
             </TabsContent>
           </Tabs>
 
@@ -1060,6 +1105,8 @@ function ChatComponent() {
               variant="outline"
               onClick={() => {
                 setShowConfig(false);
+                setVisionConnectionResult(null);
+                setDecisionConnectionResult(null);
                 if (config) {
                   setTempConfig({
                     base_url: config.base_url,
@@ -1091,12 +1138,12 @@ function ChatComponent() {
       <DeviceSidebar
         devices={devices}
         currentDeviceId={currentDeviceId}
-        onSelectDevice={setCurrentDeviceId}
+        onSelectDevice={selectDeviceById}
         onOpenConfig={() => setShowConfig(true)}
         onOpenGroupManager={() => setShowGroupManager(true)}
         onConnectWifi={handleConnectWifi}
         onDisconnectWifi={handleDisconnectWifi}
-        onRefreshDevices={loadDevices}
+        onRefreshDevices={refreshDevices}
         showToast={showToast}
       />
 
@@ -1163,7 +1210,7 @@ function ChatComponent() {
 
         {/* Content area */}
         <div className="flex-1 flex items-stretch justify-center min-h-0 px-4 py-4 pt-16">
-          {devices.length === 0 ? (
+          {!currentDevice ? (
             <div className="flex-1 flex items-center justify-center bg-slate-50 dark:bg-slate-950">
               <div className="text-center">
                 <div className="flex h-20 w-20 items-center justify-center rounded-full bg-slate-100 dark:bg-slate-800 mx-auto mb-4">
@@ -1190,43 +1237,36 @@ function ChatComponent() {
               </div>
             </div>
           ) : (
-            devices
-              .filter(device => device.id === currentDeviceId)
-              .map(device => (
-                <div
-                  key={device.serial}
-                  className="w-full max-w-7xl flex items-stretch justify-center min-h-0"
-                >
-                  {chatMode === 'chatkit' ? (
-                    <div className="w-full flex items-stretch justify-center">
-                      <ChatKitPanel
-                        deviceId={device.id}
-                        deviceSerial={device.serial}
-                        deviceName={device.model}
-                        deviceConnectionType={device.connection_type}
-                        isVisible={device.id === currentDeviceId}
-                        unlimitedStepsEnabled={
-                          config?.default_max_steps === null
-                        }
-                      />
-                    </div>
-                  ) : (
-                    <div className="w-full flex items-stretch justify-center">
-                      <DevicePanel
-                        deviceId={device.id}
-                        deviceSerial={device.serial}
-                        deviceName={device.model}
-                        deviceConnectionType={device.connection_type}
-                        isConfigured={!!config?.base_url}
-                        isVisible={device.id === currentDeviceId} // ✅ 新增：传递可见性状态
-                        unlimitedStepsEnabled={
-                          config?.default_max_steps === null
-                        }
-                      />
-                    </div>
-                  )}
+            <div
+              key={currentDevice.serial}
+              className="w-full max-w-7xl flex items-stretch justify-center min-h-0"
+            >
+              {chatMode === 'chatkit' ? (
+                <div className="w-full flex items-stretch justify-center">
+                  <ChatKitPanel
+                    deviceId={currentDevice.id}
+                    deviceSerial={currentDevice.serial}
+                    deviceName={currentDevice.model}
+                    deviceConnectionType={currentDevice.connection_type}
+                    isVisible={currentDevice.id === currentDeviceId}
+                    unlimitedStepsEnabled={config?.default_max_steps === null}
+                  />
                 </div>
-              ))
+              ) : (
+                <div className="w-full flex items-stretch justify-center">
+                  <DevicePanel
+                    deviceId={currentDevice.id}
+                    deviceSerial={currentDevice.serial}
+                    deviceName={currentDevice.model}
+                    deviceConnectionType={currentDevice.connection_type}
+                    isConfigured={!!config?.base_url}
+                    isVisible={currentDevice.id === currentDeviceId}
+                    unlimitedStepsEnabled={config?.default_max_steps === null}
+                    agentType={config?.agent_type}
+                  />
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
@@ -1235,7 +1275,7 @@ function ChatComponent() {
       <GroupManageDialog
         isOpen={showGroupManager}
         onClose={() => setShowGroupManager(false)}
-        onGroupsChanged={loadDevices}
+        onGroupsChanged={refreshDevices}
         showToast={showToast}
       />
     </div>

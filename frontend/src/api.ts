@@ -108,6 +108,21 @@ export interface StepTimingSummary {
   other_duration_ms: number;
 }
 
+export interface ModelErrorDetails {
+  kind?: string;
+  exception_type?: string;
+  message?: string;
+  model_name?: string;
+  base_url?: string;
+  call_site?: string;
+  status_code?: number;
+  request_id?: string;
+  response_headers?: Record<string, string>;
+  response_body?: string;
+  traceback?: string;
+  [key: string]: unknown;
+}
+
 export interface TraceTimingSummary {
   trace_id: string;
   steps: number;
@@ -133,6 +148,7 @@ export interface StepEvent {
   finished: boolean;
   screenshot?: string;
   timings?: StepTimingSummary;
+  error_details?: ModelErrorDetails;
 }
 
 export interface DoneEvent {
@@ -147,6 +163,7 @@ export interface ErrorEvent {
   type: 'error';
   role: 'assistant';
   message: string;
+  error_details?: ModelErrorDetails;
 }
 
 export interface CancelledEvent {
@@ -782,6 +799,27 @@ export async function deleteConfig(): Promise<{
   return res.data;
 }
 
+export interface ModelConnectionRequest {
+  base_url: string;
+  model_name: string;
+  api_key?: string;
+}
+
+export interface ModelConnectionResponse {
+  success: boolean;
+  message: string;
+}
+
+export async function modelServiceConnection(
+  req: ModelConnectionRequest
+): Promise<ModelConnectionResponse> {
+  const res = await axios.post<ModelConnectionResponse>(
+    '/api/config/model-connection-check',
+    req
+  );
+  return res.data;
+}
+
 export interface ReinitAllAgentsResponse {
   success: boolean;
   total: number;
@@ -956,6 +994,8 @@ export interface TaskRunResponse {
   input_text: string;
   final_message: string | null;
   error_message: string | null;
+  stop_reason: string | null;
+  trace_id: string | null;
   step_count: number;
   created_at: string;
   started_at: string | null;
@@ -980,6 +1020,12 @@ export interface TaskEventRecordResponse {
 
 export interface TaskEventListResponse {
   events: TaskEventRecordResponse[];
+}
+
+export interface TaskImageAttachment {
+  mime_type: string;
+  data: string;
+  name?: string | null;
 }
 
 export interface TaskCancelResponse {
@@ -1039,11 +1085,12 @@ export async function listTaskSessionTasks(
 
 export async function submitTaskSessionTask(
   sessionId: string,
-  message: string
+  message: string,
+  attachments: TaskImageAttachment[] = []
 ): Promise<TaskRunResponse> {
   const res = await axios.post<TaskRunResponse>(
     `/api/task-sessions/${sessionId}/tasks`,
-    { message }
+    { message, attachments }
   );
   return res.data;
 }
@@ -1133,6 +1180,7 @@ export interface MessageRecordResponse {
   thinking?: string | null;
   action?: Record<string, unknown> | null;
   step?: number | null;
+  attachments?: TaskImageAttachment[];
 }
 
 export interface HistoryRecordResponse {
@@ -1163,10 +1211,11 @@ export interface HistoryListResponse {
 export async function listHistory(
   serialno: string,
   limit: number = 50,
-  offset: number = 0
+  offset: number = 0,
+  mode?: 'classic' | 'layered'
 ): Promise<HistoryListResponse> {
   const res = await axios.get<HistoryListResponse>(`/api/history/${serialno}`, {
-    params: { limit, offset },
+    params: { limit, offset, ...(mode ? { mode } : {}) },
   });
   return res.data;
 }

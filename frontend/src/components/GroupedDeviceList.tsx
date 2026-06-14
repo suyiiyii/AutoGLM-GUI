@@ -148,7 +148,9 @@ export function GroupedDeviceList({
               )}
               <FolderOpen className="w-4 h-4 text-slate-400 flex-shrink-0" />
               <span className="flex-1 text-sm font-medium text-slate-700 dark:text-slate-300 truncate">
-                {group.name}
+                {group.is_default
+                  ? t.deviceGroups?.defaultGroup || 'Default'
+                  : group.name}
               </span>
               <span className="text-xs text-slate-400 dark:text-slate-500">
                 ({deviceCount})

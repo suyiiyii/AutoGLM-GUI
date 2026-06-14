@@ -16,7 +16,7 @@ from AutoGLM_GUI.device_protocol import (
 )
 
 if TYPE_CHECKING:
-    from tests.integration.state_machine import StateMachine
+    from tests.e2e.state_machine import StateMachine
 
 
 class MockDevice(DeviceProtocol):
@@ -27,7 +27,7 @@ class MockDevice(DeviceProtocol):
     screenshots and validates actions (tap coordinates, etc.).
 
     Example:
-        >>> from tests.integration.state_machine import load_test_case
+        >>> from tests.e2e.state_machine import load_test_case
         >>> state_machine, instruction, max_steps = load_test_case("scenario.yaml")
         >>>
         >>> device = MockDevice("mock_001", state_machine)

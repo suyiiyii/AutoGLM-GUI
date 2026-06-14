@@ -65,7 +65,11 @@ class AsyncMAIAgent(AsyncAgentBase):
         return MAI_MOBILE_SYSTEM_PROMPT
 
     def _prepare_initial_context(
-        self, task: str, screenshot_base64: str, current_app: str
+        self,
+        task: str,
+        screenshot_base64: str,
+        current_app: str,
+        reference_images: list[dict[str, str]] | None = None,
     ) -> None:
         """MAI 不使用基类的 _context 累积，只记录 task_goal。
 
@@ -113,11 +117,20 @@ class AsyncMAIAgent(AsyncAgentBase):
             pil_image = Image.open(BytesIO(screenshot_bytes))
             screen_info = MessageBuilder.build_screen_info(current_app)
 
-            messages = self._build_messages(
-                instruction=self.traj_memory.task_goal,
-                screen_info=screen_info,
-                current_screenshot_base64=screenshot.base64_data,
-            )
+            with trace_span(
+                "memory.read",
+                attrs={
+                    "step": self._step_count,
+                    "memory_type": "mai_traj",
+                    "history_n": self._history_n,
+                    "stored_steps": len(self.traj_memory.steps),
+                },
+            ):
+                messages = self._build_messages(
+                    instruction=self.traj_memory.task_goal,
+                    screen_info=screen_info,
+                    current_screenshot_base64=screenshot.base64_data,
+                )
 
         # 3. 带重试的 LLM 调用 + 解析
         max_retries = 3
@@ -252,7 +265,17 @@ class AsyncMAIAgent(AsyncAgentBase):
                 screenshot_bytes=screenshot_bytes,
                 structured_action={"action_json": raw_action},
             )
-            self.traj_memory.add_step(traj_step)
+            with trace_span(
+                "memory.write",
+                attrs={
+                    "step": self._step_count,
+                    "memory_type": "mai_traj",
+                    "item_type": "TrajStep",
+                    "history_n": self._history_n,
+                    "model_name": self.model_config.model_name,
+                },
+            ):
+                self.traj_memory.add_step(traj_step)
 
         # 5. 执行动作
         try:

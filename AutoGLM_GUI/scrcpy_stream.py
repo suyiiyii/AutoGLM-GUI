@@ -12,6 +12,11 @@ from asyncio.subprocess import Process as AsyncProcess
 from collections.abc import AsyncGenerator
 
 from AutoGLM_GUI.adb_plus import check_device_available
+from AutoGLM_GUI.adb_plus.display import (
+    DisplaySelection,
+    clear_display_selection_cache,
+    select_primary_display_async,
+)
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.platform_utils import is_windows, run_cmd_silently, spawn_process
 from AutoGLM_GUI.scrcpy_protocol import (
@@ -108,6 +113,7 @@ class ScrcpyServerOptions:
     send_codec_meta: bool
     send_dummy_byte: bool
     video_codec_options: str | None
+    display_id: str | None
 
 
 class ScrcpyStreamer:
@@ -146,6 +152,7 @@ class ScrcpyStreamer:
         self._read_buffer = bytearray()
         self._metadata: ScrcpyVideoStreamMetadata | None = None
         self._dummy_byte_skipped = False
+        self._display_selection: DisplaySelection | None = None
 
         # Find scrcpy-server location
         self.scrcpy_server_path = self._find_scrcpy_server()
@@ -205,6 +212,10 @@ class ScrcpyStreamer:
             logger.info(f"Checking device {self.device_id} availability...")
             await check_device_available(self.device_id)
             logger.info(f"Device {self.device_id} is available")
+
+            self._display_selection = await select_primary_display_async(
+                device_id=self.device_id
+            )
 
             # 1. Kill existing scrcpy server processes on device
             logger.info("Cleaning up existing scrcpy processes...")
@@ -307,14 +318,31 @@ class ScrcpyStreamer:
             send_codec_meta=self.stream_options.send_codec_meta,
             send_dummy_byte=self.stream_options.send_dummy_byte,
             video_codec_options=codec_options,
+            display_id=(
+                self._display_selection.logical_id if self._display_selection else None
+            ),
         )
 
     async def _start_server(self) -> None:
         """Start scrcpy server on device with intelligent retry."""
+        try:
+            await self._start_server_with_options(self._build_server_options())
+        except RuntimeError as exc:
+            if not self._display_selection or not _can_retry_without_display_id(exc):
+                raise
+
+            clear_display_selection_cache(device_id=self.device_id)
+            logger.warning(
+                "Scrcpy failed with display_id=%s, retrying without display_id",
+                self._display_selection.logical_id,
+            )
+            self._display_selection = None
+            await self._start_server_with_options(self._build_server_options())
+
+    async def _start_server_with_options(self, options: ScrcpyServerOptions) -> None:
+        """Start scrcpy server on device with the provided options."""
         max_retries = 3
         retry_delay = 1.0  # Reduced from 2s (cleanup handles waiting now)
-
-        options = self._build_server_options()
 
         for attempt in range(max_retries):
             cmd = ["adb"]
@@ -343,6 +371,8 @@ class ScrcpyStreamer:
                 f"send_dummy_byte={str(options.send_dummy_byte).lower()}",
                 f"video_codec_options={options.video_codec_options}",
             ]
+            if options.display_id:
+                server_args.append(f"display_id={options.display_id}")
             cmd.extend(server_args)
 
             self.scrcpy_process = await spawn_process(cmd, capture_output=True)
@@ -589,3 +619,10 @@ class ScrcpyStreamer:
 
     def __del__(self):
         self.stop()
+
+
+def _can_retry_without_display_id(exc: RuntimeError) -> bool:
+    error = str(exc)
+    return (
+        "persistently occupied" not in error and "Address already in use" not in error
+    )
