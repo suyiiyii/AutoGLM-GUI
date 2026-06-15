@@ -101,32 +101,10 @@ jobs:
           force-avd-creation: false
           disable-animations: true
           emulator-options: -no-window -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back none
-          script: |
-            set -e
-            # Start the backend. The reverse-agent path never calls the model,
-            # so a dummy model config is enough to boot the server.
-            export AUTOGLM_BASE_URL=http://localhost:8080/v1
-            export AUTOGLM_MODEL_NAME=test-model
-            export AUTOGLM_API_KEY=test-key
-            nohup uv run autoglm-gui --host 0.0.0.0 --port 8080 \
-              --base-url http://localhost:8080/v1 > /tmp/backend.log 2>&1 &
-            echo "waiting for backend..."
-            for i in $(seq 1 90); do
-              if curl -sf http://127.0.0.1:8080/api/health > /dev/null; then
-                echo "backend ready"; break
-              fi
-              sleep 1
-            done
-            curl -sf http://127.0.0.1:8080/api/health > /dev/null || { cat /tmp/backend.log; exit 1; }
-
-            # Install the freshly built debug APK.
-            adb install -r android-agent/app/build/outputs/apk/debug/app-debug.apk
-
-            # Run the end-to-end assertions.
-            BASE_URL=http://127.0.0.1:8080 \
-            DEVICE_BASE_URL=http://10.0.2.2:8080 \
-            ARTIFACT_DIR="$GITHUB_WORKSPACE/e2e-artifacts" \
-              uv run python scripts/android_agent_e2e_check.py
+          # android-emulator-runner runs `script` line-by-line, which breaks
+          # multi-line commands and per-line `export`s — so keep this to a
+          # single invocation of a standalone driver script.
+          script: bash scripts/run_android_agent_e2e_ci.sh
 
       - name: Upload failure artifacts
         if: failure()
