@@ -95,6 +95,9 @@ class ReverseAgentRegistry:
         # Active WebSocket sessions (agent_id -> WebSocket).
         # Access is protected by _lock but the WebSocket itself is asyncio-safe.
         self._sessions: dict[str, WebSocket] = {}
+        # Event loop each WebSocket session runs on, so a sync caller (e.g. the
+        # DELETE route running in a worker thread) can close it via that loop.
+        self._session_loops: dict[str, asyncio.AbstractEventLoop] = {}
 
         # Pending commands keyed by command_id. Access must be under _lock.
         self._pending_commands: dict[str, _PendingCommand] = {}
@@ -184,8 +187,14 @@ class ReverseAgentRegistry:
 
     def register_session(self, *, agent_id: str, websocket: WebSocket) -> None:
         """Register an active WebSocket session for an agent."""
+        try:
+            loop = asyncio.get_running_loop()
+        except RuntimeError:
+            loop = None
         with self._lock:
             self._sessions[agent_id] = websocket
+            if loop is not None:
+                self._session_loops[agent_id] = loop
 
     @staticmethod
     def _set_pending_event(pending: _PendingCommand) -> None:
@@ -199,6 +208,7 @@ class ReverseAgentRegistry:
         """Unregister a WebSocket session and fail pending commands."""
         with self._lock:
             self._sessions.pop(agent_id, None)
+            self._session_loops.pop(agent_id, None)
             pending = [
                 cmd
                 for cmd in self._pending_commands.values()
@@ -351,6 +361,7 @@ class ReverseAgentRegistry:
             self._pairing_ids_by_code.clear()
             self._agents.clear()
             self._sessions.clear()
+            self._session_loops.clear()
             self._pending_commands.clear()
 
     def heartbeat_interval_seconds(self) -> int:
@@ -402,6 +413,7 @@ class ReverseAgentRegistry:
                     pairing.claimed_at = None
                     pairing.claimed_agent_id = None
             websocket = self._sessions.pop(agent_id, None)
+            session_loop = self._session_loops.pop(agent_id, None)
             pending = [
                 cmd
                 for cmd in self._pending_commands.values()
@@ -414,13 +426,36 @@ class ReverseAgentRegistry:
                 )
                 self._set_pending_event(cmd)
         if websocket is not None:
-            try:
-                asyncio.create_task(websocket.close(code=1000, reason="removed"))
-            except Exception:
-                logger.exception(
-                    "Failed to close websocket for removed agent %s", agent_id
-                )
+            self._close_websocket(agent_id, websocket, session_loop)
         return True
+
+    @staticmethod
+    def _close_websocket(
+        agent_id: str,
+        websocket: WebSocket,
+        session_loop: asyncio.AbstractEventLoop | None,
+    ) -> None:
+        """Close a WebSocket from any thread.
+
+        remove_agent may run in a sync FastAPI route (worker thread with no event
+        loop), where ``asyncio.create_task`` would raise. Schedule the close on a
+        running loop if there is one, else on the session's own loop.
+        """
+        coro = websocket.close(code=1000, reason="removed")
+        try:
+            running_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            running_loop = None
+        try:
+            if running_loop is not None:
+                running_loop.create_task(coro)
+            elif session_loop is not None:
+                asyncio.run_coroutine_threadsafe(coro, session_loop)
+            else:
+                coro.close()  # nothing to run it on; avoid "never awaited" warning
+        except Exception:
+            coro.close()
+            logger.exception("Failed to close websocket for removed agent %s", agent_id)
 
     def _cleanup_expired_pairings_locked(self, now: float) -> None:
         expired_pairing_ids = [
@@ -443,13 +478,26 @@ class ReverseAgentRegistry:
         attempts.append(now)
 
     def _cleanup_stale_agents_locked(self, now: float) -> None:
-        """Remove agents that have been offline longer than the stale TTL."""
+        """Remove agents that are no longer usable and past the stale TTL.
+
+        Covers two cases: agents that connected and went offline, and agents that
+        were claimed but never opened a WebSocket (stuck in ``paired``) — both
+        would otherwise leak in the registry until restart.
+        """
+        ttl = self._stale_agent_ttl_seconds
         stale_agent_ids = [
             agent_id
             for agent_id, record in self._agents.items()
-            if self._connection_status_locked(record) == "offline"
-            and record.disconnected_at is not None
-            and now - record.disconnected_at > self._stale_agent_ttl_seconds
+            if (
+                self._connection_status_locked(record) == "offline"
+                and record.disconnected_at is not None
+                and now - record.disconnected_at > ttl
+            )
+            or (
+                self._connection_status_locked(record) == "paired"
+                and record.connected_at is None
+                and now - record.created_at > ttl
+            )
         ]
         for agent_id in stale_agent_ids:
             self._agents.pop(agent_id, None)

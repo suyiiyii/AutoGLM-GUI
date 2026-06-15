@@ -111,6 +111,14 @@ def delete_registry_agent(agent_id: str) -> dict[str, bool]:
     removed = registry.remove_agent(agent_id=agent_id)
     if not removed:
         raise HTTPException(status_code=404, detail="reverse_agent_not_found")
+    # Also drop it from DeviceManager so it disappears from /api/devices instead
+    # of lingering as a DISCONNECTED device.
+    try:
+        from AutoGLM_GUI.device_manager import DeviceManager
+
+        DeviceManager.get_instance().remove_reverse_agent(agent_id)
+    except Exception:
+        logger.exception("Failed to remove reverse agent from DeviceManager")
     return {"success": True}
 
 

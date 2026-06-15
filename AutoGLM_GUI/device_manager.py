@@ -1072,6 +1072,9 @@ class DeviceManager:
                 managed.last_seen = time.time()
                 for conn in managed.connections:
                     self._device_id_to_serial.pop(conn.device_id, None)
+                # Drop the device wrapper so disconnect/reconnect cycles don't
+                # leak instances; register_reverse_agent recreates it on reconnect.
+                self._reverse_agent_devices.pop(serial, None)
                 logger.info(f"Reverse agent disconnected: {serial}")
 
     def remove_reverse_agent(self, agent_id: str) -> tuple[bool, str]:

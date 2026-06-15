@@ -52,13 +52,19 @@ class ReverseAgentDevice(DeviceProtocol):
             try:
                 asyncio.get_running_loop()
             except RuntimeError:
-                return asyncio.run(
+                result = asyncio.run(
                     self._registry.send_command(
                         agent_id=self._agent_id,
                         command=command,
                         timeout_seconds=self._timeout_seconds,
                     )
-                ).payload
+                )
+                if not result.success:
+                    raise RuntimeError(
+                        f"reverse agent command '{command_type}' failed: "
+                        f"{result.error or 'unknown error'}"
+                    )
+                return result.payload
 
             raise RuntimeError(
                 "ReverseAgentDevice cannot be called from a thread with a running "
