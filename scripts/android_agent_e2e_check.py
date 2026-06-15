@@ -216,8 +216,17 @@ def main() -> int:
     assert status == "connected", f"agent never reached connected state (last={status})"
     print(f"connection status: {status}")
 
-    # 5a. screenshot must be a real image, not a solid placeholder
-    shot = send_command(agent_id, "screenshot")
+    # 5a. screenshot must be a real image, not a solid placeholder.
+    # Retry: the MediaProjection grant (appops-approved consent activity)
+    # completes a moment after the websocket connects, so the first screenshot
+    # can race ahead of "Screen capture permission has not been granted".
+    shot = None
+    deadline = time.monotonic() + 40
+    while time.monotonic() < deadline:
+        shot = send_command(agent_id, "screenshot")
+        if str(shot.get("success")).lower() == "true":
+            break
+        time.sleep(2)
     assert str(shot.get("success")).lower() == "true", f"screenshot failed: {shot}"
     payload = shot["payload"]
     png = base64.b64decode(payload["base64_data"])
