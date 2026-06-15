@@ -82,7 +82,14 @@ def send_command(agent_id: str, command_type: str, payload: dict | None = None) 
 
 
 def enable_accessibility() -> None:
-    adb("shell", "settings", "put", "secure", "enabled_accessibility_services", A11Y_SERVICE)
+    adb(
+        "shell",
+        "settings",
+        "put",
+        "secure",
+        "enabled_accessibility_services",
+        A11Y_SERVICE,
+    )
     adb("shell", "settings", "put", "secure", "accessibility_enabled", "1")
 
 
@@ -95,7 +102,14 @@ def kick_accessibility() -> None:
     re-evaluation once the app process is alive.
     """
     adb("shell", "settings", "put", "secure", "accessibility_enabled", "0")
-    adb("shell", "settings", "put", "secure", "enabled_accessibility_services", A11Y_SERVICE)
+    adb(
+        "shell",
+        "settings",
+        "put",
+        "secure",
+        "enabled_accessibility_services",
+        A11Y_SERVICE,
+    )
     adb("shell", "settings", "put", "secure", "accessibility_enabled", "1")
 
 
@@ -109,7 +123,9 @@ def find_node(xml: str, resource_id: str) -> tuple[int, int, str] | None:
     # Match negative coordinates too: scroll-view children that are scrolled
     # above the viewport report negative bounds, and scroll_to needs to see them
     # to know it has overshot and should scroll back down.
-    pattern = re.compile(r'<node([^>]*?)bounds="\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]"')
+    pattern = re.compile(
+        r'<node([^>]*?)bounds="\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]"'
+    )
     for m in pattern.finditer(xml):
         attrs = m.group(1)
         rid = re.search(r'resource-id="([^"]*)"', attrs)
@@ -160,11 +176,38 @@ def scroll_to(resource_id: str, max_swipes: int = 16) -> tuple[int, int, str]:
             if top <= cy <= bottom:
                 return node
             if cy > bottom:  # below the band -> scroll content up
-                adb("shell", "input", "swipe", str(cx), str(int(h * 0.7)), str(cx), str(int(h * 0.4)), "300")
+                adb(
+                    "shell",
+                    "input",
+                    "swipe",
+                    str(cx),
+                    str(int(h * 0.7)),
+                    str(cx),
+                    str(int(h * 0.4)),
+                    "300",
+                )
             else:  # above the band -> scroll content down
-                adb("shell", "input", "swipe", str(cx), str(int(h * 0.4)), str(cx), str(int(h * 0.7)), "300")
+                adb(
+                    "shell",
+                    "input",
+                    "swipe",
+                    str(cx),
+                    str(int(h * 0.4)),
+                    str(cx),
+                    str(int(h * 0.7)),
+                    "300",
+                )
         else:  # not in the tree yet -> large swipe up to reveal lower content
-            adb("shell", "input", "swipe", str(cx), str(int(h * 0.8)), str(cx), str(int(h * 0.25)), "300")
+            adb(
+                "shell",
+                "input",
+                "swipe",
+                str(cx),
+                str(int(h * 0.8)),
+                str(cx),
+                str(int(h * 0.25)),
+                "300",
+            )
         time.sleep(1)
     raise AssertionError(f"could not bring node {resource_id} into the tappable area")
 
