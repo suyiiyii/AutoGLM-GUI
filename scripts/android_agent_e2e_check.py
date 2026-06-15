@@ -81,6 +81,24 @@ def send_command(agent_id: str, command_type: str, payload: dict | None = None) 
     )
 
 
+def enable_accessibility() -> None:
+    adb("shell", "settings", "put", "secure", "enabled_accessibility_services", A11Y_SERVICE)
+    adb("shell", "settings", "put", "secure", "accessibility_enabled", "1")
+
+
+def kick_accessibility() -> None:
+    """Force the framework to rebind the a11y service.
+
+    Setting the secure value before the app has ever run does not reliably bind
+    the service (the framework won't bind a never-launched app), and re-writing
+    the same value is a no-op. Toggling accessibility_enabled 0 -> 1 forces a
+    re-evaluation once the app process is alive.
+    """
+    adb("shell", "settings", "put", "secure", "accessibility_enabled", "0")
+    adb("shell", "settings", "put", "secure", "enabled_accessibility_services", A11Y_SERVICE)
+    adb("shell", "settings", "put", "secure", "accessibility_enabled", "1")
+
+
 def ui_dump() -> str:
     adb("shell", "uiautomator", "dump", "/sdcard/e2e_ui.xml")
     return adb("shell", "cat", "/sdcard/e2e_ui.xml")
@@ -150,18 +168,13 @@ def main() -> int:
     print(f"adb device: {online[0].split()[0]}")
     assert api_get("/api/health"), "backend /api/health not OK"
 
-    # 1. deterministic permission setup (no UI tapping)
-    adb(
-        "shell",
-        "settings",
-        "put",
-        "secure",
-        "enabled_accessibility_services",
-        A11Y_SERVICE,
-    )
-    adb("shell", "settings", "put", "secure", "accessibility_enabled", "1")
+    # 1. deterministic permission setup (no UI tapping).
+    # MediaProjection is pre-granted now; accessibility is enabled AFTER the app
+    # launches (step 3.5) because the framework won't bind an a11y service for an
+    # app that has never run.
     adb("shell", "appops", "set", PACKAGE, "PROJECT_MEDIA", "allow")
-    print("accessibility enabled; MediaProjection pre-granted via appops")
+    enable_accessibility()
+    print("MediaProjection pre-granted via appops; accessibility set")
 
     # 2. real pairing
     pairing = api_post("/api/reverse_agents/pairings", {})
@@ -188,6 +201,10 @@ def main() -> int:
         "test_pairing_code",
         code,
     )
+
+    # 3.5. now that the app process is alive, force the a11y service to bind.
+    time.sleep(2)
+    kick_accessibility()
 
     # 4. wait for the reverse agent to register as a device
     agent_id = None
@@ -240,12 +257,14 @@ def main() -> int:
     # 5b. current_app — also serves as an accessibility-service readiness gate
     # (current_app / tap need the a11y service bound, which can lag the launch).
     cur = None
-    deadline = time.monotonic() + 40
+    deadline = time.monotonic() + 60
     while time.monotonic() < deadline:
         cur = send_command(agent_id, "current_app")
         if str(cur.get("success")).lower() == "true":
             break
-        time.sleep(2)
+        # a11y service may still be binding; re-toggle to force it and retry
+        kick_accessibility()
+        time.sleep(3)
     assert str(cur.get("success")).lower() == "true", f"current_app failed: {cur}"
     assert cur["payload"]["app_name"] == PACKAGE, cur
     print(f"current_app OK: {cur['payload']['app_name']}")
