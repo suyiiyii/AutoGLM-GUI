@@ -1,0 +1,139 @@
+name: Android Agent E2E
+
+# Real end-to-end check for the reverse Android Agent: boots an Android emulator,
+# installs the debug APK, pairs it with a live backend, and asserts that
+# screenshot / current_app / tap actually work through the reverse command
+# channel. This is the one path that exercises the real Kotlin app
+# (MediaProjection + AccessibilityService), which unit/contract tests cannot.
+#
+# Emulator e2e is inherently slower and flakier than unit tests, so this job is
+# intended to run on its own and NOT be a required merge check.
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'android-agent/**'
+      - 'AutoGLM_GUI/reverse_agent_registry.py'
+      - 'AutoGLM_GUI/reverse_agent_protocol.py'
+      - 'AutoGLM_GUI/api/reverse_agents.py'
+      - 'AutoGLM_GUI/devices/reverse_agent_device.py'
+      - 'scripts/android_agent_e2e_check.py'
+      - '.github/workflows/android-agent-e2e.yml'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'android-agent/**'
+      - 'AutoGLM_GUI/reverse_agent_registry.py'
+      - 'AutoGLM_GUI/reverse_agent_protocol.py'
+      - 'AutoGLM_GUI/api/reverse_agents.py'
+      - 'AutoGLM_GUI/devices/reverse_agent_device.py'
+      - 'scripts/android_agent_e2e_check.py'
+      - '.github/workflows/android-agent-e2e.yml'
+
+jobs:
+  android-agent-e2e:
+    name: Android Agent E2E (emulator)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v4
+        with:
+          enable-cache: true
+          cache-dependency-glob: "uv.lock"
+
+      - name: Sync backend dependencies
+        run: uv sync
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            android-agent/.gradle
+            android-agent/app/build
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android-agent/**/*.gradle.kts', 'android-agent/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x android-agent/gradlew
+
+      - name: Build Debug APK
+        working-directory: android-agent
+        run: ./gradlew assembleDebug --no-daemon
+
+      - name: Enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: Run Android Agent E2E
+        uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          force-avd-creation: false
+          disable-animations: true
+          emulator-options: -no-window -no-snapshot -no-audio -no-boot-anim -gpu swiftshader_indirect -camera-back none
+          script: |
+            set -e
+            # Start the backend. The reverse-agent path never calls the model,
+            # so a dummy model config is enough to boot the server.
+            export AUTOGLM_BASE_URL=http://localhost:8080/v1
+            export AUTOGLM_MODEL_NAME=test-model
+            export AUTOGLM_API_KEY=test-key
+            nohup uv run autoglm-gui --host 0.0.0.0 --port 8080 \
+              --base-url http://localhost:8080/v1 > /tmp/backend.log 2>&1 &
+            echo "waiting for backend..."
+            for i in $(seq 1 90); do
+              if curl -sf http://127.0.0.1:8080/api/health > /dev/null; then
+                echo "backend ready"; break
+              fi
+              sleep 1
+            done
+            curl -sf http://127.0.0.1:8080/api/health > /dev/null || { cat /tmp/backend.log; exit 1; }
+
+            # Install the freshly built debug APK.
+            adb install -r android-agent/app/build/outputs/apk/debug/app-debug.apk
+
+            # Run the end-to-end assertions.
+            BASE_URL=http://127.0.0.1:8080 \
+            DEVICE_BASE_URL=http://10.0.2.2:8080 \
+            ARTIFACT_DIR="$GITHUB_WORKSPACE/e2e-artifacts" \
+              uv run python scripts/android_agent_e2e_check.py
+
+      - name: Upload failure artifacts
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-agent-e2e-artifacts
+          path: |
+            e2e-artifacts/**
+            /tmp/backend.log
+          retention-days: 7

@@ -89,6 +89,8 @@
     <string name="tap_target_label">Tap target</string>
     <string name="demo_status_idle">No local gesture demo yet.</string>
     <string name="tap_target_hit">Tap target clicked.</string>
+    <string name="developer_options_show">Show developer options</string>
+    <string name="developer_options_hide">Hide developer options</string>
     <string name="input_focused">Input focused.</string>
     <string name="capture_granted">Screen capture permission granted.</string>
     <string name="capture_denied">Screen capture permission denied.</string>

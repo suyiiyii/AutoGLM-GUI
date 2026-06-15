@@ -171,6 +171,15 @@ class MainActivity : AppCompatActivity() {
             demoStatusView.text = getString(R.string.tap_target_hit)
         }
 
+        val developerSection = findViewById<View>(R.id.developerSection)
+        findViewById<Button>(R.id.developerToggleButton).setOnClickListener { toggle ->
+            val show = developerSection.visibility != View.VISIBLE
+            developerSection.visibility = if (show) View.VISIBLE else View.GONE
+            (toggle as Button).setText(
+                if (show) R.string.developer_options_hide else R.string.developer_options_show
+            )
+        }
+
         findViewById<EditText>(R.id.demoInput).setOnFocusChangeListener { _, hasFocus ->
             if (hasFocus) {
                 demoStatusView.text = getString(R.string.input_focused)
@@ -179,6 +188,7 @@ class MainActivity : AppCompatActivity() {
 
         ensureAgentRunning()
         maybeRequestCapture(intent)
+        maybeAutoPairForTest(intent)
         applyWindowInsets()
     }
 
@@ -187,6 +197,7 @@ class MainActivity : AppCompatActivity() {
         Log.i(TAG, "onNewIntent intent=$intent")
         setIntent(intent)
         maybeRequestCapture(intent)
+        maybeAutoPairForTest(intent)
     }
 
     override fun onResume() {
@@ -245,6 +256,25 @@ class MainActivity : AppCompatActivity() {
         if (intent?.getBooleanExtra(EXTRA_REQUEST_CAPTURE, false) == true) {
             requestScreenCapturePermission()
         }
+    }
+
+    /**
+     * Debug-only hook for automated end-to-end tests: when the launching intent
+     * carries [EXTRA_TEST_SERVER_URL] and [EXTRA_TEST_PAIRING_CODE], pre-fill the
+     * reverse-pairing inputs and claim the pairing without driving the UI.
+     * Ignored entirely on non-debuggable (release) builds.
+     */
+    private fun maybeAutoPairForTest(intent: Intent?) {
+        val debuggable =
+            (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+        if (!debuggable || intent == null) return
+        val serverUrl = intent.getStringExtra(EXTRA_TEST_SERVER_URL)
+        val pairingCode = intent.getStringExtra(EXTRA_TEST_PAIRING_CODE)
+        if (serverUrl.isNullOrBlank() || pairingCode.isNullOrBlank()) return
+        Log.i(TAG, "maybeAutoPairForTest injecting server=$serverUrl")
+        reverseServerInput.setText(serverUrl)
+        pairingCodeInput.setText(pairingCode)
+        triggerPairingClaim()
     }
 
     private fun scheduleRefreshState() {
@@ -690,6 +720,10 @@ class MainActivity : AppCompatActivity() {
     companion object {
         private const val TAG = "AutoGLM/Main"
         const val EXTRA_REQUEST_CAPTURE = "request_capture"
+        // Debug-only test hooks: let CI inject pairing without driving the UI.
+        // Only honored in debuggable builds (see maybeAutoPairForTest).
+        const val EXTRA_TEST_SERVER_URL = "test_server_url"
+        const val EXTRA_TEST_PAIRING_CODE = "test_pairing_code"
     }
 }
 

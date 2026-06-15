@@ -89,6 +89,8 @@
     <string name="tap_target_label">点击目标</string>
     <string name="demo_status_idle">暂未触发本地手势演示。</string>
     <string name="tap_target_hit">点击目标已触发。</string>
+    <string name="developer_options_show">显示开发者选项</string>
+    <string name="developer_options_hide">隐藏开发者选项</string>
     <string name="input_focused">输入框已聚焦。</string>
     <string name="capture_granted">录屏权限已授权。</string>
     <string name="capture_denied">录屏权限被拒绝。</string>
