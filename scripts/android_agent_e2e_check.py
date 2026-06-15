@@ -119,13 +119,26 @@ def find_node(xml: str, resource_id: str) -> tuple[int, int, str] | None:
     return None
 
 
-def scroll_to(resource_id: str, max_swipes: int = 6) -> tuple[int, int, str]:
-    """Swipe up until a node with resource_id is on screen; return its node."""
+def screen_size() -> tuple[int, int]:
+    """Return (width, height) in px. Defaults if `wm size` can't be parsed."""
+    out = adb("shell", "wm", "size", check=False)  # "Physical size: 320x640"
+    m = re.search(r"(\d+)x(\d+)", out)
+    return (int(m.group(1)), int(m.group(2))) if m else (1080, 1920)
+
+
+def scroll_to(resource_id: str, max_swipes: int = 10) -> tuple[int, int, str]:
+    """Swipe up until a node with resource_id is on screen; return its node.
+
+    Swipe coordinates are computed from the real screen size — CI emulators run
+    at 320x640, where hard-coded large-screen coordinates land off-screen.
+    """
+    w, h = screen_size()
+    cx, y_from, y_to = w // 2, int(h * 0.8), int(h * 0.25)
     for _ in range(max_swipes):
         node = find_node(ui_dump(), resource_id)
         if node:
             return node
-        adb("shell", "input", "swipe", "540", "1800", "540", "600", "250")
+        adb("shell", "input", "swipe", str(cx), str(y_from), str(cx), str(y_to), "300")
         time.sleep(1)
     raise AssertionError(f"could not find on-screen node {resource_id}")
 
