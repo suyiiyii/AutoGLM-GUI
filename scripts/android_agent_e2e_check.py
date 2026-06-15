@@ -106,7 +106,10 @@ def ui_dump() -> str:
 
 def find_node(xml: str, resource_id: str) -> tuple[int, int, str] | None:
     """Return (center_x, center_y, text) for the first node with resource_id."""
-    pattern = re.compile(r'<node([^>]*?)bounds="\[(\d+),(\d+)\]\[(\d+),(\d+)\]"')
+    # Match negative coordinates too: scroll-view children that are scrolled
+    # above the viewport report negative bounds, and scroll_to needs to see them
+    # to know it has overshot and should scroll back down.
+    pattern = re.compile(r'<node([^>]*?)bounds="\[(-?\d+),(-?\d+)\]\[(-?\d+),(-?\d+)\]"')
     for m in pattern.finditer(xml):
         attrs = m.group(1)
         rid = re.search(r'resource-id="([^"]*)"', attrs)
@@ -120,27 +123,50 @@ def find_node(xml: str, resource_id: str) -> tuple[int, int, str] | None:
 
 
 def screen_size() -> tuple[int, int]:
-    """Return (width, height) in px. Defaults if `wm size` can't be parsed."""
-    out = adb("shell", "wm", "size", check=False)  # "Physical size: 320x640"
-    m = re.search(r"(\d+)x(\d+)", out)
+    """Return the effective (width, height) in px.
+
+    `wm size` may print both a "Physical size" and an "Override size" (when a
+    test sets one); the override is what's actually rendered, so prefer it.
+    """
+    out = adb("shell", "wm", "size", check=False)
+    m = (
+        re.search(r"Override size:\s*(\d+)x(\d+)", out)
+        or re.search(r"Physical size:\s*(\d+)x(\d+)", out)
+        or re.search(r"(\d+)x(\d+)", out)
+    )
     return (int(m.group(1)), int(m.group(2))) if m else (1080, 1920)
 
 
-def scroll_to(resource_id: str, max_swipes: int = 10) -> tuple[int, int, str]:
-    """Swipe up until a node with resource_id is on screen; return its node.
+def scroll_to(resource_id: str, max_swipes: int = 16) -> tuple[int, int, str]:
+    """Scroll until a node with resource_id sits in the tappable safe band.
 
-    Swipe coordinates are computed from the real screen size — CI emulators run
-    at 320x640, where hard-coded large-screen coordinates land off-screen.
+    `uiautomator dump` reports scroll-view children even when they are off the
+    visible viewport (negative or beyond-height bounds), so we must check the
+    node's on-screen position, not just its presence. We accept it only when its
+    center is within [12%, 82%] of screen height (clear of the app bar and the
+    bottom navigation), nudging up or down as needed. Coordinates are derived
+    from the real screen size — CI emulators run at 320x640.
     """
     w, h = screen_size()
-    cx, y_from, y_to = w // 2, int(h * 0.8), int(h * 0.25)
+    cx = w // 2
+    # Acceptable tap band: below the app bar, above the bottom nav. The
+    # developer toggle is the last element, so when the scroll bottoms out it
+    # settles low (center ~0.90h on 320x640) — keep the lower bound generous.
+    top, bottom = 0.07 * h, 0.93 * h
     for _ in range(max_swipes):
         node = find_node(ui_dump(), resource_id)
         if node:
-            return node
-        adb("shell", "input", "swipe", str(cx), str(y_from), str(cx), str(y_to), "300")
+            cy = node[1]
+            if top <= cy <= bottom:
+                return node
+            if cy > bottom:  # below the band -> scroll content up
+                adb("shell", "input", "swipe", str(cx), str(int(h * 0.7)), str(cx), str(int(h * 0.4)), "300")
+            else:  # above the band -> scroll content down
+                adb("shell", "input", "swipe", str(cx), str(int(h * 0.4)), str(cx), str(int(h * 0.7)), "300")
+        else:  # not in the tree yet -> large swipe up to reveal lower content
+            adb("shell", "input", "swipe", str(cx), str(int(h * 0.8)), str(cx), str(int(h * 0.25)), "300")
         time.sleep(1)
-    raise AssertionError(f"could not find on-screen node {resource_id}")
+    raise AssertionError(f"could not bring node {resource_id} into the tappable area")
 
 
 def dump_artifacts(tag: str) -> None:
