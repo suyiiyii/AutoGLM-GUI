@@ -1,72 +1,64 @@
 import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
 
-// This runs in Node.js - Don't use client-side code here (browser APIs, JSX...)
-
 /**
- * Creating a sidebar enables you to:
- * - create an ordered group of docs
- * - render a sidebar for each doc of that group
- * - provide next/previous navigation
- *
- * The sidebars can be generated from the filesystem, or explicitly defined here.
- *
- * Create as many sidebars as you want.
+ * 侧边栏按 Diátaxis 四象限组织：
+ * 教程（学习）· 操作指南（任务）· 参考（信息）· 原理解释（理解）。
  */
 const sidebars: SidebarsConfig = {
   tutorialSidebar: [
     'intro',
     {
       type: 'category',
-      label: '快速开始',
+      label: '教程',
+      collapsed: false,
+      items: ['tutorial/first-task'],
+    },
+    {
+      type: 'category',
+      label: '操作指南',
+      collapsed: false,
       items: [
-        'getting-started/install',
-        'getting-started/first-run',
-        'getting-started/model-config',
-        'getting-started/device-connection',
+        'guide/connect-device',
+        'guide/configure-model',
+        'guide/use-workflow',
+        'guide/schedule-task',
+        'guide/view-history',
+        'guide/realtime-control',
+        'guide/multi-device',
+        'guide/interrupt',
+        'guide/web-terminal',
+        'guide/logs',
+        'guide/mcp',
+        'guide/deploy-docker',
+        'guide/deploy-server',
+        'guide/develop',
+        'guide/troubleshooting',
       ],
     },
     {
       type: 'category',
-      label: '功能说明',
+      label: '参考',
       items: [
-        'features/chat-control',
-        'features/realtime-preview',
-        'features/direct-operation',
-        'features/workflow',
-        'features/scheduler',
-        'features/history',
-        'features/multi-device',
-        'features/interrupt',
-        'features/layered-agent',
-        'features/mcp',
-        'features/web-terminal',
-        'features/logs',
+        'reference/cli',
+        'reference/env-vars',
+        'reference/rest-api',
+        'reference/mcp-tools',
+        'reference/docker',
       ],
     },
     {
       type: 'category',
-      label: '开发',
-      items: ['development', 'development-harness'],
-    },
-    {
-      type: 'category',
-      label: '部署',
+      label: '原理解释',
       items: [
-        'deployment/docker',
-        'deployment/server',
-        'deployment/desktop',
-      ],
-    },
-    {
-      type: 'category',
-      label: '问题排查',
-      items: [
-        'troubleshooting/common-issues',
-        'troubleshooting/adb',
-        'troubleshooting/model-api',
+        'explanation/modes',
+        'explanation/agent-types',
+        'explanation/layered-agent',
+        'explanation/layered-agent-analysis',
+        'explanation/observability',
       ],
     },
     'faq',
+    'release-notes',
   ],
 };
 
