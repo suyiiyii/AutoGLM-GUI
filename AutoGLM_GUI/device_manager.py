@@ -8,7 +8,7 @@ from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from enum import StrEnum
-from typing import TYPE_CHECKING, TypeAlias
+from typing import TypeAlias
 
 from typing_extensions import TypedDict
 
@@ -16,8 +16,7 @@ from AutoGLM_GUI.adb import ADBConnection, ConnectionType, DeviceInfo
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.types import DeviceConnectionType
 
-if TYPE_CHECKING:
-    from AutoGLM_GUI.device_protocol import DeviceProtocol
+from AutoGLM_GUI.device_protocol import AsyncDeviceProtocol, DeviceProtocol
 
 
 # Identifier vocabulary:
@@ -1095,6 +1094,38 @@ class DeviceManager:
         from AutoGLM_GUI.devices.adb_device import ADBDevice
 
         return ADBDevice(local_device_id)
+
+    def get_async_device_protocol(
+        self, device_id: ConnectionDeviceID
+    ) -> AsyncDeviceProtocol:
+        """
+        根据 device_id 获取 AsyncDeviceProtocol 实例（统一入口）.
+
+        异步 agent 统一使用此入口，避免在事件循环中调用同步 DeviceProtocol。
+        """
+        with self._devices_lock:
+            managed = self.get_device_by_device_id(device_id)
+            if not managed:
+                raise ValueError(f"Device {device_id} not found in DeviceManager")
+
+            if managed.connection_type == DeviceConnectionType.REMOTE:
+                remote_device = self.get_remote_device_instance(managed.serial)
+                if not remote_device:
+                    raise ValueError(
+                        f"Remote device instance not found for serial {managed.serial}"
+                    )
+                from AutoGLM_GUI.devices.async_adapter import AsyncDeviceAdapter
+
+                return AsyncDeviceAdapter(remote_device)  # type: ignore[return-value]
+
+            local_device_id = managed.primary_device_id
+            local_managed = managed
+
+        self._ensure_adb_keyboard_once(local_device_id, local_managed)
+
+        from AutoGLM_GUI.devices.adb_device import AsyncADBDevice
+
+        return AsyncADBDevice(local_device_id)
 
     def set_device_display_name(self, serial: str, display_name: str | None) -> None:
         """Set custom display name for device."""

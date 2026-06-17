@@ -17,13 +17,22 @@ Example:
     >>> remote.tap(100, 200)
 """
 
-from AutoGLM_GUI.devices.adb_device import ADBDevice, ADBDeviceManager
+from AutoGLM_GUI.devices.adb_device import (
+    ADBDevice,
+    ADBDeviceManager,
+    AsyncADBDevice,
+    AsyncADBDeviceManager,
+)
+from AutoGLM_GUI.devices.async_adapter import AsyncDeviceAdapter
 from AutoGLM_GUI.devices.mock_device import MockDevice
 from AutoGLM_GUI.devices.remote_device import RemoteDevice, RemoteDeviceManager
 
 __all__ = [
     "ADBDevice",
     "ADBDeviceManager",
+    "AsyncADBDevice",
+    "AsyncADBDeviceManager",
+    "AsyncDeviceAdapter",
     "MockDevice",
     "RemoteDevice",
     "RemoteDeviceManager",

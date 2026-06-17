@@ -4,8 +4,18 @@ DEPRECATED: This module now delegates to adb_plus.screenshot for the actual impl
 Use adb_plus.screenshot directly for new code.
 """
 
-from AutoGLM_GUI.adb_plus.screenshot import Screenshot, capture_screenshot
+from AutoGLM_GUI.adb_plus.screenshot import (
+    Screenshot,
+    capture_screenshot,
+    capture_screenshot_async,
+)
 
 
 def get_screenshot(device_id: str | None = None, timeout: int = 10) -> Screenshot:
     return capture_screenshot(device_id=device_id, timeout=timeout)
+
+
+async def get_screenshot_async(
+    device_id: str | None = None, timeout: int = 10
+) -> Screenshot:
+    return await capture_screenshot_async(device_id=device_id, timeout=timeout)

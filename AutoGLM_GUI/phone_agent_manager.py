@@ -162,7 +162,7 @@ class PhoneAgentManager:
                             "agent_manager.get_device_protocol",
                             attrs={"device_id": actual_device_id},
                         ):
-                            device = device_manager.get_device_protocol(
+                            device = device_manager.get_async_device_protocol(
                                 actual_device_id
                             )
                     except ValueError:
@@ -174,7 +174,7 @@ class PhoneAgentManager:
                                 "after_refresh": True,
                             },
                         ):
-                            device = device_manager.get_device_protocol(
+                            device = device_manager.get_async_device_protocol(
                                 actual_device_id
                             )
 

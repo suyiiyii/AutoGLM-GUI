@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import json
 import os
 import base64
@@ -890,6 +891,22 @@ def trace_sleep(
         time.sleep(safe_duration)
 
 
+async def trace_sleep_async(
+    duration_seconds: float,
+    *,
+    name: str = "sleep",
+    attrs: dict[str, Any] | None = None,
+) -> None:
+    """Asynchronous sleep while recording a dedicated trace span."""
+    safe_duration = max(duration_seconds, 0.0)
+    span_attrs = {"duration_ms": round(safe_duration * 1000, 3)}
+    if attrs:
+        span_attrs.update(attrs)
+
+    with trace_span(name, attrs=span_attrs):
+        await asyncio.sleep(safe_duration)
+
+
 __all__ = [
     "TraceSpan",
     "clear_trace_data",
@@ -905,6 +922,7 @@ __all__ = [
     "trace_context",
     "trace_enabled",
     "trace_sleep",
+    "trace_sleep_async",
     "trace_span",
     "write_replay_event",
     "write_replay_task_start",

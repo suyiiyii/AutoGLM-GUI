@@ -1,13 +1,15 @@
 """ADB connection management for local USB and ADB TCP/IP devices."""
 
+import asyncio
 import subprocess
 import time
 from dataclasses import dataclass
 from enum import Enum
 
 from AutoGLM_GUI.adb.timing import TIMING_CONFIG
-from AutoGLM_GUI.adb_plus.ip import get_wifi_ip
+from AutoGLM_GUI.adb_plus.ip import get_wifi_ip, get_wifi_ip_async
 from AutoGLM_GUI.logger import logger
+from AutoGLM_GUI.platform_utils import run_cmd_silently
 
 
 class ConnectionType(Enum):
@@ -316,6 +318,164 @@ class ADBConnection:
         except Exception as e:
             return False, f"Error restarting server: {e}"
 
+    async def connect_async(self, address: str, timeout: int = 10) -> tuple[bool, str]:
+        """Async version of :meth:`connect`."""
+        if ":" not in address:
+            address = f"{address}:5555"
+
+        try:
+            result = await run_cmd_silently(
+                [self.adb_path, "connect", address],
+                timeout=timeout,
+            )
+
+            output = result.stdout + result.stderr
+
+            if "connected" in output.lower():
+                return True, f"Connected to {address}"
+            elif "already connected" in output.lower():
+                return True, f"Already connected to {address}"
+            else:
+                return False, output.strip()
+
+        except subprocess.TimeoutExpired:
+            return False, f"Connection timeout after {timeout}s"
+        except Exception as e:
+            return False, f"Connection error: {e}"
+
+    async def disconnect_async(self, address: str | None = None) -> tuple[bool, str]:
+        """Async version of :meth:`disconnect`."""
+        try:
+            cmd = [self.adb_path, "disconnect"]
+            if address:
+                cmd.append(address)
+
+            result = await run_cmd_silently(cmd, timeout=5)
+
+            output = result.stdout + result.stderr
+            return True, output.strip() or "Disconnected"
+
+        except Exception as e:
+            return False, f"Disconnect error: {e}"
+
+    async def list_devices_async(self) -> list[DeviceInfo]:
+        """Async version of :meth:`list_devices`."""
+        try:
+            result = await run_cmd_silently(
+                [self.adb_path, "devices", "-l"],
+                timeout=5,
+            )
+
+            devices = []
+            for line in result.stdout.strip().split("\n")[1:]:
+                if not line.strip():
+                    continue
+
+                parts = line.split()
+                if len(parts) >= 2:
+                    device_id = parts[0]
+                    status = parts[1]
+
+                    conn_type = infer_connection_type_from_device_id(device_id)
+
+                    model = None
+                    for part in parts[2:]:
+                        if part.startswith("model:"):
+                            model = part.split(":", 1)[1]
+                            break
+
+                    devices.append(
+                        DeviceInfo(
+                            device_id=device_id,
+                            status=status,
+                            connection_type=conn_type,
+                            model=model,
+                        )
+                    )
+
+            return devices
+
+        except Exception as e:
+            logger.error(f"Error listing devices: {e}")
+            return []
+
+    async def get_device_info_async(
+        self, device_id: str | None = None
+    ) -> DeviceInfo | None:
+        """Async version of :meth:`get_device_info`."""
+        devices = await self.list_devices_async()
+
+        if not devices:
+            return None
+
+        if device_id is None:
+            return devices[0]
+
+        for device in devices:
+            if device.device_id == device_id:
+                return device
+
+        return None
+
+    async def is_connected_async(self, device_id: str | None = None) -> bool:
+        """Async version of :meth:`is_connected`."""
+        devices = await self.list_devices_async()
+
+        if not devices:
+            return False
+
+        if device_id is None:
+            return any(d.status == "device" for d in devices)
+
+        return any(d.device_id == device_id and d.status == "device" for d in devices)
+
+    async def enable_tcpip_async(
+        self, port: int = 5555, device_id: str | None = None
+    ) -> tuple[bool, str]:
+        """Async version of :meth:`enable_tcpip`."""
+        try:
+            cmd = [self.adb_path]
+            if device_id:
+                cmd.extend(["-s", device_id])
+            cmd.extend(["tcpip", str(port)])
+
+            result = await run_cmd_silently(cmd, timeout=10)
+
+            output = result.stdout + result.stderr
+
+            if "restarting" in output.lower() or result.returncode == 0:
+                await asyncio.sleep(TIMING_CONFIG.connection.adb_restart_delay)
+                return True, f"TCP/IP mode enabled on port {port}"
+            else:
+                return False, output.strip()
+
+        except Exception as e:
+            return False, f"Error enabling TCP/IP: {e}"
+
+    async def get_device_ip_async(self, device_id: str | None = None) -> str | None:
+        """Async version of :meth:`get_device_ip`."""
+        return await get_wifi_ip_async(adb_path=self.adb_path, device_id=device_id)
+
+    async def restart_server_async(self) -> tuple[bool, str]:
+        """Async version of :meth:`restart_server`."""
+        try:
+            await run_cmd_silently(
+                [self.adb_path, "kill-server"],
+                timeout=5,
+            )
+
+            await asyncio.sleep(TIMING_CONFIG.connection.server_restart_delay)
+
+            await run_cmd_silently(
+                [self.adb_path, "start-server"],
+                timeout=5,
+            )
+
+            return True, "ADB server restarted"
+
+        except Exception as e:
+            return False, f"Error restarting server: {e}"
+
 
 def quick_connect(address: str) -> tuple[bool, str]:
     """
@@ -340,3 +500,15 @@ def list_devices() -> list[DeviceInfo]:
     """
     conn = ADBConnection()
     return conn.list_devices()
+
+
+async def quick_connect_async(address: str) -> tuple[bool, str]:
+    """Async version of :func:`quick_connect`."""
+    conn = ADBConnection()
+    return await conn.connect_async(address)
+
+
+async def list_devices_async() -> list[DeviceInfo]:
+    """Async version of :func:`list_devices`."""
+    conn = ADBConnection()
+    return await conn.list_devices_async()

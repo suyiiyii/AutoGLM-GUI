@@ -87,12 +87,12 @@ class AsyncMAIAgent(AsyncAgentBase):
                 "step.capture_screenshot",
                 attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
             ):
-                screenshot = await asyncio.to_thread(self.device.get_screenshot)
+                screenshot = await self.device.get_screenshot()
             with trace_span(
                 "step.get_current_app",
                 attrs={"step": self._step_count, "agent_type": self.__class__.__name__},
             ):
-                current_app = await asyncio.to_thread(self.device.get_current_app)
+                current_app = await self.device.get_current_app()
         except Exception as e:
             logger.error(f"Failed to get device info: {e}")
             yield {"type": "error", "data": {"message": f"Device error: {e}"}}
@@ -288,8 +288,7 @@ class AsyncMAIAgent(AsyncAgentBase):
                     "action_type": converted_action.get("_metadata"),
                 },
             ):
-                result = await asyncio.to_thread(
-                    self.action_handler.execute,
+                result = await self.action_handler.execute(
                     converted_action,
                     screenshot.width,
                     screenshot.height,

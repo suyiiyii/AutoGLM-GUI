@@ -17,9 +17,10 @@ from collections.abc import AsyncIterator, Callable
 
 from openai import AsyncOpenAI
 
-from AutoGLM_GUI.actions import ActionHandler
+from AutoGLM_GUI.actions import AsyncActionHandler
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
-from AutoGLM_GUI.device_protocol import DeviceProtocol
+from AutoGLM_GUI.device_protocol import AsyncDeviceProtocol, DeviceProtocol
+from AutoGLM_GUI.devices.async_adapter import AsyncDeviceAdapter
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.model import MessageBuilder
 from AutoGLM_GUI.trace import summarize_text, trace_span
@@ -44,7 +45,7 @@ class AsyncAgentBase(ABC):
         self,
         model_config: ModelConfig,
         agent_config: AgentConfig,
-        device: DeviceProtocol,
+        device: DeviceProtocol | AsyncDeviceProtocol,
         confirmation_callback: Callable[[str], bool] | None = None,
         takeover_callback: Callable[[str], None] | None = None,
     ):
@@ -57,8 +58,8 @@ class AsyncAgentBase(ABC):
             timeout=120,
         )
 
-        self.device = device
-        self.action_handler = ActionHandler(
+        self.device = AsyncDeviceAdapter(device)
+        self.action_handler = AsyncActionHandler(
             device=self.device,
             confirmation_callback=confirmation_callback,
             takeover_callback=takeover_callback,
@@ -156,12 +157,8 @@ class AsyncAgentBase(ABC):
                                 "device_id": self.device.device_id,
                             },
                         ):
-                            screenshot = await asyncio.to_thread(
-                                self.device.get_screenshot
-                            )
-                            current_app = await asyncio.to_thread(
-                                self.device.get_current_app
-                            )
+                            screenshot = await self.device.get_screenshot()
+                            current_app = await self.device.get_current_app()
                     except Exception as e:
                         logger.error(f"Failed to get device info: {e}")
                         stream_span.set_attributes(

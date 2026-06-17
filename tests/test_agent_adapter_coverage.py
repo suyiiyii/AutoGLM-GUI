@@ -489,13 +489,11 @@ def test_mai_agent_execute_step_success_action_failure_and_reset(
         }
 
     monkeypatch.setattr(agent, "_stream_openai", fake_stream)
-    monkeypatch.setattr(
-        agent.action_handler,
-        "execute",
-        lambda action, width, height: ActionResult(
-            success=True, should_finish=False, message="ok"
-        ),
-    )
+
+    async def fake_execute(action, width, height):
+        return ActionResult(success=True, should_finish=False, message="ok")
+
+    monkeypatch.setattr(agent.action_handler, "execute", fake_execute)
 
     events = asyncio.run(_collect(agent._execute_step()))
     assert [event["type"] for event in events] == ["thinking", "step"]
@@ -506,7 +504,7 @@ def test_mai_agent_execute_step_success_action_failure_and_reset(
     async def finish_stream(messages):
         yield {"type": "raw", "content": _tool_response({"action": "terminate"})}
 
-    def raise_action(*args, **kwargs):
+    async def raise_action(*args, **kwargs):
         raise RuntimeError("action failed")
 
     monkeypatch.setattr(agent, "_stream_openai", finish_stream)
@@ -638,7 +636,7 @@ def test_qwen_agent_execute_step_error_debug_and_action_paths(
         yield {"type": "thinking", "content": "thinking"}
         yield {"type": "raw", "content": "not a qwen action"}
 
-    def raise_action(*args, **kwargs):
+    async def raise_action(*args, **kwargs):
         raise RuntimeError("action failed")
 
     monkeypatch.setattr(parse_fallback_agent, "_stream_openai", invalid_action_stream)
@@ -658,13 +656,11 @@ def test_qwen_agent_execute_step_error_debug_and_action_paths(
         }
 
     monkeypatch.setattr(tap_agent, "_stream_openai", tap_stream)
-    monkeypatch.setattr(
-        tap_agent.action_handler,
-        "execute",
-        lambda *a, **k: ActionResult(
-            success=True, should_finish=True, message="tapped"
-        ),
-    )
+
+    async def fake_tap_execute(*a, **k):
+        return ActionResult(success=True, should_finish=True, message="tapped")
+
+    monkeypatch.setattr(tap_agent.action_handler, "execute", fake_tap_execute)
     tap_events = asyncio.run(_collect(tap_agent._execute_step()))
     assert tap_events[-1]["data"]["action"]["action"] == "Tap"
     assert tap_events[-1]["data"]["message"] == "tapped"
@@ -749,11 +745,11 @@ def test_gemini_agent_execute_step_and_llm_paths(
         return "think", None, "tap", {"x": 1, "y": 2}
 
     monkeypatch.setattr(agent, "_call_llm_with_tools", tap_tool)
-    monkeypatch.setattr(
-        agent.action_handler,
-        "execute",
-        lambda *a, **k: ActionResult(success=True, should_finish=False, message="ok"),
-    )
+
+    async def fake_execute(*a, **k):
+        return ActionResult(success=True, should_finish=False, message="ok")
+
+    monkeypatch.setattr(agent.action_handler, "execute", fake_execute)
     success_events = asyncio.run(_collect(agent._execute_step()))
     assert [event["type"] for event in success_events] == ["thinking", "step"]
     assert success_events[-1]["data"]["action"]["action"] == "Tap"
@@ -765,7 +761,7 @@ def test_gemini_agent_execute_step_and_llm_paths(
     async def back_tool():
         return "", None, "back", {}
 
-    def raise_action(*args, **kwargs):
+    async def raise_action(*args, **kwargs):
         raise RuntimeError("tap failed")
 
     monkeypatch.setattr(action_error_agent, "_call_llm_with_tools", back_tool)

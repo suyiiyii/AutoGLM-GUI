@@ -82,7 +82,7 @@ class AsyncGeminiAgent(AsyncAgentBase):
                         "agent_type": self.__class__.__name__,
                     },
                 ):
-                    screenshot = await asyncio.to_thread(self.device.get_screenshot)
+                    screenshot = await self.device.get_screenshot()
                 with trace_span(
                     "step.get_current_app",
                     attrs={
@@ -90,7 +90,7 @@ class AsyncGeminiAgent(AsyncAgentBase):
                         "agent_type": self.__class__.__name__,
                     },
                 ):
-                    current_app = await asyncio.to_thread(self.device.get_current_app)
+                    current_app = await self.device.get_current_app()
             except Exception as e:
                 logger.error(f"Failed to get device info: {e}")
                 yield {"type": "error", "data": {"message": f"Device error: {e}"}}
@@ -291,7 +291,7 @@ class AsyncGeminiAgent(AsyncAgentBase):
                     "purpose": "pre_action",
                 },
             ):
-                screenshot = await asyncio.to_thread(self.device.get_screenshot)
+                screenshot = await self.device.get_screenshot()
             with trace_span(
                 "step.execute_action",
                 attrs={
@@ -301,8 +301,7 @@ class AsyncGeminiAgent(AsyncAgentBase):
                     "action_type": action.get("_metadata"),
                 },
             ):
-                result = await asyncio.to_thread(
-                    self.action_handler.execute,
+                result = await self.action_handler.execute(
                     action,
                     screenshot.width,
                     screenshot.height,

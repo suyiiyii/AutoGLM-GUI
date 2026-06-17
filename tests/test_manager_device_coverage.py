@@ -179,6 +179,9 @@ def test_phone_agent_manager_lifecycle_state_and_abort(
         def get_device_protocol(self, device_id: str):
             return SimpleNamespace(device_id=device_id)
 
+        def get_async_device_protocol(self, device_id: str):
+            return self.get_device_protocol(device_id)
+
         def force_refresh(self) -> None:
             self.refreshed = True
 
@@ -285,6 +288,9 @@ def test_phone_agent_manager_auto_init_errors_and_destroy_all(
             if self.calls == 1:
                 raise ValueError("missing")
             return SimpleNamespace(device_id=device_id)
+
+        def get_async_device_protocol(self, device_id: str):
+            return self.get_device_protocol(device_id)
 
         def force_refresh(self) -> None:
             self.refreshed = True

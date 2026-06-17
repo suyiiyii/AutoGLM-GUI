@@ -213,6 +213,87 @@ class DeviceProtocol(Protocol):
 
 
 @runtime_checkable
+class AsyncDeviceProtocol(Protocol):
+    """
+    Asynchronous device operation protocol.
+
+    Mirrors :class:`DeviceProtocol` but with ``async`` methods so that the
+    agent hot path can perform device I/O without blocking a worker thread.
+    """
+
+    @property
+    def device_id(self) -> str:
+        """Unique device identifier."""
+        ...
+
+    async def get_screenshot(self, timeout: int = 10) -> Screenshot:
+        """Capture current screen."""
+        ...
+
+    async def tap(self, x: int, y: int, delay: float | None = None) -> None:
+        """Tap at specified coordinates."""
+        ...
+
+    async def double_tap(self, x: int, y: int, delay: float | None = None) -> None:
+        """Double tap at specified coordinates."""
+        ...
+
+    async def long_press(
+        self,
+        x: int,
+        y: int,
+        duration_ms: int = 3000,
+        delay: float | None = None,
+    ) -> None:
+        """Long press at specified coordinates."""
+        ...
+
+    async def swipe(
+        self,
+        start_x: int,
+        start_y: int,
+        end_x: int,
+        end_y: int,
+        duration_ms: int | None = None,
+        delay: float | None = None,
+    ) -> None:
+        """Swipe from start to end coordinates."""
+        ...
+
+    async def type_text(self, text: str) -> None:
+        """Type text into the currently focused input field."""
+        ...
+
+    async def clear_text(self) -> None:
+        """Clear text in the currently focused input field."""
+        ...
+
+    async def back(self, delay: float | None = None) -> None:
+        """Press the back button."""
+        ...
+
+    async def home(self, delay: float | None = None) -> None:
+        """Press the home button."""
+        ...
+
+    async def launch_app(self, app_name: str, delay: float | None = None) -> bool:
+        """Launch an app by name."""
+        ...
+
+    async def get_current_app(self) -> str:
+        """Get the currently focused app name."""
+        ...
+
+    async def detect_and_set_adb_keyboard(self) -> str:
+        """Detect current keyboard and switch to ADB Keyboard if needed."""
+        ...
+
+    async def restore_keyboard(self, ime: str) -> None:
+        """Restore the original keyboard IME."""
+        ...
+
+
+@runtime_checkable
 class DeviceManagerProtocol(Protocol):
     """Device manager protocol - manages multiple devices."""
 
@@ -263,4 +344,25 @@ class DeviceManagerProtocol(Protocol):
         Returns:
             Tuple of (success, message).
         """
+        ...
+
+
+@runtime_checkable
+class AsyncDeviceManagerProtocol(Protocol):
+    """Asynchronous device manager protocol."""
+
+    async def list_devices(self) -> list[DeviceInfo]:
+        """List all available devices."""
+        ...
+
+    async def get_device(self, device_id: str) -> AsyncDeviceProtocol:
+        """Get an async device instance by ID."""
+        ...
+
+    async def connect(self, address: str, timeout: int = 10) -> tuple[bool, str]:
+        """Connect to a remote device."""
+        ...
+
+    async def disconnect(self, device_id: str) -> tuple[bool, str]:
+        """Disconnect from a device."""
         ...

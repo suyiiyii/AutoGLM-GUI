@@ -3,6 +3,8 @@
 from AutoGLM_GUI import adb
 from AutoGLM_GUI.adb import ADBConnection
 from AutoGLM_GUI.device_protocol import (
+    AsyncDeviceManagerProtocol,
+    AsyncDeviceProtocol,
     DeviceInfo,
     DeviceManagerProtocol,
     DeviceProtocol,
@@ -284,3 +286,251 @@ class ADBDeviceManager(DeviceManagerProtocol):
 
 # Verify ADBDeviceManager implements DeviceManagerProtocol
 assert isinstance(ADBDeviceManager(), DeviceManagerProtocol)
+
+
+class AsyncADBDevice(AsyncDeviceProtocol):
+    """
+    Asynchronous ADB device implementation.
+
+    Mirrors :class:`ADBDevice` but uses the async ADB primitives so that the
+    agent hot path does not block a worker thread.
+    """
+
+    def __init__(self, device_id: str):
+        self._device_id = device_id
+
+    @property
+    def device_id(self) -> str:
+        return self._device_id
+
+    async def get_screenshot(self, timeout: int = 10) -> Screenshot:
+        with trace_span(
+            "device.get_screenshot",
+            attrs={
+                "device_id": self._device_id,
+                "device_impl": "adb_async",
+                "timeout": timeout,
+            },
+        ) as span:
+            result = await adb.get_screenshot_async(self._device_id, timeout)
+            span.set_attributes({"width": result.width, "height": result.height})
+            return Screenshot(
+                base64_data=result.base64_data,
+                width=result.width,
+                height=result.height,
+                is_sensitive=result.is_sensitive,
+            )
+
+    async def tap(self, x: int, y: int, delay: float | None = None) -> None:
+        with trace_span(
+            "device.tap",
+            attrs={
+                "device_id": self._device_id,
+                "device_impl": "adb_async",
+                "x": x,
+                "y": y,
+            },
+        ):
+            await adb.tap_async(x, y, self._device_id, delay)
+
+    async def double_tap(self, x: int, y: int, delay: float | None = None) -> None:
+        with trace_span(
+            "device.double_tap",
+            attrs={
+                "device_id": self._device_id,
+                "device_impl": "adb_async",
+                "x": x,
+                "y": y,
+            },
+        ):
+            await adb.double_tap_async(x, y, self._device_id, delay)
+
+    async def long_press(
+        self,
+        x: int,
+        y: int,
+        duration_ms: int = 3000,
+        delay: float | None = None,
+    ) -> None:
+        with trace_span(
+            "device.long_press",
+            attrs={
+                "device_id": self._device_id,
+                "device_impl": "adb_async",
+                "x": x,
+                "y": y,
+                "duration_ms": duration_ms,
+            },
+        ):
+            await adb.long_press_async(x, y, duration_ms, self._device_id, delay)
+
+    async def swipe(
+        self,
+        start_x: int,
+        start_y: int,
+        end_x: int,
+        end_y: int,
+        duration_ms: int | None = None,
+        delay: float | None = None,
+    ) -> None:
+        with trace_span(
+            "device.swipe",
+            attrs={
+                "device_id": self._device_id,
+                "device_impl": "adb_async",
+                "start_x": start_x,
+                "start_y": start_y,
+                "end_x": end_x,
+                "end_y": end_y,
+                "duration_ms": duration_ms,
+            },
+        ):
+            await adb.swipe_async(
+                start_x,
+                start_y,
+                end_x,
+                end_y,
+                duration_ms,
+                self._device_id,
+                delay,
+            )
+
+    async def type_text(self, text: str) -> None:
+        with trace_span(
+            "device.type_text",
+            attrs={
+                "device_id": self._device_id,
+                "device_impl": "adb_async",
+                "text_length": len(text),
+            },
+        ):
+            await adb.type_text_async(text, self._device_id)
+
+    async def clear_text(self) -> None:
+        with trace_span(
+            "device.clear_text",
+            attrs={
+                "device_id": self._device_id,
+                "device_impl": "adb_async",
+            },
+        ):
+            await adb.clear_text_async(self._device_id)
+
+    async def back(self, delay: float | None = None) -> None:
+        with trace_span(
+            "device.back",
+            attrs={
+                "device_id": self._device_id,
+                "device_impl": "adb_async",
+            },
+        ):
+            await adb.back_async(self._device_id, delay)
+
+    async def home(self, delay: float | None = None) -> None:
+        with trace_span(
+            "device.home",
+            attrs={
+                "device_id": self._device_id,
+                "device_impl": "adb_async",
+            },
+        ):
+            await adb.home_async(self._device_id, delay)
+
+    async def launch_app(self, app_name: str, delay: float | None = None) -> bool:
+        with trace_span(
+            "device.launch_app",
+            attrs={
+                "device_id": self._device_id,
+                "device_impl": "adb_async",
+                "app_name": app_name,
+            },
+        ) as span:
+            success = await adb.launch_app_async(app_name, self._device_id, delay)
+            span.set_attribute("success", success)
+            return success
+
+    async def get_current_app(self) -> str:
+        with trace_span(
+            "device.get_current_app",
+            attrs={
+                "device_id": self._device_id,
+                "device_impl": "adb_async",
+            },
+        ) as span:
+            current_app = await adb.get_current_app_async(self._device_id)
+            span.set_attribute("current_app", current_app)
+            return current_app
+
+    async def detect_and_set_adb_keyboard(self) -> str:
+        with trace_span(
+            "device.detect_and_set_adb_keyboard",
+            attrs={
+                "device_id": self._device_id,
+                "device_impl": "adb_async",
+            },
+        ):
+            return await adb.detect_and_set_adb_keyboard_async(self._device_id)
+
+    async def restore_keyboard(self, ime: str) -> None:
+        with trace_span(
+            "device.restore_keyboard",
+            attrs={
+                "device_id": self._device_id,
+                "device_impl": "adb_async",
+            },
+        ):
+            await adb.restore_keyboard_async(ime, self._device_id)
+
+
+# Verify AsyncADBDevice implements AsyncDeviceProtocol
+assert isinstance(AsyncADBDevice("test"), AsyncDeviceProtocol)
+
+
+class AsyncADBDeviceManager(AsyncDeviceManagerProtocol):
+    """Asynchronous ADB device manager implementation."""
+
+    def __init__(self, adb_path: str = "adb"):
+        self._connection = adb.ADBConnection(adb_path)
+        self._devices: dict[str, AsyncADBDevice] = {}
+
+    async def list_devices(self) -> list[DeviceInfo]:
+        adb_devices = await self._connection.list_devices_async()
+        result = []
+
+        for dev in adb_devices:
+            result.append(
+                DeviceInfo(
+                    device_id=dev.device_id,
+                    status="online" if dev.status == "device" else dev.status,
+                    model=dev.model,
+                    platform="android",
+                    connection_type=dev.connection_type.value,
+                )
+            )
+
+        return result
+
+    async def get_device(self, device_id: str) -> AsyncADBDevice:
+        devices = await self.list_devices()
+        device_info = next((d for d in devices if d.device_id == device_id), None)
+
+        if device_info is None:
+            raise KeyError(f"Device '{device_id}' not found")
+        if device_info.status != "online":
+            raise KeyError(f"Device '{device_id}' is {device_info.status}")
+
+        if device_id not in self._devices:
+            self._devices[device_id] = AsyncADBDevice(device_id)
+
+        return self._devices[device_id]
+
+    async def connect(self, address: str, timeout: int = 10) -> tuple[bool, str]:
+        return await self._connection.connect_async(address, timeout)
+
+    async def disconnect(self, device_id: str) -> tuple[bool, str]:
+        self._devices.pop(device_id, None)
+        return await self._connection.disconnect_async(device_id)
+
+
+# Verify AsyncADBDeviceManager implements AsyncDeviceManagerProtocol
+assert isinstance(AsyncADBDeviceManager(), AsyncDeviceManagerProtocol)
