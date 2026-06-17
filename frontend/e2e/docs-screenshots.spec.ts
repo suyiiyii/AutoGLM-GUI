@@ -12,7 +12,12 @@
  * A manifest of which shots succeeded/failed is written to
  * docs/static/img/screenshots/_manifest.json
  */
-import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import {
+  test,
+  expect,
+  type APIRequestContext,
+  type Page,
+} from '@playwright/test';
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -31,21 +36,31 @@ type ServiceUrls = {
 function readServiceUrls(): ServiceUrls {
   const urlsPath = path.resolve(__dirname, '.service_urls.json');
   if (!fs.existsSync(urlsPath)) {
-    throw new Error('.service_urls.json not found - is start_e2e_services.py running?');
+    throw new Error(
+      '.service_urls.json not found - is start_e2e_services.py running?'
+    );
   }
   return JSON.parse(fs.readFileSync(urlsPath, 'utf-8')) as ServiceUrls;
 }
 
-async function setupMockDeviceAndConfig(request: APIRequestContext): Promise<string> {
+async function setupMockDeviceAndConfig(
+  request: APIRequestContext
+): Promise<string> {
   const { backend_url, agent_url, llm_url } = readServiceUrls();
   const deviceId = 'mock_device_001';
 
   let serial = deviceId;
   try {
-    const addResp = await request.post(`${backend_url}/api/devices/add_remote`, {
-      data: { base_url: agent_url, device_id: deviceId },
-    });
-    const addData = (await addResp.json()) as { success: boolean; serial: string | null };
+    const addResp = await request.post(
+      `${backend_url}/api/devices/add_remote`,
+      {
+        data: { base_url: agent_url, device_id: deviceId },
+      }
+    );
+    const addData = (await addResp.json()) as {
+      success: boolean;
+      serial: string | null;
+    };
     if (addData?.serial) serial = addData.serial;
   } catch {
     /* device may already exist */
@@ -69,11 +84,18 @@ async function setupMockDeviceAndConfig(request: APIRequestContext): Promise<str
 
 const results: { name: string; ok: boolean; error?: string }[] = [];
 
-async function shot(page: Page, name: string, fn: () => Promise<void>): Promise<void> {
+async function shot(
+  page: Page,
+  name: string,
+  fn: () => Promise<void>
+): Promise<void> {
   try {
     await fn();
     await page.waitForTimeout(400);
-    await page.screenshot({ path: path.join(OUT_DIR, `${name}.png`), fullPage: false });
+    await page.screenshot({
+      path: path.join(OUT_DIR, `${name}.png`),
+      fullPage: false,
+    });
     results.push({ name, ok: true });
     console.log(`[shot] OK   ${name}`);
   } catch (e) {
@@ -81,7 +103,10 @@ async function shot(page: Page, name: string, fn: () => Promise<void>): Promise<
     console.log(`[shot] FAIL ${name}: ${String(e).split('\n')[0]}`);
     // Best-effort screenshot of whatever is on screen, for debugging
     try {
-      await page.screenshot({ path: path.join(OUT_DIR, `${name}.png`), fullPage: false });
+      await page.screenshot({
+        path: path.join(OUT_DIR, `${name}.png`),
+        fullPage: false,
+      });
     } catch {
       /* ignore */
     }
@@ -89,7 +114,11 @@ async function shot(page: Page, name: string, fn: () => Promise<void>): Promise<
 }
 
 /** Screenshot the open dialog if present, else the full viewport. */
-async function shotDialog(page: Page, name: string, open: () => Promise<void>): Promise<void> {
+async function shotDialog(
+  page: Page,
+  name: string,
+  open: () => Promise<void>
+): Promise<void> {
   await shot(page, name, async () => {
     await open();
     const dialog = page.locator('[role="dialog"]').first();
@@ -135,7 +164,9 @@ test.describe('Docs screenshots', () => {
     });
 
     await shot(page, 'chat-layered', async () => {
-      await page.goto(`/chat?serial=${encodeURIComponent(serial)}&mode=chatkit`);
+      await page.goto(
+        `/chat?serial=${encodeURIComponent(serial)}&mode=chatkit`
+      );
       await page.waitForTimeout(1500);
     });
 
@@ -210,7 +241,9 @@ test.describe('Docs screenshots', () => {
     await shot(page, 'chat-input', async () => {
       await page.goto(chatUrl);
       await expect(page.locator('textarea')).toBeVisible({ timeout: 15000 });
-      await page.locator('textarea').fill('去美团点一杯霸王茶姬的伯牙绝弦，去冰加珍珠');
+      await page
+        .locator('textarea')
+        .fill('去美团点一杯霸王茶姬的伯牙绝弦，去冰加珍珠');
       await page.waitForTimeout(500);
     });
 
@@ -218,7 +251,10 @@ test.describe('Docs screenshots', () => {
     await page.goto('/workflows');
     await page.waitForTimeout(1000);
     await shotDialog(page, 'workflow-create', async () => {
-      await page.getByRole('button', { name: /新建 Workflow|新建/ }).first().click();
+      await page
+        .getByRole('button', { name: /新建 Workflow|新建/ })
+        .first()
+        .click();
     });
     await closeDialog(page);
 
@@ -226,7 +262,10 @@ test.describe('Docs screenshots', () => {
     await page.goto('/scheduled-tasks');
     await page.waitForTimeout(1000);
     await shotDialog(page, 'scheduled-create', async () => {
-      await page.getByRole('button', { name: /新建任务|新建/ }).first().click();
+      await page
+        .getByRole('button', { name: /新建任务|新建/ })
+        .first()
+        .click();
     });
     await closeDialog(page);
 
@@ -245,14 +284,23 @@ test.describe('Docs screenshots', () => {
     // Write manifest
     fs.writeFileSync(
       path.join(OUT_DIR, '_manifest.json'),
-      JSON.stringify({ generatedAt: new Date().toISOString(), results }, null, 2)
+      JSON.stringify(
+        { generatedAt: new Date().toISOString(), results },
+        null,
+        2
+      )
     );
     const failed = results.filter(r => !r.ok);
-    console.log(`\n[docs-screenshots] ${results.length} shots, ${failed.length} failed`);
+    console.log(
+      `\n[docs-screenshots] ${results.length} shots, ${failed.length} failed`
+    );
     for (const f of failed) console.log(`  FAILED: ${f.name} — ${f.error}`);
   });
 
-  test('capture populated states (seeded data + task run)', async ({ page, request }) => {
+  test('capture populated states (seeded data + task run)', async ({
+    page,
+    request,
+  }) => {
     test.setTimeout(300000);
     const { backend_url, agent_url } = readServiceUrls();
     const serial = await setupMockDeviceAndConfig(request);
@@ -350,7 +398,10 @@ test.describe('Docs screenshots', () => {
       await page.goto(chatUrl);
       await expect(page.locator('textarea')).toBeVisible({ timeout: 15000 });
       // The workflow quick-run button is the ListChecks lucide icon near the input
-      await page.locator('button:has(svg.lucide-list-checks)').last().click({ timeout: 4000 });
+      await page
+        .locator('button:has(svg.lucide-list-checks)')
+        .last()
+        .click({ timeout: 4000 });
       await page.waitForTimeout(900);
     });
 
@@ -392,10 +443,16 @@ test.describe('Docs screenshots', () => {
 
     fs.writeFileSync(
       path.join(OUT_DIR, '_manifest.json'),
-      JSON.stringify({ generatedAt: new Date().toISOString(), results }, null, 2)
+      JSON.stringify(
+        { generatedAt: new Date().toISOString(), results },
+        null,
+        2
+      )
     );
     const failed2 = results.filter(r => !r.ok);
-    console.log(`\n[docs-screenshots] total ${results.length} shots, ${failed2.length} failed`);
+    console.log(
+      `\n[docs-screenshots] total ${results.length} shots, ${failed2.length} failed`
+    );
     for (const f of failed2) console.log(`  FAILED: ${f.name} — ${f.error}`);
   });
 });
