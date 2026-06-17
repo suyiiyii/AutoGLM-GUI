@@ -201,11 +201,15 @@ class TestModelNotFound:
 
 class TestHTTPError:
     def test_non_200_status(self) -> None:
-        mock_resp = _make_response(401, text="Unauthorized")
+        mock_resp_models = _make_response(401, text="Unauthorized")
+        mock_resp_chat = _make_response(401, text="Unauthorized")
         with patch("AutoGLM_GUI.api.agents.httpx.Client") as MockClient:
-            MockClient.return_value.__enter__ = MagicMock(
-                return_value=MagicMock(get=MagicMock(return_value=mock_resp))
-            )
+            mock_ctx = MagicMock()
+            get_mock = MagicMock(side_effect=[mock_resp_models, mock_resp_chat])
+            post_mock = MagicMock(return_value=mock_resp_chat)
+            mock_ctx.get = get_mock
+            mock_ctx.post = post_mock
+            MockClient.return_value.__enter__ = MagicMock(return_value=mock_ctx)
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
             client = TestClient(_build_app())
             resp = client.post(
@@ -214,6 +218,7 @@ class TestHTTPError:
 
         body = resp.json()
         assert body["success"] is False
+        assert "请求失败" in body["message"]
         assert "401" in body["message"]
 
     def test_404_fallback_to_chat_completions(self) -> None:
@@ -254,12 +259,56 @@ class TestHTTPError:
         assert body["success"] is True
         assert "连接成功" in body["message"]
 
-    def test_403_no_fallback(self) -> None:
+    def test_403_fallback_allowed(self) -> None:
         mock_resp_models = _make_response(403, text="Forbidden")
+        mock_resp_chat = _make_response(200)
         with patch("AutoGLM_GUI.api.agents.httpx.Client") as MockClient:
-            MockClient.return_value.__enter__ = MagicMock(
-                return_value=MagicMock(get=MagicMock(return_value=mock_resp_models))
+            mock_ctx = MagicMock()
+            get_mock = MagicMock(side_effect=[mock_resp_models, mock_resp_chat])
+            post_mock = MagicMock(return_value=mock_resp_chat)
+            mock_ctx.get = get_mock
+            mock_ctx.post = post_mock
+            MockClient.return_value.__enter__ = MagicMock(return_value=mock_ctx)
+            MockClient.return_value.__exit__ = MagicMock(return_value=False)
+            client = TestClient(_build_app())
+            resp = client.post(
+                URL, json={"base_url": "http://localhost:8080/v1", "model_name": "m"}
             )
+
+        body = resp.json()
+        assert body["success"] is True
+        assert "连接成功" in body["message"]
+
+    def test_401_fallback_allowed(self) -> None:
+        mock_resp_models = _make_response(401, text="Unauthorized")
+        mock_resp_chat = _make_response(200)
+        with patch("AutoGLM_GUI.api.agents.httpx.Client") as MockClient:
+            mock_ctx = MagicMock()
+            get_mock = MagicMock(side_effect=[mock_resp_models, mock_resp_chat])
+            post_mock = MagicMock(return_value=mock_resp_chat)
+            mock_ctx.get = get_mock
+            mock_ctx.post = post_mock
+            MockClient.return_value.__enter__ = MagicMock(return_value=mock_ctx)
+            MockClient.return_value.__exit__ = MagicMock(return_value=False)
+            client = TestClient(_build_app())
+            resp = client.post(
+                URL, json={"base_url": "http://localhost:8080/v1", "model_name": "m"}
+            )
+
+        body = resp.json()
+        assert body["success"] is True
+        assert "连接成功" in body["message"]
+
+    def test_auth_fallback_auth_failure(self) -> None:
+        mock_resp_models = _make_response(403, text="Forbidden")
+        mock_resp_chat = _make_response(401, text="Unauthorized")
+        with patch("AutoGLM_GUI.api.agents.httpx.Client") as MockClient:
+            mock_ctx = MagicMock()
+            get_mock = MagicMock(side_effect=[mock_resp_models, mock_resp_chat])
+            post_mock = MagicMock(return_value=mock_resp_chat)
+            mock_ctx.get = get_mock
+            mock_ctx.post = post_mock
+            MockClient.return_value.__enter__ = MagicMock(return_value=mock_ctx)
             MockClient.return_value.__exit__ = MagicMock(return_value=False)
             client = TestClient(_build_app())
             resp = client.post(
@@ -268,7 +317,8 @@ class TestHTTPError:
 
         body = resp.json()
         assert body["success"] is False
-        assert "认证失败" in body["message"]
+        assert "请求失败" in body["message"]
+        assert "401" in body["message"]
 
     def test_json_parsing_error_fallback(self) -> None:
         mock_resp_models = MagicMock()

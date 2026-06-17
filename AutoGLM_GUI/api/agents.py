@@ -402,12 +402,11 @@ def model_connection_check(req: ModelConnectionRequest) -> dict[str, Any]:
                         "message": f"连接成功，但未返回模型列表\n{base}",
                     }
 
-            # 2) Auth error on /models — don't bother with fallback
+            # 2) Auth error on /models — log but try fallback
             if resp.status_code in (401, 403):
-                return {
-                    "success": False,
-                    "message": f"认证失败 ({resp.status_code})\n{(resp.text or '')[:120]}",
-                }
+                # Some providers disable /models but allow /chat/completions
+                # Continue to fallback to verify if the key/model actually work
+                pass
 
             # 3) /models not available — fall back to /chat/completions
             payload: dict[str, Any] = {
