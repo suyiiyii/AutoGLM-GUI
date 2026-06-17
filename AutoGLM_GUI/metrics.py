@@ -250,9 +250,8 @@ class AutoGLMMetricsCollector(Collector):
 
         busy_count = 0
 
-        with manager._manager_lock:
-            # Get snapshot (shallow copy to minimize lock time)
-            metadata_snapshot = dict(manager._metadata)
+        # Get snapshot (shallow copy to minimize lock time)
+        metadata_snapshot = manager.get_metadata_snapshot()
 
         # Iterate over _metadata (state is stored in AgentMetadata.state)
         for device_id, metadata in metadata_snapshot.items():
@@ -295,10 +294,7 @@ class AutoGLMMetricsCollector(Collector):
         metrics.append(busy_gauge)
 
         # Metric 3: autoglm_streaming_sessions_active
-        with manager._manager_lock:
-            streaming_count = sum(
-                1 for m in manager._metadata.values() if m.abort_handler is not None
-            )
+        streaming_count = manager.get_streaming_sessions_count()
 
         streaming_gauge = GaugeMetricFamily(
             "autoglm_streaming_sessions_active",

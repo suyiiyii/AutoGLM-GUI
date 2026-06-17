@@ -116,7 +116,7 @@ class TaskManager:
                 from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
 
                 manager = PhoneAgentManager.get_instance()
-                manager.destroy_agent(device_id, context=context)
+                await manager.destroy_agent_async(device_id, context=context)
             except Exception as exc:
                 logger.debug(
                     f"Contextual agent cleanup skipped for {device_id}/{context}: {exc}"
@@ -276,29 +276,43 @@ class TaskManager:
             )
 
     @staticmethod
-    def _register_abort_handler(
+    async def _register_abort_handler(
         manager: Any,
         device_id: str,
         handler: Callable[[], Any] | Callable[[], Awaitable[Any]],
         *,
         context: str,
     ) -> None:
-        try:
-            manager.register_abort_handler(device_id, handler, context=context)
-        except TypeError:
-            manager.register_abort_handler(device_id, handler)
+        if hasattr(manager, "register_abort_handler_async"):
+            try:
+                await manager.register_abort_handler_async(
+                    device_id, handler, context=context
+                )
+            except TypeError:
+                await manager.register_abort_handler_async(device_id, handler)
+        else:
+            try:
+                manager.register_abort_handler(device_id, handler, context=context)
+            except TypeError:
+                manager.register_abort_handler(device_id, handler)
 
     @staticmethod
-    def _unregister_abort_handler(
+    async def _unregister_abort_handler(
         manager: Any,
         device_id: str,
         *,
         context: str,
     ) -> None:
-        try:
-            manager.unregister_abort_handler(device_id, context=context)
-        except TypeError:
-            manager.unregister_abort_handler(device_id)
+        if hasattr(manager, "unregister_abort_handler_async"):
+            try:
+                await manager.unregister_abort_handler_async(device_id, context=context)
+            except TypeError:
+                await manager.unregister_abort_handler_async(device_id)
+        else:
+            try:
+                manager.unregister_abort_handler(device_id, context=context)
+            except TypeError:
+                manager.unregister_abort_handler(device_id)
 
     async def _record_trace_artifacts(
         self,
@@ -487,8 +501,7 @@ class TaskManager:
                     auto_initialize=True,
                     context=context,
                 )
-                agent = await asyncio.to_thread(
-                    manager.get_agent_with_context,
+                agent = await manager.get_agent_with_context_async(
                     device_id,
                     context=context,
                     agent_type=None,
@@ -511,7 +524,7 @@ class TaskManager:
                     await agent.cancel()
 
                 self._abort_handlers[task_id] = cancel_handler
-                self._register_abort_handler(
+                await self._register_abort_handler(
                     manager,
                     device_id,
                     cancel_handler,
@@ -655,15 +668,17 @@ class TaskManager:
             self._cancel_requested.discard(task_id)
             self._abort_handlers.pop(task_id, None)
             if abort_registered:
-                self._unregister_abort_handler(
+                await self._unregister_abort_handler(
                     manager,
                     device_id,
                     context=context,
                 )
             if final_status == TaskStatus.FAILED.value:
-                manager.set_error_state(device_id, final_message, context=context)
+                await manager.set_error_state_async(
+                    device_id, final_message, context=context
+                )
             if acquired:
-                manager.release_device(device_id, context=context)
+                await manager.release_device_async(device_id, context=context)
 
         await self._finalize_traced_task(
             task_id=task_id,
@@ -850,8 +865,7 @@ class TaskManager:
                     auto_initialize=True,
                     context=context,
                 )
-                agent = await asyncio.to_thread(
-                    manager.get_agent_with_context,
+                agent = await manager.get_agent_with_context_async(
                     device_id,
                     context=context,
                     agent_type=None,
@@ -861,7 +875,7 @@ class TaskManager:
                     await agent.cancel()
 
                 self._abort_handlers[task_id] = cancel_handler
-                self._register_abort_handler(
+                await self._register_abort_handler(
                     manager,
                     device_id,
                     cancel_handler,
@@ -993,15 +1007,17 @@ class TaskManager:
             self._cancel_requested.discard(task_id)
             self._abort_handlers.pop(task_id, None)
             if abort_registered:
-                self._unregister_abort_handler(
+                await self._unregister_abort_handler(
                     manager,
                     device_id,
                     context=context,
                 )
             if final_status == TaskStatus.FAILED.value:
-                manager.set_error_state(device_id, final_message, context=context)
+                await manager.set_error_state_async(
+                    device_id, final_message, context=context
+                )
             if acquired:
-                manager.release_device(device_id, context=context)
+                await manager.release_device_async(device_id, context=context)
 
         await self._finalize_traced_task(
             task_id=task_id,

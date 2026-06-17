@@ -5,11 +5,11 @@ from __future__ import annotations
 import asyncio
 import threading
 import time
-from collections.abc import Awaitable, Callable
-from contextlib import contextmanager
+from collections.abc import Awaitable, Callable, Coroutine
+from contextlib import asynccontextmanager, contextmanager
 from dataclasses import dataclass
 from enum import StrEnum
-from typing import Any
+from typing import Any, TypeVar
 
 from AutoGLM_GUI.agents.protocols import AsyncAgent
 from AutoGLM_GUI.config import AgentConfig, ModelConfig
@@ -21,6 +21,8 @@ from AutoGLM_GUI.exceptions import (
 from AutoGLM_GUI.logger import logger
 from AutoGLM_GUI.trace import trace_span
 from AutoGLM_GUI.types import AgentSpecificConfig
+
+T = TypeVar("T")
 
 
 class AgentState(StrEnum):
@@ -63,7 +65,7 @@ class PhoneAgentManager:
 
     Design Principles:
     - Uses state.agents and state.agent_configs as storage (backward compatible)
-    - Single RLock (_manager_lock) for all state transitions (microsecond hold time)
+    - Single asyncio.Lock (_manager_lock) for all state transitions
     - No long-held per-device locks; acquire/release are instantaneous CAS operations
     - Context managers for automatic state release
 
@@ -71,8 +73,8 @@ class PhoneAgentManager:
         >>> manager = PhoneAgentManager.get_instance()
         >>>
         >>> # Use agent with automatic locking (auto-initializes if needed)
-        >>> with manager.use_agent(device_id) as agent:
-        >>>     result = agent.run("Open WeChat")
+        >>> async with manager.use_agent_async(device_id) as agent:
+        >>>     result = await agent.run("Open WeChat")
     """
 
     _instance: PhoneAgentManager | None = None
@@ -84,7 +86,7 @@ class PhoneAgentManager:
         # All state transitions (IDLE↔BUSY) are guarded by this single lock.
         # Each critical section holds it for microseconds only (atomic CAS),
         # so no asyncio.to_thread() wrapper is needed for release/register/unregister.
-        self._manager_lock = threading.RLock()
+        self._manager_lock = asyncio.Lock()
 
         # Agent metadata (indexed by device_id)
         # State is stored in AgentMetadata.state (single source of truth)
@@ -104,7 +106,148 @@ class PhoneAgentManager:
                     logger.info("PhoneAgentManager singleton created")
         return cls._instance
 
+    # ==================== Lock helpers ====================
+
+    def _run_sync(self, coro: Coroutine[Any, Any, T]) -> T:
+        """Run an async implementation coroutine from a sync context."""
+        try:
+            return asyncio.run(coro)
+        except RuntimeError as e:
+            if "asyncio.run() cannot be called from a running event loop" in str(e):
+                # Fallback: run in a worker thread with its own event loop.
+                import concurrent.futures
+
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    return pool.submit(asyncio.run, coro).result()
+            raise
+
     # ==================== Agent Lifecycle ====================
+
+    async def _initialize_agent_with_factory_impl(
+        self,
+        device_id: str,
+        agent_type: str,
+        model_config: ModelConfig,
+        agent_config: AgentConfig,
+        agent_specific_config: AgentSpecificConfig,
+        takeover_callback: Callable[..., Any] | None = None,
+        confirmation_callback: Callable[..., Any] | None = None,
+        force: bool = False,
+    ) -> AsyncAgent:
+        with trace_span(
+            "agent_manager.initialize_agent",
+            attrs={
+                "device_id": device_id,
+                "agent_type": agent_type,
+                "force": force,
+            },
+        ):
+            async with self._manager_lock:
+                return await self._initialize_agent_with_factory_unsafe(
+                    device_id=device_id,
+                    agent_type=agent_type,
+                    model_config=model_config,
+                    agent_config=agent_config,
+                    agent_specific_config=agent_specific_config,
+                    takeover_callback=takeover_callback,
+                    confirmation_callback=confirmation_callback,
+                    force=force,
+                )
+
+    async def _initialize_agent_with_factory_unsafe(
+        self,
+        device_id: str,
+        agent_type: str,
+        model_config: ModelConfig,
+        agent_config: AgentConfig,
+        agent_specific_config: AgentSpecificConfig,
+        takeover_callback: Callable[..., Any] | None = None,
+        confirmation_callback: Callable[..., Any] | None = None,
+        force: bool = False,
+    ) -> AsyncAgent:
+        """Actual initialization logic; caller must hold ``_manager_lock``."""
+        from AutoGLM_GUI.agents import create_agent
+
+        if device_id in self._agents and not force:
+            logger.debug(f"Agent already initialized for {device_id}")
+            return self._agents[device_id]
+
+        metadata = self._metadata.get(device_id)
+        if metadata and metadata.state == AgentState.BUSY:
+            raise DeviceBusyError(
+                f"Device {device_id} is currently processing a request"
+            )
+
+        self._metadata[device_id] = AgentMetadata(
+            device_id=device_id,
+            state=AgentState.INITIALIZING,
+            model_config=model_config,
+            agent_config=agent_config,
+            agent_type=agent_type,
+            created_at=time.time(),
+            last_used=time.time(),
+        )
+
+        try:
+            from AutoGLM_GUI.device_manager import DeviceManager
+
+            device_manager = DeviceManager.get_instance()
+            actual_device_id = agent_config.device_id
+            if not actual_device_id:
+                raise AgentInitializationError(
+                    "agent_config.device_id is required but was None"
+                )
+            try:
+                with trace_span(
+                    "agent_manager.get_device_protocol",
+                    attrs={"device_id": actual_device_id},
+                ):
+                    device = device_manager.get_async_device_protocol(actual_device_id)
+            except ValueError:
+                device_manager.force_refresh()
+                with trace_span(
+                    "agent_manager.get_device_protocol",
+                    attrs={
+                        "device_id": actual_device_id,
+                        "after_refresh": True,
+                    },
+                ):
+                    device = device_manager.get_async_device_protocol(actual_device_id)
+
+            with trace_span(
+                "agent_manager.create_agent",
+                attrs={"device_id": device_id, "agent_type": agent_type},
+            ):
+                agent = create_agent(
+                    agent_type=agent_type,
+                    model_config=model_config,
+                    agent_config=agent_config,
+                    agent_specific_config=agent_specific_config,
+                    device=device,
+                    takeover_callback=takeover_callback,
+                    confirmation_callback=confirmation_callback,
+                )
+
+            self._agents[device_id] = agent
+            self._agent_configs[device_id] = (model_config, agent_config)
+
+            self._metadata[device_id].state = AgentState.IDLE
+
+            logger.info(
+                f"Agent of type '{agent_type}' initialized for device {device_id}"
+            )
+            return agent
+
+        except Exception as e:
+            self._agents.pop(device_id, None)
+            self._agent_configs.pop(device_id, None)
+            self._metadata[device_id].state = AgentState.ERROR
+            self._metadata[device_id].error_message = str(e)
+
+            logger.error(f"Failed to initialize agent for {device_id}: {e}")
+            raise AgentInitializationError(
+                f"Failed to initialize agent: {str(e)}"
+            ) from e
 
     def initialize_agent_with_factory(
         self,
@@ -117,103 +260,42 @@ class PhoneAgentManager:
         confirmation_callback: Callable[..., Any] | None = None,
         force: bool = False,
     ) -> AsyncAgent:
-        from AutoGLM_GUI.agents import create_agent
+        return self._run_sync(
+            self._initialize_agent_with_factory_impl(
+                device_id=device_id,
+                agent_type=agent_type,
+                model_config=model_config,
+                agent_config=agent_config,
+                agent_specific_config=agent_specific_config,
+                takeover_callback=takeover_callback,
+                confirmation_callback=confirmation_callback,
+                force=force,
+            )
+        )
 
-        with trace_span(
-            "agent_manager.initialize_agent",
-            attrs={
-                "device_id": device_id,
-                "agent_type": agent_type,
-                "force": force,
-            },
-        ):
-            with self._manager_lock:
-                if device_id in self._agents and not force:
-                    logger.debug(f"Agent already initialized for {device_id}")
-                    return self._agents[device_id]
+    async def initialize_agent_with_factory_async(
+        self,
+        device_id: str,
+        agent_type: str,
+        model_config: ModelConfig,
+        agent_config: AgentConfig,
+        agent_specific_config: AgentSpecificConfig,
+        takeover_callback: Callable[..., Any] | None = None,
+        confirmation_callback: Callable[..., Any] | None = None,
+        force: bool = False,
+    ) -> AsyncAgent:
+        return await self._initialize_agent_with_factory_impl(
+            device_id=device_id,
+            agent_type=agent_type,
+            model_config=model_config,
+            agent_config=agent_config,
+            agent_specific_config=agent_specific_config,
+            takeover_callback=takeover_callback,
+            confirmation_callback=confirmation_callback,
+            force=force,
+        )
 
-                metadata = self._metadata.get(device_id)
-                if metadata and metadata.state == AgentState.BUSY:
-                    raise DeviceBusyError(
-                        f"Device {device_id} is currently processing a request"
-                    )
-
-                self._metadata[device_id] = AgentMetadata(
-                    device_id=device_id,
-                    state=AgentState.INITIALIZING,
-                    model_config=model_config,
-                    agent_config=agent_config,
-                    agent_type=agent_type,
-                    created_at=time.time(),
-                    last_used=time.time(),
-                )
-
-                try:
-                    from AutoGLM_GUI.device_manager import DeviceManager
-
-                    device_manager = DeviceManager.get_instance()
-                    actual_device_id = agent_config.device_id
-                    if not actual_device_id:
-                        raise AgentInitializationError(
-                            "agent_config.device_id is required but was None"
-                        )
-                    try:
-                        with trace_span(
-                            "agent_manager.get_device_protocol",
-                            attrs={"device_id": actual_device_id},
-                        ):
-                            device = device_manager.get_async_device_protocol(
-                                actual_device_id
-                            )
-                    except ValueError:
-                        device_manager.force_refresh()
-                        with trace_span(
-                            "agent_manager.get_device_protocol",
-                            attrs={
-                                "device_id": actual_device_id,
-                                "after_refresh": True,
-                            },
-                        ):
-                            device = device_manager.get_async_device_protocol(
-                                actual_device_id
-                            )
-
-                    with trace_span(
-                        "agent_manager.create_agent",
-                        attrs={"device_id": device_id, "agent_type": agent_type},
-                    ):
-                        agent = create_agent(
-                            agent_type=agent_type,
-                            model_config=model_config,
-                            agent_config=agent_config,
-                            agent_specific_config=agent_specific_config,
-                            device=device,
-                            takeover_callback=takeover_callback,
-                            confirmation_callback=confirmation_callback,
-                        )
-
-                    self._agents[device_id] = agent
-                    self._agent_configs[device_id] = (model_config, agent_config)
-
-                    self._metadata[device_id].state = AgentState.IDLE
-
-                    logger.info(
-                        f"Agent of type '{agent_type}' initialized for device {device_id}"
-                    )
-                    return agent
-
-                except Exception as e:
-                    self._agents.pop(device_id, None)
-                    self._agent_configs.pop(device_id, None)
-                    self._metadata[device_id].state = AgentState.ERROR
-                    self._metadata[device_id].error_message = str(e)
-
-                    logger.error(f"Failed to initialize agent for {device_id}: {e}")
-                    raise AgentInitializationError(
-                        f"Failed to initialize agent: {str(e)}"
-                    ) from e
-
-    def _auto_initialize_agent(
+    async def _auto_initialize_agent_impl(
         self, agent_key: str, actual_device_id: str, agent_type: str | None = None
     ) -> None:
         """
@@ -279,7 +361,7 @@ class PhoneAgentManager:
             # 在Web模式下默认确认，让前端处理
             return True
 
-        self.initialize_agent_with_factory(
+        await self._initialize_agent_with_factory_unsafe(
             device_id=agent_key,
             agent_type=effective_agent_type,
             model_config=model_config,
@@ -290,11 +372,24 @@ class PhoneAgentManager:
         )
         logger.info(f"Agent auto-initialized for key {agent_key}")
 
+    def _auto_initialize_agent(
+        self, agent_key: str, actual_device_id: str, agent_type: str | None = None
+    ) -> None:
+        return self._run_sync(
+            self._auto_initialize_agent_impl(agent_key, actual_device_id, agent_type)
+        )
+
+    async def _get_agent_impl(self, device_id: str) -> AsyncAgent:
+        return await self._get_agent_with_context_impl(device_id, context="default")
+
     def get_agent(self, device_id: str) -> AsyncAgent:
         """Get agent using default context (backward compatible)."""
-        return self.get_agent_with_context(device_id, context="default")
+        return self._run_sync(self._get_agent_impl(device_id))
 
-    def get_agent_with_context(
+    async def get_agent_async(self, device_id: str) -> AsyncAgent:
+        return await self._get_agent_impl(device_id)
+
+    async def _get_agent_with_context_impl(
         self,
         device_id: str,
         context: str = "default",
@@ -310,19 +405,42 @@ class PhoneAgentManager:
         Returns:
             Agent instance for this device+context combination
         """
-        with self._manager_lock:
+        async with self._manager_lock:
             agent_key = self._make_agent_key(device_id, context)
 
             if agent_key not in self._agents:
-                self._auto_initialize_agent(agent_key, device_id, agent_type=agent_type)
+                await self._auto_initialize_agent_impl(
+                    agent_key, device_id, agent_type=agent_type
+                )
 
             return self._agents[agent_key]
 
-    def get_agent_safe(self, device_id: str) -> AsyncAgent | None:
-        with self._manager_lock:
+    def get_agent_with_context(
+        self,
+        device_id: str,
+        context: str = "default",
+        agent_type: str | None = None,
+    ) -> AsyncAgent:
+        return self._run_sync(
+            self._get_agent_with_context_impl(device_id, context, agent_type)
+        )
+
+    async def get_agent_with_context_async(
+        self,
+        device_id: str,
+        context: str = "default",
+        agent_type: str | None = None,
+    ) -> AsyncAgent:
+        return await self._get_agent_with_context_impl(device_id, context, agent_type)
+
+    async def _get_agent_safe_impl(self, device_id: str) -> AsyncAgent | None:
+        async with self._manager_lock:
             return self._agents.get(device_id)
 
-    def reset_agent(self, device_id: str, context: str = "default") -> None:
+    def get_agent_safe(self, device_id: str) -> AsyncAgent | None:
+        return self._run_sync(self._get_agent_safe_impl(device_id))
+
+    async def _reset_agent_impl(self, device_id: str, context: str = "default") -> None:
         """
         Reset agent state by calling the agent's reset() method.
 
@@ -334,7 +452,7 @@ class PhoneAgentManager:
             AgentNotInitializedError: If agent not initialized
         """
         agent_key = self._make_agent_key(device_id, context)
-        with self._manager_lock:
+        async with self._manager_lock:
             if agent_key not in self._agents:
                 raise AgentNotInitializedError(
                     f"Agent not initialized for device {device_id} (context={context})"
@@ -351,7 +469,15 @@ class PhoneAgentManager:
 
             logger.info(f"Agent reset for device {device_id} (context={context})")
 
-    def destroy_agent(self, device_id: str, context: str = "default") -> None:
+    def reset_agent(self, device_id: str, context: str = "default") -> None:
+        return self._run_sync(self._reset_agent_impl(device_id, context))
+
+    async def reset_agent_async(self, device_id: str, context: str = "default") -> None:
+        await self._reset_agent_impl(device_id, context)
+
+    async def _destroy_agent_impl(
+        self, device_id: str, context: str = "default"
+    ) -> None:
         """
         Destroy agent and clean up resources.
 
@@ -360,7 +486,7 @@ class PhoneAgentManager:
             context: Agent context (default, chat:session_id, scheduled, etc.)
         """
         agent_key = self._make_agent_key(device_id, context)
-        with self._manager_lock:
+        async with self._manager_lock:
             # Remove agent
             agent = self._agents.pop(agent_key, None)
             if agent:
@@ -377,11 +503,29 @@ class PhoneAgentManager:
 
             logger.info(f"Agent destroyed for device {device_id} (context={context})")
 
-    def is_initialized(self, device_id: str, context: str = "default") -> bool:
+    def destroy_agent(self, device_id: str, context: str = "default") -> None:
+        return self._run_sync(self._destroy_agent_impl(device_id, context))
+
+    async def destroy_agent_async(
+        self, device_id: str, context: str = "default"
+    ) -> None:
+        await self._destroy_agent_impl(device_id, context)
+
+    async def _is_initialized_impl(
+        self, device_id: str, context: str = "default"
+    ) -> bool:
         """Check if agent is initialized for device."""
-        with self._manager_lock:
+        async with self._manager_lock:
             agent_key = self._make_agent_key(device_id, context)
             return agent_key in self._agents
+
+    def is_initialized(self, device_id: str, context: str = "default") -> bool:
+        return self._run_sync(self._is_initialized_impl(device_id, context))
+
+    async def is_initialized_async(
+        self, device_id: str, context: str = "default"
+    ) -> bool:
+        return await self._is_initialized_impl(device_id, context)
 
     # ==================== Concurrency Control ====================
 
@@ -389,7 +533,7 @@ class PhoneAgentManager:
         """Build composite key for device+context isolation."""
         return device_id if context == "default" else f"{device_id}:{context}"
 
-    def acquire_device(
+    async def _acquire_device_impl(
         self,
         device_id: str,
         auto_initialize: bool = False,
@@ -425,14 +569,15 @@ class PhoneAgentManager:
             AgentNotInitializedError: If agent not initialized AND auto_initialize=False
             AgentInitializationError: If auto_initialize=True and initialization fails
         """
+        _ = timeout
         agent_key = self._make_agent_key(device_id, context)
 
         # Verify agent exists (with optional auto-initialization)
-        if not self.is_initialized(agent_key):
+        if not await self._is_initialized_impl(agent_key):
             if auto_initialize:
-                with self._manager_lock:
-                    if not self.is_initialized(agent_key):
-                        self._auto_initialize_agent(agent_key, device_id)
+                async with self._manager_lock:
+                    if not await self._is_initialized_impl(agent_key):
+                        await self._auto_initialize_agent_impl(agent_key, device_id)
             else:
                 raise AgentNotInitializedError(
                     f"Agent not initialized for device {agent_key}. "
@@ -440,7 +585,7 @@ class PhoneAgentManager:
                 )
 
         # Atomic CAS: IDLE → BUSY
-        with self._manager_lock:
+        async with self._manager_lock:
             metadata = self._metadata.get(agent_key)
             if metadata and metadata.state == AgentState.BUSY:
                 if raise_on_timeout:
@@ -455,6 +600,24 @@ class PhoneAgentManager:
         logger.debug(f"Device lock acquired for {agent_key}")
         return True
 
+    def acquire_device(
+        self,
+        device_id: str,
+        auto_initialize: bool = False,
+        timeout: float | None = None,
+        raise_on_timeout: bool = True,
+        context: str = "default",
+    ) -> bool:
+        return self._run_sync(
+            self._acquire_device_impl(
+                device_id,
+                auto_initialize=auto_initialize,
+                timeout=timeout,
+                raise_on_timeout=raise_on_timeout,
+                context=context,
+            )
+        )
+
     async def acquire_device_async(
         self,
         device_id: str,
@@ -466,8 +629,7 @@ class PhoneAgentManager:
         """Acquire a device lock without leaking it if the awaiter is cancelled."""
 
         acquire_task = asyncio.create_task(
-            asyncio.to_thread(
-                self.acquire_device,
+            self._acquire_device_impl(
                 device_id,
                 auto_initialize=auto_initialize,
                 timeout=timeout,
@@ -490,7 +652,9 @@ class PhoneAgentManager:
                     return
 
                 try:
-                    self.release_device(device_id, context=context)
+                    asyncio.get_running_loop().create_task(
+                        self.release_device_async(device_id, context=context)
+                    )
                 except BaseException as e:
                     logger.error(
                         f"Failed to cleanup cancelled acquire for {device_id}: {e}"
@@ -499,7 +663,9 @@ class PhoneAgentManager:
             acquire_task.add_done_callback(_cleanup_cancelled_acquire)
             raise
 
-    def release_device(self, device_id: str, context: str = "default") -> None:
+    async def _release_device_impl(
+        self, device_id: str, context: str = "default"
+    ) -> None:
         """
         Atomically transition device state from BUSY to IDLE and clear abort handler.
 
@@ -512,7 +678,7 @@ class PhoneAgentManager:
             context: Context identifier, must match the one used in acquire_device.
         """
         agent_key = self._make_agent_key(device_id, context)
-        with self._manager_lock:
+        async with self._manager_lock:
             metadata = self._metadata.get(agent_key)
             if metadata:
                 # Only transition BUSY→IDLE; preserve ERROR state so callers
@@ -522,6 +688,14 @@ class PhoneAgentManager:
                 metadata.abort_handler = None
 
         logger.debug(f"Device lock released for {agent_key}")
+
+    def release_device(self, device_id: str, context: str = "default") -> None:
+        return self._run_sync(self._release_device_impl(device_id, context))
+
+    async def release_device_async(
+        self, device_id: str, context: str = "default"
+    ) -> None:
+        await self._release_device_impl(device_id, context)
 
     @contextmanager
     def use_agent(
@@ -573,20 +747,50 @@ class PhoneAgentManager:
             if acquired:
                 self.release_device(device_id)
 
+    @asynccontextmanager
+    async def use_agent_async(
+        self,
+        device_id: str,
+        timeout: float | None = None,
+        auto_initialize: bool = True,
+    ):
+        """Async context manager for automatic lock acquisition/release."""
+        _ = timeout
+        acquired = False
+        try:
+            acquired = await self.acquire_device_async(
+                device_id,
+                auto_initialize=auto_initialize,
+            )
+            agent = await self.get_agent_async(device_id)
+            yield agent
+        except Exception as exc:
+            await self.set_error_state_async(device_id, str(exc))
+            raise
+        finally:
+            if acquired:
+                await self.release_device_async(device_id)
+
     # ==================== State Management ====================
 
-    def get_state(self, device_id: str) -> AgentState:
+    async def _get_state_impl(self, device_id: str) -> AgentState:
         """Get current agent state."""
-        with self._manager_lock:
+        async with self._manager_lock:
             metadata = self._metadata.get(device_id)
             return metadata.state if metadata else AgentState.ERROR
 
-    def set_error_state(
+    def get_state(self, device_id: str) -> AgentState:
+        return self._run_sync(self._get_state_impl(device_id))
+
+    async def get_state_async(self, device_id: str) -> AgentState:
+        return await self._get_state_impl(device_id)
+
+    async def _set_error_state_impl(
         self, device_id: str, error_message: str, context: str = "default"
     ) -> None:
         """Mark agent as errored."""
         agent_key = self._make_agent_key(device_id, context)
-        with self._manager_lock:
+        async with self._manager_lock:
             if agent_key in self._metadata:
                 self._metadata[agent_key].state = AgentState.ERROR
                 self._metadata[agent_key].error_message = error_message
@@ -595,30 +799,62 @@ class PhoneAgentManager:
                 f"Agent error for {device_id} (context={context}): {error_message}"
             )
 
+    def set_error_state(
+        self, device_id: str, error_message: str, context: str = "default"
+    ) -> None:
+        return self._run_sync(
+            self._set_error_state_impl(device_id, error_message, context)
+        )
+
+    async def set_error_state_async(
+        self, device_id: str, error_message: str, context: str = "default"
+    ) -> None:
+        await self._set_error_state_impl(device_id, error_message, context)
+
     # ==================== Configuration Management ====================
 
-    def get_config(self, device_id: str) -> tuple[ModelConfig, AgentConfig]:
+    async def _get_config_impl(self, device_id: str) -> tuple[ModelConfig, AgentConfig]:
         """Get cached configuration for device."""
-        with self._manager_lock:
+        async with self._manager_lock:
             if device_id not in self._agent_configs:
                 raise AgentNotInitializedError(
                     f"No configuration found for device {device_id}"
                 )
             return self._agent_configs[device_id]
 
+    def get_config(self, device_id: str) -> tuple[ModelConfig, AgentConfig]:
+        return self._run_sync(self._get_config_impl(device_id))
+
+    async def get_config_async(self, device_id: str) -> tuple[ModelConfig, AgentConfig]:
+        return await self._get_config_impl(device_id)
+
     # ==================== Introspection ====================
 
-    def list_agents(self) -> list[str]:
+    async def _list_agents_impl(self) -> list[str]:
         """Get list of all initialized device IDs."""
-        with self._manager_lock:
+        async with self._manager_lock:
             return list(self._agents.keys())
 
-    def get_metadata(self, device_id: str) -> AgentMetadata | None:
+    def list_agents(self) -> list[str]:
+        return self._run_sync(self._list_agents_impl())
+
+    async def list_agents_async(self) -> list[str]:
+        return await self._list_agents_impl()
+
+    async def _get_metadata_impl(self, device_id: str) -> AgentMetadata | None:
         """Get agent metadata."""
-        with self._manager_lock:
+        async with self._manager_lock:
             return self._metadata.get(device_id)
 
-    def get_metadata_for_device(self, device_id: str) -> AgentMetadata | None:
+    def get_metadata(self, device_id: str) -> AgentMetadata | None:
+        return self._run_sync(self._get_metadata_impl(device_id))
+
+    async def get_metadata_async(self, device_id: str) -> AgentMetadata | None:
+        return await self._get_metadata_impl(device_id)
+
+    async def _get_metadata_for_device_impl(
+        self, device_id: str
+    ) -> AgentMetadata | None:
         """Get the most relevant metadata for a device across all contexts.
 
         Device-level UI cares whether a device has any initialized agent, even when
@@ -633,7 +869,7 @@ class PhoneAgentManager:
         }
         key_prefix = f"{device_id}:"
 
-        with self._manager_lock:
+        async with self._manager_lock:
             candidates = [
                 metadata
                 for key, metadata in self._metadata.items()
@@ -652,7 +888,32 @@ class PhoneAgentManager:
             ),
         )
 
-    def register_abort_handler(
+    def get_metadata_for_device(self, device_id: str) -> AgentMetadata | None:
+        return self._run_sync(self._get_metadata_for_device_impl(device_id))
+
+    async def get_metadata_for_device_async(
+        self, device_id: str
+    ) -> AgentMetadata | None:
+        return await self._get_metadata_for_device_impl(device_id)
+
+    async def _get_metadata_snapshot_impl(self) -> dict[str, AgentMetadata]:
+        """Return a shallow copy of the metadata map under the manager lock."""
+        async with self._manager_lock:
+            return dict(self._metadata)
+
+    def get_metadata_snapshot(self) -> dict[str, AgentMetadata]:
+        return self._run_sync(self._get_metadata_snapshot_impl())
+
+    async def _get_streaming_sessions_count_impl(self) -> int:
+        async with self._manager_lock:
+            return sum(
+                1 for m in self._metadata.values() if m.abort_handler is not None
+            )
+
+    def get_streaming_sessions_count(self) -> int:
+        return self._run_sync(self._get_streaming_sessions_count_impl())
+
+    async def _register_abort_handler_impl(
         self,
         device_id: str,
         abort_handler: threading.Event
@@ -660,7 +921,7 @@ class PhoneAgentManager:
         | Callable[[], Awaitable[None]],
         context: str = "default",
     ) -> None:
-        """注册取消处理器 (支持同步和异步处理器)。
+        """注册取消处理器 (支持同步和异步处理器).
 
         Instantaneous operation (microsecond lock hold). Safe to call directly
         from async contexts without ``asyncio.to_thread``.
@@ -669,15 +930,37 @@ class PhoneAgentManager:
             device_id: 设备标识符
             abort_handler: 取消处理器 (Event / 同步函数 / 异步函数)
         """
-        with self._manager_lock:
+        async with self._manager_lock:
             metadata = self._metadata.get(self._make_agent_key(device_id, context))
             if metadata:
                 metadata.abort_handler = abort_handler
 
-    def unregister_abort_handler(
+    def register_abort_handler(
+        self,
+        device_id: str,
+        abort_handler: threading.Event
+        | Callable[[], None]
+        | Callable[[], Awaitable[None]],
+        context: str = "default",
+    ) -> None:
+        return self._run_sync(
+            self._register_abort_handler_impl(device_id, abort_handler, context)
+        )
+
+    async def register_abort_handler_async(
+        self,
+        device_id: str,
+        abort_handler: threading.Event
+        | Callable[[], None]
+        | Callable[[], Awaitable[None]],
+        context: str = "default",
+    ) -> None:
+        await self._register_abort_handler_impl(device_id, abort_handler, context)
+
+    async def _unregister_abort_handler_impl(
         self, device_id: str, context: str = "default"
     ) -> None:
-        """注销取消处理器。
+        """注销取消处理器.
 
         Instantaneous operation (microsecond lock hold). Safe to call directly
         from async ``finally`` blocks without ``asyncio.to_thread``.
@@ -685,10 +968,20 @@ class PhoneAgentManager:
         Args:
             device_id: 设备标识符
         """
-        with self._manager_lock:
+        async with self._manager_lock:
             metadata = self._metadata.get(self._make_agent_key(device_id, context))
             if metadata:
                 metadata.abort_handler = None
+
+    def unregister_abort_handler(
+        self, device_id: str, context: str = "default"
+    ) -> None:
+        return self._run_sync(self._unregister_abort_handler_impl(device_id, context))
+
+    async def unregister_abort_handler_async(
+        self, device_id: str, context: str = "default"
+    ) -> None:
+        await self._unregister_abort_handler_impl(device_id, context)
 
     async def abort_streaming_chat_async(self, device_id: str) -> bool:
         """异步中止流式对话 (支持 AsyncAgent)。
@@ -703,7 +996,7 @@ class PhoneAgentManager:
         Returns:
             bool: True 表示发送了中止信号，False 表示没有活跃会话
         """
-        with self._manager_lock:
+        async with self._manager_lock:
             # 查找所有匹配的 contextual key，优先选择有 abort handler 的
             key_prefix = f"{device_id}:"
             candidates: list[tuple[str, Any]] = []
@@ -742,9 +1035,9 @@ class PhoneAgentManager:
 
         return True
 
-    def is_streaming_active(self, device_id: str) -> bool:
+    async def _is_streaming_active_impl(self, device_id: str) -> bool:
         """检查设备是否有活跃的流式会话."""
-        with self._manager_lock:
+        async with self._manager_lock:
             key_prefix = f"{device_id}:"
             for key, metadata in self._metadata.items():
                 if (
@@ -753,13 +1046,19 @@ class PhoneAgentManager:
                     return True
             return False
 
-    def destroy_all_agents(self) -> int:
+    def is_streaming_active(self, device_id: str) -> bool:
+        return self._run_sync(self._is_streaming_active_impl(device_id))
+
+    async def is_streaming_active_async(self, device_id: str) -> bool:
+        return await self._is_streaming_active_impl(device_id)
+
+    async def _destroy_all_agents_impl(self) -> int:
         """销毁所有 Agent 实例，用于配置热更新.
 
         Returns:
             int: 销毁的 Agent 数量
         """
-        with self._manager_lock:
+        async with self._manager_lock:
             agent_keys = list(self._agents.keys())
             count = len(agent_keys)
 
@@ -781,3 +1080,9 @@ class PhoneAgentManager:
                 logger.info(f"Destroyed {count} agent(s) for config hot reload")
 
             return count
+
+    def destroy_all_agents(self) -> int:
+        return self._run_sync(self._destroy_all_agents_impl())
+
+    async def destroy_all_agents_async(self) -> int:
+        return await self._destroy_all_agents_impl()

@@ -282,8 +282,7 @@ async def chat(device_id: str, message: str) -> str:
                 "layered.tool.chat.get_agent",
                 attrs={"device_id": device_id},
             ):
-                agent = await asyncio.to_thread(
-                    manager.get_agent_with_context,
+                agent = await manager.get_agent_with_context_async(
                     device_id,
                     context="layered",
                     agent_type=None,
@@ -373,7 +372,7 @@ async def chat(device_id: str, message: str) -> str:
                         "layered.tool.chat.release_device",
                         attrs={"device_id": device_id},
                     ):
-                        manager.release_device(device_id, context="layered")
+                        await manager.release_device_async(device_id, context="layered")
                 except BaseException as exc:  # pragma: no cover - safety net
                     logger.error(
                         f"Failed to release device lock for {device_id}: {exc}"

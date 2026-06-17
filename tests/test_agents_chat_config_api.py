@@ -77,16 +77,30 @@ class FakePhoneAgentManager:
         _ = (device_id, kwargs)
         return self.agent
 
+    async def get_agent_with_context_async(self, device_id: str, **kwargs) -> Any:
+        return self.get_agent_with_context(device_id, **kwargs)
+
     def release_device(self, device_id: str, **kwargs) -> None:
         self.release_calls.append(device_id)
+
+    async def release_device_async(self, device_id: str, **kwargs) -> None:
+        self.release_device(device_id, **kwargs)
 
     def register_abort_handler(self, device_id: str, handler: Any, **kwargs) -> None:
         context = kwargs.get("context", "default")
         self.registered_handlers[f"{device_id}:{context}"] = handler
 
+    async def register_abort_handler_async(
+        self, device_id: str, handler: Any, **kwargs
+    ) -> None:
+        self.register_abort_handler(device_id, handler, **kwargs)
+
     def unregister_abort_handler(self, device_id: str, **kwargs) -> None:
         context = kwargs.get("context", "default")
         self.unregistered_handlers.append(f"{device_id}:{context}")
+
+    async def unregister_abort_handler_async(self, device_id: str, **kwargs) -> None:
+        self.unregister_abort_handler(device_id, **kwargs)
 
     def list_agents(self) -> list[str]:
         return list(self.destroy_candidates)
@@ -96,10 +110,18 @@ class FakePhoneAgentManager:
     ) -> None:
         pass
 
+    async def set_error_state_async(
+        self, device_id: str, error_message: str, **kwargs: Any
+    ) -> None:
+        pass
+
     def destroy_agent(self, device_id: str) -> None:
         self.destroy_calls.append(device_id)
         if device_id.endswith("-fail"):
             raise RuntimeError("destroy failed")
+
+    async def destroy_agent_async(self, device_id: str) -> None:
+        self.destroy_agent(device_id)
 
     def destroy_all_agents(self) -> int:
         """销毁所有 Agent，返回销毁数量."""

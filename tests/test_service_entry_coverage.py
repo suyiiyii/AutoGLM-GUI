@@ -417,8 +417,14 @@ def test_scheduler_single_device_execution_paths(scheduler: SchedulerManager) ->
                 raise RuntimeError("agent failed")
             return FakeAgent()
 
+        async def get_agent_async(self, device_id: str):
+            return self.get_agent(device_id)
+
         def release_device(self, device_id: str) -> None:
             self.released.append(device_id)
+
+        async def release_device_async(self, device_id: str) -> None:
+            self.release_device(device_id)
 
     class FakeHistory:
         def __init__(self) -> None:

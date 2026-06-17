@@ -55,8 +55,7 @@ async def chat(device_id: str, message: str) -> ChatResult:
             auto_initialize=True,
             context="mcp",
         )
-        agent = await asyncio.to_thread(
-            manager.get_agent_with_context,
+        agent = await manager.get_agent_with_context_async(
             device_id,
             context="mcp",
             agent_type=None,  # 使用配置中的 agent_type
@@ -102,7 +101,7 @@ async def chat(device_id: str, message: str) -> ChatResult:
     finally:
         if acquired:
             try:
-                manager.release_device(device_id, context="mcp")
+                await manager.release_device_async(device_id, context="mcp")
             except BaseException as e:
                 logger.error(f"Failed to release device lock for {device_id}: {e}")
 

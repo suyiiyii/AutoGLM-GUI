@@ -1,5 +1,7 @@
 """Tests for Prometheus metrics endpoint."""
 
+import asyncio
+
 import pytest
 from fastapi.testclient import TestClient
 
@@ -152,16 +154,19 @@ def test_metrics_capture_failed_agents():
     test_device_id = "test_failed_device_123"
 
     # Directly set state to ERROR in metadata (simulating failed init)
-    with manager._manager_lock:
-        manager._metadata[test_device_id] = AgentMetadata(
-            device_id=test_device_id,
-            state=AgentState.ERROR,
-            model_config=None,  # type: ignore
-            agent_config=None,  # type: ignore
-            created_at=0.0,
-            last_used=0.0,
-            error_message="Test error",
-        )
+    async def _set_metadata() -> None:
+        async with manager._manager_lock:
+            manager._metadata[test_device_id] = AgentMetadata(
+                device_id=test_device_id,
+                state=AgentState.ERROR,
+                model_config=None,  # type: ignore
+                agent_config=None,  # type: ignore
+                created_at=0.0,
+                last_used=0.0,
+                error_message="Test error",
+            )
+
+    asyncio.run(_set_metadata())
 
     try:
         # Collect metrics
@@ -204,5 +209,8 @@ def test_metrics_capture_failed_agents():
 
     finally:
         # Cleanup: remove test state
-        with manager._manager_lock:
-            manager._metadata.pop(test_device_id, None)
+        async def _cleanup_metadata() -> None:
+            async with manager._manager_lock:
+                manager._metadata.pop(test_device_id, None)
+
+        asyncio.run(_cleanup_metadata())

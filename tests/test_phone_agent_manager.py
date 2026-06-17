@@ -21,17 +21,17 @@ def test_acquire_device_async_releases_lock_after_cancellation(
     released = threading.Event()
     release_calls: list[tuple[str, str]] = []
 
-    def fake_acquire(device_id: str, **kwargs) -> bool:
+    async def fake_acquire(device_id: str, **kwargs) -> bool:
         _ = (device_id, kwargs)
-        time.sleep(0.05)
+        await asyncio.to_thread(time.sleep, 0.05)
         return True
 
-    def fake_release(device_id: str, context: str = "default") -> None:
+    async def fake_release(device_id: str, context: str = "default") -> None:
         release_calls.append((device_id, context))
         released.set()
 
-    monkeypatch.setattr(manager, "acquire_device", fake_acquire)
-    monkeypatch.setattr(manager, "release_device", fake_release)
+    monkeypatch.setattr(manager, "_acquire_device_impl", fake_acquire)
+    monkeypatch.setattr(manager, "release_device_async", fake_release)
 
     async def run_test() -> None:
         task = asyncio.create_task(

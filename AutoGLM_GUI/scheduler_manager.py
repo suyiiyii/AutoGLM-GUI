@@ -240,7 +240,7 @@ class SchedulerManager:
         task_success = False
 
         try:
-            agent: Any = manager.get_agent(device.primary_device_id)
+            agent: Any = await manager.get_agent_async(device.primary_device_id)
             agent.reset()
 
             async for event in agent.stream(workflow["text"]):
@@ -319,7 +319,7 @@ class SchedulerManager:
             )
 
         finally:
-            manager.release_device(device.primary_device_id)
+            await manager.release_device_async(device.primary_device_id)
 
     def _resolve_device_serialnos(self, task: ScheduledTask) -> list[str]:
         """解析任务的目标设备列表.
