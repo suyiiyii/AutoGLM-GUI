@@ -168,6 +168,12 @@ def create_app() -> FastAPI:
         device_manager = DeviceManager.get_instance(adb_path=adb_path)
         device_manager.start_polling()
 
+        # Ensure the PhoneAgentManager singleton is created on the main event loop
+        # so that its asyncio.Lock is bound to the loop used by async callers.
+        from AutoGLM_GUI.phone_agent_manager import PhoneAgentManager
+
+        PhoneAgentManager.get_instance()
+
         await task_manager.start()
         # Start scheduled task scheduler
         await scheduler_manager.start()

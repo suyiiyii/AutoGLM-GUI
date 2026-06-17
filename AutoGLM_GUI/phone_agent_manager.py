@@ -88,6 +88,16 @@ class PhoneAgentManager:
         # so no asyncio.to_thread() wrapper is needed for release/register/unregister.
         self._manager_lock = asyncio.Lock()
 
+        # The event loop that owns the manager lock. Sync wrappers schedule
+        # coroutines back onto this loop so that the same asyncio.Lock is used
+        # even when called from a worker thread with a different event loop.
+        try:
+            self._home_loop: asyncio.AbstractEventLoop | None = (
+                asyncio.get_running_loop()
+            )
+        except RuntimeError:
+            self._home_loop = None
+
         # Agent metadata (indexed by device_id)
         # State is stored in AgentMetadata.state (single source of truth)
         self._metadata: dict[str, AgentMetadata] = {}
@@ -109,17 +119,29 @@ class PhoneAgentManager:
     # ==================== Lock helpers ====================
 
     def _run_sync(self, coro: Coroutine[Any, Any, T]) -> T:
-        """Run an async implementation coroutine from a sync context."""
-        try:
-            return asyncio.run(coro)
-        except RuntimeError as e:
-            if "asyncio.run() cannot be called from a running event loop" in str(e):
-                # Fallback: run in a worker thread with its own event loop.
-                import concurrent.futures
+        """Run an async implementation coroutine from a sync context.
 
-                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
-                    return pool.submit(asyncio.run, coro).result()
-            raise
+        When the manager was created inside a running event loop (the typical
+        production case), sync callers from other threads/loops are routed back
+        to that loop so the manager's asyncio.Lock remains valid. When no home
+        loop was captured (e.g. CLI), a fresh event loop is used.
+        """
+        if self._home_loop is None:
+            return asyncio.run(coro)
+
+        try:
+            current_loop = asyncio.get_running_loop()
+        except RuntimeError:
+            current_loop = None
+
+        if current_loop is self._home_loop:
+            raise RuntimeError(
+                "Cannot call sync PhoneAgentManager method from the home event loop; "
+                "use the async variant instead."
+            )
+
+        future = asyncio.run_coroutine_threadsafe(coro, self._home_loop)
+        return future.result(timeout=30)
 
     # ==================== Agent Lifecycle ====================
 
