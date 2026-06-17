@@ -34,7 +34,9 @@ sidebar_position: 3
 | --- | --- | --- |
 | POST | `/api/task-sessions` | 创建任务会话 |
 | GET | `/api/task-sessions/{session_id}` | 获取会话 |
-| POST | `/api/tasks` | 提交任务 |
+| POST | `/api/task-sessions/{session_id}/tasks` | 提交任务 |
+| GET | `/api/task-sessions/{session_id}/tasks` | 列出会话内的任务 |
+| POST | `/api/task-sessions/{session_id}/reset` | 重置会话 |
 | GET | `/api/tasks` | 列出任务 |
 | GET | `/api/tasks/{task_id}` | 任务详情 |
 | GET | `/api/tasks/{task_id}/events` | 任务事件列表 |
@@ -49,8 +51,10 @@ sidebar_position: 3
 | GET | `/api/devices/discover_mdns` | mDNS 发现 |
 | POST | `/api/devices/connect_wifi` · `/disconnect_wifi` · `/pair_wifi` | WiFi 连接 / 断开 / 配对 |
 | POST | `/api/devices/qr_pair/generate` | 生成二维码配对会话 |
-| GET | `/api/devices/qr_pair/{session_id}/image` | 获取配对二维码图片 |
+| GET | `/api/devices/qr_pair/status/{session_id}` | 获取配对状态 |
+| DELETE | `/api/devices/qr_pair/{session_id}` | 取消配对会话 |
 | POST | `/api/devices/add_remote` · `/remove_remote` | 添加 / 移除远程设备 |
+| POST | `/api/devices/discover_remote` | 发现远程服务器上的设备 |
 | GET/PUT | `/api/devices/{serial}/name` | 获取 / 设置设备名 |
 
 ## 设备分组
@@ -69,6 +73,7 @@ sidebar_position: 3
 | POST | `/api/control/tap` · `/swipe` | 点击 / 滑动 |
 | POST | `/api/control/touch/down` · `/move` · `/up` | 原始触摸事件 |
 | POST | `/api/screenshot` | 截图 |
+| POST | `/api/video/reset` | 重置视频流 |
 
 ## Workflow
 
