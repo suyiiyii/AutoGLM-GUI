@@ -56,6 +56,8 @@ docker run -d --network host \
 | `AUTOGLM_MODEL_NAME` | 模型名称（默认 `autoglm-phone-9b`） |
 | `AUTOGLM_API_KEY` | API 密钥 |
 
+> 预构建镜像的 `Dockerfile` 中默认将 `AUTOGLM_CORS_ORIGINS` 设为 `"*"`，比源码默认的 `http://localhost:3000` 更宽松。如需限制来源，请在启动时显式覆盖该变量。
+
 ## 健康检查
 
 ```bash

@@ -39,6 +39,7 @@ sidebar_position: 2
 | --- | --- | --- |
 | `AUTOGLM_CORS_ORIGINS` | `http://localhost:3000` | 允许的 CORS 来源 |
 | `AUTOGLM_ENABLE_WEB_TERMINAL` | `0` | 置为 `1` 启用 [Web 终端](../guide/web-terminal.md) |
+| `AUTOGLM_SERVER_HOST` | `127.0.0.1` | 服务绑定的主机地址，Web 终端等内部模块使用 |
 | `AUTOGLM_ADB_PATH` | `adb` | adb 可执行文件路径 |
 | `AUTOGLM_LOG_LEVEL` | `INFO` | 日志级别（`--reload` 模式下沿用） |
 | `AUTOGLM_LOG_FILE` | `logs/autoglm_{time:YYYY-MM-DD}.log` | 日志文件路径 |
@@ -54,6 +55,8 @@ sidebar_position: 2
 | `AUTOGLM_TRACE_REPLAY_ENABLED` | `1`（开启） | 是否启用可回放追踪 |
 | `AUTOGLM_TRACE_FILE` | `logs/trace_{date}.jsonl` | 追踪 JSONL 输出路径 |
 | `AUTOGLM_TRACE_CAPTURE_SCREENSHOT` | `artifact` | 截图捕获模式 |
+| `AUTOGLM_TRACE_CAPTURE_THINKING` | `1`（开启） | 置为 `0`/`false`/`no`/`off` 关闭追踪中的 thinking 内容 |
+| `AUTOGLM_TRACE_CAPTURE_ACTION` | `1`（开启） | 置为 `0`/`false`/`no`/`off` 关闭追踪中的 action 内容 |
 
 ## 设备操作延迟（高级）
 

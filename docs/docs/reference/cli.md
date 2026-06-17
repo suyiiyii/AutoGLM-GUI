@@ -46,6 +46,7 @@ autoglm-gui [选项]
 | 参数 | 默认值 | 说明 |
 | --- | --- | --- |
 | `--layered-max-turns` | `50` | [分层代理模式](../explanation/layered-agent.md)的最大轮数，最小值 1 |
+| `--adb-terminal-repl` | 关闭 | 启动 ADB 终端 REPL（内部/调试用，通常无需使用） |
 
 ## 示例
 

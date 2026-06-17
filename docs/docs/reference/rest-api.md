@@ -50,6 +50,7 @@ sidebar_position: 3
 | GET | `/api/devices` | 列出设备 |
 | GET | `/api/devices/discover_mdns` | mDNS 发现 |
 | POST | `/api/devices/connect_wifi` · `/disconnect_wifi` · `/pair_wifi` | WiFi 连接 / 断开 / 配对 |
+| POST | `/api/devices/connect_wifi_manual` | 手动指定 IP/端口进行 WiFi 连接 |
 | POST | `/api/devices/qr_pair/generate` | 生成二维码配对会话 |
 | GET | `/api/devices/qr_pair/status/{session_id}` | 获取配对状态 |
 | DELETE | `/api/devices/qr_pair/{session_id}` | 取消配对会话 |
@@ -112,6 +113,9 @@ sidebar_position: 3
 | GET | `/api/health` | 健康检查 |
 | GET | `/api/version/latest` | 检查最新版本 |
 | GET | `/api/metrics` | Prometheus 指标 |
-| POST | `/api/terminal/sessions` | 创建终端会话（WebSocket 流见 `/stream`） |
+| POST | `/api/terminal/sessions` | 创建终端会话 |
+| GET | `/api/terminal/sessions/{session_id}` | 获取终端会话元数据 |
+| DELETE | `/api/terminal/sessions/{session_id}` | 关闭终端会话 |
+| WebSocket | `/api/terminal/sessions/{session_id}/stream` | 终端双向数据流 |
 | — | `/mcp` | [MCP 服务端点](./mcp-tools.md) |
 | — | `/socket.io` | Socket.IO 实时通道（设备状态、视频流等） |

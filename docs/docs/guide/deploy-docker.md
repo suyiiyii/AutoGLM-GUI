@@ -56,7 +56,7 @@ docker run -d --network host \
 几个参数的作用：
 
 - `--network host`：容器直接复用宿主机网络，便于 ADB 设备发现和二维码配对（原因见下文）。
-- `-v autoglm_config:/root/.config/autoglm`：持久化配置和对话历史数据库（`history.db`），容器重建后数据不丢。
+- `-v autoglm_config:/root/.config/autoglm`：持久化配置和对话历史（`~/.config/autoglm/history/` 下每台设备一个 JSON 文件），容器重建后数据不丢。
 - `-v autoglm_logs:/app/logs`：持久化日志和 trace 文件，方便事后排查。
 
 同样访问 http://localhost:8000 进入界面配模型。镜像标签、端口修改、bridge 网络下的端口映射等更多选项，见 [Docker 参考](../reference/docker.md)。

@@ -8,7 +8,7 @@ sidebar_position: 1
 
 本教程带你从零走一遍完整流程：**连接一台设备 → 配置模型 → 发出第一条指令 → 看着 AI 在手机上执行**。跟着做完，你就理解了本工具的核心使用方式。
 
-本教程假设你已经安装好 AutoGLM-GUI（桌面版双击即可，或 `pip install autoglm-gui` 后运行 `autoglm-gui`，详见[安装与启动](../guide/deploy-docker.md)）。启动后浏览器会打开主界面：
+本教程假设你已经安装好 AutoGLM-GUI（桌面版双击即可，或 `pip install autoglm-gui` 后运行 `autoglm-gui`，详见[本地开发与构建](../guide/develop.md)）。启动后浏览器会打开主界面：
 
 ![主界面](/img/screenshots/home.png)
 
