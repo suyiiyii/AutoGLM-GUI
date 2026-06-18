@@ -25,6 +25,51 @@ from AutoGLM_GUI.types import AgentSpecificConfig
 T = TypeVar("T")
 
 
+class _AsyncLock:
+    """Async-compatible lock backed by threading.Lock.
+
+    asyncio.Lock is bound to the event loop that creates it, which breaks
+    singletons accessed from multiple event loops (e.g. FastAPI threadpool
+    workers). This lock uses a plain threading.Lock so it works from both
+    sync and async contexts without event-loop binding issues.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.Lock()
+
+    async def acquire(self) -> bool:
+        return await asyncio.to_thread(self._lock.acquire)
+
+    def release(self) -> None:
+        self._lock.release()
+
+    async def __aenter__(self) -> _AsyncLock:
+        await self.acquire()
+        return self
+
+    async def __aexit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+    ) -> bool:
+        self.release()
+        return False
+
+    def __enter__(self) -> _AsyncLock:
+        self._lock.acquire()
+        return self
+
+    def __exit__(
+        self,
+        exc_type: type[BaseException] | None,
+        exc_val: BaseException | None,
+        exc_tb: Any,
+    ) -> bool:
+        self.release()
+        return False
+
+
 class AgentState(StrEnum):
     """Agent runtime state."""
 
@@ -65,7 +110,7 @@ class PhoneAgentManager:
 
     Design Principles:
     - Uses state.agents and state.agent_configs as storage (backward compatible)
-    - Single asyncio.Lock (_manager_lock) for all state transitions
+    - Single async-compatible lock (_manager_lock) for all state transitions
     - No long-held per-device locks; acquire/release are instantaneous CAS operations
     - Context managers for automatic state release
 
@@ -86,17 +131,7 @@ class PhoneAgentManager:
         # All state transitions (IDLE↔BUSY) are guarded by this single lock.
         # Each critical section holds it for microseconds only (atomic CAS),
         # so no asyncio.to_thread() wrapper is needed for release/register/unregister.
-        self._manager_lock = asyncio.Lock()
-
-        # The event loop that owns the manager lock. Sync wrappers schedule
-        # coroutines back onto this loop so that the same asyncio.Lock is used
-        # even when called from a worker thread with a different event loop.
-        try:
-            self._home_loop: asyncio.AbstractEventLoop | None = (
-                asyncio.get_running_loop()
-            )
-        except RuntimeError:
-            self._home_loop = None
+        self._manager_lock = _AsyncLock()
 
         # Agent metadata (indexed by device_id)
         # State is stored in AgentMetadata.state (single source of truth)
@@ -119,29 +154,17 @@ class PhoneAgentManager:
     # ==================== Lock helpers ====================
 
     def _run_sync(self, coro: Coroutine[Any, Any, T]) -> T:
-        """Run an async implementation coroutine from a sync context.
-
-        When the manager was created inside a running event loop (the typical
-        production case), sync callers from other threads/loops are routed back
-        to that loop so the manager's asyncio.Lock remains valid. When no home
-        loop was captured (e.g. CLI), a fresh event loop is used.
-        """
-        if self._home_loop is None:
-            return asyncio.run(coro)
-
+        """Run an async implementation coroutine from a sync context."""
         try:
-            current_loop = asyncio.get_running_loop()
-        except RuntimeError:
-            current_loop = None
+            return asyncio.run(coro)
+        except RuntimeError as e:
+            if "asyncio.run() cannot be called from a running event loop" in str(e):
+                # Fallback: run in a worker thread with its own event loop.
+                import concurrent.futures
 
-        if current_loop is self._home_loop:
-            raise RuntimeError(
-                "Cannot call sync PhoneAgentManager method from the home event loop; "
-                "use the async variant instead."
-            )
-
-        future = asyncio.run_coroutine_threadsafe(coro, self._home_loop)
-        return future.result(timeout=30)
+                with concurrent.futures.ThreadPoolExecutor(max_workers=1) as pool:
+                    return pool.submit(asyncio.run, coro).result()
+            raise
 
     # ==================== Agent Lifecycle ====================
 
@@ -164,8 +187,9 @@ class PhoneAgentManager:
                 "force": force,
             },
         ):
+            agent: AsyncAgent | None = None
             async with self._manager_lock:
-                return await self._initialize_agent_with_factory_unsafe(
+                agent = await self._initialize_agent_with_factory_unsafe(
                     device_id=device_id,
                     agent_type=agent_type,
                     model_config=model_config,
@@ -175,6 +199,8 @@ class PhoneAgentManager:
                     confirmation_callback=confirmation_callback,
                     force=force,
                 )
+            assert agent is not None
+            return agent
 
     async def _initialize_agent_with_factory_unsafe(
         self,
@@ -427,6 +453,7 @@ class PhoneAgentManager:
         Returns:
             Agent instance for this device+context combination
         """
+        agent: AsyncAgent | None = None
         async with self._manager_lock:
             agent_key = self._make_agent_key(device_id, context)
 
@@ -435,7 +462,9 @@ class PhoneAgentManager:
                     agent_key, device_id, agent_type=agent_type
                 )
 
-            return self._agents[agent_key]
+            agent = self._agents[agent_key]
+        assert agent is not None
+        return agent
 
     def get_agent_with_context(
         self,
@@ -537,9 +566,11 @@ class PhoneAgentManager:
         self, device_id: str, context: str = "default"
     ) -> bool:
         """Check if agent is initialized for device."""
+        initialized = False
         async with self._manager_lock:
             agent_key = self._make_agent_key(device_id, context)
-            return agent_key in self._agents
+            initialized = agent_key in self._agents
+        return initialized
 
     def is_initialized(self, device_id: str, context: str = "default") -> bool:
         return self._run_sync(self._is_initialized_impl(device_id, context))
@@ -797,9 +828,11 @@ class PhoneAgentManager:
 
     async def _get_state_impl(self, device_id: str) -> AgentState:
         """Get current agent state."""
+        state = AgentState.ERROR
         async with self._manager_lock:
             metadata = self._metadata.get(device_id)
-            return metadata.state if metadata else AgentState.ERROR
+            state = metadata.state if metadata else AgentState.ERROR
+        return state
 
     def get_state(self, device_id: str) -> AgentState:
         return self._run_sync(self._get_state_impl(device_id))
@@ -837,12 +870,15 @@ class PhoneAgentManager:
 
     async def _get_config_impl(self, device_id: str) -> tuple[ModelConfig, AgentConfig]:
         """Get cached configuration for device."""
+        config: tuple[ModelConfig, AgentConfig] | None = None
         async with self._manager_lock:
             if device_id not in self._agent_configs:
                 raise AgentNotInitializedError(
                     f"No configuration found for device {device_id}"
                 )
-            return self._agent_configs[device_id]
+            config = self._agent_configs[device_id]
+        assert config is not None
+        return config
 
     def get_config(self, device_id: str) -> tuple[ModelConfig, AgentConfig]:
         return self._run_sync(self._get_config_impl(device_id))
@@ -854,8 +890,10 @@ class PhoneAgentManager:
 
     async def _list_agents_impl(self) -> list[str]:
         """Get list of all initialized device IDs."""
+        agent_ids: list[str] = []
         async with self._manager_lock:
-            return list(self._agents.keys())
+            agent_ids = list(self._agents.keys())
+        return agent_ids
 
     def list_agents(self) -> list[str]:
         return self._run_sync(self._list_agents_impl())
@@ -890,6 +928,7 @@ class PhoneAgentManager:
             AgentState.IDLE: 1,
         }
         key_prefix = f"{device_id}:"
+        candidates: list[AgentMetadata] = []
 
         async with self._manager_lock:
             candidates = [
@@ -920,17 +959,21 @@ class PhoneAgentManager:
 
     async def _get_metadata_snapshot_impl(self) -> dict[str, AgentMetadata]:
         """Return a shallow copy of the metadata map under the manager lock."""
+        snapshot: dict[str, AgentMetadata] = {}
         async with self._manager_lock:
-            return dict(self._metadata)
+            snapshot = dict(self._metadata)
+        return snapshot
 
     def get_metadata_snapshot(self) -> dict[str, AgentMetadata]:
         return self._run_sync(self._get_metadata_snapshot_impl())
 
     async def _get_streaming_sessions_count_impl(self) -> int:
+        count = 0
         async with self._manager_lock:
-            return sum(
+            count = sum(
                 1 for m in self._metadata.values() if m.abort_handler is not None
             )
+        return count
 
     def get_streaming_sessions_count(self) -> int:
         return self._run_sync(self._get_streaming_sessions_count_impl())
@@ -1018,6 +1061,8 @@ class PhoneAgentManager:
         Returns:
             bool: True 表示发送了中止信号，False 表示没有活跃会话
         """
+        handler: Any = None
+        has_candidates = False
         async with self._manager_lock:
             # 查找所有匹配的 contextual key，优先选择有 abort handler 的
             key_prefix = f"{device_id}:"
@@ -1028,21 +1073,23 @@ class PhoneAgentManager:
                 ) and metadata.abort_handler is not None:
                     candidates.append((key, metadata.abort_handler))
 
-            if not candidates:
+            if candidates:
+                has_candidates = True
+                # 优先使用精确匹配
+                for key, h in candidates:
+                    handler = h
+                    if key == device_id:
+                        break
+
+                logger.info(
+                    f"Aborting async streaming chat for device {device_id} "
+                    f"(found {len(candidates)} active handler(s))"
+                )
+            else:
                 logger.warning(f"No active streaming chat for device {device_id}")
-                return False
 
-            # 优先使用精确匹配
-            handler = None
-            for key, h in candidates:
-                handler = h
-                if key == device_id:
-                    break
-
-            logger.info(
-                f"Aborting async streaming chat for device {device_id} "
-                f"(found {len(candidates)} active handler(s))"
-            )
+        if not has_candidates:
+            return False
 
         # 执行取消 (根据类型选择方式, 在锁外执行避免死锁)
         if isinstance(handler, threading.Event):
@@ -1059,14 +1106,16 @@ class PhoneAgentManager:
 
     async def _is_streaming_active_impl(self, device_id: str) -> bool:
         """检查设备是否有活跃的流式会话."""
+        active = False
         async with self._manager_lock:
             key_prefix = f"{device_id}:"
             for key, metadata in self._metadata.items():
                 if (
                     key == device_id or key.startswith(key_prefix)
                 ) and metadata.abort_handler is not None:
-                    return True
-            return False
+                    active = True
+                    break
+        return active
 
     def is_streaming_active(self, device_id: str) -> bool:
         return self._run_sync(self._is_streaming_active_impl(device_id))
@@ -1080,6 +1129,7 @@ class PhoneAgentManager:
         Returns:
             int: 销毁的 Agent 数量
         """
+        count = 0
         async with self._manager_lock:
             agent_keys = list(self._agents.keys())
             count = len(agent_keys)
@@ -1101,7 +1151,7 @@ class PhoneAgentManager:
             if count > 0:
                 logger.info(f"Destroyed {count} agent(s) for config hot reload")
 
-            return count
+        return count
 
     def destroy_all_agents(self) -> int:
         return self._run_sync(self._destroy_all_agents_impl())
