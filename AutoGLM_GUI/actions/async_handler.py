@@ -1,5 +1,6 @@
 """Async action handler for executing phone operations."""
 
+import asyncio
 from typing import Any
 from collections.abc import Callable
 
@@ -164,7 +165,10 @@ class AsyncActionHandler:
         x, y = self._convert_relative_to_absolute(element, width, height)
 
         if "message" in action:
-            if not self.confirmation_callback(action["message"]):
+            confirmed = await asyncio.to_thread(
+                self.confirmation_callback, action["message"]
+            )
+            if not confirmed:
                 return ActionResult(
                     success=False,
                     should_finish=True,
@@ -287,7 +291,7 @@ class AsyncActionHandler:
         self, action: dict[str, Any], width: int, height: int
     ) -> ActionResult:
         message = action.get("message", "User intervention required")
-        self.takeover_callback(message)
+        await asyncio.to_thread(self.takeover_callback, message)
         return ActionResult(True, False, message=f"TAKEOVER_REQUIRED:\n {message}")
 
     async def _handle_note(
