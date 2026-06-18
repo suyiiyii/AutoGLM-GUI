@@ -307,6 +307,10 @@ test.describe('Docs screenshots', () => {
       `\n[docs-screenshots] ${results.length} shots, ${failed.length} failed`
     );
     for (const f of failed) console.log(`  FAILED: ${f.name} — ${f.error}`);
+    expect(
+      failed,
+      `Expected all screenshots to succeed, but ${failed.length} failed`
+    ).toHaveLength(0);
   });
 
   test('capture populated states (seeded data + task run)', async ({
@@ -466,5 +470,9 @@ test.describe('Docs screenshots', () => {
       `\n[docs-screenshots] total ${results.length} shots, ${failed2.length} failed`
     );
     for (const f of failed2) console.log(`  FAILED: ${f.name} — ${f.error}`);
+    expect(
+      failed2,
+      `Expected all screenshots to succeed, but ${failed2.length} failed`
+    ).toHaveLength(0);
   });
 });

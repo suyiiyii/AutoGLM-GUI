@@ -33,7 +33,7 @@ curl -O https://raw.githubusercontent.com/suyiiyii/AutoGLM-GUI/main/docker-compo
 然后在同一目录下启动服务：
 
 ```bash
-docker-compose up -d
+docker compose up -d
 ```
 
 `-d` 表示后台运行。首次启动会自动拉取镜像 `ghcr.io/suyiiyii/autoglm-gui:main`，拉完即启动。

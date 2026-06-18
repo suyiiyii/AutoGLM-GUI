@@ -53,7 +53,7 @@ sidebar_position: 2
 - GLM Agent：基于 GLM 模型优化，成熟稳定，适合大多数任务。
 - MAI Agent：阿里通义团队开发，支持多张历史截图上下文。
 - General Vision Agent：通用视觉模型，支持 Gemini/GPT-4o 等，使用 Function Calling。
-- Qwen Agent：Qwen3.6 系列适配。
+- Qwen Agent：Qwen 系列适配。
 - DroidRun Agent：基于 DroidRun 框架，需安装 Portal APK。
 - Midscene Agent：基于 Midscene.js 视觉驱动，需要 Node.js 环境。
 

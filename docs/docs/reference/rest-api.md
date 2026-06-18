@@ -96,8 +96,10 @@ sidebar_position: 3
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
 | GET | `/api/history/{serialno}` | 设备历史（分页） |
-| GET | `/api/history/{serialno}/{record_id}/artifacts` | 记录的截图等附件 |
+| GET | `/api/history/{serialno}/{record_id}` | 单条记录详情（含消息与附件） |
 | DELETE | `/api/history/{serialno}` · `/{record_id}` | 清空 / 删除单条 |
+
+> 历史记录的截图等附件内联在 `GET /api/history/{serialno}/{record_id}` 返回的 `messages[*].attachments` 中，没有独立的 `/artifacts` 端点。
 
 ## 配置
 
