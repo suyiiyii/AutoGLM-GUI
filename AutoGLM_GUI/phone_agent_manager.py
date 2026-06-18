@@ -38,7 +38,12 @@ class _AsyncLock:
         self._lock = threading.Lock()
 
     async def acquire(self) -> bool:
-        return await asyncio.to_thread(self._lock.acquire)
+        # Busy-wait with yields instead of blocking a worker thread. This avoids
+        # deadlocking when the lock is held by async code that itself needs
+        # worker threads (e.g. asyncio.to_thread for ADB/device operations).
+        while not self._lock.acquire(blocking=False):
+            await asyncio.sleep(0.001)
+        return True
 
     def release(self) -> None:
         self._lock.release()
@@ -347,7 +352,29 @@ class PhoneAgentManager:
         self, agent_key: str, actual_device_id: str, agent_type: str | None = None
     ) -> None:
         """
-        使用全局配置自动初始化 agent（内部方法，需在 manager_lock 内调用）.
+        使用全局配置自动初始化 agent.
+
+        使用 factory 模式创建 agent，避免直接依赖 phone_agent.PhoneAgent。
+        此方法会自行获取 ``_manager_lock``，适用于未持有锁的调用方。
+
+        Args:
+            agent_key: Agent 存储键（可能是 device_id 或 device_id:context）
+            actual_device_id: 实际设备标识符（用于设备操作）
+            agent_type: 可选的 agent 类型覆盖
+
+        Raises:
+            AgentInitializationError: 如果配置不完整或初始化失败
+        """
+        async with self._manager_lock:
+            await self._auto_initialize_agent_unsafe(
+                agent_key, actual_device_id, agent_type=agent_type
+            )
+
+    async def _auto_initialize_agent_unsafe(
+        self, agent_key: str, actual_device_id: str, agent_type: str | None = None
+    ) -> None:
+        """
+        使用全局配置自动初始化 agent（内部方法，调用方必须已持有 ``_manager_lock``）。
 
         使用 factory 模式创建 agent，避免直接依赖 phone_agent.PhoneAgent。
 
@@ -458,7 +485,7 @@ class PhoneAgentManager:
             agent_key = self._make_agent_key(device_id, context)
 
             if agent_key not in self._agents:
-                await self._auto_initialize_agent_impl(
+                await self._auto_initialize_agent_unsafe(
                     agent_key, device_id, agent_type=agent_type
                 )
 
@@ -625,12 +652,14 @@ class PhoneAgentManager:
         _ = timeout
         agent_key = self._make_agent_key(device_id, context)
 
-        # Verify agent exists (with optional auto-initialization)
-        if not await self._is_initialized_impl(agent_key):
+        # Verify agent exists (with optional auto-initialization).
+        # We read ``self._agents`` directly here: ``dict.__contains__`` is atomic
+        # under the GIL and we re-check under the lock before mutating state.
+        if agent_key not in self._agents:
             if auto_initialize:
                 async with self._manager_lock:
-                    if not await self._is_initialized_impl(agent_key):
-                        await self._auto_initialize_agent_impl(agent_key, device_id)
+                    if agent_key not in self._agents:
+                        await self._auto_initialize_agent_unsafe(agent_key, device_id)
             else:
                 raise AgentNotInitializedError(
                     f"Agent not initialized for device {agent_key}. "
@@ -680,7 +709,6 @@ class PhoneAgentManager:
         context: str = "default",
     ) -> bool:
         """Acquire a device lock without leaking it if the awaiter is cancelled."""
-
         acquire_task = asyncio.create_task(
             self._acquire_device_impl(
                 device_id,
