@@ -47,7 +47,9 @@ async function setupMockDeviceAndConfig(
   request: APIRequestContext
 ): Promise<string> {
   const { backend_url, agent_url, llm_url } = readServiceUrls();
-  const deviceId = 'mock_device_001';
+  // Use a unique device ID so this spec does not collide with other E2E
+  // tests (e.g. scroll.spec.ts) that share the same backend process.
+  const deviceId = `mock_device_docs_${Date.now()}`;
 
   let serial = deviceId;
   try {
@@ -218,10 +220,10 @@ test.describe('Docs screenshots', () => {
     await shotDialog(page, 'device-add', async () => {
       await page.getByRole('button', { name: '添加无线设备' }).click();
     });
-    // Tabs within the add-device dialog
+    // Tabs within the add-device dialog. QR pairing renders inside the
+    // "配对设备" tab, so it is captured separately below.
     for (const [tabName, file] of [
       ['配对设备', 'device-add-pair'],
-      ['二维码', 'device-add-qr'],
       ['远程设备', 'device-add-remote'],
       ['直接连接', 'device-add-direct'],
     ] as const) {
@@ -230,6 +232,16 @@ test.describe('Docs screenshots', () => {
         await page.waitForTimeout(700);
       });
     }
+
+    // QR pairing UI auto-generates inside the "配对设备" tab.
+    await shot(page, 'device-add-qr', async () => {
+      await page.getByRole('tab', { name: /配对设备/ }).click();
+      await page
+        .locator('[role="dialog"] svg')
+        .first()
+        .waitFor({ state: 'visible', timeout: 8000 });
+      await page.waitForTimeout(600);
+    });
     await closeDialog(page);
 
     await shotDialog(page, 'device-groups', async () => {
