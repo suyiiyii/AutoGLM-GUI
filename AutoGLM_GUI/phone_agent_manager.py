@@ -652,32 +652,35 @@ class PhoneAgentManager:
         _ = timeout
         agent_key = self._make_agent_key(device_id, context)
 
-        # Verify agent exists (with optional auto-initialization).
-        # We read ``self._agents`` directly here: ``dict.__contains__`` is atomic
-        # under the GIL and we re-check under the lock before mutating state.
-        if agent_key not in self._agents:
-            if auto_initialize:
-                async with self._manager_lock:
-                    if agent_key not in self._agents:
-                        await self._auto_initialize_agent_unsafe(agent_key, device_id)
-            else:
-                raise AgentNotInitializedError(
-                    f"Agent not initialized for device {agent_key}. "
-                    f"Use auto_initialize=True or call initialize_agent() first."
-                )
-
-        # Atomic CAS: IDLE → BUSY
+        # Auto-initialization (if needed) and the CAS must happen under the same
+        # lock acquisition. Releasing the lock between init and CAS creates a race
+        # window where another task can destroy the agent, leaving us returning
+        # ``True`` without ever setting the state to BUSY.
         async with self._manager_lock:
+            if agent_key not in self._agents:
+                if auto_initialize:
+                    await self._auto_initialize_agent_unsafe(agent_key, device_id)
+                else:
+                    raise AgentNotInitializedError(
+                        f"Agent not initialized for device {agent_key}. "
+                        f"Use auto_initialize=True or call initialize_agent() first."
+                    )
+
             metadata = self._metadata.get(agent_key)
-            if metadata and metadata.state == AgentState.BUSY:
+            if metadata is None:
+                # The agent was destroyed between init and lookup (should be rare).
+                raise AgentNotInitializedError(
+                    f"Agent metadata missing for {agent_key}. "
+                    f"The agent may have been destroyed concurrently."
+                )
+            if metadata.state == AgentState.BUSY:
                 if raise_on_timeout:
                     raise DeviceBusyError(
                         f"Device {agent_key} is busy, could not acquire lock"
                     )
                 return False
-            if metadata:
-                metadata.state = AgentState.BUSY
-                metadata.last_used = time.time()
+            metadata.state = AgentState.BUSY
+            metadata.last_used = time.time()
 
         logger.debug(f"Device lock acquired for {agent_key}")
         return True
