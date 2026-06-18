@@ -57,10 +57,10 @@ uv run autoglm-gui --no-log-file
 docker logs -f <容器名或ID>
 ```
 
-使用 `docker-compose` 部署时，可以用服务名：
+使用 Docker Compose 部署时，可以用服务名：
 
 ```bash
-docker-compose logs -f
+docker compose logs -f
 ```
 
 默认的 `docker-compose.yml` 把 `/app/logs` 挂载到了一个名为 `autoglm_logs` 的卷上，日志文件会持久保存在该卷中，容器重建不会丢失。如果你希望直接在宿主机上读取日志文件，可以把这一行改成绑定挂载到宿主机目录：

@@ -150,6 +150,7 @@ test.describe('Docs screenshots', () => {
 
   test('capture all pages and dialogs', async ({ page, request }) => {
     test.setTimeout(300000);
+    results.length = 0; // reset shared state so failures don't cascade
     const serial = await setupMockDeviceAndConfig(request);
     const chatUrl = `/chat?serial=${encodeURIComponent(serial)}&mode=classic`;
 
@@ -318,6 +319,7 @@ test.describe('Docs screenshots', () => {
     request,
   }) => {
     test.setTimeout(300000);
+    results.length = 0; // reset shared state so failures don't cascade
     const { backend_url, agent_url } = readServiceUrls();
     const serial = await setupMockDeviceAndConfig(request);
     const chatUrl = `/chat?serial=${encodeURIComponent(serial)}&mode=classic`;

@@ -25,7 +25,7 @@ sidebar_position: 2
 
 选择 MAI Agent 时可配置 `history_n`：传给模型的历史截图数量（1–10，默认 3）。截图越多，模型对「我刚才做了什么」越有上下文，但 token 成本也越高。
 
-MAI Agent 还提供流式思考输出、中文优化 Prompt、性能监控（LLM 耗时、动作统计）。需要旧版行为时可选 `mai_legacy`。
+MAI Agent 还提供流式思考输出、中文优化 Prompt、性能监控（LLM 耗时、动作统计）。
 
 ## 选型建议
 
