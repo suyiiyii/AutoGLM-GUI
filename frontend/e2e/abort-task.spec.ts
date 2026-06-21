@@ -166,6 +166,12 @@ test.describe('Task abort', () => {
           model_name: 'mock-glm-model',
           api_key: 'mock-key',
           agent_type: 'glm-async',
+          // Unlimited steps: the mock LLM cycles taps round-robin and never
+          // calls finish(), but the default cap (100 steps) would let the task
+          // reach a terminal state on fast runners before we click abort —
+          // hiding the abort button and flaking the test. With no cap the task
+          // stays RUNNING until we cancel it, matching this test's intent.
+          default_max_steps: null,
         },
       }),
       'save config'
@@ -207,7 +213,7 @@ test.describe('Task abort', () => {
 
     // The abort button is shown while loading; it carries a stable title.
     const abortButton = page.getByTitle('Abort Chat');
-    await expect(abortButton).toBeVisible({ timeout: 5000 });
+    await expect(abortButton).toBeVisible({ timeout: 15000 });
     await abortButton.click();
 
     // ── UI assertions ──────────────────────────────────────────────────
