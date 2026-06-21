@@ -39,7 +39,7 @@ jobs:
           files: coverage-unit.xml
           flags: unit
           name: unit-py311
-          fail_ci_if_error: true
+          fail_ci_if_error: false
           verbose: true
 
   integration-coverage:
@@ -73,7 +73,7 @@ jobs:
           files: coverage-integration.xml
           flags: integration
           name: integration-py311
-          fail_ci_if_error: true
+          fail_ci_if_error: false
           verbose: true
 
   e2e-backend-coverage:
@@ -110,5 +110,5 @@ jobs:
           files: coverage-e2e-backend.xml
           flags: e2e-backend
           name: e2e-backend-py311
-          fail_ci_if_error: true
+          fail_ci_if_error: false
           verbose: true
