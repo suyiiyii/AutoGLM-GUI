@@ -131,6 +131,24 @@ pnpm test:e2e
 - mock LLM server
 - mock agent server
 
+前端 E2E 场景（`frontend/e2e/*.spec.ts`）：
+- `scroll.spec.ts` — 流式响应期间聊天自动吸底（回归 #346）
+- `trace-events.spec.ts` — 前端调试输出 + 后端 trace 事件持久化
+- `device-state-routing.spec.ts` — 在 chat/history 间切换时保持选中设备（回归 #376）
+- `abort-task.spec.ts` — 从 UI 中止正在运行的任务，验证 UI 恢复可输入、后端 task 状态为 `CANCELLED` 且事件含 `cancelled`
+- `history-detail.spec.ts` — 任务完成后打开 History 详情对话框，校验任务文本、步骤、每步耗时与动作记录
+
+### 前端 E2E 视频录制
+
+Playwright 配置（`frontend/playwright.config.ts`）对每个用例录制视频，并生成 HTML 报告：
+
+- `video: 'on'` — 每个用例都录制视频
+- `trace: 'on'` — 每个用例都保留完整 trace（带真实时间轴，可逐步回放每个 action / 网络请求 / DOM 快照）
+- `screenshot: 'only-on-failure'` — 失败用例保留截图
+- `reporter: html` — 视频和 trace 内嵌进 HTML 报告
+
+CI（`web-e2e.yml` / `coverage-e2e-frontend.yml`）会把 `playwright-report` 打包成 artifact 上传，运行结束后可在 Actions 运行页面下载。下载后解压，本地用浏览器打开 `playwright-report/index.html` 即可回放视频和 trace。
+
 ---
 
 ## 覆盖率口径

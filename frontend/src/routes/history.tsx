@@ -329,6 +329,8 @@ export function HistoryComponent() {
           {records.map(record => (
             <Card
               key={record.id}
+              data-testid="history-record-card"
+              data-record-id={record.id}
               className="hover:shadow-md transition-shadow cursor-pointer"
               onClick={() => handleViewDetail(record)}
             >
@@ -401,6 +403,7 @@ export function HistoryComponent() {
                       variant="ghost"
                       size="sm"
                       className="text-slate-400 hover:text-blue-500"
+                      aria-label={t.historyPage.detailTitle || 'View detail'}
                       onClick={e => {
                         e.stopPropagation();
                         handleViewDetail(record);

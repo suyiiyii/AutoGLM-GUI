@@ -52,6 +52,7 @@ logs/
 docs/node_modules/
 docs/build/
 docs/.docusaurus/
+docs/static/img/screenshots/_manifest.json
 
 # Vercel
 .vercel/

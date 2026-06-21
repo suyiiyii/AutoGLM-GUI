@@ -356,7 +356,7 @@ class ModelConnectionRequest(BaseModel):
 
 @router.post("/api/config/model-connection-check")
 def model_connection_check(req: ModelConnectionRequest) -> dict[str, Any]:
-    """测试模型服务连通性：检查 base_url 是否可达、模型是否存在."""
+    """测试模型服务连通性：先尝试 /models 端点，不支持的降级到 /chat/completions."""
     base = req.base_url.rstrip("/")
     if not base:
         return {"success": False, "message": "请先填写 Base URL"}
@@ -372,31 +372,62 @@ def model_connection_check(req: ModelConnectionRequest) -> dict[str, Any]:
 
     try:
         with httpx.Client(timeout=10) as client:
+            # 1) Try /models endpoint (OpenAI-compatible standard)
             resp = client.get(f"{base}/models", headers=headers)
             if resp.status_code == 200:
-                data = resp.json()
-                ids = [
-                    m.get("id") for m in (data.get("data") or []) if isinstance(m, dict)
-                ]
-                if req.model_name in ids:
-                    return {
-                        "success": True,
-                        "message": f"连接成功 ({api_type})\n{base}\n{req.model_name}",
-                    }
-                if ids:
-                    show = ", ".join(str(id) for id in ids[:10] if id is not None)
-                    more = "" if len(ids) <= 10 else f" ...(+{len(ids) - 10})"
+                try:
+                    data = resp.json()
+                except Exception:
+                    data = None  # non-JSON body, fall through
+                if data and isinstance(data, dict):
+                    ids = [
+                        m.get("id")
+                        for m in (data.get("data") or [])
+                        if isinstance(m, dict)
+                    ]
+                    if req.model_name in ids:
+                        return {
+                            "success": True,
+                            "message": f"连接成功 ({api_type})\n{base}\n{req.model_name}",
+                        }
+                    if ids:
+                        show = ", ".join(str(id) for id in ids[:10] if id is not None)
+                        more = "" if len(ids) <= 10 else f" ...(+{len(ids) - 10})"
+                        return {
+                            "success": False,
+                            "message": f"连接成功，但未找到模型: {req.model_name}\n可用模型: {show}{more}",
+                        }
                     return {
                         "success": False,
-                        "message": f"连接成功，但未找到模型: {req.model_name}\n可用模型: {show}{more}",
+                        "message": f"连接成功，但未返回模型列表\n{base}",
                     }
+
+            # 2) Auth error on /models — log but try fallback
+            if resp.status_code in (401, 403):
+                # Some providers disable /models but allow /chat/completions
+                # Continue to fallback to verify if the key/model actually work
+                pass
+
+            # 3) /models not available — fall back to /chat/completions
+            payload: dict[str, Any] = {
+                "model": req.model_name,
+                "messages": [{"role": "user", "content": "Hi"}],
+                "max_tokens": 1,
+            }
+            chat_headers = {**headers, "Content-Type": "application/json"}
+            resp2 = client.post(
+                f"{base}/chat/completions",
+                json=payload,
+                headers=chat_headers,
+            )
+            if resp2.status_code == 200:
                 return {
-                    "success": False,
-                    "message": f"连接成功，但未返回模型列表\n{base}",
+                    "success": True,
+                    "message": f"连接成功 ({api_type})\n{base}\n{req.model_name}",
                 }
             return {
                 "success": False,
-                "message": f"请求失败 ({resp.status_code})\n{(resp.text or '')[:120]}",
+                "message": f"请求失败 ({resp2.status_code})\n{(resp2.text or '')[:120]}",
             }
     except httpx.ConnectError:
         return {"success": False, "message": f"无法连接 {base}"}
