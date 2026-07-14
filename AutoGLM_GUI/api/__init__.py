@@ -33,6 +33,7 @@ from . import (
     mcp,
     media,
     metrics,
+    reverse_agents,
     scheduled_tasks,
     terminal,
     tasks,
@@ -201,6 +202,7 @@ def create_app() -> FastAPI:
     app.include_router(control.router)
     app.include_router(media.router)
     app.include_router(metrics.router)
+    app.include_router(reverse_agents.router)
     app.include_router(scheduled_tasks.router)
     app.include_router(terminal.router)
     app.include_router(tasks.router)

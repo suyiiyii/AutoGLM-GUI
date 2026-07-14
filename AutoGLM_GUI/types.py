@@ -135,8 +135,10 @@ class DeviceConnectionType(Enum):
     - USB: Physical USB connection
     - WIFI: ADB over WiFi (local network)
     - REMOTE: HTTP Remote Device (via Device Agent Server)
+    - REVERSE_AGENT: Reverse-connected Android Agent
     """
 
     USB = "usb"
     WIFI = "wifi"
     REMOTE = "remote"
+    REVERSE_AGENT = "reverse_agent"

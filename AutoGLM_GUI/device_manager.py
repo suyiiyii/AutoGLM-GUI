@@ -291,6 +291,7 @@ class DeviceManager:
 
         self._remote_devices: dict[str, DeviceProtocol] = {}
         self._remote_device_configs: dict[str, RemoteDeviceConfig] = {}
+        self._reverse_agent_devices: dict[str, DeviceProtocol] = {}
 
         # ADB Keyboard setup state (process-local, best-effort)
         self._adb_keyboard_attempted_serials: set[DeviceSerial] = set()
@@ -510,7 +511,11 @@ class DeviceManager:
                 s
                 for s in removed_serials
                 if s not in self._devices
-                or self._devices[s].connection_type != DeviceConnectionType.REMOTE
+                or self._devices[s].connection_type
+                not in (
+                    DeviceConnectionType.REMOTE,
+                    DeviceConnectionType.REVERSE_AGENT,
+                )
             }
             existing_serials = current_serials & previous_serials
 
@@ -999,6 +1004,103 @@ class DeviceManager:
         """
         return self._remote_devices.get(serial)
 
+    def register_reverse_agent(
+        self,
+        agent_id: str,
+        display_name: str | None = None,
+        model: str | None = None,
+    ) -> ManagedDevice:
+        """Register a reverse-connected Android Agent as a managed device.
+
+        Args:
+            agent_id: Reverse agent identifier from ReverseAgentRegistry.
+            display_name: Optional user-defined display name.
+            model: Optional device model string.
+
+        Returns:
+            The created or updated ManagedDevice.
+        """
+        from AutoGLM_GUI.devices.reverse_agent_device import ReverseAgentDevice
+
+        serial = f"reverse:{agent_id}"
+        with self._devices_lock:
+            managed = self._devices.get(serial)
+            if managed is None:
+                managed = ManagedDevice(
+                    serial=serial,
+                    connections=[
+                        DeviceConnection(
+                            device_id=agent_id,
+                            connection_type=DeviceConnectionType.REVERSE_AGENT,
+                            status="device",
+                            last_seen=time.time(),
+                        )
+                    ],
+                    model=model or display_name or "Android Agent",
+                    display_name=display_name,
+                    state=DeviceState.ONLINE,
+                )
+                managed.select_primary_connection()
+                self._devices[serial] = managed
+                self._reverse_agent_devices[serial] = ReverseAgentDevice(agent_id)
+                self._device_id_to_serial[agent_id] = serial
+                logger.info(f"Reverse agent registered as device: {serial}")
+            else:
+                managed.state = DeviceState.ONLINE
+                managed.last_seen = time.time()
+                if display_name:
+                    managed.display_name = display_name
+                if model:
+                    managed.model = model
+                if serial not in self._reverse_agent_devices:
+                    self._reverse_agent_devices[serial] = ReverseAgentDevice(agent_id)
+
+            return managed
+
+    def unregister_reverse_agent(self, agent_id: str) -> None:
+        """Mark a reverse agent as disconnected.
+
+        Args:
+            agent_id: Reverse agent identifier.
+        """
+        serial = f"reverse:{agent_id}"
+        with self._devices_lock:
+            managed = self._devices.get(serial)
+            if managed is not None:
+                managed.state = DeviceState.DISCONNECTED
+                managed.last_seen = time.time()
+                for conn in managed.connections:
+                    self._device_id_to_serial.pop(conn.device_id, None)
+                # Drop the device wrapper so disconnect/reconnect cycles don't
+                # leak instances; register_reverse_agent recreates it on reconnect.
+                self._reverse_agent_devices.pop(serial, None)
+                logger.info(f"Reverse agent disconnected: {serial}")
+
+    def remove_reverse_agent(self, agent_id: str) -> tuple[bool, str]:
+        """Remove a reverse agent device from management.
+
+        Args:
+            agent_id: Reverse agent identifier.
+
+        Returns:
+            Tuple of (success, message).
+        """
+        serial = f"reverse:{agent_id}"
+        with self._devices_lock:
+            managed = self._devices.get(serial)
+            if managed is None:
+                return (False, "Reverse agent not found")
+            if managed.connection_type != DeviceConnectionType.REVERSE_AGENT:
+                return (False, "Not a reverse agent device")
+
+            managed = self._devices.pop(serial)
+            self._reverse_agent_devices.pop(serial, None)
+            for conn in managed.connections:
+                self._device_id_to_serial.pop(conn.device_id, None)
+
+            logger.info(f"Reverse agent removed: {serial}")
+            return (True, "Reverse agent removed successfully")
+
     def get_serial_by_device_id(
         self, device_id: ConnectionDeviceID
     ) -> DeviceSerial | None:
@@ -1016,7 +1118,10 @@ class DeviceManager:
         self, device_id: ConnectionDeviceID, managed: ManagedDevice
     ) -> None:
         """Best-effort ADB Keyboard setup for local ADB devices (once per serial)."""
-        if managed.connection_type == DeviceConnectionType.REMOTE:
+        if managed.connection_type in (
+            DeviceConnectionType.REMOTE,
+            DeviceConnectionType.REVERSE_AGENT,
+        ):
             return
 
         serial = managed.serial
@@ -1084,6 +1189,14 @@ class DeviceManager:
                         f"Remote device instance not found for serial {managed.serial}"
                     )
                 return remote_device  # type: ignore[return-value]
+
+            if managed.connection_type == DeviceConnectionType.REVERSE_AGENT:
+                reverse_device = self._reverse_agent_devices.get(managed.serial)
+                if not reverse_device:
+                    raise ValueError(
+                        f"Reverse agent device instance not found for serial {managed.serial}"
+                    )
+                return reverse_device  # type: ignore[return-value]
 
             # ADB device (USB / WiFi): 返回本地 ADB 包装
             local_device_id = managed.primary_device_id

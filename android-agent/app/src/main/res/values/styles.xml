@@ -1,0 +1,138 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <style name="AgentFilledCard" parent="@style/Widget.Material3.CardView.Filled">
+        <item name="cardCornerRadius">28dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeWidth">0dp</item>
+        <item name="contentPaddingStart">24dp</item>
+        <item name="contentPaddingEnd">24dp</item>
+        <item name="contentPaddingTop">20dp</item>
+        <item name="contentPaddingBottom">20dp</item>
+        <item name="cardBackgroundColor">?colorPrimaryContainer</item>
+    </style>
+
+    <style name="AgentHeroCard" parent="@style/AgentFilledCard">
+        <item name="cardBackgroundColor">?colorSurfaceContainerLow</item>
+    </style>
+
+    <style name="AgentTertiaryFilledCard" parent="@style/AgentFilledCard">
+        <item name="cardBackgroundColor">?colorTertiaryContainer</item>
+    </style>
+
+    <style name="AgentErrorFilledCard" parent="@style/AgentFilledCard">
+        <item name="cardBackgroundColor">?colorErrorContainer</item>
+    </style>
+
+    <style name="AgentSurfaceFilledCard" parent="@style/AgentFilledCard">
+        <item name="cardBackgroundColor">?colorSurfaceContainerLow</item>
+    </style>
+
+    <style name="AgentSummaryCard" parent="@style/AgentFilledCard">
+        <item name="cardBackgroundColor">?colorSurfaceContainerHighest</item>
+        <item name="contentPaddingTop">18dp</item>
+        <item name="contentPaddingBottom">18dp</item>
+    </style>
+
+    <style name="AgentMiniCard" parent="@style/Widget.Material3.CardView.Filled">
+        <item name="cardCornerRadius">28dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeWidth">0dp</item>
+        <item name="contentPaddingStart">20dp</item>
+        <item name="contentPaddingEnd">20dp</item>
+        <item name="contentPaddingTop">16dp</item>
+        <item name="contentPaddingBottom">16dp</item>
+        <item name="cardBackgroundColor">?colorSurfaceContainerHigh</item>
+    </style>
+
+    <style name="AgentBadgeCard" parent="@style/Widget.Material3.CardView.Filled">
+        <item name="cardCornerRadius">28dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeWidth">0dp</item>
+        <item name="contentPaddingStart">16dp</item>
+        <item name="contentPaddingEnd">16dp</item>
+        <item name="contentPaddingTop">12dp</item>
+        <item name="contentPaddingBottom">12dp</item>
+        <item name="cardBackgroundColor">?colorSurfaceContainerHighest</item>
+    </style>
+
+    <style name="AgentIconCircleCard" parent="@style/Widget.Material3.CardView.Filled">
+        <item name="android:layout_width">44dp</item>
+        <item name="android:layout_height">44dp</item>
+        <item name="cardCornerRadius">22dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeWidth">0dp</item>
+        <item name="cardBackgroundColor">?colorPrimaryContainer</item>
+        <item name="contentPadding">0dp</item>
+    </style>
+
+    <style name="AgentChecklistRow" parent="@style/Widget.Material3.CardView.Filled">
+        <item name="cardCornerRadius">20dp</item>
+        <item name="cardElevation">0dp</item>
+        <item name="strokeWidth">0dp</item>
+        <item name="cardBackgroundColor">@android:color/transparent</item>
+        <item name="contentPadding">0dp</item>
+    </style>
+
+    <style name="CardTitle">
+        <item name="android:textAppearance">?textAppearanceBodyLarge</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:lineSpacingExtra">1sp</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="ChecklistHeaderTitle">
+        <item name="android:textAppearance">?textAppearanceTitleMedium</item>
+        <item name="android:textColor">?colorOnSurface</item>
+        <item name="android:textStyle">normal</item>
+        <item name="android:textFontWeight">500</item>
+    </style>
+
+    <style name="ChecklistHeaderSummary" parent="@style/CardSummary">
+        <item name="android:textColor">?colorOnSurfaceVariant</item>
+    </style>
+
+    <style name="StepTitle">
+        <item name="android:textAppearance">?textAppearanceBodyLarge</item>
+        <item name="android:textColor">?colorOnSurfaceVariant</item>
+        <item name="android:textStyle">normal</item>
+    </style>
+
+    <style name="StepTitleActive" parent="@style/StepTitle">
+        <item name="android:textColor">?colorOnSurface</item>
+        <item name="android:textFontWeight">500</item>
+    </style>
+
+    <style name="StepStatus">
+        <item name="android:textAppearance">?textAppearanceLabelMedium</item>
+        <item name="android:textColor">?colorOnSurfaceVariant</item>
+        <item name="android:textStyle">normal</item>
+        <item name="android:textFontWeight">500</item>
+        <item name="android:background">@drawable/status_token_background</item>
+    </style>
+
+    <style name="CardSummary">
+        <item name="android:textAppearance">?textAppearanceBodyMedium</item>
+        <item name="android:lineSpacingExtra">2dp</item>
+    </style>
+
+    <style name="HeroTitle">
+        <item name="android:textAppearance">?textAppearanceHeadlineSmall</item>
+        <item name="android:textColor">?colorOnSurface</item>
+        <item name="android:textStyle">bold</item>
+    </style>
+
+    <style name="HeroSummary">
+        <item name="android:textAppearance">?textAppearanceTitleLarge</item>
+        <item name="android:textColor">?colorOnSurface</item>
+        <item name="android:textStyle">normal</item>
+        <item name="android:textFontWeight">500</item>
+        <item name="android:lineSpacingExtra">1dp</item>
+    </style>
+
+    <style name="SectionOverline">
+        <item name="android:textAppearance">?textAppearanceLabelLarge</item>
+        <item name="android:textStyle">bold</item>
+        <item name="android:textColor">?colorOnSurfaceVariant</item>
+        <item name="android:letterSpacing">0.03</item>
+    </style>
+</resources>

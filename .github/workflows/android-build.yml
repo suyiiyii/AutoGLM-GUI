@@ -1,0 +1,68 @@
+name: Android Build
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'android-agent/**'
+  pull_request:
+    branches:
+      - main
+    paths:
+      - 'android-agent/**'
+
+jobs:
+  build-debug:
+    name: Build Android Debug APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Cache Gradle packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            android-agent/.gradle
+            android-agent/app/build
+            ~/.gradle/caches
+            ~/.gradle/wrapper
+          key: gradle-${{ runner.os }}-${{ hashFiles('android-agent/**/*.gradle.kts', 'android-agent/gradle/wrapper/gradle-wrapper.properties') }}
+          restore-keys: |
+            gradle-${{ runner.os }}-
+
+      - name: Grant execute permission for gradlew
+        run: chmod +x android-agent/gradlew
+
+      - name: Build Debug APK & Lint
+        working-directory: android-agent
+        run: ./gradlew assembleDebug lintDebug --no-daemon
+
+      - name: Upload Debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: autoglm-agent-debug-apk
+          path: android-agent/app/build/outputs/apk/debug/*.apk
+          retention-days: 7
+
+      - name: Upload Lint Report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-lint-report
+          path: android-agent/app/build/reports/lint-results-debug.html
+          retention-days: 7
+
+      - name: Run scaffold verification
+        run: python3 scripts/check_android_agent_scaffold.py

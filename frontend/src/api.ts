@@ -372,6 +372,38 @@ export interface TerminalSessionCloseResponse {
   session_id: string;
 }
 
+export interface ReverseAgentPairingCreateRequest {
+  display_name?: string | null;
+}
+
+export interface ReverseAgentPairingCreateResponse {
+  pairing_id: string;
+  pairing_code: string;
+  created_at: number;
+  expires_at: number;
+  heartbeat_interval_seconds: number;
+}
+
+export interface ReverseAgentInfo {
+  agent_id: string;
+  pairing_id: string;
+  display_name?: string | null;
+  platform: string;
+  app_version?: string | null;
+  capabilities: string[];
+  metadata: Record<string, unknown>;
+  created_at: number;
+  last_seen_at: number;
+  last_heartbeat_at?: number | null;
+  connected_at?: number | null;
+  disconnected_at?: number | null;
+  connection_status: 'paired' | 'connected' | 'stale';
+}
+
+export interface ReverseAgentRegistryListResponse {
+  agents: ReverseAgentInfo[];
+}
+
 export async function listDevices(): Promise<DeviceListResponse> {
   const res = await axios.get<DeviceListResponse>('/api/devices');
   return res.data;
@@ -486,6 +518,32 @@ export async function closeTerminalSession(
     {
       params: { token: sessionToken },
     }
+  );
+  return res.data;
+}
+
+export async function createReverseAgentPairing(
+  payload: ReverseAgentPairingCreateRequest = {}
+): Promise<ReverseAgentPairingCreateResponse> {
+  const res = await axios.post<ReverseAgentPairingCreateResponse>(
+    '/api/reverse_agents/pairings',
+    payload
+  );
+  return res.data;
+}
+
+export async function listReverseAgents(): Promise<ReverseAgentRegistryListResponse> {
+  const res = await axios.get<ReverseAgentRegistryListResponse>(
+    '/api/reverse_agents/registry'
+  );
+  return res.data;
+}
+
+export async function getReverseAgent(
+  agentId: string
+): Promise<ReverseAgentInfo> {
+  const res = await axios.get<ReverseAgentInfo>(
+    `/api/reverse_agents/registry/${agentId}`
   );
   return res.data;
 }
