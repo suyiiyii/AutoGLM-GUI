@@ -10,7 +10,8 @@ def main() -> None:
     parser = MobileForgeParser()
     response = (
         "<thinking>I should tap Search.</thinking>"
-        '<tool_call>{"action":"click","coordinate":[500,120]}</tool_call>'
+        '<tool_call>{"name":"mobile_use","arguments":'
+        '{"action":"click","coordinate":[500,120]}}</tool_call>'
     )
     thinking, action_text = parser.parse_response(response)
     action = parser.parse(action_text)

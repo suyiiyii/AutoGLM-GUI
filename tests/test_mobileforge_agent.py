@@ -1,6 +1,7 @@
 """Tests for the MobileForge protocol adapter."""
 
 import asyncio
+import json
 
 import pytest
 
@@ -14,7 +15,7 @@ from AutoGLM_GUI.device_protocol import Screenshot
 class _FakeDevice:
     device_id = "mobileforge-test"
 
-    def get_screenshot(self, timeout: int = 10) -> Screenshot:  # noqa: ARG002
+    def get_screenshot(self, timeout: int = 10) -> Screenshot:
         return Screenshot(base64_data="image", width=1080, height=2400)
 
     def get_current_app(self) -> str:
@@ -26,12 +27,17 @@ class TestMobileForgeParser:
         ("content", "expected"),
         [
             (
-                '<thinking>tap it</thinking><tool_call>{"action":"click","coordinate":[12,999]}</tool_call>',
+                '<thinking>tap it</thinking><tool_call>{"name":"mobile_use","arguments":{"action":"click","coordinate":[12,999]}}</tool_call>',
                 {"_metadata": "do", "action": "Tap", "element": [12, 999]},
             ),
             (
                 '<tool_call>{"action":"swipe","start":[100,200],"end":[300,400]}</tool_call>',
-                {"_metadata": "do", "action": "Swipe", "start": [100, 200], "end": [300, 400]},
+                {
+                    "_metadata": "do",
+                    "action": "Swipe",
+                    "start": [100, 200],
+                    "end": [300, 400],
+                },
             ),
             (
                 '<tool_call>{"action":"type","text":"hello"}</tool_call>',
@@ -64,6 +70,46 @@ class TestMobileForgeParser:
         with pytest.raises(ValueError, match="Unsupported"):
             parser.parse('{"action":"shell"}')
 
+    @pytest.mark.parametrize(
+        ("arguments", "expected"),
+        [
+            (
+                {
+                    "action": "swipe",
+                    "coordinate": [500, 750],
+                    "coordinate2": [500, 250],
+                },
+                {
+                    "_metadata": "do",
+                    "action": "Swipe",
+                    "start": [500, 750],
+                    "end": [500, 250],
+                },
+            ),
+            (
+                {"action": "open", "text": "Settings"},
+                {"_metadata": "do", "action": "Launch", "app": "Settings"},
+            ),
+            (
+                {"action": "wait", "time": 2},
+                {"_metadata": "do", "action": "Wait", "duration": "2 seconds"},
+            ),
+            (
+                {"action": "system_button", "button": "Home"},
+                {"_metadata": "do", "action": "Home"},
+            ),
+            (
+                {"action": "terminate", "status": "failure"},
+                {"_metadata": "finish", "message": "Task infeasible"},
+            ),
+        ],
+    )
+    def test_sanitized_harmonyos_trace_shapes(self, arguments, expected):
+        """Exercise real MobileForge shapes without retaining device trace data."""
+        parser = MobileForgeParser()
+        payload = json.dumps({"name": "mobile_use", "arguments": arguments})
+        assert parser.parse(payload) == expected
+
 
 def test_mobileforge_agent_preserves_native_assistant_context(monkeypatch):
     agent = AsyncMobileForgeAgent(
@@ -72,11 +118,11 @@ def test_mobileforge_agent_preserves_native_assistant_context(monkeypatch):
         device=_FakeDevice(),
     )
     response = (
-        '<thinking>the app is open</thinking>'
+        "<thinking>the app is open</thinking>"
         '<tool_call>{"action":"terminate","status":"success"}</tool_call>'
     )
 
-    async def fake_stream(messages):  # noqa: ARG001
+    async def fake_stream(messages):
         yield {"type": "raw", "content": response}
 
     monkeypatch.setattr(agent, "_stream_openai", fake_stream)
