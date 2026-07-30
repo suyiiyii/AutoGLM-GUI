@@ -10,6 +10,16 @@ This directory documents how to serve or reproduce a **MobileForge-protocol** Qw
 
 It deliberately excludes LoRA/merged checkpoint weights, screenshots, task data, credentials, and training logs. Those artifacts are both too large for source control and may contain private content. Publish model weights separately only after checking the base-model license, dataset permissions, and a privacy review.
 
+## Pretrained LoRA adapter
+
+A privacy-reviewed LoRA adapter is published separately from the source tree:
+
+- [Qwen3-VL-4B MobileForge LoRA v1](https://github.com/YoungJulY0728/AutoGLM-GUI/releases/tag/mobileforge-qwen3-vl-4b-lora-v1)
+
+The release removes local absolute paths and identity metadata and includes a
+SHA-256 checksum. Raw screenshots, device identifiers, credentials, and logs
+are not bundled with the adapter.
+
 ## Serve a local adapter
 
 Install a Qwen3-VL-compatible vLLM build, then point the GUI's **MobileForge Agent** at an OpenAI-compatible endpoint. For example:
