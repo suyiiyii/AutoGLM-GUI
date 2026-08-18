@@ -5,6 +5,7 @@ without requiring users to manually download and install APK.
 """
 
 import asyncio
+import time
 import urllib.request
 from pathlib import Path
 from typing import Any
@@ -18,6 +19,12 @@ ADB_KEYBOARD_APK_URL = (
     "https://github.com/senzhk/ADBKeyBoard/raw/master/ADBKeyboard.apk"
 )
 ADB_KEYBOARD_APK_FILENAME = "ADBKeyboard.apk"
+
+# Install can succeed before InputMethodManager lists the new IME.
+IME_REGISTER_TIMEOUT_S = 5.0
+IME_REGISTER_POLL_INTERVAL_S = 0.3
+ENABLE_RETRY_COUNT = 3
+ENABLE_RETRY_DELAY_S = 0.4
 
 # APK file in user cache directory (fallback)
 USER_CACHE_APK_PATH = Path.home() / ".cache" / "autoglm" / ADB_KEYBOARD_APK_FILENAME
@@ -256,25 +263,80 @@ class ADBKeyboardInstaller:
                 )
             )
 
-            if result.returncode == 0:
+            output = f"{result.stdout} {result.stderr}"
+            if result.returncode == 0 and not _ime_unknown(output):
                 success_msg = "ADB Keyboard enabled successfully"
                 logger.info(success_msg)
                 return True, success_msg
-            else:
-                # Some devices return non-zero but still succeed, verify with is_enabled()
-                if self.is_enabled():
-                    success_msg = "ADB Keyboard enabled (verified)"
-                    logger.info(success_msg)
-                    return True, success_msg
-                else:
-                    error_msg = f"Enable failed: {result.stdout} {result.stderr}"
-                    logger.warning(error_msg)
-                    return False, error_msg
+
+            # Some devices return non-zero but still succeed, verify with is_enabled()
+            if self.is_enabled():
+                success_msg = "ADB Keyboard enabled (verified)"
+                logger.info(success_msg)
+                return True, success_msg
+
+            error_msg = f"Enable failed: {result.stdout} {result.stderr}"
+            logger.warning(error_msg)
+            return False, error_msg
 
         except Exception as e:
             error_msg = f"Enable error: {e}"
             logger.exception("Unexpected error during enable")
             return False, error_msg
+
+    def is_ime_registered(self) -> bool:
+        """Return True when InputMethodManager lists ADB Keyboard.
+
+        Uses ``ime list -a`` so disabled-but-registered IMEs count. A failed
+        query returns False; the caller should not spin on command errors.
+        """
+        try:
+            result = asyncio.run(
+                run_cmd_silently(self.adb_prefix + ["shell", "ime", "list", "-a"])
+            )
+        except Exception as e:
+            logger.debug(f"ime list -a failed: {e}")
+            return False
+
+        output = f"{result.stdout} {result.stderr}"
+        if result.returncode != 0 and ADB_KEYBOARD_IME not in output:
+            logger.debug(f"ime list -a returned {result.returncode}: {output.strip()}")
+            return False
+        return ADB_KEYBOARD_IME in output
+
+    def wait_for_ime_registered(
+        self,
+        timeout: float = IME_REGISTER_TIMEOUT_S,
+        interval: float = IME_REGISTER_POLL_INTERVAL_S,
+    ) -> bool:
+        """Poll until the IME is registered, or the timeout elapses."""
+        deadline = time.monotonic() + timeout
+        while True:
+            if self.is_ime_registered():
+                logger.debug("ADB Keyboard IME is registered")
+                return True
+            if time.monotonic() >= deadline:
+                logger.warning(
+                    "ADB Keyboard IME was not listed within "
+                    f"{timeout:.1f}s; attempting enable anyway"
+                )
+                return False
+            time.sleep(interval)
+
+    def _enable_after_registered(self) -> tuple[bool, str]:
+        """Wait for IME registration, then enable with a few retries."""
+        self.wait_for_ime_registered()
+        last_result = (False, "Enable not attempted")
+        for attempt in range(ENABLE_RETRY_COUNT):
+            last_result = self.enable()
+            if last_result[0]:
+                return last_result
+            if attempt < ENABLE_RETRY_COUNT - 1:
+                logger.info(
+                    f"Retrying ADB Keyboard enable ({attempt + 1}/{ENABLE_RETRY_COUNT})"
+                )
+                time.sleep(ENABLE_RETRY_DELAY_S)
+        return last_result
 
     def auto_setup(self) -> tuple[bool, str]:
         """
@@ -305,7 +367,7 @@ class ADBKeyboardInstaller:
         # Status 2: Installed but not enabled
         if installed and not enabled:
             logger.info("ADB Keyboard is installed but not enabled, enabling now")
-            return self.enable()
+            return self._enable_after_registered()
 
         # Status 3: Not installed
         if not installed:
@@ -323,8 +385,8 @@ class ADBKeyboardInstaller:
                 logger.error(f"Installation failed: {message}")
                 return False, message
 
-            # Step 3: Enable
-            success, message = self.enable()
+            # Step 3: Wait for IME registration, then enable
+            success, message = self._enable_after_registered()
             if not success:
                 logger.error(f"Enable failed: {message}")
                 return False, message
@@ -394,6 +456,11 @@ def auto_setup_adb_keyboard(device_id: str | None = None) -> tuple[bool, str]:
     """
     installer = ADBKeyboardInstaller(device_id)
     return installer.auto_setup()
+
+
+def _ime_unknown(output: str) -> bool:
+    """Return True if adb ime output says the IME is not registered."""
+    return "unknown input method" in output.lower()
 
 
 def check_and_suggest_installation() -> bool:

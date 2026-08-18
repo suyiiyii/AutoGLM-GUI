@@ -1015,13 +1015,18 @@ class DeviceManager:
     def _ensure_adb_keyboard_once(
         self, device_id: ConnectionDeviceID, managed: ManagedDevice
     ) -> None:
-        """Best-effort ADB Keyboard setup for local ADB devices (once per serial)."""
+        """Best-effort ADB Keyboard setup for local ADB devices.
+
+        Successful setup is remembered per serial. A failed attempt is
+        retried on the next protocol access so a later-registered IME can
+        still be enabled.
+        """
         if managed.connection_type == DeviceConnectionType.REMOTE:
             return
 
         serial = managed.serial
         with self._adb_keyboard_setup_lock:
-            if serial in self._adb_keyboard_attempted_serials:
+            if serial in self._adb_keyboard_ready_serials:
                 return
             self._adb_keyboard_attempted_serials.add(serial)
 

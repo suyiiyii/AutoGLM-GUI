@@ -555,13 +555,14 @@ def test_platform_utils_adb_input_apps_and_version_helpers(
     assert asyncio.run(platform_utils.spawn_process(["spawn-win"])).cmd == ["spawn-win"]
 
     input_calls: list[list[str]] = []
+    current_ime = ["ime.old/.Keyboard"]
 
     def fake_input_run(cmd, **kwargs):
         input_calls.append(cmd)
         if "default_input_method" in cmd:
-            return subprocess.CompletedProcess(
-                cmd, 0, stdout="ime.old/.Keyboard", stderr=""
-            )
+            return subprocess.CompletedProcess(cmd, 0, stdout=current_ime[0], stderr="")
+        if len(cmd) >= 2 and cmd[-2] == "set" and "adbkeyboard" in cmd[-1]:
+            current_ime[0] = "com.android.adbkeyboard/.AdbIME"
         return subprocess.CompletedProcess(cmd, 0, stdout="", stderr="")
 
     monkeypatch.setattr(adb_input.subprocess, "run", fake_input_run)
@@ -573,6 +574,9 @@ def test_platform_utils_adb_input_apps_and_version_helpers(
     flattened = [" ".join(call) for call in input_calls]
     assert any("ADB_INPUT_B64" in call for call in flattened)
     assert any("ADB_CLEAR_TEXT" in call for call in flattened)
+    assert any(
+        "ime enable com.android.adbkeyboard/.AdbIME" in call for call in flattened
+    )
     assert any("ime set com.android.adbkeyboard/.AdbIME" in call for call in flattened)
     assert any("ime set ime.old/.Keyboard" in call for call in flattened)
 
@@ -1025,6 +1029,7 @@ def test_mdns_pair_touch_version_and_keyboard(monkeypatch: pytest.MonkeyPatch) -
     )
     monkeypatch.setattr(installer, "is_installed", lambda: True)
     monkeypatch.setattr(installer, "is_enabled", lambda: False)
+    monkeypatch.setattr(installer, "wait_for_ime_registered", lambda *a, **k: True)
     monkeypatch.setattr(installer, "enable", lambda: (True, "enabled"))
     assert installer.auto_setup() == (True, "enabled")
     status = installer.get_status()
@@ -1044,6 +1049,7 @@ def test_adb_keyboard_installer_download_install_enable_and_auto_setup(
         lambda package: (_ for _ in ()).throw(RuntimeError("no bundle")),
     )
     installer = keyboard.ADBKeyboardInstaller("serial")
+    monkeypatch.setattr(installer, "wait_for_ime_registered", lambda *a, **k: True)
 
     run_results = iter(
         [

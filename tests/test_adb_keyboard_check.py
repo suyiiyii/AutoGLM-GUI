@@ -209,7 +209,7 @@ class TestAutoSetup:
                 assert "already installed" in msg
 
     def test_installed_not_enabled_enables(self) -> None:
-        """When installed but not enabled, should call enable."""
+        """When installed but not enabled, should wait then enable."""
         with patch(
             "AutoGLM_GUI.adb_plus.keyboard_installer.run_cmd_silently"
         ) as mock_run:
@@ -219,10 +219,114 @@ class TestAutoSetup:
             installer = _make_installer()
             with patch.object(installer, "is_enabled", return_value=False):
                 with patch.object(
-                    installer,
-                    "enable",
-                    return_value=(True, "ADB Keyboard enabled successfully"),
-                ) as mock_enable:
-                    success, msg = installer.auto_setup()
-                    assert success is True
-                    mock_enable.assert_called_once()
+                    installer, "wait_for_ime_registered", return_value=True
+                ):
+                    with patch.object(
+                        installer,
+                        "enable",
+                        return_value=(True, "ADB Keyboard enabled successfully"),
+                    ) as mock_enable:
+                        success, msg = installer.auto_setup()
+                        assert success is True
+                        mock_enable.assert_called_once()
+
+
+class TestImeRegistrationWait:
+    def test_is_ime_registered_true(self) -> None:
+        with patch(
+            "AutoGLM_GUI.adb_plus.keyboard_installer.run_cmd_silently"
+        ) as mock_run:
+            mock_run.return_value = _fake_result(stdout=f"{ADB_KEYBOARD_IME}\n")
+            assert _make_installer().is_ime_registered() is True
+            assert mock_run.call_args[0][0][-2:] == ["list", "-a"]
+
+    def test_is_ime_registered_false(self) -> None:
+        with patch(
+            "AutoGLM_GUI.adb_plus.keyboard_installer.run_cmd_silently"
+        ) as mock_run:
+            mock_run.return_value = _fake_result(
+                stdout="com.google.android.inputmethod.latin/.LatinIME\n"
+            )
+            assert _make_installer().is_ime_registered() is False
+
+    def test_is_ime_registered_command_error_is_false(self) -> None:
+        with patch(
+            "AutoGLM_GUI.adb_plus.keyboard_installer.run_cmd_silently"
+        ) as mock_run:
+            mock_run.side_effect = OSError("device offline")
+            assert _make_installer().is_ime_registered() is False
+
+    def test_wait_returns_immediately_when_registered(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        sleeps: list[float] = []
+        monkeypatch.setattr(
+            "AutoGLM_GUI.adb_plus.keyboard_installer.time.sleep",
+            sleeps.append,
+        )
+        installer = _make_installer()
+        with patch.object(installer, "is_ime_registered", return_value=True):
+            assert installer.wait_for_ime_registered(timeout=5, interval=0.3) is True
+        assert sleeps == []
+
+    def test_wait_polls_until_registered(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        sleeps: list[float] = []
+        monkeypatch.setattr(
+            "AutoGLM_GUI.adb_plus.keyboard_installer.time.sleep",
+            sleeps.append,
+        )
+        installer = _make_installer()
+        with patch.object(installer, "is_ime_registered", side_effect=[False, True]):
+            assert installer.wait_for_ime_registered(timeout=5, interval=0.3) is True
+        assert sleeps == [0.3]
+
+    def test_wait_times_out(self, monkeypatch: pytest.MonkeyPatch) -> None:
+        monkeypatch.setattr(
+            "AutoGLM_GUI.adb_plus.keyboard_installer.time.sleep",
+            lambda _delay: None,
+        )
+        installer = _make_installer()
+        with patch.object(installer, "is_ime_registered", return_value=False):
+            assert installer.wait_for_ime_registered(timeout=0, interval=0.3) is False
+
+    def test_enable_after_registered_retries(
+        self, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        monkeypatch.setattr(
+            "AutoGLM_GUI.adb_plus.keyboard_installer.time.sleep",
+            lambda _delay: None,
+        )
+        installer = _make_installer()
+        with (
+            patch.object(installer, "wait_for_ime_registered", return_value=False),
+            patch.object(
+                installer,
+                "enable",
+                side_effect=[
+                    (False, "Enable failed: Unknown input method"),
+                    (True, "ADB Keyboard enabled successfully"),
+                ],
+            ) as mock_enable,
+        ):
+            success, message = installer._enable_after_registered()
+        assert success is True
+        assert "enabled" in message
+        assert mock_enable.call_count == 2
+
+    def test_enable_rejects_unknown_ime_even_with_zero_exit(self) -> None:
+        installer = _make_installer()
+        with patch(
+            "AutoGLM_GUI.adb_plus.keyboard_installer.run_cmd_silently"
+        ) as mock_run:
+            mock_run.return_value = _fake_result(
+                stdout="",
+                stderr=(
+                    "Unknown input method com.android.adbkeyboard/.AdbIME "
+                    "cannot be enabled for user #0"
+                ),
+                returncode=0,
+            )
+            with patch.object(installer, "is_enabled", return_value=False):
+                success, message = installer.enable()
+        assert success is False
+        assert "Unknown input method" in message

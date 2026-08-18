@@ -148,3 +148,18 @@ def test_setup_failure_does_not_raise_and_still_returns_local_protocol(
     assert "SER-3" in manager._adb_keyboard_attempted_serials
     assert "SER-3" not in manager._adb_keyboard_ready_serials
     assert _FakeInstaller.calls.count(("setup", "dev-3")) == 1
+
+
+def test_setup_failure_retries_on_next_protocol_access(
+    manager: device_manager_module.DeviceManager,
+) -> None:
+    managed = _build_local_managed(serial="SER-4", device_id="dev-4")
+    manager._devices["SER-4"] = managed
+    manager._device_id_to_serial["dev-4"] = "SER-4"
+    _FakeInstaller.setup_result = (False, "Enable failed")
+
+    manager.get_device_protocol("dev-4")
+    manager.get_device_protocol("dev-4")
+
+    assert _FakeInstaller.calls.count(("setup", "dev-4")) == 2
+    assert "SER-4" not in manager._adb_keyboard_ready_serials
