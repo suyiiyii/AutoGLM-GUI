@@ -28,10 +28,11 @@ jobs:
         with:
           frozen: "true"
 
-      - name: Install optional dependencies
-        run: |
-          echo "📦 Installing optional dependencies..."
-          uv pip install -e ".[droidrun]"
+      # Do not install the droidrun extra here. Those packages pull
+      # arize-phoenix / llama-index, and phoenix's import graph currently
+      # crashes pytest during plugin autoload
+      # (`ModuleNotFoundError: phoenix.evals.models`). No release_gate test
+      # imports the real droidrun package; adapter tests mock it.
 
       - name: Backend lint (check-only)
         run: |
