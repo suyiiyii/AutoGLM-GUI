@@ -4,7 +4,10 @@ import base64
 import subprocess
 from collections.abc import Sequence
 
-from AutoGLM_GUI.adb_plus.keyboard_installer import ADB_KEYBOARD_IME
+from AutoGLM_GUI.adb_plus.keyboard_installer import (
+    ADB_KEYBOARD_IME,
+    ADB_KEYBOARD_PACKAGE,
+)
 from AutoGLM_GUI.platform_utils import build_adb_command, run_cmd_silently
 from AutoGLM_GUI.trace import trace_span
 
@@ -108,13 +111,42 @@ def _read_default_ime(adb_prefix: Sequence[str]) -> str:
     return _combined_output(result)
 
 
-def _enable_and_set_adb_keyboard(adb_prefix: Sequence[str]) -> None:
-    enable = subprocess.run(
-        list(adb_prefix) + ["shell", "ime", "enable", ADB_KEYBOARD_IME],
+def _is_adb_ime_enabled(adb_prefix: Sequence[str]) -> bool:
+    """Return True if ADB Keyboard is already in the enabled IME list.
+
+    Reads ``enabled_input_methods`` first. ``ime list -s`` is only a
+    fallback because some OEM ROMs raise SecurityException on it.
+    """
+    result = subprocess.run(
+        list(adb_prefix)
+        + ["shell", "settings", "get", "secure", "enabled_input_methods"],
         capture_output=True,
         text=True,
         check=False,
     )
+    enabled_imes = result.stdout.strip()
+    if enabled_imes and enabled_imes != "null" and result.returncode == 0:
+        return ADB_KEYBOARD_PACKAGE in enabled_imes or ADB_KEYBOARD_IME in enabled_imes
+
+    listed = subprocess.run(
+        list(adb_prefix) + ["shell", "ime", "list", "-s"],
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    return ADB_KEYBOARD_IME in _combined_output(listed)
+
+
+def _enable_and_set_adb_keyboard(adb_prefix: Sequence[str]) -> None:
+    enable_out = "skipped, already enabled"
+    if not _is_adb_ime_enabled(adb_prefix):
+        enable = subprocess.run(
+            list(adb_prefix) + ["shell", "ime", "enable", ADB_KEYBOARD_IME],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+        enable_out = _combined_output(enable)
     set_ime = subprocess.run(
         list(adb_prefix) + ["shell", "ime", "set", ADB_KEYBOARD_IME],
         capture_output=True,
@@ -124,7 +156,7 @@ def _enable_and_set_adb_keyboard(adb_prefix: Sequence[str]) -> None:
     current_ime = _read_default_ime(adb_prefix)
     _require_adb_ime_current(
         current_ime,
-        f"enable={_combined_output(enable)!r}, set={_combined_output(set_ime)!r}",
+        f"enable={enable_out!r}, set={_combined_output(set_ime)!r}",
     )
 
 
@@ -136,17 +168,35 @@ async def _read_default_ime_async(adb_prefix: Sequence[str]) -> str:
     return _combined_output(result)
 
 
-async def _enable_and_set_adb_keyboard_async(adb_prefix: Sequence[str]) -> None:
-    enable = await run_cmd_silently(
-        list(adb_prefix) + ["shell", "ime", "enable", ADB_KEYBOARD_IME],
+async def _is_adb_ime_enabled_async(adb_prefix: Sequence[str]) -> bool:
+    result = await run_cmd_silently(
+        list(adb_prefix)
+        + ["shell", "settings", "get", "secure", "enabled_input_methods"],
     )
+    enabled_imes = result.stdout.strip()
+    if enabled_imes and enabled_imes != "null" and result.returncode == 0:
+        return ADB_KEYBOARD_PACKAGE in enabled_imes or ADB_KEYBOARD_IME in enabled_imes
+
+    listed = await run_cmd_silently(
+        list(adb_prefix) + ["shell", "ime", "list", "-s"],
+    )
+    return ADB_KEYBOARD_IME in _combined_output(listed)
+
+
+async def _enable_and_set_adb_keyboard_async(adb_prefix: Sequence[str]) -> None:
+    enable_out = "skipped, already enabled"
+    if not await _is_adb_ime_enabled_async(adb_prefix):
+        enable = await run_cmd_silently(
+            list(adb_prefix) + ["shell", "ime", "enable", ADB_KEYBOARD_IME],
+        )
+        enable_out = _combined_output(enable)
     set_ime = await run_cmd_silently(
         list(adb_prefix) + ["shell", "ime", "set", ADB_KEYBOARD_IME],
     )
     current_ime = await _read_default_ime_async(adb_prefix)
     _require_adb_ime_current(
         current_ime,
-        f"enable={_combined_output(enable)!r}, set={_combined_output(set_ime)!r}",
+        f"enable={enable_out!r}, set={_combined_output(set_ime)!r}",
     )
 
 
