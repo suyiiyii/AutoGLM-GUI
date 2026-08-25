@@ -280,3 +280,26 @@ def _create_qwen_agent(
 
 
 register_agent("qwen", _create_qwen_agent)
+
+
+def _create_mobileforge_agent(
+    model_config: ModelConfig,
+    agent_config: AgentConfig,
+    agent_specific_config: AgentSpecificConfig,  # noqa: ARG001
+    device: DeviceProtocol,
+    takeover_callback: Callable[..., Any] | None = None,
+    confirmation_callback: Callable[..., Any] | None = None,
+) -> AsyncAgent:
+    """Create an agent for MobileForge-format Qwen-VL checkpoints."""
+    from .mobileforge.async_agent import AsyncMobileForgeAgent
+
+    return AsyncMobileForgeAgent(  # type: ignore[return-value]
+        model_config=model_config,
+        agent_config=agent_config,
+        device=device,
+        confirmation_callback=confirmation_callback,
+        takeover_callback=takeover_callback,
+    )
+
+
+register_agent("mobileforge", _create_mobileforge_agent)

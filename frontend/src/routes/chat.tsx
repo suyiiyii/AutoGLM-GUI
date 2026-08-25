@@ -125,6 +125,13 @@ const AGENT_PRESETS = [
     icon: Layers,
     defaultConfig: {},
   },
+  {
+    name: 'mobileforge',
+    displayName: 'MobileForge Agent',
+    descriptionKey: 'agentMobileForgeDesc',
+    icon: Layers,
+    defaultConfig: {},
+  },
 ] as const;
 
 // 决策模型预设配置（与视觉模型保持一致）
