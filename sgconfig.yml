@@ -1,0 +1,4 @@
+ruleDirs:
+  - sg/rules
+testConfigs:
+  - testDir: sg/tests

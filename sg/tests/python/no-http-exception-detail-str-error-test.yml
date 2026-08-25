@@ -1,0 +1,18 @@
+id: no-http-exception-detail-str-error
+valid:
+  - |
+    from fastapi import HTTPException
+
+    def handler(exc: Exception) -> None:
+        raise HTTPException(status_code=500, detail="Failed to save config")
+  - |
+    from fastapi import HTTPException
+
+    def handler(exc: Exception) -> None:
+        raise HTTPException(status_code=400, detail=str(exc))
+invalid:
+  - |
+    from fastapi import HTTPException
+
+    def handler(exc: Exception) -> None:
+        raise HTTPException(status_code=500, detail=str(exc))

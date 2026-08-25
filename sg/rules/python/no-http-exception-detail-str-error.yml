@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-http-exception-detail-str-error
+message: Avoid returning raw exception strings in HTTP 500 responses; map to a stable message and log the original error.
+severity: warning
+language: Python
+files:
+  - AutoGLM_GUI/api/**/*.py
+rule:
+  pattern: raise HTTPException(status_code=500, detail=str($ERR))
+note: Raw exception text can leak implementation details to clients.

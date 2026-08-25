@@ -52,6 +52,9 @@ jobs:
           echo "🎨 Checking backend Python format..."
           uv run ruff format --check --diff
 
+          echo "🌳 Checking backend structural rules..."
+          uv run ast-grep scan --config sgconfig.yml --report-style medium --color never .
+
       - name: Run frontend lint and format check
         if: always()
         run: |
@@ -110,7 +113,7 @@ jobs:
             ## 🚀 Lint & Format Check Results: ${status}
 
             ### What was checked:
-            - 🐍 **Backend**: Ruff linting + formatting
+            - 🐍 **Backend**: Ruff linting + formatting + ast-grep structural rules
             - 📱 **Frontend**: ESLint + Prettier + TypeScript types
             - 🔧 **Unified**: Custom lint script validation
 
@@ -121,6 +124,7 @@ jobs:
             ### Checks performed:
             - Backend Ruff lint ✅
             - Backend Ruff format ✅
+            - Backend ast-grep ✅
             - Frontend ESLint ✅
             - Frontend Prettier format ✅
             - Frontend TypeScript types ✅
@@ -148,6 +152,7 @@ jobs:
             \`\`\`bash
             uv run ruff check --fix
             uv run ruff format
+            uv run ast-grep scan --config sgconfig.yml --report-style medium --color never .
             \`\`\`
 
             **Frontend:**

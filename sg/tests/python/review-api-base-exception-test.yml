@@ -1,0 +1,27 @@
+id: review-api-base-exception
+valid:
+  - |
+    def handler() -> None:
+        try:
+            work()
+        except Exception:
+            recover()
+  - |
+    def handler() -> None:
+        try:
+            work()
+        finally:
+            cleanup()
+invalid:
+  - |
+    def handler() -> None:
+        try:
+            work()
+        except BaseException:
+            cleanup()
+  - |
+    def handler() -> None:
+        try:
+            work()
+        except BaseException as exc:
+            cleanup(exc)

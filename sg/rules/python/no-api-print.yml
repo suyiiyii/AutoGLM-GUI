@@ -1,0 +1,11 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/ast-grep/ast-grep/main/schemas/rule.json
+
+id: no-api-print
+message: API handlers should not write directly to stdout; use structured logging or HTTP responses instead.
+severity: error
+language: Python
+files:
+  - AutoGLM_GUI/api/**/*.py
+rule:
+  pattern: print($$$ARGS)
+note: Keep API request handling free of direct console output.
