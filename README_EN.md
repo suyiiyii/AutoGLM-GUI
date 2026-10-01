@@ -41,9 +41,9 @@ Modern Web GUI for AutoGLM Phone Agent - AI-Powered Android Device Automation Ma
 
 | Platform | Download Link | Notes |
 |---------|---------|------|
-| 🪟 **Windows** (x64) | [📦 Download Portable EXE](https://github.com/suyiiyii/AutoGLM-GUI/releases/download/v1.1.0/AutoGLM.GUI.1.1.0.exe) | For Windows 10/11, no installation needed |
-| 🍎 **macOS** (Apple Silicon) | [📦 Download DMG](https://github.com/suyiiyii/AutoGLM-GUI/releases/download/v1.1.0/AutoGLM.GUI-1.1.0-arm64.dmg) | For M-series Macs |
-| 🐧 **Linux** (x64) | [📦 Download AppImage](https://github.com/suyiiyii/AutoGLM-GUI/releases/download/v1.1.0/AutoGLM.GUI-1.1.0.AppImage) \| [deb](https://github.com/suyiiyii/AutoGLM-GUI/releases/download/v1.1.0/autoglm-gui_1.1.0_amd64.deb) \| [tar.gz](https://github.com/suyiiyii/AutoGLM-GUI/releases/download/v1.1.0/autoglm-gui-1.1.0.tar.gz) | Universal format for major distributions |
+| 🪟 **Windows** (x64) | [📦 Download Portable EXE](https://github.com/suyiiyii/AutoGLM-GUI/releases/latest) | For Windows 10/11, no installation needed |
+| 🍎 **macOS** (Apple Silicon) | [📦 Download DMG](https://github.com/suyiiyii/AutoGLM-GUI/releases/latest) | For M-series Macs |
+| 🐧 **Linux** (x64) | [📦 Download AppImage / deb / tar.gz](https://github.com/suyiiyii/AutoGLM-GUI/releases/latest) | Universal format for major distributions |
 
 </div>
 
@@ -56,6 +56,11 @@ Modern Web GUI for AutoGLM Phone Agent - AI-Powered Android Device Automation Ma
   - **tar.gz**: Portable version, extract and run `./AutoGLM\ GUI/autoglm-gui`
 
 > 💡 **Tip**: Desktop version includes all dependencies (Python, ADB, etc.), no manual environment setup needed. You'll need to configure model service API on first launch.
+
+**Display Language:**
+
+- **First launch**: if you have a previously saved language preference it is used; otherwise the app checks your browser/OS language — a Chinese (`zh-*`) locale shows the UI in Chinese, any other locale falls back to English.
+- **Switch manually**: click the globe icon + language label (`EN` / `中文`) in the footer at the bottom of the page to toggle between English and Chinese. Your choice is saved and persists after restarting the app.
 
 ---
 
@@ -164,7 +169,7 @@ uvx autoglm-gui --base-url http://localhost:8080/v1
 
 ```bash
 # Install from source
-git clone https://github.com/your-repo/AutoGLM-GUI.git
+git clone https://github.com/suyiiyii/AutoGLM-GUI.git
 cd AutoGLM-GUI
 uv sync
 
