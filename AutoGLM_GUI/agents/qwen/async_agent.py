@@ -70,6 +70,7 @@ class AsyncQwenAgent(AsyncAgentBase, AsyncAgent):
         # official Open-AutoGLM layout.
         self._pending_task: str | None = None
         self._pending_reference_images: list[dict[str, str]] = []
+        self._action_markers = ["<answer>", "finish(message=", "do(action="]
 
     def _get_default_system_prompt(self, lang: str) -> str:
         return get_system_prompt(lang)
@@ -349,7 +350,7 @@ class AsyncQwenAgent(AsyncAgentBase, AsyncAgent):
             )
             self._context.append(
                 MessageBuilder.create_assistant_message(
-                    f"<thought>{thinking}</thought><answer>{action_str}</answer>"
+                    self._format_assistant_context(raw_content, thinking, action_str)
                 )
             )
 
@@ -396,6 +397,12 @@ class AsyncQwenAgent(AsyncAgentBase, AsyncAgent):
             },
         }
 
+    def _format_assistant_context(
+        self, raw_content: str, thinking: str, action_str: str
+    ) -> str:
+        """Return the assistant turn to retain in the next model request."""
+        return f"<thought>{thinking}</thought><answer>{action_str}</answer>"
+
     async def _stream_openai(
         self, messages: list[dict[str, Any]]
     ) -> AsyncGenerator[dict[str, str], None]:
@@ -412,7 +419,7 @@ class AsyncQwenAgent(AsyncAgentBase, AsyncAgent):
         )
 
         buffer = ""
-        action_markers = ["<answer>", "finish(message=", "do(action="]
+        action_markers = self._action_markers
         in_action_phase = False
 
         try:
