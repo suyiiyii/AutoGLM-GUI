@@ -1,4 +1,10 @@
-import React, { useRef, useEffect, useCallback, useState } from 'react';
+import React, {
+  useRef,
+  useEffect,
+  useLayoutEffect,
+  useCallback,
+  useState,
+} from 'react';
 import {
   Send,
   RotateCcw,
@@ -555,7 +561,10 @@ export function DevicePanel({
     await abortConversation();
   }, [abortConversation]);
 
-  useEffect(() => {
+  // Keep the viewport pinned in the same commit that adds streamed content.
+  // A passive effect can run after paint, briefly leaving the latest message
+  // a full viewport below the visible area.
+  useLayoutEffect(() => {
     const latest = messages[messages.length - 1];
     const thinkingSignature = latest?.thinking
       ? JSON.stringify(latest.thinking).length
@@ -1194,7 +1203,9 @@ export function DevicePanel({
                     ? t.devicePanel.configureFirst
                     : t.devicePanel.whatToDo
               }
-              disabled={loading && !waitingForUserInteraction}
+              disabled={
+                !sessionReady || (loading && !waitingForUserInteraction)
+              }
               className="flex-1 min-h-[40px] max-h-[120px] resize-none"
               rows={1}
             />
