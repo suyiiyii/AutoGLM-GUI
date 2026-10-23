@@ -10,7 +10,7 @@ overrides:
   svgo@>=3 <3.3.5: ^3.3.5
   dompurify@>=3 <3.4.17: ^3.4.17
   proxy-addr@>=2 <2.0.8: ^2.0.8
-  shell-quote@>=1 <1.9.0: 1.9.0
+  shell-quote@>=1 <1.9.0: 1.11.0
   websocket-driver@<0.7.5: ^0.7.5
   js-yaml@>=3 <3.15.2: ^3.15.2
   js-yaml@>=4 <4.3.2: ^4.3.2
@@ -4966,8 +4966,8 @@ packages:
     resolution: {integrity: sha512-7++dFhtcx3353uBaq8DDR4NuxBetBzC7ZQOhmTQInHEd6bSrXdiEyzCvG07Z44UYdLShWUyXt5M/yhz8ekcb1A==}
     engines: {node: '>=8'}
 
-  shell-quote@1.9.0:
-    resolution: {integrity: sha512-Iov+JwFv/2HcTpcwNMKd8+IWNb8tboQJNQTkAY/LLVK7gGH9jy+LGkVqPxfekHl+yMmiqXszdGWXgkfml7hjqA==}
+  shell-quote@1.11.0:
+    resolution: {integrity: sha512-JdxDPD0DBTyu08pq0kPC0xSNet/qsU07qT6IsX1AS8oO2ICNRY4ldNa8OAI6PuwAH8tG3lxEhbqmyp4Dw4036g==}
     engines: {node: '>= 0.4'}
 
   side-channel-list@1.0.0:
@@ -10263,7 +10263,7 @@ snapshots:
   launch-editor@2.12.0:
     dependencies:
       picocolors: 1.1.1
-      shell-quote: 1.9.0
+      shell-quote: 1.11.0
 
   layout-base@1.0.2: {}
 
@@ -12086,7 +12086,7 @@ snapshots:
 
   shebang-regex@3.0.0: {}
 
-  shell-quote@1.9.0: {}
+  shell-quote@1.11.0: {}
 
   side-channel-list@1.0.0:
     dependencies:
