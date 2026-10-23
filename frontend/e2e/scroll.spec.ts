@@ -163,21 +163,15 @@ test.describe('DevicePanel auto-scroll', () => {
     // ── 4. Send a message ───────────────────────────────────────────────
 
     await textbox.fill('点击屏幕下方的消息按钮');
-    await textbox.press('Meta+Enter');
+    await textbox.press('ControlOrMeta+Enter');
 
     // ── 5. Wait for streaming to complete ────────────────────────────────
 
-    // The agent will stream thinking → step → done events.
-    await page.waitForTimeout(2000);
-
-    // Wait for the loading spinner to disappear (agent finished)
-    const loadingIndicator = page.locator('.animate-spin');
-    await loadingIndicator
-      .first()
-      .waitFor({ state: 'hidden', timeout: 60000 })
-      .catch(() => {
-        // May have already disappeared
-      });
+    // Confirm the task actually ran. A missing spinner can also mean the
+    // submission was dropped before the task session finished initializing.
+    await expect(
+      page.locator('p').filter({ hasText: '已成功点击消息按钮' }).first()
+    ).toBeVisible({ timeout: 30000 });
 
     // Extra wait to let all DOM updates + scroll effects (incl. async
     // screenshot loads and the ResizeObserver re-pin) settle.
