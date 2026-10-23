@@ -21,10 +21,29 @@ jobs:
       - name: Setup Python & uv
         uses: ./.github/actions/setup-python
 
-      - name: Install optional dependencies
+      - name: Verify locked DroidRun integration imports
         run: |
-          echo "📦 Installing optional dependencies..."
-          uv pip install -e ".[droidrun]"
+          uv sync --locked --extra droidrun
+          uv run --no-sync python - <<'PY'
+          from droidrun.agent.codeact.events import CodeActResponseEvent
+          from droidrun.agent.droid.droid_agent import DroidAgent
+          from droidrun.agent.droid import events
+          from droidrun.agent.utils.llm_picker import load_llm
+          from droidrun.config_manager.config_manager import DeviceConfig, DroidConfig
+
+          for event in (
+              "ExecutorResultEvent",
+              "FinalizeEvent",
+              "ManagerPlanEvent",
+              "ResultEvent",
+          ):
+              getattr(events, event)
+          assert any(
+              hasattr(events, event)
+              for event in ("CodeActResultEvent", "FastAgentResultEvent")
+          )
+          print("Locked DroidRun adapter imports passed")
+          PY
 
       - name: Setup Node.js & pnpm
         uses: ./.github/actions/setup-node
@@ -39,12 +58,16 @@ jobs:
           cd ..
 
       - name: Run unified lint script (check-only mode)
+        env:
+          UV_NO_SYNC: "true"
         run: |
           echo "🚀 Running unified lint script in check-only mode..."
           uv run python scripts/lint.py --check-only
 
       - name: Run backend lint and format check
         if: always()
+        env:
+          UV_NO_SYNC: "true"
         run: |
           echo "🐍 Checking backend Python code..."
           uv run ruff check --output-format=github
