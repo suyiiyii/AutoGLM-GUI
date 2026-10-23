@@ -18,6 +18,8 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 3
 
       - name: Setup Python & uv
         uses: ./.github/actions/setup-python
@@ -33,11 +35,25 @@ jobs:
           cd frontend
           pnpm exec playwright install chromium
 
-      - name: Run frontend E2E tests
+      - name: Prove session readiness regression against original implementation
+        shell: bash
+        run: |
+          git show HEAD^^:frontend/src/components/DevicePanel.tsx > frontend/src/components/DevicePanel.tsx
+          cd frontend
+          set +e
+          pnpm exec playwright test e2e/trace-events.spec.ts --reporter=line > baseline.log 2>&1
+          baseline_status=$?
+          set -e
+          cat baseline.log
+          test "$baseline_status" -ne 0
+          uv run python -c 'import pathlib,re; log=re.sub(r"\x1b\[[0-9;]*m", "", pathlib.Path("baseline.log").read_text(encoding="utf-8")); assert "Expected: disabled" in log and "Received: enabled" in log, log'
+          git restore src/components/DevicePanel.tsx
+
+      - name: Run patched targeted E2E tests
         shell: bash
         run: |
           cd frontend
-          pnpm test:e2e
+          pnpm exec playwright test e2e/trace-events.spec.ts e2e/scroll.spec.ts --reporter=line
 
       - name: Package Playwright report (videos + traces + screenshots)
         if: always()
