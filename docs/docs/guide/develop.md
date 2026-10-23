@@ -15,7 +15,7 @@ sidebar_position: 14
 开始前确认本机已经装好以下工具：
 
 - Python 3.11 或更高版本
-- Node.js 18+ 和 pnpm
+- Node.js 24 LTS（推荐，与 lint/E2E CI 一致）和 pnpm；桌面版开发与打包至少需要 Node.js 22.12（当前 `@electron/rebuild` 构建依赖要求）
 - uv（Python 包管理器），安装见[官方文档](https://docs.astral.sh/uv/getting-started/installation/)
 - adb（Android Debug Bridge），且已加入系统 PATH
 

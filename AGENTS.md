@@ -9,7 +9,7 @@
 
 ## Setup
 - Required Python: `>=3.11` (from `pyproject.toml`).
-- Required Node/pnpm: Node.js `18+` and `pnpm` (from `CONTRIBUTING.md`); CI commonly runs Node `24` (from `.github/workflows/pr-lint.yml`).
+- Node/pnpm: Node.js `24` LTS and `pnpm` are recommended, matching lint/E2E CI. Desktop development and packaging require Node.js `>=22.12` because of `@electron/rebuild` (see `CONTRIBUTING.md`).
 - Required tools: `uv` (dependency sync and task runner), `adb` in PATH (from `CONTRIBUTING.md`).
 - Install backend dependencies (repo root): `uv sync`
 - Install frontend dependencies: `cd frontend && pnpm install`
