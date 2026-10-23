@@ -173,11 +173,7 @@ export interface CancelledEvent {
 }
 
 export type StreamEvent =
-  | ThinkingEvent
-  | StepEvent
-  | DoneEvent
-  | ErrorEvent
-  | CancelledEvent;
+  ThinkingEvent | StepEvent | DoneEvent | ErrorEvent | CancelledEvent;
 
 export interface TapRequest {
   x: number;
@@ -904,12 +900,7 @@ export async function deleteWorkflow(uuid: string): Promise<void> {
 // ==================== Task API ====================
 
 export type TaskStatus =
-  | 'QUEUED'
-  | 'RUNNING'
-  | 'SUCCEEDED'
-  | 'FAILED'
-  | 'CANCELLED'
-  | 'INTERRUPTED';
+  'QUEUED' | 'RUNNING' | 'SUCCEEDED' | 'FAILED' | 'CANCELLED' | 'INTERRUPTED';
 
 export interface TaskSessionResponse {
   id: string;

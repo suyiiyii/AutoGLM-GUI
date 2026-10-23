@@ -774,8 +774,7 @@ export function ChatComponent() {
                     max={10}
                     value={
                       (tempConfig.agent_config_params?.history_n as
-                        | number
-                        | undefined) || 3
+                        number | undefined) || 3
                     }
                     onChange={e => {
                       const value = parseInt(e.target.value) || 3;
@@ -805,8 +804,7 @@ export function ChatComponent() {
                     placeholder="e.g. doubao-vision, gemini, qwen3.5"
                     value={
                       (tempConfig.agent_config_params?.model_family as
-                        | string
-                        | undefined) || 'doubao-vision'
+                        string | undefined) || 'doubao-vision'
                     }
                     onChange={e => {
                       setTempConfig(prev => ({
