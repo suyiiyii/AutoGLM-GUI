@@ -35,15 +35,17 @@ Modern Web GUI for AutoGLM Phone Agent - AI-Powered Android Device Automation Ma
 
 ## 📥 Quick Download
 
-**One-Click Desktop Version (No Environment Setup Required):**
+**Desktop Version (No Environment Setup Required):**
+
+Open the latest release page below, then expand **Assets** and select the file for your platform.
 
 <div align="center">
 
-| Platform | Download Link | Notes |
+| Platform | Release Page | Asset to Choose |
 |---------|---------|------|
-| 🪟 **Windows** (x64) | [📦 Download Portable EXE](https://github.com/suyiiyii/AutoGLM-GUI/releases/latest) | For Windows 10/11, no installation needed |
-| 🍎 **macOS** (Apple Silicon) | [📦 Download DMG](https://github.com/suyiiyii/AutoGLM-GUI/releases/latest) | For M-series Macs |
-| 🐧 **Linux** (x64) | [📦 Download AppImage / deb / tar.gz](https://github.com/suyiiyii/AutoGLM-GUI/releases/latest) | Universal format for major distributions |
+| 🪟 **Windows** (x64) | [View latest release](https://github.com/suyiiyii/AutoGLM-GUI/releases/latest) | `AutoGLM-GUI-<version>.exe` (portable; no installation needed) |
+| 🍎 **macOS** (Apple Silicon) | [View latest release](https://github.com/suyiiyii/AutoGLM-GUI/releases/latest) | `AutoGLM-GUI-<version>-arm64.dmg` (M-series Macs) |
+| 🐧 **Linux** (x64) | [View latest release](https://github.com/suyiiyii/AutoGLM-GUI/releases/latest) | `.AppImage`, `_amd64.deb`, or `autoglm-gui-<version>.tar.gz` |
 
 </div>
 
