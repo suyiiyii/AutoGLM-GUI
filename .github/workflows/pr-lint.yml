@@ -29,7 +29,7 @@ jobs:
           from droidrun.agent.droid.droid_agent import DroidAgent
           from droidrun.agent.droid import events
           from droidrun.agent.utils.llm_picker import load_llm
-          from droidrun.config_manager.config_manager import DeviceConfig, DroidConfig
+          from droidrun.config_manager.config_manager import DeviceConfig, DroidrunConfig
 
           for event in (
               "ExecutorResultEvent",
@@ -44,6 +44,7 @@ jobs:
           )
           print("Locked DroidRun adapter imports passed")
           PY
+          uv run --no-sync pytest tests/test_droidrun_optional_runtime.py -q
 
       - name: Setup Node.js & pnpm
         uses: ./.github/actions/setup-node

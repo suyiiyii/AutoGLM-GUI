@@ -91,7 +91,7 @@ def _install_fake_droidrun(monkeypatch: pytest.MonkeyPatch, events: list[Any]) -
         def __init__(self, serial: str) -> None:
             self.serial = serial
 
-    class DroidConfig:
+    class DroidrunConfig:
         def __init__(self) -> None:
             self.device = None
             self.telemetry = SimpleNamespace(enabled=True)
@@ -111,7 +111,7 @@ def _install_fake_droidrun(monkeypatch: pytest.MonkeyPatch, events: list[Any]) -
         created: list[dict[str, Any]] = []
         fail_init = False
 
-        def __init__(self, goal: str, llms: Any, config: DroidConfig) -> None:
+        def __init__(self, goal: str, llms: Any, config: DroidrunConfig) -> None:
             if self.fail_init:
                 raise RuntimeError("init failed")
             self.created.append({"goal": goal, "llms": llms, "config": config})
@@ -153,7 +153,7 @@ def _install_fake_droidrun(monkeypatch: pytest.MonkeyPatch, events: list[Any]) -
     modules["droidrun.agent.droid.droid_agent"].DroidAgent = DroidAgent
     modules["droidrun.agent.utils.llm_picker"].load_llm = lambda *a, **k: "llm"
     modules["droidrun.config_manager.config_manager"].DeviceConfig = DeviceConfig
-    modules["droidrun.config_manager.config_manager"].DroidConfig = DroidConfig
+    modules["droidrun.config_manager.config_manager"].DroidrunConfig = DroidrunConfig
 
     for name, module in modules.items():
         monkeypatch.setitem(sys.modules, name, module)
