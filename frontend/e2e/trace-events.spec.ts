@@ -199,6 +199,19 @@ test.describe('Trace debug surface', () => {
       'save config'
     );
 
+    // Hold the real session response so the test also exercises a slow
+    // connection: a visible composer must not accept a submission before
+    // the task session exists.
+    let releaseSessionResponse!: () => void;
+    const sessionResponseGate = new Promise<void>(resolve => {
+      releaseSessionResponse = resolve;
+    });
+    await page.route('**/api/task-sessions', async route => {
+      const response = await route.fetch();
+      await sessionResponseGate;
+      await route.fulfill({ response });
+    });
+
     await page.goto(
       `/chat?serial=${encodeURIComponent(deviceData.serial)}&mode=classic`
     );
@@ -210,6 +223,12 @@ test.describe('Trace debug surface', () => {
 
     const textbox = page.locator('textarea');
     await expect(textbox).toBeVisible({ timeout: 15000 });
+    try {
+      await expect(textbox).toBeDisabled();
+    } finally {
+      releaseSessionResponse();
+    }
+    await expect(textbox).toBeEditable();
 
     const taskResponsePromise = page.waitForResponse(response => {
       return (
@@ -220,7 +239,7 @@ test.describe('Trace debug surface', () => {
     });
 
     await textbox.fill('点击屏幕下方的消息按钮');
-    await textbox.press('Meta+Enter');
+    await textbox.press('ControlOrMeta+Enter');
 
     const taskResponse = await taskResponsePromise;
     await assertOk(taskResponse, 'submit task');
