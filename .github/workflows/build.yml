@@ -8,6 +8,11 @@ on:
     branches:
       - main
 
+# A newer commit supersedes unpublished CI artifacts for the same PR or branch.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build-windows:
     name: Build for Windows
