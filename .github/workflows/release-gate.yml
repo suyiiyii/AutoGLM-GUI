@@ -11,7 +11,12 @@ on:
       - 'pyproject.toml'
       - 'uv.lock'
       - '.github/workflows/release-gate.yml'
+      - '.github/workflows/release.yml'
   workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
 
 jobs:
   release-gate:
