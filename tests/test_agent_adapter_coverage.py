@@ -225,6 +225,7 @@ def test_droidrun_agent_reports_import_llm_init_and_runtime_errors(
     missing = asyncio.run(_collect(agent.stream("task")))
     assert missing[-1]["type"] == "error"
     assert "droidrun" in missing[-1]["data"]["message"]
+    assert "'droidrun>=0.4.26,<0.5'" in missing[-1]["data"]["message"]
 
     fake = _install_fake_droidrun(monkeypatch, [])
     fake.llm_picker.load_llm = lambda *a, **k: (_ for _ in ()).throw(

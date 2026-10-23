@@ -77,7 +77,9 @@ class DroidRunAgent:
                 "type": "error",
                 "data": {
                     "message": (
-                        f"droidrun 未安装，请运行：uv pip install droidrun\n错误：{e}"
+                        "droidrun 未安装或版本不兼容，请运行："
+                        "uv pip install 'droidrun>=0.4.26,<0.5'\n"
+                        f"错误：{e}"
                     )
                 },
             }
