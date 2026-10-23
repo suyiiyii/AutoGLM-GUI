@@ -47,7 +47,7 @@
 确保你的环境中已安装：
 
 - **Python 3.11+**
-- **Node.js 24 LTS**（推荐，与 lint/E2E CI 一致）和 **pnpm**；Electron 42 桌面版开发与打包至少需要 Node.js 22.12
+- **Node.js 24 LTS**（推荐，与 lint/E2E CI 一致）和 **pnpm**；桌面版开发与打包至少需要 Node.js 22.12（当前 `@electron/rebuild` 构建依赖要求）
 - **uv**（Python 包管理器）- [安装教程](https://docs.astral.sh/uv/getting-started/installation/)
 - **ADB** (Android Debug Bridge) - 需要添加到系统 PATH
 
