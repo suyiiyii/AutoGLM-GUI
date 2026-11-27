@@ -77,6 +77,7 @@ export const en = {
     agentMidsceneDesc:
       'Midscene.js vision-driven, requires Node.js environment',
     agentQwenDesc: 'Adapted for Qwen3.6 series',
+    agentMobileForgeDesc: 'Qwen-VL models using the MobileForge tool-call protocol',
   },
   deviceSidebar: {
     devices: 'Devices',

@@ -10,6 +10,7 @@ const defaultInteractionConfig: InteractionConfig = {
     gemini: ['Interact', 'Take_over'],
     'glm-async': ['Interact', 'Take_over'],
     qwen: ['Interact', 'Take_over'],
+    mobileforge: ['Interact', 'Take_over'],
     droidrun: ['Interact', 'Take_over'],
     midscene: ['Interact', 'Take_over'],
   },
